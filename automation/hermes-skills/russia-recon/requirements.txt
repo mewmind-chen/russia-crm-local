@@ -1,0 +1,9 @@
+beautifulsoup4
+dnspython
+loguru
+PySocks
+requests
+rich
+
+# Optional: enables UN Comtrade customs checks in scripts/check_china_purchase.py
+comtradeapicall

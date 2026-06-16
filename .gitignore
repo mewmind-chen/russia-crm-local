@@ -1,0 +1,40 @@
+node_modules/
+.env
+.claude/
+.codex*
+.tmp*
+bot3-workspace-link
+
+# Runtime databases, WAL files, and backups contain business/customer data.
+data/
+data/*.db
+data/*.db-*
+data/*.backup*
+data/*.bak*
+data/.translation-cache.json
+data/*.csv
+data/*.md
+
+# Local logs, run artifacts, generated reports, and scratch output.
+logs/
+recon-runs/
+tmp/
+output/
+memory/
+crm/
+new-*.json
+crm-domain-blocklist*
+finder-copy-test.txt
+_node_write_test.txt
+*.pid
+*.log
+
+# Local machine/editor noise.
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Generated binary reports.
+*.docx
+*.xlsx
+*.pdf

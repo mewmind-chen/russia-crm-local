@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradeLead AI Local</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #f1f5f9;
+      --line: #d8dee8;
+      --line-strong: #b8c2d2;
+      --text: #172033;
+      --muted: #657186;
+      --primary: #0f766e;
+      --primary-strong: #0b5d56;
+      --primary-soft: #d9f2ee;
+      --danger: #b42318;
+      --danger-soft: #fee4e2;
+      --warning: #a15c07;
+      --warning-soft: #fff3d6;
+      --success: #027a48;
+      --success-soft: #dcfae6;
+      --shadow: 0 12px 30px rgba(25, 38, 65, 0.08);
+      --shadow-soft: 0 1px 2px rgba(25, 38, 65, 0.04);
+      --shadow-hover: 0 10px 24px rgba(25, 38, 65, 0.08);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; overflow-y: auto; }
+    button, input, select, textarea { font: inherit; }
+    button { border: 0; cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    .topbar { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,0.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
+    .topbar-inner { max-width: 1480px; margin: 0 auto; padding: 14px 22px; display: grid; grid-template-columns: minmax(240px,1fr) auto; gap: 18px; align-items: center; }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 8px; background: #0f766e; color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .brand h1 { margin: 0; font-size: 18px; line-height: 1.2; }
+    .brand p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .top-actions { display: flex; gap: 10px; align-items: center; justify-content: end; flex-wrap: wrap; }
+    .pill { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px; padding: 8px 12px; white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; border-radius: 9px; padding: 8px 12px; background: var(--primary); color: #fff; font-weight: 650; transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease, opacity 140ms ease; }
+    .btn:hover { background: var(--primary-strong); }
+    .btn.secondary { background: #fff; color: var(--text); border: 1px solid var(--line-strong); }
+    .btn.secondary:hover { background: var(--panel-soft); }
+    .btn.ghost { background: transparent; color: var(--muted); border: 1px solid transparent; }
+    .btn.ghost:hover { background: var(--panel-soft); color: var(--text); border-color: var(--line); }
+    .btn:active, .tab:active, .mini-card:active, .ai-suggestion:active, .template-card:active { transform: translateY(1px); }
+    .btn:focus-visible, .tab:focus-visible, .input:focus-visible, .select:focus-visible, .textarea:focus-visible, .assistant-source:focus-visible, .assistant-quick-btn:focus-visible, .ai-suggestion:focus-visible, .mini-card:focus-visible { outline: 2px solid rgba(15,118,110,0.24); outline-offset: 2px; }
+    .btn.small { min-height: 30px; padding: 6px 10px; font-size: 12px; }
+    .layout { max-width: 1480px; width: 100%; margin: 0 auto; padding: 18px 22px 28px; display: grid; gap: 16px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab { border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 9px 14px; font-weight: 650; transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+    .tab.active { color: var(--primary-strong); border-color: #99d4cc; background: var(--primary-soft); }
+    .filters { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: minmax(220px,1.5fr) repeat(6,minmax(130px,1fr)) auto; gap: 10px; align-items: end; box-shadow: var(--shadow-soft); }
+    .field { display: grid; gap: 5px; min-width: 0; }
+    .field label { font-size: 12px; color: var(--muted); font-weight: 650; }
+    .input, .select, .textarea { width: 100%; border: 1px solid var(--line-strong); background: #fff; border-radius: 7px; color: var(--text); min-height: 38px; padding: 8px 10px; outline: none; }
+    .textarea { min-height: 84px; resize: vertical; }
+    .input:focus, .select:focus, .textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15,118,110,0.14); }
+    .checks { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; color: var(--muted); }
+    .checks label { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+    .section { display: none; min-width: 0; }
+    .section.active { display: grid; gap: 16px; min-width: 0; }
+    .metric-grid { display: grid; grid-template-columns: repeat(5,minmax(145px,1fr)); gap: 12px; }
+    .metric { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-height: 92px; display: grid; gap: 8px; align-content: start; box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .metric:hover { box-shadow: var(--shadow-hover); border-color: #cfd6e1; }
+    .metric span { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .metric strong { font-size: 28px; line-height: 1; }
+    .metric.warning { border-color: #f0c36a; background: var(--warning-soft); }
+    .metric.danger { border-color: #fda29b; background: var(--danger-soft); }
+    .split { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(320px,0.65fr); gap: 16px; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-soft); }
+    .panel-head { min-height: 48px; display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { margin: 0; font-size: 15px; }
+    .panel-body { padding: 14px; }
+    .table-wrap { overflow: visible; max-height: none; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 980px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; z-index: 1; background: #f8fafc; color: var(--muted); font-size: 12px; font-weight: 750; }
+    tr.customer-row, tr.pool-row, tr.recon-row { cursor: pointer; }
+    tr.customer-row:hover, tr.pool-row:hover, tr.recon-row:hover { background: #f8fbfb; }
+    tr.customer-row.risk, tr.pool-row.risk, tr.recon-row.risk { background: #fff8f7; }
+    .company { font-weight: 750; color: var(--text); max-width: 230px; }
+    .muted { color: var(--muted); }
+    .tag-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .tag { display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 3px 8px; font-size: 12px; line-height: 1.2; font-weight: 700; background: var(--panel-soft); color: #475467; border: 1px solid #e4e7ec; white-space: nowrap; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease; }
+    .tag.status { color: var(--primary-strong); background: var(--primary-soft); border-color: #a7ddd7; }
+    .tag.risk { color: var(--danger); background: var(--danger-soft); border-color: #fda29b; }
+    .tag.today { color: var(--success); background: var(--success-soft); border-color: #a6f4c5; }
+    .tag.overdue { color: var(--warning); background: var(--warning-soft); border-color: #f7cf79; }
+    .tag.sanction { color: #344054; background: #eef2f6; border-color: #cfd6e1; }
+    .tag.recon-running { color: var(--primary-strong); background: var(--primary-soft); border-color: #a7ddd7; }
+    .tag.customer-tag { color: #344054; background: #f8fafc; border-color: #cfd6e1; }
+    .tag-editor { border: 1px solid var(--line); background: #f8fafc; border-radius: 12px; padding: 12px; display: grid; gap: 12px; }
+    .tag-editor-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .tag-editor-head h3 { margin: 0; font-size: 14px; }
+    .tag-groups { display: grid; gap: 10px; }
+    .tag-group { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+    .tag-group strong { font-size: 12px; color: var(--muted); }
+    .tag-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag-check { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 8px; background: #fff; font-size: 12px; font-weight: 650; }
+    .tag-create { display: grid; grid-template-columns: minmax(150px,0.7fr) minmax(180px,1fr) auto; gap: 8px; align-items: center; }
+    .recon-strip { border: 1px solid var(--line); background: #f8fafc; border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+    .recon-strip-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .recon-strip p { margin: 0; color: var(--muted); }
+    .recon-facts { display: grid; grid-template-columns: repeat(3,minmax(160px,1fr)); gap: 8px; }
+    .recon-fact { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px; min-height: 58px; box-shadow: var(--shadow-soft); }
+    .recon-fact span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; font-weight: 650; }
+    .recon-fact p { color: var(--text); overflow-wrap: anywhere; }
+    .recon-cell-main { min-width: 230px; }
+    .recon-cell-wide { min-width: 260px; max-width: 360px; }
+    .report-inline { margin-top: 8px; }
+    .recon-monitor { display: grid; gap: 12px; margin-bottom: 14px; }
+    .recon-monitor-grid { display: grid; grid-template-columns: repeat(6,minmax(120px,1fr)); gap: 10px; }
+    .recon-monitor-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 12px; min-height: 78px; box-shadow: var(--shadow-soft); }
+    .recon-monitor-card span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; font-weight: 650; }
+    .recon-monitor-card strong { display: block; color: var(--text); font-size: 22px; line-height: 1.1; }
+    .recon-monitor-card p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .recon-monitor-card.warning { background: #fffaf0; border-color: #f7cf79; }
+    .recon-monitor-card.danger { background: #fff8f7; border-color: #fda29b; }
+    .recon-monitor-strip { border: 1px solid var(--line); background: #f8fafc; border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+    .recon-monitor-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .recon-monitor-head p { margin: 0; color: var(--muted); }
+    .recon-monitor-workers, .recon-monitor-artifacts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .recon-monitor-jobs { display: grid; grid-template-columns: repeat(2,minmax(280px,1fr)); gap: 12px; }
+    .recon-job-card { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px; display: grid; gap: 10px; box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .recon-job-card:hover { box-shadow: var(--shadow-hover); border-color: #cfd6e1; }
+    .recon-job-card.stale { border-color: #f7cf79; background: #fffaf0; }
+    .recon-job-card.failed { border-color: #fda29b; background: #fff8f7; }
+    .recon-job-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .recon-job-top h3 { margin: 0; font-size: 14px; }
+    .recon-job-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .recon-job-pipeline { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
+    .recon-step { border: 1px solid var(--line); background: #f8fafc; border-radius: 10px; padding: 8px; text-align: center; font-size: 12px; color: var(--muted); }
+    .recon-step.active { color: var(--primary-strong); border-color: #a7ddd7; background: var(--primary-soft); font-weight: 700; }
+    .recon-step.done { color: var(--success); border-color: #a6f4c5; background: var(--success-soft); font-weight: 700; }
+    .recon-log { margin: 0; border: 1px solid var(--line); background: #101828; color: #d0d5dd; border-radius: 8px; padding: 12px; overflow: auto; max-height: 220px; font-size: 12px; line-height: 1.55; }
+    .list { display: grid; gap: 10px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: #fff; cursor: pointer; box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .mini-card:hover { border-color: var(--primary); box-shadow: var(--shadow-hover); }
+    .mini-card.risk { border-color: #fda29b; background: #fff8f7; }
+    .mini-card h3 { margin: 0 0 6px; font-size: 14px; }
+    .mini-card p { margin: 0; color: var(--muted); font-size: 12px; }
+    .kanban { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 12px; padding-bottom: 2px; }
+    .lane { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-soft); display: grid; grid-template-rows: auto 1fr; }
+    .lane-head { padding: 11px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: center; background: #f8fafc; font-weight: 750; }
+    .lane-body { padding: 10px; display: grid; gap: 8px; min-height: 0; overflow: visible; }
+    .template-grid { display: grid; grid-template-columns: repeat(2,minmax(280px,1fr)); gap: 12px; }
+    .template-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .template-card:hover { box-shadow: var(--shadow-hover); border-color: #cfd6e1; }
+    .template-card h3 { margin: 0; font-size: 15px; }
+    .template-card pre { margin: 0; overflow: visible; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 10px; white-space: pre-wrap; color: #344054; }
+    .empty { padding: 20px; color: var(--muted); text-align: center; }
+    .pagination-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-top: 1px solid var(--line); background: #f8fafc; border-radius: 0 0 12px 12px; }
+    .pagination-info { color: var(--muted); font-size: 12px; }
+    .pagination-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pagination-controls .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; border-radius: 8px; background: #172033; color: #fff; box-shadow: var(--shadow); padding: 11px 14px; transform: translateY(16px); opacity: 0; pointer-events: none; transition: all 160ms ease; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .assistant-launcher { position: fixed; right: 18px; bottom: 18px; z-index: 24; width: 54px; height: 54px; border-radius: 50%; background: var(--primary); color: #fff; box-shadow: 0 16px 34px rgba(15,118,110,0.24); font-weight: 850; letter-spacing: 0; opacity: 0.92; }
+    .assistant-launcher:hover { background: var(--primary-strong); }
+    .assistant-drawer { position: fixed; right: 18px; bottom: 84px; z-index: 24; width: min(430px,calc(100vw - 36px)); height: min(640px,calc(100vh - 112px)); min-width: min(320px,calc(100vw - 24px)); min-height: min(380px,calc(100vh - 24px)); display: none; grid-template-rows: auto auto auto auto 1fr auto auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 22px 54px rgba(25,38,65,0.18); overflow: hidden; }
+    .assistant-drawer * { min-width: 0; }
+    .assistant-drawer.open { display: grid; }
+    .assistant-head { min-height: 54px; padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f8fafc; cursor: move; user-select: none; touch-action: none; }
+    .assistant-title { display: grid; gap: 2px; min-width: 0; }
+    .assistant-title strong { font-size: 14px; }
+    .assistant-title span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .assistant-quick { border-bottom: 1px solid var(--line); padding: 9px 10px; display: flex; flex-wrap: wrap; gap: 6px; background: #fff; overflow-x: hidden; }
+    .assistant-quick-btn { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; background: #f8fafc; color: #344054; font-size: 12px; line-height: 1.2; }
+    .assistant-quick-btn:hover { border-color: var(--primary); color: var(--primary-strong); }
+    .assistant-messages { padding: 14px; overflow-y: auto; overflow-x: hidden; display: grid; gap: 10px; align-content: start; background: #fbfcfe; }
+    .assistant-empty { border: 1px dashed var(--line-strong); border-radius: 8px; padding: 12px; color: var(--muted); background: #fff; overflow-wrap: anywhere; }
+    .assistant-msg { display: grid; gap: 6px; max-width: 92%; min-width: 0; }
+    .assistant-msg.user { justify-self: end; }
+    .assistant-msg.assistant { justify-self: start; }
+    .assistant-bubble { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; background: #fff; }
+    .assistant-bubble pre { margin: 6px 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; overflow-x: hidden; font: inherit; }
+    .assistant-msg.user .assistant-bubble { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .assistant-sources { display: grid; gap: 5px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-x: hidden; }
+    .assistant-source-list { display: flex; gap: 5px; flex-wrap: wrap; }
+    .assistant-source { border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; background: #fff; color: #475467; max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; cursor: pointer; text-decoration: none; text-align: left; }
+    .assistant-source:hover { border-color: var(--primary); color: var(--primary-strong); }
+    .assistant-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+    .assistant-form { border-top: 1px solid var(--line); padding: 10px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; background: #fff; }
+    .assistant-input { min-height: 42px; max-height: 110px; resize: vertical; }
+    .assistant-send { align-self: end; min-width: 70px; }
+    .assistant-status { grid-column: 1 / -1; color: var(--muted); font-size: 12px; min-height: 16px; }
+    .assistant-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none; }
+    .assistant-resize::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-right: 2px solid #98a2b3; border-bottom: 2px solid #98a2b3; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(16,24,40,0.42); z-index: 20; display: none; padding: 20px; overflow: auto; }
+    .modal-backdrop.show { display: grid; place-items: start center; }
+    .modal { width: min(1040px,100%); margin: 20px 0; background: #fff; border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+    .modal-head { display: flex; justify-content: space-between; gap: 14px; align-items: start; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .modal-head h2 { margin: 0 0 5px; font-size: 19px; }
+    .modal-body { padding: 18px; display: grid; gap: 16px; }
+    .risk-banner { display: none; border: 1px solid #fda29b; background: var(--danger-soft); color: var(--danger); border-radius: 10px; padding: 12px; font-weight: 700; }
+    .risk-banner.show { display: block; }
+    .detail-grid { display: grid; grid-template-columns: repeat(3,minmax(180px,1fr)); gap: 10px; }
+    .detail-item { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px; min-height: 70px; }
+    .detail-item.span-2 { grid-column: span 2; }
+    .detail-item.span-3 { grid-column: span 3; }
+    .detail-item span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; font-weight: 650; }
+    .detail-item strong, .detail-item a, .detail-item p { color: var(--text); margin: 0; overflow-wrap: anywhere; }
+    .edit-grid { display: grid; grid-template-columns: repeat(3,minmax(180px,1fr)); gap: 12px; }
+    .edit-grid .wide { grid-column: span 3; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); background: #f8fafc; }
+    .workbench-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .view-title { display: grid; gap: 2px; }
+    .view-title strong { font-size: 15px; }
+    .view-title span { color: var(--muted); font-size: 12px; }
+    .filters { grid-template-columns: minmax(260px,1.8fr) repeat(2,minmax(150px,1fr)) auto auto; position: sticky; top: 67px; z-index: 8; box-shadow: 0 8px 20px rgba(25,38,65,0.04); }
+    .filters.collapsed .advanced-filter { display: none; }
+    .filters-toggle { white-space: nowrap; }
+    .metric-grid { grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); align-items: stretch; }
+    .metric.secondary-metric { display: none; }
+    .metric-grid.show-all .metric.secondary-metric { display: grid; }
+    .metric { min-height: 78px; padding: 12px 13px; }
+    .metric strong { font-size: 25px; }
+    .split { grid-template-columns: minmax(0,1fr) minmax(320px,1fr); align-items: start; }
+    .panel { box-shadow: 0 1px 2px rgba(25,38,65,0.03); min-width: 0; }
+    .panel-head { background: #fff; }
+    .panel-body { padding: 12px; }
+    .table-wrap { border-top: 1px solid var(--line); overflow: visible; max-height: none; }
+    table.compact-table { min-width: 1040px; }
+    .compact-table th, .compact-table td { padding: 8px 10px; }
+    .compact-table td { font-size: 13px; }
+    .recon-results-table { min-width: 1480px; table-layout: fixed; }
+    .recon-results-table th:nth-child(1), .recon-results-table td:nth-child(1) { width: 230px; }
+    .recon-results-table th:nth-child(2), .recon-results-table td:nth-child(2) { width: 150px; }
+    .recon-results-table th:nth-child(3), .recon-results-table td:nth-child(3) { width: 120px; }
+    .recon-results-table th:nth-child(4), .recon-results-table td:nth-child(4) { width: 270px; }
+    .recon-results-table th:nth-child(5), .recon-results-table td:nth-child(5) { width: 270px; }
+    .recon-results-table th:nth-child(6), .recon-results-table td:nth-child(6) { width: 320px; }
+    .recon-results-table th:nth-child(7), .recon-results-table td:nth-child(7) { width: 240px; }
+    .recon-results-table th:nth-child(8), .recon-results-table td:nth-child(8) { width: 110px; }
+    .recon-results-table .cell-main, .recon-results-table .recon-cell-main, .recon-results-table .recon-cell-wide { min-width: 0; max-width: none; }
+    .recon-results-table .clamp { max-width: none; }
+    .recon-results-table td:nth-child(2) .tag { max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .recon-results-table td:nth-child(2) .tag-row { gap: 4px; }
+    .sticky-col { position: sticky; left: 0; z-index: 2; background: inherit; box-shadow: 1px 0 0 var(--line); }
+    th.sticky-col { z-index: 3; background: #f8fafc; }
+    .compact-table .select-col + .sticky-col { left: 36px; }
+    .select-col { width: 36px; min-width: 36px; text-align: center; }
+    .row-check { width: 15px; height: 15px; }
+    .cell-main { display: grid; gap: 4px; min-width: 190px; }
+    .cell-title { font-weight: 760; color: var(--text); overflow-wrap: anywhere; }
+    .cell-sub { color: var(--muted); font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .cell-muted { color: var(--muted); font-size: 12px; }
+    .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 320px; }
+    .bulk-bar { display: none; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .bulk-bar.show { display: flex; }
+    .modal { width: min(1120px,100%); }
+    .modal-tabs { display: flex; gap: 6px; padding: 10px 18px 0; border-bottom: 1px solid var(--line); background: #fff; overflow-x: auto; }
+    .modal-tab { border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted); padding: 9px 12px; border-radius: 8px 8px 0 0; font-weight: 700; white-space: nowrap; }
+    .modal-tab.active { color: var(--primary-strong); background: #f8fafc; border-color: var(--line); }
+    .detail-pane { display: none; }
+    .detail-pane.active { display: grid; gap: 12px; }
+    .detail-hero { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 14px; display: grid; gap: 10px; box-shadow: var(--shadow-soft); }
+    .detail-hero h3 { margin: 0; font-size: 18px; }
+    .detail-grid, .edit-grid { grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 10px; }
+    .detail-item { min-height: 62px; padding: 9px 10px; }
+    .detail-item.span-2 { grid-column: span 2; }
+    .detail-item.span-3, .edit-grid .wide { grid-column: 1 / -1; }
+    .ai-suggestion-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
+    .ai-suggestion { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 12px; text-align: left; display: grid; gap: 5px; color: var(--text); box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .ai-suggestion:hover { box-shadow: var(--shadow-hover); border-color: #cfd6e1; }
+    .ai-suggestion strong { font-size: 14px; }
+    .ai-suggestion span { color: var(--muted); font-size: 12px; }
+    .assistant-context { display: none; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #f8fafc; color: var(--muted); font-size: 12px; overflow: hidden; }
+    .assistant-context.show { display: flex; }
+    #assistantContextText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .assistant-context .btn { flex: 0 0 auto; }
+    .assistant-tools { border-bottom: 1px solid var(--line); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: center; background: #fff; overflow-x: hidden; }
+    .assistant-tool-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .assistant-drawer.hide-quick .assistant-quick { display: none; }
+    .assistant-debug { display: none; border-top: 1px solid var(--line); background: #f8fafc; padding: 8px 10px; color: var(--muted); font-size: 12px; max-height: 110px; overflow-y: auto; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .assistant-drawer.show-debug .assistant-debug { display: block; }
+    .assistant-bubble table { border-collapse: collapse; width: 100%; min-width: 0; table-layout: fixed; font-size: 12px; margin: 6px 0; }
+    .assistant-bubble th, .assistant-bubble td { border: 1px solid var(--line); padding: 5px 6px; overflow-wrap: anywhere; word-break: break-word; }
+    .assistant-bubble strong { font-weight: 800; }
+    .recon-monitor-grid { grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); }
+    .recon-monitor-jobs { grid-template-columns: repeat(auto-fit,minmax(340px,1fr)); }
+    .recon-job-card { gap: 8px; }
+    .recon-cell-wide { min-width: 220px; max-width: 320px; }
+    .template-grid { grid-template-columns: repeat(auto-fit,minmax(340px,1fr)); }
+    .template-card { gap: 9px; }
+    .template-card pre { max-height: none; overflow: visible; }
+    .recon-status-strip { display: grid; grid-template-columns: repeat(auto-fit,minmax(132px,1fr)); gap: 10px; margin-bottom: 12px; }
+    .recon-status-item { border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 10px 12px; display: grid; gap: 4px; }
+    .recon-status-item strong { font-size: 20px; line-height: 1; }
+    .recon-status-item span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .recon-status-item.warning { background: var(--warning-soft); border-color: #f7cf79; }
+    .recon-status-item.danger { background: var(--danger-soft); border-color: #fda29b; }
+    .prospect-grid { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(320px,0.6fr); gap: 16px; align-items: start; }
+    .prospect-form { display: grid; gap: 12px; }
+    .prospect-form-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(160px,0.35fr) minmax(180px,0.45fr); gap: 10px; }
+    .prospect-actions { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .prospect-status { color: var(--muted); font-size: 12px; min-height: 18px; }
+    .prospect-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+    .prospect-table { min-width: 1280px; table-layout: fixed; }
+    .prospect-table th:nth-child(1), .prospect-table td:nth-child(1) { width: 230px; }
+    .prospect-table th:nth-child(2), .prospect-table td:nth-child(2) { width: 80px; }
+    .prospect-table th:nth-child(3), .prospect-table td:nth-child(3) { width: 230px; }
+    .prospect-table th:nth-child(4), .prospect-table td:nth-child(4) { width: 240px; }
+    .prospect-table th:nth-child(5), .prospect-table td:nth-child(5) { width: 240px; }
+    .prospect-table th:nth-child(6), .prospect-table td:nth-child(6) { width: 170px; }
+    .prospect-table th:nth-child(7), .prospect-table td:nth-child(7) { width: 190px; }
+    .prospect-task-list { display: grid; gap: 8px; }
+    .prospect-task { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff; display: grid; gap: 7px; }
+    .prospect-task.active { border-color: #99d4cc; background: #f3fbf9; }
+    .prospect-task h3 { margin: 0; font-size: 13px; }
+    .prospect-task p { margin: 0; color: var(--muted); font-size: 12px; }
+    .prospect-row.promoted { background: #f6fef9; }
+    .prospect-row .btn { margin: 2px 0; }
+    .loading { min-height: 260px; display: grid; place-items: center; color: var(--muted); }
+    @media (max-width:1100px) { .filters { grid-template-columns: repeat(3,minmax(160px,1fr)); } .metric-grid { grid-template-columns: repeat(auto-fit,minmax(155px,1fr)); } .split { grid-template-columns: 1fr 1fr; } .recon-facts { grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); } .recon-job-pipeline { grid-template-columns: repeat(5,minmax(72px,1fr)); } .kanban { grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); } }
+    @media (max-width:720px) { .topbar-inner, .layout { padding-left: 14px; padding-right: 14px; } .topbar-inner { grid-template-columns: 1fr; } .top-actions { justify-content: start; } .filters { grid-template-columns: 1fr; } .metric-grid, .split, .detail-grid, .edit-grid, .template-grid, .tag-create, .ai-suggestion-grid, .recon-monitor-grid, .recon-monitor-jobs, .recon-status-strip, .prospect-grid, .prospect-form-row, .prospect-summary { grid-template-columns: 1fr; } .detail-item.span-2, .detail-item.span-3, .edit-grid .wide { grid-column: auto; } .recon-job-pipeline { grid-template-columns: 1fr; } .assistant-launcher { right: 14px; bottom: 14px; } .assistant-drawer { right: 10px; bottom: 76px; width: calc(100vw - 20px); height: min(620px,calc(100vh - 90px)); } .assistant-form { grid-template-columns: 1fr; } .assistant-send { width: 100%; } }
+    /* TradeLead AI V2 shell: dark local-workbench interface. */
+    body.tradelead-v2 {
+      --bg: #070b10;
+      --panel: #0d151b;
+      --panel-soft: #111e26;
+      --line: #20323b;
+      --line-strong: #2c4652;
+      --text: #e7f1f3;
+      --muted: #89a0aa;
+      --primary: #38d6bd;
+      --primary-strong: #69ead6;
+      --primary-soft: rgba(56,214,189,0.13);
+      --danger: #ff7b88;
+      --danger-soft: rgba(255, 92, 114, 0.12);
+      --warning: #ffd166;
+      --warning-soft: rgba(255, 209, 102, 0.12);
+      --success: #6ee7a8;
+      --success-soft: rgba(110, 231, 168, 0.12);
+      --shadow: 0 22px 70px rgba(0,0,0,0.36);
+      --shadow-soft: 0 1px 0 rgba(255,255,255,0.04), 0 16px 40px rgba(0,0,0,0.18);
+      --shadow-hover: 0 20px 48px rgba(0,0,0,0.26);
+      background:
+        radial-gradient(circle at 24% 0%, rgba(56,214,189,0.12), transparent 32%),
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, 34px 34px, 34px 34px, auto;
+      color: var(--text);
+    }
+
+    body.tradelead-v2 .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 260px minmax(0,1fr);
+      grid-template-rows: 1fr;
+    }
+
+    body.tradelead-v2 .topbar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      z-index: 14;
+      background: linear-gradient(180deg, rgba(13,21,27,0.98), rgba(7,11,16,0.98));
+      border-right: 1px solid var(--line);
+      border-bottom: 0;
+      backdrop-filter: blur(18px);
+    }
+
+    body.tradelead-v2 .topbar-inner {
+      max-width: none;
+      height: 100%;
+      padding: 18px 14px;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr;
+      align-content: start;
+      gap: 16px;
+    }
+
+    body.tradelead-v2 .brand {
+      padding: 8px 8px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    body.tradelead-v2 .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #145a52, #38d6bd);
+      color: #dffdfa;
+      box-shadow: 0 0 0 1px rgba(105,234,214,0.28), 0 14px 30px rgba(56,214,189,0.12);
+    }
+
+    body.tradelead-v2 .brand h1 {
+      color: #f2fffd;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    body.tradelead-v2 .brand p,
+    body.tradelead-v2 .muted,
+    body.tradelead-v2 .cell-muted,
+    body.tradelead-v2 .pagination-info,
+    body.tradelead-v2 .assistant-title span,
+    body.tradelead-v2 .prospect-status {
+      color: var(--muted);
+    }
+
+    body.tradelead-v2 .tabs {
+      display: grid;
+      gap: 6px;
+      flex-wrap: nowrap;
+      padding: 2px;
+    }
+
+    body.tradelead-v2 .tab {
+      width: 100%;
+      justify-content: flex-start;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #9eb4bd;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 11px;
+      min-height: 40px;
+      text-align: left;
+    }
+
+    body.tradelead-v2 .tab::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #2f4650;
+      box-shadow: 0 0 0 3px rgba(47,70,80,0.16);
+      flex: 0 0 auto;
+    }
+
+    body.tradelead-v2 .tab:hover {
+      color: #e7f1f3;
+      background: rgba(255,255,255,0.035);
+      border-color: rgba(105,234,214,0.12);
+    }
+
+    body.tradelead-v2 .tab.active {
+      color: #dffdfa;
+      border-color: rgba(56,214,189,0.34);
+      background: linear-gradient(90deg, rgba(56,214,189,0.18), rgba(56,214,189,0.05));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    body.tradelead-v2 .tab.active::before {
+      background: var(--primary);
+      box-shadow: 0 0 16px rgba(56,214,189,0.72);
+    }
+
+    body.tradelead-v2 .top-actions {
+      justify-content: stretch;
+      align-items: stretch;
+      align-self: end;
+      display: grid;
+      gap: 8px;
+    }
+
+    body.tradelead-v2 .pill {
+      border-color: var(--line);
+      background: rgba(255,255,255,0.035);
+      color: #9eb4bd;
+      border-radius: 8px;
+      white-space: normal;
+    }
+
+    body.tradelead-v2 .layout {
+      max-width: none;
+      margin: 0;
+      padding: 22px;
+      min-width: 0;
+    }
+
+    body.tradelead-v2 .workbench-strip {
+      position: sticky;
+      top: 0;
+      z-index: 9;
+      padding: 14px 0 10px;
+      background: linear-gradient(180deg, rgba(7,11,16,0.96), rgba(7,11,16,0.72));
+      backdrop-filter: blur(14px);
+    }
+
+    body.tradelead-v2 .workbench-strip .tabs {
+      display: none;
+    }
+
+    body.tradelead-v2 .view-title strong {
+      color: #f2fffd;
+      font-size: 22px;
+    }
+
+    body.tradelead-v2 .view-title span {
+      color: var(--muted);
+    }
+
+    body.tradelead-v2 .filters,
+    body.tradelead-v2 .panel,
+    body.tradelead-v2 .metric,
+    body.tradelead-v2 .lane,
+    body.tradelead-v2 .mini-card,
+    body.tradelead-v2 .template-card,
+    body.tradelead-v2 .recon-monitor-card,
+    body.tradelead-v2 .recon-monitor-strip,
+    body.tradelead-v2 .recon-job-card,
+    body.tradelead-v2 .recon-strip,
+    body.tradelead-v2 .tag-editor,
+    body.tradelead-v2 .tag-group,
+    body.tradelead-v2 .detail-item,
+    body.tradelead-v2 .ai-suggestion,
+    body.tradelead-v2 .prospect-task,
+    body.tradelead-v2 .recon-status-item {
+      background: rgba(13,21,27,0.88);
+      border-color: var(--line);
+      color: var(--text);
+      box-shadow: var(--shadow-soft);
+    }
+
+    body.tradelead-v2 .panel,
+    body.tradelead-v2 .metric,
+    body.tradelead-v2 .lane,
+    body.tradelead-v2 .mini-card,
+    body.tradelead-v2 .template-card,
+    body.tradelead-v2 .recon-monitor-card,
+    body.tradelead-v2 .recon-job-card,
+    body.tradelead-v2 .detail-item {
+      border-radius: 8px;
+    }
+
+    body.tradelead-v2 .panel-head,
+    body.tradelead-v2 .lane-head,
+    body.tradelead-v2 .pagination-bar,
+    body.tradelead-v2 .modal-head,
+    body.tradelead-v2 .modal-actions,
+    body.tradelead-v2 .assistant-head,
+    body.tradelead-v2 .assistant-tools,
+    body.tradelead-v2 .assistant-form,
+    body.tradelead-v2 .assistant-context,
+    body.tradelead-v2 .modal-tabs {
+      background: rgba(17,30,38,0.9);
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    body.tradelead-v2 .panel-head h2,
+    body.tradelead-v2 .template-card h3,
+    body.tradelead-v2 .mini-card h3,
+    body.tradelead-v2 .recon-job-top h3,
+    body.tradelead-v2 .prospect-task h3,
+    body.tradelead-v2 .cell-title,
+    body.tradelead-v2 .company {
+      color: #f2fffd;
+    }
+
+    body.tradelead-v2 .metric:hover,
+    body.tradelead-v2 .mini-card:hover,
+    body.tradelead-v2 .template-card:hover,
+    body.tradelead-v2 .recon-job-card:hover,
+    body.tradelead-v2 .ai-suggestion:hover {
+      border-color: rgba(56,214,189,0.45);
+      box-shadow: var(--shadow-hover);
+    }
+
+    body.tradelead-v2 .metric strong {
+      color: #f8fffd;
+    }
+
+    body.tradelead-v2 .metric.warning,
+    body.tradelead-v2 .recon-monitor-card.warning,
+    body.tradelead-v2 .recon-status-item.warning,
+    body.tradelead-v2 .recon-job-card.stale {
+      background: var(--warning-soft);
+      border-color: rgba(255,209,102,0.32);
+    }
+
+    body.tradelead-v2 .metric.danger,
+    body.tradelead-v2 .recon-monitor-card.danger,
+    body.tradelead-v2 .recon-status-item.danger,
+    body.tradelead-v2 .mini-card.risk,
+    body.tradelead-v2 .prospect-task.failed,
+    body.tradelead-v2 .recon-job-card.failed {
+      background: var(--danger-soft);
+      border-color: rgba(255,123,136,0.34);
+    }
+
+    body.tradelead-v2 .input,
+    body.tradelead-v2 .select,
+    body.tradelead-v2 .textarea {
+      background: #071016;
+      border-color: var(--line-strong);
+      color: var(--text);
+      border-radius: 7px;
+    }
+
+    body.tradelead-v2 .input::placeholder,
+    body.tradelead-v2 .textarea::placeholder {
+      color: #5f7883;
+    }
+
+    body.tradelead-v2 .input:focus,
+    body.tradelead-v2 .select:focus,
+    body.tradelead-v2 .textarea:focus {
+      border-color: rgba(56,214,189,0.78);
+      box-shadow: 0 0 0 3px rgba(56,214,189,0.16);
+    }
+
+    body.tradelead-v2 .btn {
+      border-radius: 7px;
+      background: linear-gradient(135deg, #24bea7, #68e7d4);
+      color: #06201c;
+      box-shadow: 0 12px 26px rgba(56,214,189,0.14);
+    }
+
+    body.tradelead-v2 .btn:hover {
+      background: linear-gradient(135deg, #54e2ce, #8cf6e7);
+    }
+
+    body.tradelead-v2 .btn.secondary {
+      background: #101d24;
+      color: #d9f6f2;
+      border: 1px solid var(--line-strong);
+      box-shadow: none;
+    }
+
+    body.tradelead-v2 .btn.secondary:hover,
+    body.tradelead-v2 .btn.ghost:hover {
+      background: rgba(56,214,189,0.12);
+      border-color: rgba(56,214,189,0.34);
+      color: #f2fffd;
+    }
+
+    body.tradelead-v2 .btn.ghost {
+      background: transparent;
+      color: #9eb4bd;
+      border: 1px solid transparent;
+      box-shadow: none;
+    }
+
+    body.tradelead-v2 .btn[disabled],
+    body.tradelead-v2 .pagination-controls .btn[disabled] {
+      opacity: 0.42;
+      cursor: not-allowed;
+      filter: saturate(0.65);
+    }
+
+    body.tradelead-v2 .tag {
+      background: rgba(255,255,255,0.045);
+      color: #aecad3;
+      border-color: var(--line);
+      border-radius: 999px;
+    }
+
+    body.tradelead-v2 .tag.status,
+    body.tradelead-v2 .tag.recon-running,
+    body.tradelead-v2 .tag.today {
+      color: #9ff5e8;
+      background: rgba(56,214,189,0.13);
+      border-color: rgba(56,214,189,0.28);
+    }
+
+    body.tradelead-v2 .tag.risk {
+      color: #ffadb6;
+      background: rgba(255,123,136,0.12);
+      border-color: rgba(255,123,136,0.28);
+    }
+
+    body.tradelead-v2 .tag.sanction {
+      color: #ffd166;
+      background: rgba(255,209,102,0.12);
+      border-color: rgba(255,209,102,0.28);
+    }
+
+    body.tradelead-v2 table,
+    body.tradelead-v2 .prospect-table,
+    body.tradelead-v2 .recon-results-table {
+      color: var(--text);
+    }
+
+    body.tradelead-v2 .table-wrap {
+      overflow: auto;
+      border-top-color: var(--line);
+    }
+
+    body.tradelead-v2 th {
+      background: #101b22;
+      color: #9eb4bd;
+      border-color: var(--line);
+    }
+
+    body.tradelead-v2 th.sticky-col,
+    body.tradelead-v2 .sticky-col {
+      background: #0d151b;
+      box-shadow: 1px 0 0 var(--line);
+    }
+
+    body.tradelead-v2 td {
+      border-color: rgba(32,50,59,0.86);
+    }
+
+    body.tradelead-v2 tr.customer-row:hover,
+    body.tradelead-v2 tr.pool-row:hover,
+    body.tradelead-v2 tr.recon-row:hover,
+    body.tradelead-v2 .prospect-row:hover {
+      background: rgba(56,214,189,0.055);
+    }
+
+    body.tradelead-v2 tr.customer-row.risk,
+    body.tradelead-v2 tr.pool-row.risk,
+    body.tradelead-v2 tr.recon-row.risk {
+      background: rgba(255,123,136,0.06);
+    }
+
+    body.tradelead-v2 .row-check,
+    body.tradelead-v2 input[type="checkbox"] {
+      accent-color: var(--primary);
+    }
+
+    body.tradelead-v2 a {
+      color: #82efe0;
+    }
+
+    body.tradelead-v2 .template-card pre,
+    body.tradelead-v2 .recon-log,
+    body.tradelead-v2 .assistant-debug {
+      background: #050b10;
+      color: #bcd6dd;
+      border-color: var(--line);
+    }
+
+    body.tradelead-v2 .modal-backdrop {
+      background: rgba(0,0,0,0.64);
+    }
+
+    body.tradelead-v2 .modal,
+    body.tradelead-v2 .assistant-drawer {
+      background: #0b1319;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 10px;
+    }
+
+    body.tradelead-v2 .detail-hero {
+      background: rgba(13,21,27,0.9);
+      border-color: var(--line);
+      color: var(--text);
+      border-radius: 8px;
+    }
+
+    body.tradelead-v2 .detail-hero h3 {
+      color: #f2fffd;
+    }
+
+    body.tradelead-v2 .modal-tab {
+      color: #91a9b3;
+    }
+
+    body.tradelead-v2 .modal-tab.active {
+      color: #dffdfa;
+      background: rgba(56,214,189,0.12);
+      border-color: rgba(56,214,189,0.3);
+    }
+
+    body.tradelead-v2 .risk-banner {
+      background: var(--danger-soft);
+      border-color: rgba(255,123,136,0.34);
+      color: #ffadb6;
+    }
+
+    body.tradelead-v2 .assistant-launcher {
+      background: linear-gradient(135deg, #1aa994, #65ead7);
+      color: #05201c;
+      box-shadow: 0 18px 42px rgba(56,214,189,0.28);
+    }
+
+    body.tradelead-v2 .assistant-messages {
+      background: #071016;
+    }
+
+    body.tradelead-v2 .assistant-empty,
+    body.tradelead-v2 .assistant-bubble,
+    body.tradelead-v2 .assistant-source,
+    body.tradelead-v2 .assistant-quick-btn {
+      background: #101d24;
+      border-color: var(--line);
+      color: #d8e8eb;
+    }
+
+    body.tradelead-v2 .assistant-msg.user .assistant-bubble {
+      background: linear-gradient(135deg, #1aa994, #37d5bc);
+      color: #05201c;
+      border-color: transparent;
+    }
+
+    body.tradelead-v2 .assistant-source:hover,
+    body.tradelead-v2 .assistant-quick-btn:hover {
+      border-color: rgba(56,214,189,0.42);
+      color: #dffdfa;
+    }
+
+    body.tradelead-v2 .toast {
+      background: #dffdfa;
+      color: #061513;
+      border: 1px solid rgba(56,214,189,0.38);
+    }
+
+    body.tradelead-v2 .loading,
+    body.tradelead-v2 .empty {
+      color: var(--muted);
+    }
+
+    body.tradelead-v2 .bulk-bar.show {
+      display: flex;
+      border: 1px solid rgba(56,214,189,0.22);
+      background: rgba(56,214,189,0.08);
+      border-radius: 8px;
+      padding: 6px 8px;
+    }
+
+    body.tradelead-v2 .prospect-task.active,
+    body.tradelead-v2 .prospect-row.promoted {
+      background: rgba(56,214,189,0.09);
+      border-color: rgba(56,214,189,0.34);
+    }
+
+    body.tradelead-v2 .checks label,
+    body.tradelead-v2 .field label {
+      color: #9eb4bd;
+    }
+
+    body.tradelead-v2 .tag-check {
+      background: #101d24;
+      border-color: var(--line);
+      color: #d8e8eb;
+    }
+
+    @media (max-width: 920px) {
+      body.tradelead-v2 .app {
+        grid-template-columns: 1fr;
+      }
+
+      body.tradelead-v2 .topbar {
+        position: sticky;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      body.tradelead-v2 .topbar-inner {
+        height: auto;
+        padding: 12px 14px;
+        grid-template-rows: auto auto auto;
+      }
+
+      body.tradelead-v2 .brand {
+        padding: 0 0 10px;
+      }
+
+      body.tradelead-v2 .tabs {
+        display: flex;
+        overflow-x: auto;
+        gap: 8px;
+      }
+
+      body.tradelead-v2 .tab {
+        width: auto;
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+
+      body.tradelead-v2 .top-actions {
+        grid-template-columns: 1fr auto;
+      }
+
+      body.tradelead-v2 .layout {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body class="tradelead-v2">
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand"><div class="brand-mark">RU</div><div><h1>俄罗斯客户开发系统</h1><p id="metaLine">本地 CRM V1.0</p></div></div>
+        <div class="top-actions"><span class="pill" id="userPill">数据源：SQLite</span><button class="btn secondary" id="refreshBtn" type="button">刷新数据</button></div>
+      </div>
+    </header>
+    <main class="layout">
+      <div class="workbench-strip">
+        <nav class="tabs">
+          <button class="tab active" type="button" data-view="dashboard">仪表盘</button>
+          <button class="tab" type="button" data-view="prospect">外贸智能体</button>
+          <button class="tab" type="button" data-view="pool">总客户池</button>
+          <button class="tab" type="button" data-view="customers">客户列表</button>
+          <button class="tab" type="button" data-view="kanban">Kanban</button>
+          <button class="tab" type="button" data-view="recon">Recon结果</button>
+          <button class="tab" type="button" data-view="templates">话术模板</button>
+        </nav>
+        <div class="view-title"><strong id="viewTitle">仪表盘</strong><span id="viewSubtitle">关键指标、今日跟进和需确认提醒</span></div>
+      </div>
+      <section class="filters collapsed" id="filtersPanel">
+        <div class="field"><label for="searchInput">搜索</label><input class="input" id="searchInput" placeholder="公司、官网、行业、产品、联系人"></div>
+        <div class="field"><label for="statusFilter">状态/池子</label><select class="select" id="statusFilter"></select></div>
+        <div class="field"><label for="typeFilter">客户类型</label><select class="select" id="typeFilter"></select></div>
+        <div class="field advanced-filter"><label for="industryFilter">行业</label><select class="select" id="industryFilter"></select></div>
+        <div class="field advanced-filter"><label for="ownerFilter">负责人</label><select class="select" id="ownerFilter"></select></div>
+        <div class="field advanced-filter"><label for="tagFilter">标签</label><select class="select" id="tagFilter"></select></div>
+        <div class="checks"><label><input type="checkbox" id="riskOnly"> 只看需确认</label><label><input type="checkbox" id="todayOnly"> 今日跟进</label></div>
+        <button class="btn ghost filters-toggle" id="filtersToggleBtn" type="button">高级筛选</button>
+      </section>
+      <div id="loading" class="loading">正在读取数据...</div>
+      <section class="section active" id="dashboardView"><div class="metric-grid" id="metricGrid"></div><div class="split"><div class="panel"><div class="panel-head"><h2>今日待跟进</h2><span class="muted" id="todayCount">0 个客户</span></div><div class="panel-body"><div class="list" id="todayList"></div></div></div><div class="panel"><div class="panel-head"><h2>需确认客户</h2><span class="muted" id="riskCount">0 个客户</span></div><div class="panel-body"><div class="list" id="riskList"></div></div></div></div></section>
+      <section class="section" id="prospectView"><div class="prospect-grid"><div class="panel"><div class="panel-head"><h2>外贸智能体</h2><span class="muted" id="prospectCount">0 个候选</span></div><div class="panel-body"><form class="prospect-form" id="prospectForm"><div class="field"><label for="prospectQuery">搜索目标</label><textarea class="textarea" id="prospectQuery" placeholder="例：找俄罗斯做工业控制设备、可能采购 MCU/IGBT/传感器的制造商，优先有官网和联系人入口"></textarea></div><div class="prospect-form-row"><div class="field"><label for="prospectProduct">可供应/重点产品</label><input class="input" id="prospectProduct" placeholder="MCU、IGBT、传感器、连接器"></div><div class="field"><label for="prospectMarket">市场</label><input class="input" id="prospectMarket" value="俄罗斯"></div><div class="field"><label for="prospectIndustry">行业重点</label><input class="input" id="prospectIndustry" placeholder="工业控制/电子制造/存储"></div></div><div class="prospect-actions"><button class="btn" id="prospectRunBtn" type="submit">开始筛选</button><span class="prospect-status" id="prospectStatus"></span></div></form></div><div class="table-wrap"><table class="compact-table prospect-table"><thead><tr><th class="sticky-col">候选公司</th><th>评分</th><th>业务/产品</th><th>需求信号</th><th>证据来源</th><th>状态</th><th>动作</th></tr></thead><tbody id="prospectTable"></tbody></table></div></div><aside class="panel"><div class="panel-head"><h2>实时数据</h2><button class="btn ghost small" id="prospectRefreshBtn" type="button">刷新</button></div><div class="panel-body"><div class="prospect-summary" id="prospectSummary"></div><div class="prospect-task-list" id="prospectTasks"></div></div></aside></div></section>
+      <section class="section" id="poolView"><div class="panel"><div class="panel-head"><h2>总客户池</h2><div class="bulk-bar" id="poolBulkBar"><span>已选择 0 个客户</span><button class="btn ghost small" type="button">预留批量操作</button></div><span class="muted" id="poolCount">0 个客户</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th class="select-col sticky-col"><input class="row-check" type="checkbox" data-select-all="pool"></th><th class="sticky-col">公司</th><th>城市</th><th>客户类型</th><th>行业</th><th>简介</th><th>池子</th><th>产品</th><th>Recon</th></tr></thead><tbody id="poolTable"></tbody></table></div><div class="pagination-bar" id="poolPagination"></div></div></section>
+      <section class="section" id="customersView"><div class="panel"><div class="panel-head"><h2>客户列表</h2><div class="bulk-bar" id="customerBulkBar"><span>已选择 0 个客户</span><button class="btn ghost small" type="button">预留批量操作</button></div><span class="muted" id="resultCount">0 个客户</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th class="select-col sticky-col"><input class="row-check" type="checkbox" data-select-all="customers"></th><th class="sticky-col">公司</th><th>网站</th><th>类型</th><th>状态</th><th>负责人</th><th>最近跟进</th><th>下次跟进</th><th>Recon</th></tr></thead><tbody id="customerTable"></tbody></table></div></div></section>
+      <section class="section" id="kanbanView"><div class="kanban" id="kanban"></div></section>
+      <section class="section" id="reconView"><div class="recon-status-strip" id="reconStatusStrip"></div><div class="panel"><div class="panel-head"><h2>Russia-recon 结果</h2><span class="muted" id="reconCount">0 条结果</span></div><div class="panel-body"><div class="recon-monitor" id="reconMonitor"></div></div><div class="table-wrap"><table class="compact-table recon-results-table"><thead><tr><th class="sticky-col">客户</th><th>状态/评分</th><th>客户画像</th><th>需求信号</th><th>可提供</th><th>联系人</th><th>建议动作</th><th>证据/报告</th></tr></thead><tbody id="reconTable"></tbody></table></div></div></section>
+      <section class="section" id="templatesView"><div class="template-grid" id="templateGrid"></div></section>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2 id="modalTitle">客户详情</h2><div class="tag-row" id="modalTags"></div></div><button class="btn ghost" id="closeModalBtn">关闭</button></div><div class="modal-tabs" id="detailTabs"><button class="modal-tab active" type="button" data-detail-tab="overview">概览</button><button class="modal-tab" type="button" data-detail-tab="follow">跟进</button><button class="modal-tab" type="button" data-detail-tab="recon">Recon</button><button class="modal-tab" type="button" data-detail-tab="tags">标签</button><button class="modal-tab" type="button" data-detail-tab="ai">AI 建议</button></div><div class="modal-body"><div class="risk-banner" id="riskBanner">此客户带有人工确认标签；系统不会自动拦截业务操作。</div><section class="detail-pane active" id="detailPaneOverview"><div id="detailHero"></div><div class="detail-grid" id="detailGrid"></div></section><section class="detail-pane" id="detailPaneFollow"><form class="edit-grid" id="editForm"><div class="field"><label for="editOwner">分配给</label><input class="input" id="editOwner" name="owner"></div><div class="field"><label for="editStatus">当前状态</label><select class="select" id="editStatus" name="status"></select></div><div class="field"><label for="editChannel">联系渠道</label><input class="input" id="editChannel" name="channel" placeholder="邮件/电话/WhatsApp/Telegram"></div><div class="field"><label for="editFirstContactDate">首次联系日期</label><input class="input" id="editFirstContactDate" name="firstContactDate" type="date"></div><div class="field"><label for="editLastFollowDate">最近跟进日期</label><input class="input" id="editLastFollowDate" name="lastFollowDate" type="date"></div><div class="field"><label for="editNextFollowDate">下次跟进日期</label><input class="input" id="editNextFollowDate" name="nextFollowDate" type="date"></div><div class="field wide"><label for="editFeedback">客户反馈</label><textarea class="textarea" id="editFeedback" name="feedback"></textarea></div><div class="field wide"><label for="editNextAction">下一步动作</label><textarea class="textarea" id="editNextAction" name="nextAction"></textarea></div><div class="field wide"><label for="editInvalidReason">无效原因</label><textarea class="textarea" id="editInvalidReason" name="invalidReason"></textarea></div><div class="field wide"><label for="editNotes">备注</label><textarea class="textarea" id="editNotes" name="notes"></textarea></div></form></section><section class="detail-pane" id="detailPaneRecon"><div class="recon-strip" id="reconActionPanel"></div></section><section class="detail-pane" id="detailPaneTags"><div class="tag-editor" id="tagEditorPanel"></div></section><section class="detail-pane" id="detailPaneAi"><div class="ai-suggestion-grid"><button class="ai-suggestion" type="button" data-detail-ai="基于当前客户的数据库资料、跟进记录、标签和Recon信息，输出客户画像：1.客户类型 2.主营/应用场景 3.可能需求 4.推荐产品 5.确认点 6.开发优先级。"><strong>客户画像</strong><span>类型、需求、产品、确认点和优先级</span></button><button class="ai-suggestion" type="button" data-detail-ai="基于当前客户的状态、下次跟进日期、反馈、标签和Recon信息，给出下一步跟进计划：联系目标、渠道、话术要点、要确认的问题、是否需要人工复核。"><strong>跟进建议</strong><span>联系目标、渠道和确认问题</span></button><button class="ai-suggestion" type="button" data-detail-ai="基于当前客户资料写开发信：先给中文策略说明，再给英文邮件和俄文邮件。不要编造联系人或邮箱，缺信息时用占位符。"><strong>写开发信</strong><span>中文策略 + 英文/俄文邮件</span></button><button class="ai-suggestion" type="button" data-detail-ai="基于当前客户的人工确认标签、Recon制裁状态、制裁字段和证据来源，输出制裁机会摘要：结论、证据、机会等级、建议动作。只基于数据库。"><strong>机会摘要</strong><span>结论、证据、等级和动作</span></button><button class="ai-suggestion" type="button" data-detail-ai="找和当前客户相似的客户。请结合行业、产品需求、客户类型、标签、Recon摘要和报告正文，列出相似客户、相似原因、推荐切入点。"><strong>相似客户</strong><span>按相似原因和切入点列出</span></button><button class="ai-suggestion" type="button" data-detail-ai="从当前客户的Recon证据和报告正文里查找采购邮箱、采购部、联系人、供应链或询价线索，列字段、来源URL和置信度。"><strong>采购线索</strong><span>采购邮箱、联系人和证据来源</span></button></div></section></div><div class="modal-actions"><button class="btn secondary" id="cancelBtn">取消</button><button class="btn" id="saveBtn">保存</button></div></div></div>
+  <button class="assistant-launcher" id="assistantLauncher" type="button" aria-label="打开 AI 助手">AI</button>
+  <section class="assistant-drawer" id="assistantDrawer" aria-label="AI 助手">
+    <div class="assistant-head"><div class="assistant-title"><strong>CRM AI 助手</strong><span id="assistantMeta">DeepSeek · SQLite</span></div><button class="btn ghost small" id="assistantCloseBtn" type="button">关闭</button></div>
+    <div class="assistant-context" id="assistantContextBar"><span id="assistantContextText"></span><button class="btn ghost small" type="button" id="assistantAskCurrentBtn">问这个客户</button></div>
+    <div class="assistant-tools"><div class="assistant-tool-group"><button class="btn ghost small" type="button" id="assistantClearBtn">清空对话</button><button class="btn ghost small" type="button" id="assistantQuickToggleBtn">收起模板</button></div><button class="btn ghost small" type="button" id="assistantDebugToggleBtn">展开调试</button></div>
+    <div class="assistant-quick" id="assistantQuickActions">
+      <button class="assistant-quick-btn" type="button" data-prompt="帮我判断今天最值得开发的客户。请先用数据库列出今日跟进客户，再按开发价值排序，说明机会点、缺口、下一步最小动作；信息不足时给出需要补查的证据来源。">今日开发</button>
+      <button class="assistant-quick-btn" type="button" data-prompt="帮我找需要人工确认的客户。请区分制裁事实、敏感行业信号、普通商业风险和信息不足；每条说明依据、可信度、人工复核点和业务含义。">复核客户</button>
+      <button class="assistant-quick-btn" type="button" data-prompt="哪些客户有 Recon 报告？请返回总数、当前页清单、评分、制裁状态和报告入口，超过20条请支持继续。">Recon报告</button>
+      <button class="assistant-quick-btn" type="button" data-prompt="帮我做需求匹配判断。请按功率器件、MCU/控制器、传感器、连接器、被动元件、电源模块评估客户匹配度、依据、可信度和切入话题；证据不足时说明要补查什么。">需求匹配</button>
+      <button class="assistant-quick-btn" type="button" data-prompt="帮我找采购入口线索。请区分已验证联系人、入口邮箱/电话、官网联系入口、疑似采购线索、未找到；每条必须给来源URL、可信度和下一步核验动作，不要编造联系人。">采购入口</button>
+      <button class="assistant-quick-btn" type="button" data-prompt="帮我挑选最适合今天开发的客户。请先给选择逻辑，再列前3个客户的开发理由、风险/缺口、首封开发信方向。" data-current-prompt="基于当前客户的数据库资料、Recon和必要的公开搜索线索，判断是否值得开发；再给中文策略说明、英文邮件和俄文邮件草稿。缺联系人/邮箱时用占位符，并说明需要补查的官网/采购入口证据。">外联策略</button>
+    </div>
+    <div class="assistant-messages" id="assistantMessages"></div>
+    <form class="assistant-form" id="assistantForm"><textarea class="input assistant-input" id="assistantInput" rows="2" placeholder="问客户、跟进、Recon、联系人或机会信号"></textarea><button class="btn assistant-send" id="assistantSendBtn" type="submit">发送</button><div class="assistant-status" id="assistantStatus"></div></form>
+    <div class="assistant-debug" id="assistantDebug"></div>
+    <div class="assistant-resize" id="assistantResizeHandle" aria-hidden="true"></div>
+  </section>
+  <div class="toast" id="toast"></div>
+  <textarea id="initialDataJson" hidden readonly>__INITIAL_DATA_JSON__</textarea>
+  <script>
+    const state={view:'dashboard',customers:[],filtered:[],customerPool:[],poolFiltered:[],templates:[],reconJobs:[],reconResults:[],reconMonitor:null,prospectTasks:[],prospectCandidates:[],prospectSources:[],prospectBusy:!1,prospectActiveTaskId:'',tags:[],tagCategories:[],stats:{},user:{},statusOptions:[],statusGroups:[],diagnostics:[],currentCustomer:null,currentReconTarget:null,currentTagTarget:null,loading:!1,lastReconHydrateAt:0,reconPollHandle:null,filtersExpanded:!1,detailTab:'overview',selectedPool:new Set(),selectedCustomers:new Set(),showAllMetrics:!1,poolPage:1,poolPageSize:20};
+    const assistantState={open:!1,busy:!1,messages:[],lastCursor:'',debug:!1,quickCollapsed:!1,lastMeta:null};
+    const API_BASE='/api';
+    const fallbackData={user:{email:'local-preview@example.com',name:'local-preview'},statusOptions:['未分配','已分配待联系','已邮件联系','已电话联系','已WhatsApp/Telegram联系','暂无回复','已回复-有兴趣','已回复-不匹配','已询价','已报价','联系方式无效','风险过高','放弃跟进'],statusGroups:['待联系','已联系','暂无回复','有兴趣/询价','已报价','需确认/无效'],customers:[{followId:'FU-0002',customerId:'RU-0002',companyName:'ChipDip',website:'chipdip.ru',customerType:'大贸易商',industry:'电子制造',rating:'⭐⭐⭐',products:'IC/MCU/被动元件/连接器/国产替代料',reason:'俄罗斯大型电子元器件分销平台，适合推荐现货IC、被动件、连接器和国产替代料。',email:'',phone:'+7 (495) 544-00-08',contact:'',owner:'试点业务',assignedDate:'',status:'已分配待联系',statusGroup:'待联系',firstContactDate:'',lastFollowDate:'',channel:'',feedback:'',nextAction:'发送首次开发信',nextFollowDate:new Date().toISOString().slice(0,10),nextFollowDateKey:new Date().toISOString().slice(0,10),invalidReason:'',notes:'',isRisk:!1,riskReasons:[],isDueToday:!0,isOverdue:!1},{followId:'FU-0007',customerId:'RU-0007',companyName:'КРЭТ (KRET)',website:'kret.com',customerType:'终端客户-军工电子',industry:'电子制造',rating:'⭐⭐⭐',products:'RF组件/微波器件/FPGA/ADDA转换器（需人工复核）',reason:'Rostec旗下电子企业，射频、微波、FPGA、AD/DA需求匹配，但军工属性强，需人工复核。',email:'',phone:'+7 (495) 587-70-70',contact:'',owner:'',assignedDate:'',status:'未分配',statusGroup:'待联系',firstContactDate:'',lastFollowDate:'',channel:'',feedback:'',nextAction:'提交负责人确认',nextFollowDate:'',nextFollowDateKey:'',invalidReason:'',notes:'需确认客户',isRisk:!0,riskReasons:['军工','人工复核'],isDueToday:!1,isOverdue:!1}],customerPool:[{customerId:'RU-0002',domain:'chipdip.ru',companyName:'ChipDip',website:'chipdip.ru',industry:'电子元器件分销',customerType:'贸易商',description:'俄罗斯大众型电子分销平台',products:'分立半导体、被动元件、开发板、仪器仪表',rating:'⭐⭐⭐',currentPool:'A',phone:'+7 (495) 544-00-08',email:'sales@chipdip.ru',websiteVerification:'1',contactCount:'0',verified:'1',notes:'俄罗斯大型电子元件零售商/批发商',isRisk:!1,riskReasons:[]}],reconJobs:[],reconResults:[],templates:[{id:'1',scenario:'首次开发信',description:'首次联系俄罗斯客户，介绍公司和服务',english:'Dear [Name],\\n\\nWe are a professional electronic components supplier based in Shenzhen, China.\\n\\nBest regards,\\n[Your Name]',russian:'Уважаемый [Name],\\n\\nМы являемся профессиональным поставщиком электронных компонентов из Шэньчжэня, Китай.\\n\\nС уважением,\\n[Your Name]',customerType:'通用',product:'IC/MCU/通用'}]};
+    const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+    document.addEventListener('DOMContentLoaded',()=>{try{initTradeLeadV2Layout();bindEvents();bootstrapData();startReconPolling()}catch(e){showFatalInitError(e)}});
+    function initTradeLeadV2Layout(){document.title='TradeLead AI Local';const brand=$('.brand'),mark=brand&&brand.querySelector('.brand-mark'),title=brand&&brand.querySelector('h1'),sub=brand&&brand.querySelector('p'),top=$('.topbar-inner'),tabs=$('.tabs'),actions=$('.top-actions');if(mark)mark.textContent='TL';if(title)title.textContent='TradeLead AI';if(sub)sub.textContent='SQLite · Russia CRM';if($('#userPill'))$('#userPill').textContent='本地数据 · SQLite';const labels={dashboard:'控制台',prospect:'搜客任务',pool:'线索库',customers:'客户详情',kanban:'跟进看板',recon:'Recon',templates:'营销生成器'};$$('.tab').forEach(btn=>{const label=labels[btn.dataset.view]||btn.textContent.trim();btn.textContent=label;btn.setAttribute('aria-label',label)});if(top&&tabs&&!top.contains(tabs))top.insertBefore(tabs,actions||null);const refresh=$('#refreshBtn');if(refresh)refresh.textContent='刷新数据'}
+    function bindEvents(){upgradeAiSuggestionPrompts();$$('.tab').forEach(t=>t.addEventListener('click',()=>switchView(t.dataset.view)));$('#refreshBtn').addEventListener('click',refreshFromServer);$('#filtersToggleBtn').addEventListener('click',toggleFilters);$('#closeModalBtn').addEventListener('click',closeModal);$('#cancelBtn').addEventListener('click',closeModal);$('#saveBtn').addEventListener('click',saveCustomer);$('#reconActionPanel').addEventListener('click',e=>{const start=e.target.closest('#startReconBtn');if(start)startRecon();const retry=e.target.closest('#retryReconBtn');if(retry)retryRecon(retry.dataset.jobId)});$('#reconMonitor').addEventListener('click',e=>{const retry=e.target.closest('.retry-recon-job-btn');if(retry)retryRecon(retry.dataset.jobId)});$('#tagEditorPanel').addEventListener('click',e=>{if(e.target.closest('#saveTagsBtn'))saveCustomerTags();if(e.target.closest('#createTagBtn'))createCustomTag()});$('#detailTabs').addEventListener('click',e=>{const b=e.target.closest('[data-detail-tab]');if(b)setDetailTab(b.dataset.detailTab)});$('#detailPaneAi').addEventListener('click',e=>{const b=e.target.closest('[data-detail-ai]');if(!b)return;toggleAssistant(!0);sendAssistantMessage(b.dataset.detailAi||'')});$('#poolTable').addEventListener('change',handleTableSelection);$('#customerTable').addEventListener('change',handleTableSelection);$$('[data-select-all]').forEach(i=>i.addEventListener('change',handleSelectAll));$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});['searchInput','statusFilter','typeFilter','industryFilter','ownerFilter','tagFilter','riskOnly','todayOnly'].forEach(id=>$('#'+id).addEventListener('input',applyFilters));bindProspectEvents();bindAssistantEvents()}
+    function upgradeAiSuggestionPrompts(){const items=[['开发判断','是否值得投入、机会点和下一步','判断当前客户是否值得开发。请输出：结论、开发等级A/B/C/暂缓、值得/不值得的依据、最大机会点、最大不确定性、下一步最小动作。信息不足时说明需要补查的来源和证据。'],['客户业务','做什么、卖给谁、可能买什么','用销售能理解的话解释当前客户到底做什么。请说明产品/服务、客户群或应用场景、可能用到的电子元器件、我们可能卖什么、仍需确认的事实。'],['需求匹配','按产品线判断匹配度','判断当前客户和我们产品的匹配度。请按功率器件、MCU/控制器、传感器、连接器、被动元件、电源模块分别评估匹配依据、可信度和推荐切入话题。'],['采购入口','联系人、入口和证据可信度','从当前客户的数据库、Recon证据、报告正文和公开线索中找采购入口。请区分已验证联系人、入口邮箱/电话、官网联系入口、疑似采购线索、未找到；每条给来源URL、可信度和下一步核验动作。'],['风险复核','制裁、敏感信号和复核点','判断当前客户开发前需要注意什么。请区分制裁事实、军工/敏感行业信号、普通商业风险、信息不足；说明业务含义和人工复核点，不要把制裁简单等同于不能开发。'],['外联策略','开场角度 + 英文/俄文邮件','给当前客户设计第一轮外联策略。请输出联系对象、渠道、开场角度、首封邮件主题、中文策略、英文邮件、俄文邮件、必须确认的问题、不要提的内容。缺联系人/邮箱时用占位符并标注待核验。']];$$('#detailPaneAi .ai-suggestion').forEach((btn,i)=>{const item=items[i];if(!item)return;btn.dataset.detailAi=item[2];const strong=btn.querySelector('strong'),span=btn.querySelector('span');if(strong)strong.textContent=item[0];if(span)span.textContent=item[1]})}
+    function bootstrapData(){const d=readInjectedInitialData();if(d){hydrate(d);setLoading(!1);return}loadData()}
+    function toggleFilters(){state.filtersExpanded=!state.filtersExpanded;$('#filtersPanel').classList.toggle('collapsed',!state.filtersExpanded);$('#filtersToggleBtn').textContent=state.filtersExpanded?'收起筛选':'高级筛选'}
+    function showFatalInitError(e){console.error(e);const m=e&&e.message?e.message:String(e||'未知错误');$('#metaLine').textContent='TradeLead AI Local · 初始化失败';$('#userPill').textContent='数据源：初始化失败';$('#loading').style.display='none';$$('.section').forEach(s=>s.style.visibility='visible');const f=$('#dashboardView');if(f)f.innerHTML=`<div class="empty" style="padding:40px;"><p style="font-size:16px;color:var(--danger);">页面初始化失败</p><p>${escapeHtml(m)}</p><p style="margin-top:14px;"><button class="btn" onclick="location.reload()">重新加载</button></p><p class="muted" style="margin-top:12px;">请确认 Express 服务已启动：<br>cd russia-crm-local && node server.js</p></div>`;showToast('页面初始化失败')}
+    function readInjectedInitialData(){const e=$('#initialDataJson');if(!e)return null;const t=(e.value||e.textContent||'').trim();if(!t||t.indexOf('<?')===0)return null;try{return JSON.parse(t)}catch(e){return null}}
+    function refreshFromServer(){loadData()}
+    async function loadData(){setLoading(!0);try{const d=await fetchJson(`${API_BASE}/initial`,void 0,!0);hydrate(d);await loadReconMonitor(!0);showToast(d&&d.ok===!1?'数据部分读取':'数据已刷新')}catch(e){console.error(e);if(isFilePreview()){hydrate({...fallbackData,stats:computeLocalStats(fallbackData.customers,fallbackData.customerPool),updatedAt:'本地预览模式'});showToast('已进入本地预览模式')}else{const d=$('#dashboardView');if(d)d.innerHTML=`<div class="empty" style="padding:40px;"><p style="font-size:16px;color:var(--danger);">数据读取失败</p><p>${escapeHtml(e.message||'未知错误')}</p><p style="margin-top:14px;"><button class="btn" onclick="location.reload()">重新加载</button></p><p class="muted" style="margin-top:12px;">请确认：<br>1. Express 已启动：node server.js<br>2. 数据已迁移：node scripts/migrate.js</p></div>`;showToast(e.message||'读取失败')}}finally{setLoading(!1)}}
+    function hydrate(d){state.customers=d.customers||[];state.customerPool=d.customerPool||[];state.templates=d.templates||[];state.reconJobs=d.reconJobs||[];state.reconResults=d.reconResults||[];state.prospectTasks=d.prospectTasks||[];state.prospectCandidates=d.prospectCandidates||[];state.prospectSources=d.prospectSources||[];if(!state.prospectActiveTaskId&&state.prospectTasks[0])state.prospectActiveTaskId=state.prospectTasks[0].taskId;state.tags=d.tags||[];state.tagCategories=d.tagCategories||defaultTagCategories();state.stats=d.stats||computeLocalStats(state.customers,state.customerPool);state.user=d.user||{};state.statusOptions=d.statusOptions||fallbackData.statusOptions;state.statusGroups=d.statusGroups||fallbackData.statusGroups;state.diagnostics=d.diagnostics||[];state.lastReconHydrateAt=Date.now();$('#metaLine').textContent=`SQLite · Russia CRM · ${d.updatedAt||''}`;$('#userPill').textContent='本地数据 · SQLite';if(state.diagnostics.length)showToast(`部分数据读取失败：${state.diagnostics[0]}`);buildSelectOptions();applyFilters();updateAssistantContext()}
+    function buildSelectOptions(){const s=state.customers.map(i=>i.status).filter(Boolean);const p=state.customerPool.map(i=>i.currentPool).filter(Boolean);const a=[...state.customers,...state.customerPool];fillSelect('#statusFilter',['全部状态/池子',...unique([...s,...p])]);fillSelect('#typeFilter',['全部类型',...unique(a.map(i=>i.customerType).filter(Boolean))]);fillSelect('#industryFilter',['全部行业',...unique(a.map(i=>i.industry).filter(Boolean))]);fillSelect('#ownerFilter',['全部负责人',...unique(state.customers.map(i=>i.owner||'未分配'))]);fillTagSelect('#tagFilter');fillSelect('#editStatus',state.statusOptions)}
+    function fillSelect(sel,opts){const s=$(sel),c=s.value;s.innerHTML=opts.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');if(opts.includes(c))s.value=c}
+    function fillTagSelect(sel){const s=$(sel),c=s.value,groups=groupTags(state.tags);let html='<option value="">全部标签</option>';Object.keys(groups).forEach(cat=>{html+=`<optgroup label="${escapeAttr(cat)}">${groups[cat].map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.name)}</option>`).join('')}</optgroup>`});s.innerHTML=html;if(Array.from(s.options).some(o=>o.value===c))s.value=c}
+    function applyFilters(){const q=$('#searchInput').value.trim().toLowerCase(),st=$('#statusFilter').value,t=$('#typeFilter').value,i=$('#industryFilter').value,o=$('#ownerFilter').value,tg=$('#tagFilter').value,ro=$('#riskOnly').checked,to=$('#todayOnly').checked;state.filtered=state.customers.filter(c=>{const h=[c.customerId,c.followId,c.companyName,c.website,c.customerType,c.industry,c.products,c.reason,c.email,c.phone,c.contact,tagSearchText(c)].join(' ').toLowerCase();if(q&&!h.includes(q))return!1;if(st&&st!=='全部状态/池子'&&c.status!==st)return!1;if(t&&t!=='全部类型'&&c.customerType!==t)return!1;if(i&&i!=='全部行业'&&c.industry!==i)return!1;if(o&&o!=='全部负责人'&&(c.owner||'未分配')!==o)return!1;if(tg&&!hasTag(c,tg))return!1;if(ro&&!c.isRisk)return!1;if(to&&!c.isDueToday)return!1;return!0});state.poolFiltered=state.customerPool.filter(c=>{const h=[c.customerId,c.companyName,c.russianName,c.englishName,c.domain,c.website,c.customerType,c.industry,c.description,c.products,c.email,c.phone,c.city,c.sourceFile,c.firstFound,c.lastFound,c.notes,tagSearchText(c)].join(' ').toLowerCase();if(q&&!h.includes(q))return!1;if(st&&st!=='全部状态/池子'&&c.currentPool!==st)return!1;if(t&&t!=='全部类型'&&c.customerType!==t)return!1;if(i&&i!=='全部行业'&&c.industry!==i)return!1;if(tg&&!hasTag(c,tg))return!1;if(ro&&!c.isRisk)return!1;return!0});state.poolPage=1;render()}
+    function render(){renderMetrics();renderPriorityLists();renderProspectAgent();renderPoolTable();renderTable();renderKanban();renderReconResults();renderReconMonitor();renderReconStatusStrip();renderTemplates();updateBulkBars()}
+    function renderMetrics(){const s=state.stats,m=[['总客户池',s.poolTotal||state.customerPool.length||0,''],['今日跟进',s.dueToday||0,'warning'],['逾期未跟进',s.overdue||0,'warning'],['需确认客户',s.risk||0,'danger'],['Recon完成',s.reconDone||countReconStatus('done'),''],['Recon失败',countReconStatus('failed'),'danger'],['跟进客户',s.total||0,'secondary-metric'],['待联系',s.waiting||0,'secondary-metric'],['已联系',s.contacted||0,'secondary-metric'],['有兴趣/询价',s.interested||0,'secondary-metric'],['已报价',s.quoted||0,'secondary-metric'],['Recon排队',s.reconQueued||countReconStatus('queued'),'secondary-metric'],['Recon执行中',s.reconRunning||countReconStatus('running'),'secondary-metric warning'],['暂无回复',s.noReply||0,'secondary-metric'],['未分配',s.unassigned||0,'secondary-metric']];$('#metricGrid').classList.toggle('show-all',state.showAllMetrics);$('#metricGrid').innerHTML=m.map(([l,v,t])=>`<article class="metric ${t}"><span>${escapeHtml(l)}</span><strong>${Number(v||0)}</strong></article>`).join('')+`<button class="btn ghost small" id="metricToggleBtn" type="button">${state.showAllMetrics?'收起指标':'更多指标'}</button>`;$('#metricToggleBtn').addEventListener('click',()=>{state.showAllMetrics=!state.showAllMetrics;renderMetrics()})}
+    function renderPriorityLists(){const td=state.customers.filter(c=>c.isDueToday||c.isOverdue).slice(0,8),rk=state.customers.filter(c=>c.isRisk).slice(0,8);$('#todayCount').textContent=`${td.length} 个客户`;$('#riskCount').textContent=`${rk.length} 个客户`;$('#todayList').innerHTML=td.length?td.map(renderMiniCard).join(''):'<div class="empty">暂无今日待跟进客户</div>';$('#riskList').innerHTML=rk.length?rk.map(renderMiniCard).join(''):'<div class="empty">暂无需确认客户提醒</div>';bindCustomerCards()}
+    function bindProspectEvents(){const form=$('#prospectForm'),table=$('#prospectTable'),tasks=$('#prospectTasks'),refresh=$('#prospectRefreshBtn');if(form)form.addEventListener('submit',e=>{e.preventDefault();runProspectSearch()});if(refresh)refresh.addEventListener('click',refreshFromServer);if(table)table.addEventListener('click',e=>{const promote=e.target.closest('[data-prospect-promote]'),recon=e.target.closest('[data-prospect-recon]'),ask=e.target.closest('[data-prospect-ask]');if(promote)promoteProspectCandidate(promote.dataset.prospectPromote,!1);if(recon)promoteProspectCandidate(recon.dataset.prospectRecon,!0);if(ask)askProspectCandidate(ask.dataset.prospectAsk)});if(tasks)tasks.addEventListener('click',e=>{const view=e.target.closest('[data-prospect-task]'),rerun=e.target.closest('[data-prospect-rerun]');if(view){state.prospectActiveTaskId=view.dataset.prospectTask;renderProspectAgent()}if(rerun)rerunProspectTask(rerun.dataset.prospectRerun)})}
+    function activeProspectTask(){return state.prospectTasks.find(t=>String(t.taskId)===String(state.prospectActiveTaskId))||state.prospectTasks[0]||null}
+    function activeProspectCandidates(){const task=activeProspectTask();const rows=task?state.prospectCandidates.filter(c=>String(c.taskId)===String(task.taskId)):state.prospectCandidates;return rows.slice().sort((a,b)=>(b.score||0)-(a.score||0))}
+    function prospectSourcesForCandidate(id){return state.prospectSources.filter(s=>String(s.candidateId)===String(id))}
+    function renderProspectAgent(){const count=$('#prospectCount'),table=$('#prospectTable'),summary=$('#prospectSummary'),tasksRoot=$('#prospectTasks'),status=$('#prospectStatus');if(!table||!summary||!tasksRoot)return;const task=activeProspectTask(),rows=activeProspectCandidates();if(count)count.textContent=`${rows.length} 个候选`;if(status&&!state.prospectBusy)status.textContent=task?`当前任务：${task.status} · ${task.sourceMix||'等待运行'}`:'输入目标后开始筛选';const promoted=rows.filter(r=>r.promotedCustomerId||r.status==='promoted').length,readyRecon=rows.filter(r=>r.existingCustomerId||r.promotedCustomerId).length,high=rows.filter(r=>Number(r.score||0)>=70).length;summary.innerHTML=[['候选',rows.length,''],['高匹配',high,'warning'],['已入池',promoted,'']].map(([l,v,t])=>`<div class="recon-monitor-card ${t}"><span>${escapeHtml(l)}</span><strong>${Number(v||0)}</strong><p>${l==='已入池'?`${readyRecon} 个可继续 Recon`:'实时任务结果'}</p></div>`).join('');tasksRoot.innerHTML=state.prospectTasks.length?state.prospectTasks.map(t=>`<article class="prospect-task ${task&&task.taskId===t.taskId?'active':''}"><div class="tag-row"><span class="tag ${t.status==='failed'?'risk':t.status==='running'?'recon-running':'status'}">${escapeHtml(t.status||'-')}</span><span class="tag">${escapeHtml(String(t.candidateCount||0))} 候选</span></div><h3>${escapeHtml(shortText(t.query,72))}</h3><p>${escapeHtml([t.market,t.industryFocus,t.productFocus].filter(Boolean).join(' · ')||'未设置筛选条件')}</p><p>${escapeHtml(t.sourceMix||t.error||t.updatedAt||'')}</p><div class="tag-row"><button class="btn ghost small" type="button" data-prospect-task="${escapeAttr(t.taskId)}">查看</button><button class="btn secondary small" type="button" data-prospect-rerun="${escapeAttr(t.taskId)}">重跑</button></div></article>`).join(''):'<div class="empty">暂无任务</div>';table.innerHTML=rows.length?rows.map(c=>{const sources=prospectSourcesForCandidate(c.candidateId),source=sources[0]||{},promoted=c.promotedCustomerId||c.existingCustomerId,statusLabel=promoted?`已入池 ${promoted}`:(c.status==='promoted'?'已入池':'候选');return`<tr class="prospect-row ${promoted?'promoted':''}"><td class="sticky-col"><div class="cell-main"><div class="cell-title">${escapeHtml(c.companyName||c.domain||'-')}</div><div class="cell-sub">${c.existingCustomerId?`<span>${escapeHtml(c.existingCustomerId)}</span>`:''}${renderWebsite(c.website||c.domain)}</div><div class="tag-row">${c.customerType?`<span class="tag">${escapeHtml(c.customerType)}</span>`:''}${c.industry?`<span class="tag">${escapeHtml(c.industry)}</span>`:''}</div></div></td><td><strong>${escapeHtml(String(c.score||0))}</strong></td><td><span class="clamp" title="${escapeAttr(c.description||c.products||'')}">${escapeHtml(shortText(c.description||c.products||'-',120))}</span></td><td><span class="clamp" title="${escapeAttr(c.needSignal||c.sellSignal||'')}">${escapeHtml(shortText(c.needSignal||c.sellSignal||'-',130))}</span></td><td><div class="cell-muted clamp" title="${escapeAttr(c.sourceSummary||source.snippet||'')}">${escapeHtml(shortText(c.sourceSummary||source.snippet||'-',110))}</div>${source.url?`<a class="btn ghost small" href="${escapeAttr(source.url)}" target="_blank" rel="noopener">来源</a>`:''}</td><td><span class="tag ${promoted?'today':'status'}">${escapeHtml(statusLabel)}</span><div class="cell-muted">${escapeHtml(shortText(c.decision||'',80))}</div></td><td><button class="btn secondary small" type="button" data-prospect-promote="${escapeAttr(c.candidateId)}" ${promoted?'disabled':''}>入池</button> <button class="btn small" type="button" data-prospect-recon="${escapeAttr(c.candidateId)}">入池+Recon</button> <button class="btn ghost small" type="button" data-prospect-ask="${escapeAttr(c.candidateId)}">问AI</button></td></tr>`}).join(''):'<tr><td colspan="7" class="empty">输入目标后，系统会先查本地客户池和 Recon，再补充公开搜索候选。</td></tr>'}
+    async function runProspectSearch(){if(state.prospectBusy)return;const q=$('#prospectQuery').value.trim(),market=$('#prospectMarket').value.trim()||'俄罗斯',product=$('#prospectProduct').value.trim(),industry=$('#prospectIndustry').value.trim();if(!q){showToast('请输入搜索目标');return}state.prospectBusy=!0;$('#prospectRunBtn').disabled=!0;$('#prospectStatus').textContent='正在筛选本地库和公开搜索...';try{const r=await postProspectAction('createTask',{payload:{query:q,market,productFocus:product,industryFocus:industry}});if(r.prospectState)hydrateProspectState(r.prospectState);if(r.task)state.prospectActiveTaskId=r.task.taskId;showToast(r.message||'筛选完成')}catch(e){showToast(e.message||'筛选失败');$('#prospectStatus').textContent=e.message||'筛选失败'}finally{state.prospectBusy=!1;$('#prospectRunBtn').disabled=!1;renderProspectAgent()}}
+    async function rerunProspectTask(taskId){if(state.prospectBusy)return;state.prospectBusy=!0;$('#prospectStatus').textContent='正在重跑任务...';try{const r=await postProspectAction('rerunTask',{taskId});if(r.prospectState)hydrateProspectState(r.prospectState);state.prospectActiveTaskId=taskId;showToast(r.message||'任务已重跑')}catch(e){showToast(e.message||'重跑失败')}finally{state.prospectBusy=!1;renderProspectAgent()}}
+    async function promoteProspectCandidate(candidateId,createRecon){try{const r=await postProspectAction('promoteCandidate',{candidateId,createRecon});if(r.prospectState)hydrateProspectState(r.prospectState);showToast(r.message||'候选已处理');if(createRecon||r.customerId)refreshFromServer();else renderProspectAgent()}catch(e){showToast(e.message||'候选处理失败')}}
+    function askProspectCandidate(candidateId){const c=state.prospectCandidates.find(i=>String(i.candidateId)===String(candidateId));if(!c)return;toggleAssistant(!0);sendAssistantMessage(`基于这个外贸候选判断是否值得开发：${c.companyName||c.domain}，官网 ${c.website||c.domain||'未知'}。业务/产品：${c.description||c.products||''}。需求信号：${c.needSignal||''}。请给开发等级、证据缺口、下一步核验动作和首轮外联角度。`)}
+    function hydrateProspectState(s){state.prospectTasks=s.tasks||state.prospectTasks||[];state.prospectCandidates=s.candidates||state.prospectCandidates||[];state.prospectSources=s.sources||state.prospectSources||[];if(!state.prospectActiveTaskId&&state.prospectTasks[0])state.prospectActiveTaskId=state.prospectTasks[0].taskId}
+    async function postProspectAction(action,payload){if(isFilePreview())throw new Error('本地文件预览不支持外贸智能体，请启动 node server.js');return fetchJson(`${API_BASE}/prospect-agent`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...payload})})}
+    function poolPageCount(){return Math.max(1,Math.ceil((state.poolFiltered.length||0)/state.poolPageSize))}
+    function poolPageBounds(){const total=state.poolFiltered.length,pageCount=poolPageCount(),page=Math.min(Math.max(1,state.poolPage||1),pageCount),start=(page-1)*state.poolPageSize,end=Math.min(start+state.poolPageSize,total);return{start,end,total,page,pageCount}}
+    function renderPoolPagination(){const bar=$('#poolPagination');if(!bar)return;const {start,end,total,page,pageCount}=poolPageBounds();const hasRows=total>0;bar.innerHTML=`<div class="pagination-info">第 ${page} / ${pageCount} 页，显示 ${hasRows?start+1:0}-${end} 条，共 ${total} 条</div><div class="pagination-controls"><button class="btn secondary small" type="button" id="poolFirstPageBtn" ${page<=1?'disabled':''}>首页</button><button class="btn secondary small" type="button" id="poolPrevPageBtn" ${page<=1?'disabled':''}>上一页</button><button class="btn secondary small" type="button" id="poolNextPageBtn" ${page>=pageCount?'disabled':''}>下一页</button><button class="btn secondary small" type="button" id="poolLastPageBtn" ${page>=pageCount?'disabled':''}>末页</button></div>`;$('#poolFirstPageBtn')?.addEventListener('click',()=>{state.poolPage=1;renderPoolTable()});$('#poolPrevPageBtn')?.addEventListener('click',()=>{state.poolPage=Math.max(1,page-1);renderPoolTable()});$('#poolNextPageBtn')?.addEventListener('click',()=>{state.poolPage=Math.min(pageCount,page+1);renderPoolTable()});$('#poolLastPageBtn')?.addEventListener('click',()=>{state.poolPage=pageCount;renderPoolTable()})}
+    function renderPoolTable(){const {start,end,total}=poolPageBounds();$('#poolCount').textContent=`${total} / ${state.customerPool.length} 个客户`;const rows=state.poolFiltered.slice(start,end);$('#poolTable').innerHTML=rows.length?rows.map(c=>`<tr class="pool-row ${c.isRisk?'risk':''}" data-customer-id="${escapeAttr(c.customerId)}"><td class="select-col sticky-col"><input class="row-check" type="checkbox" data-select-kind="pool" data-select-id="${escapeAttr(c.customerId)}" ${state.selectedPool.has(String(c.customerId))?'checked':''}></td><td class="sticky-col"><div class="cell-main"><div class="cell-title">${escapeHtml(c.companyName||c.russianName||c.englishName||'-')}</div><div class="cell-sub"><span>${escapeHtml(c.customerId||'-')}</span>${renderWebsite(c.website||c.domain)}</div>${renderCustomerTags(c,3)}</div></td><td>${escapeHtml(c.city||'-')}</td><td>${escapeHtml(c.customerType||'-')}</td><td><span class="clamp" title="${escapeAttr(c.industry||'')}">${escapeHtml(c.industry||'-')}</span></td><td><span class="clamp" title="${escapeAttr(c.description||'')}">${escapeHtml(shortText(c.description,110)||'-')}</span></td><td><span class="tag">${escapeHtml(c.currentPool||'未分池')}</span></td><td><span class="clamp" title="${escapeAttr(c.products||'')}">${escapeHtml(shortText(c.products,110)||'-')}</span></td><td>${renderReconInline(c)||'<span class="cell-muted">-</span>'}</td></tr>`).join(''):'<tr><td colspan=\"9\" class=\"empty\">没有匹配客户</td></tr>';renderPoolPagination();$$('.pool-row').forEach(r=>r.addEventListener('click',e=>{if(e.target.closest('a,button,input'))return;openPoolCustomer(r.dataset.customerId)}))}
+    function renderTable(){$('#resultCount').textContent=`${state.filtered.length} 个客户`;$('#customerTable').innerHTML=state.filtered.length?state.filtered.map(c=>`<tr class="customer-row ${c.isRisk?'risk':''}" data-follow-id="${escapeAttr(c.followId)}"><td class="select-col sticky-col"><input class="row-check" type="checkbox" data-select-kind="customers" data-select-id="${escapeAttr(c.followId)}" ${state.selectedCustomers.has(String(c.followId))?'checked':''}></td><td class="sticky-col"><div class="cell-main"><div class="cell-title">${escapeHtml(c.companyName||'-')}</div><div class="cell-sub"><span>${escapeHtml(c.customerId||c.followId||'-')}</span>${renderWebsite(c.website)||''}</div>${renderCustomerTags(c,3)}</div></td><td>${renderWebsite(c.website)||'<span class="cell-muted">-</span>'}</td><td>${escapeHtml(c.customerType||'-')}</td><td>${renderStatusTags(c)}</td><td>${escapeHtml(c.owner||'未分配')}</td><td>${escapeHtml(c.lastFollowDate||'-')}</td><td>${escapeHtml(c.nextFollowDate||'-')}</td><td>${renderReconInline(c)||'<span class="cell-muted">-</span>'}</td></tr>`).join(''):'<tr><td colspan="9" class="empty">没有匹配客户</td></tr>';$$('.customer-row').forEach(r=>r.addEventListener('click',e=>{if(e.target.closest('a,button,input'))return;openCustomer(r.dataset.followId)}))}
+    function renderKanban(){const g=state.statusGroups.length?state.statusGroups:['待联系','已联系','暂无回复','有兴趣/询价','已报价','需确认/无效'];$('#kanban').innerHTML=g.map(gr=>{const cs=state.filtered.filter(c=>c.statusGroup===gr);return`<section class="lane"><div class="lane-head"><span>${escapeHtml(gr)}</span><span class="tag">${cs.length}</span></div><div class="lane-body">${cs.length?cs.map(renderMiniCard).join(''):'<div class="empty">暂无客户</div>'}</div></section>`}).join('');bindCustomerCards()}
+    function renderTemplates(){$('#templateGrid').innerHTML=state.templates.length?state.templates.map(t=>`<article class="template-card"><div><h3>${escapeHtml(t.scenario||'未命名话术')}</h3><p class="muted">${escapeHtml(t.description||'')}</p></div><div class="tag-row"><span class="tag">${escapeHtml(t.customerType||'通用')}</span><span class="tag">${escapeHtml(t.product||'通用')}</span></div><pre>${escapeHtml(t.english||'')}</pre><pre>${escapeHtml(t.russian||'')}</pre><button class="btn secondary copy-template" type="button" data-template-id="${escapeHtml(t.id)}">复制英文+俄文</button></article>`).join(''):'<div class="empty">暂无话术模板</div>';$$('.copy-template').forEach(b=>b.addEventListener('click',()=>{const t=state.templates.find(i=>i.id===b.dataset.templateId);if(!t)return;copyText(`${t.english||''}\n\n---\n\n${t.russian||''}`)}))}
+    function isNoisyReconSummary(text){const v=String(text||'').trim();if(!v)return!0;return/now i have|let me compile|compile (the )?(final|complete) report|已有足够数据|开始编译|开始整理完整报告|尽调报告$/i.test(v)||/^[^|]{1,80}\s*\|\s*(https?:\/\/|[\w.-]+\.[a-z]{2,})\s*\|\s*评分/i.test(v)}
+    function cleanReconText(text){return String(text||'').trim().replace(/^华强北\s*/,'').replace(/华强北可供应/g,'可提供').replace(/华强北可提供/g,'可提供').replace(/华强北现货渠道/g,'现货渠道').replace(/华强北全球品牌元器件/g,'全球品牌元器件').replace(/华强北电子元器件供应链/g,'电子元器件供应链').replace(/华强北货源/g,'货源').replace(/华强北/g,'').replace(/\s+/g,' ')}
+    function demandOnlyText(text){let v=cleanReconText(text);v=v.split(/可提供|我们可|我们能|我们有|我方可|我方能|我方有|我司可|可供应|供应能力|供应方案|推荐/)[0].replace(/[，,；;:\s]+$/,'');return v}
+    function renderReconDemandSignal(r){const candidates=[r.opportunity_need,!isNoisyReconSummary(r.opportunity_summary)?demandOnlyText(r.opportunity_summary):'',demandOnlyText(r.outreach_angle)].map(v=>cleanReconText(v)).filter(Boolean);return candidates[0]||''}
+    function renderReconSupplyText(r,c={}){const text=cleanReconText(r.opportunity_sell||r.recommended_products||c.products||'').replace(/^可(?:以)?(?:提供|供应|供)[：:，,\s]*/,'').replace(/^我们(?:能|可以)?(?:提供|供应|卖)[：:，,\s]*/,'');return text}
+    function renderReconDecisionText(r){return cleanReconText(r.opportunity_decision||r.next_action||'')}
+    function renderReconOpportunityText(r){const chain=[r.opportunity_do&&`做：${cleanReconText(r.opportunity_do)}`,renderReconDemandSignal(r)&&`需：${renderReconDemandSignal(r)}`,renderReconSupplyText(r)&&`供：${renderReconSupplyText(r)}`,renderReconDecisionText(r)&&`决策：${renderReconDecisionText(r)}`].filter(Boolean);return chain.join(' ｜ ')}
+    function renderReconResults(){const rows=state.reconResults.slice().reverse();$('#reconCount').textContent=`${rows.length} 条结果`;$('#reconTable').innerHTML=rows.length?rows.map(r=>{const j=state.reconJobs.find(i=>i.job_id===r.job_id)||{},c=state.customerPool.find(i=>i.customerId===r.customer_id)||state.customers.find(i=>i.customerId===r.customer_id)||{},demand=renderReconDemandSignal(r),supply=renderReconSupplyText(r,c),decision=renderReconDecisionText(r),profile=cleanReconText(r.opportunity_do||r.description||c.description||r.industry||c.industry||''),generatedAt=formatDateTime(j.finished_at||r.updated_at||j.latest_artifact_at||'');return`<tr class="recon-row " data-job-id="${escapeAttr(r.job_id)}"><td class="recon-cell-main sticky-col"><div class="cell-main"><div class="cell-title">${escapeHtml(c.companyName||r.company_name||j.company_name||'-')}</div><div class="cell-sub"><span>${escapeHtml(r.customer_id||j.customer_id||'-')}</span>${renderWebsite(r.website||j.website||c.website)}</div><div class="tag-row">${(r.current_pool||c.currentPool)?`<span class="tag">${escapeHtml(r.current_pool||c.currentPool)}</span>`:''}</div></div></td><td><div class="tag-row">${renderReconStatusTag(j.status||'done')}${renderSanctionTag(r)}</div><div class="cell-muted" style="margin-top:6px;">评分 ${escapeHtml(r.score||'-')} · 证据 ${escapeHtml(r.evidence_count||'0')} 条</div><div class="cell-muted" style="margin-top:4px;">生成 ${escapeHtml(generatedAt||'-')}</div></td><td class="recon-cell-wide"><div>${escapeHtml(r.customer_type||c.customerType||'-')}</div><div class="cell-muted clamp" title="${escapeAttr(profile)}">${escapeHtml(shortText(profile,90)||r.industry||c.industry||'')}</div></td><td class="recon-cell-wide"><span class="clamp" title="${escapeAttr(demand)}">${escapeHtml(shortText(demand,150)||'-')}</span></td><td class="recon-cell-wide"><span class="clamp" title="${escapeAttr(supply)}">${escapeHtml(shortText(supply,150)||'-')}</span></td><td class="recon-cell-wide"><span class="clamp" title="${escapeAttr(r.contacts_summary||'')}">${escapeHtml(shortText(r.contacts_summary||[r.email,r.phone,c.email,c.phone].filter(Boolean).join(' / '),150)||'-')}</span></td><td class="recon-cell-wide"><span class="clamp" title="${escapeAttr(decision)}">${escapeHtml(shortText(decision,150)||'-')}</span></td><td>${r.evidence_url?`<a class="btn ghost small" href="${escapeAttr(r.evidence_url)}" target="_blank" rel="noopener">证据</a>`:''}${renderReportLink(r.report_path,r.job_id)}</td></tr>`}).join(''):'<tr><td colspan="8" class="empty">暂无 Russia-recon 回填结果</td></tr>';$$('.recon-row').forEach(r=>r.addEventListener('click',e=>{if(e.target.closest('a,button,input'))return;openReconCustomer(r.dataset.jobId)}))}
+    function renderReconMonitor(){const root=$('#reconMonitor');if(!root)return;const data=state.reconMonitor;if(!data||data.ok===!1){root.innerHTML='<div class="empty">执行面板暂时不可用</div>';return}const s=data.summary||{},workers=data.workers||[],hermes=data.hermesProcesses||[],jobs=data.jobs||[],active=jobs.filter(j=>['queued','running'].includes(j.status)).slice(0,8),recent=(active.length?active:jobs.slice(0,6)),terminal=(data.terminal&&data.terminal.lines||[]).join('\n'),terminalTitle=(data.terminal&&data.terminal.title)||'Hermes 终端',capabilityBlock=renderCapabilitySnapshot(data.capabilitySnapshot||null,data.capabilitySource||'');root.innerHTML=`<div class="recon-monitor-grid"><div class="recon-monitor-card"><span>排队任务</span><strong>${Number(s.queued||0)}</strong><p>等待 Hermes 领取</p></div><div class="recon-monitor-card warning"><span>执行中</span><strong>${Number(s.running||0)}</strong><p>${Number(s.stale_running||0)} 条可能卡住</p></div><div class="recon-monitor-card"><span>已完成</span><strong>${Number(s.done||0)}</strong><p>报告已回填</p></div><div class="recon-monitor-card ${Number(s.failed||0)?'danger':''}"><span>失败</span><strong>${Number(s.failed||0)}</strong><p>需要人工复核</p></div><div class="recon-monitor-card"><span>Hermes</span><strong>${Number(s.hermes||0)}</strong><p>chat / gateway 进程</p></div><div class="recon-monitor-card"><span>更新时间</span><strong style="font-size:14px;">${escapeHtml(formatClock(data.updatedAt)||'-')}</strong><p>自动刷新中</p></div></div><div class="recon-monitor-strip"><div class="recon-monitor-head"><div><div class="tag-row">${hermes.length?hermes.map(p=>`<span class="tag ${p.type==='chat'?'status':'recon-running'}">Hermes ${escapeHtml(p.type)} ${escapeHtml(String(p.pid))} · ${escapeHtml(p.etime||'')}</span>`).join(''):'<span class="tag risk">未发现 Hermes chat/gateway</span>'}${workers.length?workers.map(w=>`<span class="tag">Worker ${escapeHtml(String(w.pid))}</span>`).join(''):''}</div><p>${escapeHtml(active.length?`当前聚焦 ${active.length} 条活跃任务`:'当前没有活跃任务，下面显示最近任务')}</p></div><button class="btn secondary small" type="button" id="refreshReconMonitorBtn">刷新执行面板</button></div>${capabilityBlock}<div class="recon-monitor-jobs">${recent.length?recent.map(renderReconMonitorJob).join(''):'<div class="empty">暂无任务可展示</div>'}</div>${terminal?`<div class="recon-job-meta" style="font-weight:700;">${escapeHtml(terminalTitle)}</div><pre class="recon-log">${escapeHtml(terminal)}</pre>`:'<div class="empty">暂无 Hermes 终端输出</div>'}</div>`;const btn=$('#refreshReconMonitorBtn');if(btn)btn.addEventListener('click',()=>refreshReconDataSilently(!0))}
+    function renderReconMonitorJob(job){const result=job.result||{},company=job.company_name||result.company_name||'-',stage=job.stage||'unknown',artifactTags=renderArtifactTags(job.artifacts||{}),meta=[job.customer_id||'',job.job_id||''].filter(Boolean).join(' · '),generatedAt=job.finished_at||result.updated_at||job.latest_artifact_at||'',timing=[job.requested_at?`提交 ${job.requested_at}`:'',job.started_at?`开始 ${job.started_at}`:'',generatedAt?`生成 ${formatClock(generatedAt)}`:'',job.latest_artifact_at?`文件更新 ${formatClock(job.latest_artifact_at)}`:''].filter(Boolean).join(' ｜ '),pipeline=renderPipeline(stage),capabilityTags=renderCapabilityTags(job.capabilities||null),actions=[job.report_url?`<a class="btn ghost small" href="${escapeAttr(job.report_url)}" target="_blank">查看报告</a>`:'',result.evidence_url?`<a class="btn ghost small" href="${escapeAttr(result.evidence_url)}" target="_blank" rel="noopener">证据</a>`:'',job.status==='failed'?`<button class="btn secondary small retry-recon-job-btn" type="button" data-job-id="${escapeAttr(job.job_id)}">重新执行</button>`:''].filter(Boolean).join('');return`<article class="recon-job-card ${job.stale?'stale':''} ${job.status==='failed'?'failed':''}"><div class="recon-job-top"><div><h3>${escapeHtml(company)}</h3><div class="recon-job-meta">${escapeHtml(meta||'-')}</div></div><div class="tag-row">${renderReconStatusTag(job.status)}<span class="tag ${job.stale?'risk':'status'}">${escapeHtml(job.stage_label||stage)}</span>${job.stale?`<span class="tag overdue">${escapeHtml(`${job.stale_minutes||0} 分钟未回写`)}</span>`:''}</div></div><div class="recon-job-pipeline">${pipeline}</div><div class="recon-job-meta">${escapeHtml(timing||'尚未产出文件')}</div>${capabilityTags?`<div class="tag-row">${capabilityTags}</div>`:''}<div class="recon-monitor-artifacts">${artifactTags||'<span class="muted">暂无产物文件</span>'}</div>${job.error?`<div class="recon-job-meta" style="color:var(--danger);">${escapeHtml(shortText(job.error,220))}</div>`:''}${result.contacts_summary?`<div class="recon-job-meta">联系人：${escapeHtml(shortText(result.contacts_summary,120))}</div>`:''}${actions?`<div class="tag-row">${actions}</div>`:''}</article>`}
+    function renderCapabilitySnapshot(cap,source){if(!cap)return'';const tags=renderCapabilityTags(cap),elig=cap.eligibility||{};return`<div class="recon-job-meta">${escapeHtml(source?`能力快照来源 ${source}`:'当前能力快照')}</div><div class="tag-row">${tags}</div><div class="recon-job-meta">浏览器依赖步骤仅在 <code>browser_fetch_ok=true</code> 时进入应执行集合；当前独立域名 ${elig.known_independent_domain?'可用':'缺失'}，Comtrade ${elig.comtrade_api_key?'可用':'未配置'}。</div>`}
+    function renderCapabilityTags(cap){if(!cap)return'';const tags=[['API Broker',cap.api_broker_ok],['Fetch',cap.fetch_ok],['Scrapling',cap.scrapling_ok],['浏览器',cap.browser_fetch_ok],['Stealth',cap.stealth_fetch_ok],['Proxy',cap.mihomo_ok]];return tags.map(([label,ok])=>`<span class="tag ${ok?'status':'risk'}">${escapeHtml(label)} ${ok?'可用':'不可用'}</span>`).join('')}
+    function renderArtifactTags(artifacts){const labels=[['prompt','Prompt'],['capabilities_json','能力'],['hermes_stdout','Stdout'],['hermes_stderr','Stderr'],['report_md','Markdown'],['report_html','HTML']];return labels.filter(([key])=>artifacts[key]&&artifacts[key].exists).map(([key,label])=>`<span class="tag">${escapeHtml(label)}</span>`).join('')}
+    function renderPipeline(stage){const order=[['queued','排队'],['prompt_ready','Prompt'],['agent_running','执行'],['report_ready','报告'],['failed','失败']];const rank={queued:1,worker_claimed:1,prompt_ready:2,agent_running:3,report_ready:4,failed:5,unknown:0}[stage]||0;return order.map(([key,label],idx)=>{const isFailed=stage==='failed'&&key==='failed';const cls=isFailed?'active':(rank>idx+1?'done':rank===idx+1?'active':'');return`<div class="recon-step ${cls}">${escapeHtml(label)}</div>`}).join('')}
+    function formatClock(text){const date=text?new Date(String(text).replace(' ','T')):null;if(!date||Number.isNaN(date.getTime()))return String(text||'');const pad=n=>String(n).padStart(2,'0');return`${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`}
+    function formatDateTime(text){const date=text?new Date(String(text).replace(' ','T')):null;if(!date||Number.isNaN(date.getTime()))return String(text||'');const pad=n=>String(n).padStart(2,'0');return`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`}
+    function openReconCustomer(jobId){const r=state.reconResults.find(i=>i.job_id===jobId),j=state.reconJobs.find(i=>i.job_id===jobId);if(!r&&!j)return;const cid=(r&&r.customer_id)||(j&&j.customer_id)||'',pool=state.customerPool.find(i=>i.customerId===cid),follow=state.customers.find(i=>i.customerId===cid||i.followId===cid);if(pool)return openPoolCustomer(pool.customerId);if(follow)return openCustomer(follow.followId);showToast('未找到对应客户资料')}
+    function renderMiniCard(c){return`<article class="mini-card ${c.isRisk?'risk':''}" data-follow-id="${escapeHtml(c.followId)}"><h3>${escapeHtml(c.companyName||'-')}</h3><p>${escapeHtml(c.customerType||'-')} · ${escapeHtml(c.status||'-')}</p><div class="tag-row" style="margin-top:8px;">${renderStatusTags(c)}</div></article>`}
+    function bindCustomerCards(){$$('.mini-card').forEach(c=>c.addEventListener('click',()=>openCustomer(c.dataset.followId)))}
+    function renderStatusTags(c){const t=[`<span class="tag status">${escapeHtml(c.status||'未分配')}</span>`];if(c.isDueToday)t.push('<span class="tag today">今日跟进</span>');if(c.isOverdue)t.push('<span class="tag overdue">已逾期</span>');if(c.isRisk)t.push('<span class="tag risk">需人工确认</span>');const r=getLatestReconResult(c);if(r&&r.sanctioned==='true')t.push(renderSanctionTag(r));(c.tags||[]).forEach(tag=>t.push(renderTagPill(tag)));return`<div class="tag-row">${t.join('')}</div>`}
+    function openCustomer(fid){const c=state.customers.find(i=>i.followId===fid);if(!c)return;state.currentCustomer=c;state.currentReconTarget={customer:c,source:'followup'};state.currentTagTarget=c;const followTab=$('[data-detail-tab="follow"]');if(followTab)followTab.style.display='';$('.modal-actions').style.display='flex';$('#modalTitle').textContent=c.companyName||'客户详情';$('#modalTags').innerHTML=renderStatusTags(c);$('#riskBanner').classList.toggle('show',!!c.isRisk);$('#detailHero').innerHTML=renderDetailHero(c,'followup');$('#reconActionPanel').innerHTML=renderReconPanel(c);$('#detailGrid').innerHTML=renderDetails(c);$('#tagEditorPanel').innerHTML=renderTagEditor(c);$('#editOwner').value=c.owner||'';$('#editStatus').value=state.statusOptions.includes(c.status)?c.status:'未分配';$('#editChannel').value=c.channel||'';$('#editFirstContactDate').value=toDateInput(c.firstContactDate);$('#editLastFollowDate').value=toDateInput(c.lastFollowDate);$('#editNextFollowDate').value=toDateInput(c.nextFollowDate);$('#editFeedback').value=c.feedback||'';$('#editNextAction').value=c.nextAction||'';$('#editInvalidReason').value=c.invalidReason||'';$('#editNotes').value=c.notes||'';setDetailTab('overview');$('#modalBackdrop').classList.add('show');updateAssistantContext()}
+    function openPoolCustomer(cid){const c=state.customerPool.find(i=>i.customerId===cid);if(!c)return;state.currentCustomer=null;state.currentReconTarget={customer:c,source:'pool'};state.currentTagTarget=c;const followTab=$('[data-detail-tab="follow"]');if(followTab)followTab.style.display='none';$('#modalTitle').textContent=c.companyName||c.russianName||c.englishName||'客户详情';$('#modalTags').innerHTML=renderPoolTags(c);$('#riskBanner').classList.toggle('show',!!c.isRisk);$('#detailHero').innerHTML=renderDetailHero(c,'pool');$('#reconActionPanel').innerHTML=renderReconPanel(c);$('#detailGrid').innerHTML=renderPoolDetails(c);$('#tagEditorPanel').innerHTML=renderTagEditor(c);$('.modal-actions').style.display='none';setDetailTab('overview');$('#modalBackdrop').classList.add('show');updateAssistantContext()}
+    function renderPoolTags(c){const t=[`<span class="tag">${escapeHtml(c.customerId||'-')}</span>`];if(c.currentPool)t.push(`<span class="tag">${escapeHtml(c.currentPool)}</span>`);if(c.customerType)t.push(`<span class="tag status">${escapeHtml(c.customerType)}</span>`);if(c.isRisk)t.push('<span class="tag risk">需人工确认</span>');const r=getLatestReconResult(c);if(r&&r.sanctioned==='true')t.push(renderSanctionTag(r));(c.tags||[]).forEach(tag=>t.push(renderTagPill(tag)));return`<div class="tag-row">${t.join('')}</div>`}
+    function renderDetailHero(c,source){const name=c.companyName||c.russianName||c.englishName||'-',id=c.customerId||c.followId||'-',site=c.website||c.domain||'',parts=[c.customerType,c.industry,c.currentPool||c.status].filter(Boolean).join(' · ');return`<div class="detail-hero"><div><h3>${escapeHtml(name)}</h3><div class="cell-sub"><span>${escapeHtml(id)}</span>${site?renderWebsite(site):''}<span>${escapeHtml(source==='pool'?'客户池':'跟进客户')}</span></div></div><div class="tag-row">${parts?`<span class="tag">${escapeHtml(parts)}</span>`:''}${c.isRisk?'<span class="tag risk">需人工确认</span>':''}${renderReconInline(c)}</div><div class="cell-muted">${escapeHtml(shortText(c.products||c.description||c.reason||'',220)||'暂无产品/画像摘要')}</div></div>`}
+    function renderDetails(c){const i=[['跟进ID',c.followId],['客户ID',c.customerId],['官网',renderWebsite(c.website),!0],['客户类型',c.customerType],['行业',c.industry],['主推产品',c.products,!1,'span-2'],['推荐联系理由',c.reason,!1,'span-3'],['联系邮箱',c.email],['联系电话',c.phone],['联系人',c.contact],['分配日期',c.assignedDate],['确认原因',c.riskReasons&&c.riskReasons.length?c.riskReasons.join('、'):'-',!1,'span-2']];return i.map(([l,v,rw,ex])=>`<div class="detail-item ${ex||''}"><span>${escapeHtml(l)}</span>${rw?`<p>${v||'-'}</p>`:`<p>${escapeHtml(v||'-')}</p>`}</div>`).join('')}
+    function renderPoolDetails(c){const i=[['客户ID',c.customerId],['域名',renderWebsite(c.domain),!0],['官网',renderWebsite(c.website),!0],['俄文名称',c.russianName],['英文名称',c.englishName],['国家/城市',[c.country,c.city].filter(Boolean).join(' / ')],['客户类型',c.customerType],['行业',c.industry],['当前池子',c.currentPool],['简介',c.description,!1,'span-2'],['产品需求',c.products,!1,'span-2'],['邮箱',c.email],['电话',c.phone],['INN',c.inn],['制裁/机会信号',c.riskStatus||'-',!1,'span-2'],['官网验证',c.websiteVerification],['联系人数量',c.contactCount],['深度报告',c.deepReport],['来源文件',c.sourceFile],['首次发现',c.firstFound],['最后发现',c.lastFound],['搜索次数',c.searchCount],['已验证',c.verified],['备注',c.notes,!1,'span-3']];return i.map(([l,v,rw,ex])=>`<div class="detail-item ${ex||''}"><span>${escapeHtml(l)}</span>${rw?`<p>${v||'-'}</p>`:`<p>${escapeHtml(v||'-')}</p>`}</div>`).join('')}
+    function renderTagEditor(c){const groups=groupTags(state.tags),selected=new Set((c.tags||[]).map(t=>String(t.id))),cats=Object.keys(groups);return`<div class="tag-editor-head"><h3>客户标签</h3><button class="btn secondary small" type="button" id="saveTagsBtn">保存标签</button></div><div class="tag-groups">${cats.length?cats.map(cat=>`<div class="tag-group"><strong>${escapeHtml(cat)}</strong><div class="tag-checks">${groups[cat].map(t=>`<label class="tag-check"><input type="checkbox" class="customer-tag-check" value="${escapeAttr(t.id)}" ${selected.has(String(t.id))?'checked':''}> ${escapeHtml(t.name)}</label>`).join('')}</div></div>`).join(''):'<div class="empty">暂无标签，请先新增一个标签</div>'}</div><div class="tag-create"><select class="select" id="newTagCategory">${defaultTagCategories().map(cat=>`<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`).join('')}</select><input class="input" id="newTagName" placeholder="新增自定义标签"><button class="btn secondary small" type="button" id="createTagBtn">新增标签</button></div>`}
+    function groupTags(tags){const order=defaultTagCategories(),groups={};order.forEach(c=>groups[c]=[]);(tags||[]).forEach(t=>{const c=t.category||'其他';if(!groups[c])groups[c]=[];groups[c].push(t)});Object.keys(groups).forEach(c=>{groups[c].sort((a,b)=>String(a.name).localeCompare(String(b.name),'zh-CN'));if(!groups[c].length)delete groups[c]});return groups}
+    function defaultTagCategories(){return state.tagCategories&&state.tagCategories.length?state.tagCategories:['客户类型','客户经营产品','需求/采购产品','应用行业','重点场景','需确认属性']}
+    function renderTagPill(t){return`<span class="tag customer-tag" title="${escapeAttr(t.category||'标签')}">${escapeHtml(t.name||'')}</span>`}
+    function renderCustomerTags(c,limit){const tags=(c.tags||[]).slice(0,limit||99);if(!tags.length)return'';const more=(c.tags||[]).length>tags.length?`<span class="tag customer-tag">+${(c.tags||[]).length-tags.length}</span>`:'';return`<div class="tag-row" style="margin-top:6px;">${tags.map(renderTagPill).join('')}${more}</div>`}
+    function tagSearchText(c){return(c.tags||[]).map(t=>`${t.category} ${t.name}`).join(' ')}
+    function hasTag(c,id){return(c.tags||[]).some(t=>String(t.id)===String(id))}
+    function applyCustomerTags(customerId,tags){[state.customers,state.customerPool].forEach(list=>list.forEach(c=>{if(c.customerId===customerId)c.tags=tags||[]}));if(state.currentTagTarget&&state.currentTagTarget.customerId===customerId)state.currentTagTarget.tags=tags||[];if(state.currentCustomer&&state.currentCustomer.customerId===customerId)state.currentCustomer.tags=tags||[]}
+    async function saveCustomerTags(){const c=state.currentTagTarget;if(!c||!c.customerId){showToast('缺少客户ID，无法保存标签');return}const tagIds=$$('.customer-tag-check').filter(i=>i.checked).map(i=>Number(i.value));const btn=$('#saveTagsBtn');if(btn){btn.disabled=!0;btn.textContent='保存中...'}try{const r=await postAppAction('setCustomerTags',{customerId:c.customerId,tagIds});applyCustomerTags(r.customerId||c.customerId,r.tags||[]);state.stats=computeLocalStats(state.customers,state.customerPool);buildSelectOptions();applyFilters();$('#tagEditorPanel').innerHTML=renderTagEditor(state.currentTagTarget);$('#modalTags').innerHTML=state.currentCustomer?renderStatusTags(state.currentTagTarget):renderPoolTags(state.currentTagTarget);showToast(r.message||'客户标签已保存')}catch(e){showToast(e.message||'保存标签失败')}finally{const b=$('#saveTagsBtn');if(b){b.disabled=!1;b.textContent='保存标签'}}}
+    async function createCustomTag(){const category=$('#newTagCategory').value,name=$('#newTagName').value.trim();if(!name){showToast('请输入标签名称');return}const btn=$('#createTagBtn');if(btn){btn.disabled=!0;btn.textContent='新增中...'}try{const r=await postAppAction('createTag',{payload:{category,name}});state.tags=r.tags||state.tags;if(r.tag&&state.currentTagTarget&&state.currentTagTarget.customerId){const tagIds=unique([...(state.currentTagTarget.tags||[]).map(t=>String(t.id)),String(r.tag.id)]).map(Number);const saved=await postAppAction('setCustomerTags',{customerId:state.currentTagTarget.customerId,tagIds});applyCustomerTags(saved.customerId||state.currentTagTarget.customerId,saved.tags||[]);showToast('标签已新增并绑定')}else showToast(r.message||'标签已新增');buildSelectOptions();applyFilters();if(state.currentTagTarget){$('#tagEditorPanel').innerHTML=renderTagEditor(state.currentTagTarget);$('#modalTags').innerHTML=state.currentCustomer?renderStatusTags(state.currentTagTarget):renderPoolTags(state.currentTagTarget)}}catch(e){showToast(e.message||'新增标签失败')}finally{const b=$('#createTagBtn');if(b){b.disabled=!1;b.textContent='新增标签'}}}
+    async function saveCustomer(){if(!state.currentCustomer)return;const p={owner:$('#editOwner').value,status:$('#editStatus').value,firstContactDate:$('#editFirstContactDate').value,lastFollowDate:$('#editLastFollowDate').value,channel:$('#editChannel').value,feedback:$('#editFeedback').value,nextAction:$('#editNextAction').value,nextFollowDate:$('#editNextFollowDate').value,invalidReason:$('#editInvalidReason').value,notes:$('#editNotes').value};$('#saveBtn').disabled=!0;$('#saveBtn').textContent='保存中...';try{const r=await postAppAction('updateCustomer',{followId:state.currentCustomer.followId,payload:p});replaceCustomer(r.customer||{...state.currentCustomer,...p});state.stats=computeLocalStats(state.customers,state.customerPool);applyFilters();closeModal();showToast(r.message||'更新成功');if(r.opaque)window.setTimeout(refreshFromServer,900)}catch(e){showToast(e.message||'保存失败')}finally{$('#saveBtn').disabled=!1;$('#saveBtn').textContent='保存'}}
+    async function startRecon(){if(!state.currentReconTarget)return;const{customer:c,source:s}=state.currentReconTarget;const cid=getReconCustomerId(c);if(!cid){showToast('缺少客户ID，无法创建任务');return}const btn=$('#startReconBtn');if(btn){btn.disabled=!0;btn.textContent='创建任务中...'}try{const r=await postAppAction('createReconJob',{customerId:cid,source:s});if(r.reconState){state.reconJobs=r.reconState.jobs||state.reconJobs;state.reconResults=r.reconState.results||state.reconResults}else if(r.job)upsertLocalJob(r.job);render();$('#reconActionPanel').innerHTML=renderReconPanel(c);showToast(r.message||'Russia-recon 任务已创建');if(r.opaque)window.setTimeout(refreshFromServer,900)}catch(e){showToast(e.message||'创建失败');$('#reconActionPanel').innerHTML=renderReconPanel(c)}}
+    async function retryRecon(jobId){const clean=String(jobId||'').trim();if(!clean){showToast('缺少任务ID，无法重试');return}const btns=$$(`button[data-job-id="${clean}"]`);btns.forEach(b=>{b.disabled=!0;if(!b.dataset.originalText)b.dataset.originalText=b.textContent;b.textContent='重试中...'});try{const r=await postAppAction('retryReconJob',{jobId:clean});if(r.reconState){state.reconJobs=r.reconState.jobs||state.reconJobs;state.reconResults=r.reconState.results||state.reconResults}else if(r.job)upsertLocalJob(r.job);render();if(state.currentReconTarget)$('#reconActionPanel').innerHTML=renderReconPanel(state.currentReconTarget.customer);showToast(r.message||'已重新加入队列');if(r.opaque)window.setTimeout(refreshFromServer,900)}catch(e){showToast(e.message||'重试失败')}finally{btns.forEach(b=>{b.disabled=!1;b.textContent=b.dataset.originalText||'重新执行'})}}
+    function replaceCustomer(c){const i=state.customers.findIndex(x=>x.followId===c.followId);if(i>=0)state.customers.splice(i,1,normalizeLocalCustomer(c))}
+    function normalizeLocalCustomer(c){const n={...c};n.statusGroup=n.statusGroup||getStatusGroup(n.status);n.nextFollowDateKey=n.nextFollowDateKey||toDateInput(n.nextFollowDate);n.isDueToday=n.nextFollowDateKey===new Date().toISOString().slice(0,10);n.isOverdue=!!(n.nextFollowDateKey&&n.nextFollowDateKey<new Date().toISOString().slice(0,10));return n}
+    function countReconStatus(s){return state.reconJobs.filter(j=>j.status===s).length}
+    function renderReconInline(c){const j=getLatestReconJob(c),r=getLatestReconResult(c),t=[];if(j&&['queued','running','failed'].includes(j.status))t.push(renderReconStatusTag(j.status));if(r&&r.sanctioned==='true')t.push(renderSanctionTag(r));return t.length?`<div class="tag-row" style="margin-top:6px;">${t.join('')}</div>`:''}
+    function renderReconPanel(c){const j=getLatestReconJob(c),r=getLatestReconResult(c),busy=j&&['queued','running'].includes(j.status),st=j?renderReconStatusTag(j.status):'<span class="tag">未侦查</span>',sn=r?renderSanctionTag(r):'',rp=r?r.report_path:'',sm=r?[r.score?`评分 ${r.score}`:'',r.customer_type||'',r.evidence_count?`${r.evidence_count} 条证据`:''].filter(Boolean).join(' · '):'本地 worker 会领取任务，调用 DeepSeek agent，并把结果和证据回填到数据库。',facts=r?renderReconFacts(r,j):'',demand=r?renderReconDemandSignal(r):'',supply=r?renderReconSupplyText(r,c):'',decision=r?renderReconDecisionText(r):'',primaryBtn=busy?`<button class="btn secondary" id="startReconBtn" type="button" disabled>任务进行中</button>`:(j&&j.status==='failed'?`<button class="btn secondary" id="retryReconBtn" data-job-id="${escapeAttr(j.job_id)}" type="button">重新执行</button>`:`<button class="btn secondary" id="startReconBtn" type="button">Russia-recon</button>`);return`<div class="recon-strip-main"><div><div class="tag-row">${st}${sn}</div><p>${escapeHtml(sm||'等待回填')}</p></div>${primaryBtn}</div>${facts}${demand?`<p>需求信号：${escapeHtml(shortText(demand,220))}</p>`:''}${supply?`<p>可提供：${escapeHtml(shortText(supply,180))}</p>`:''}${r&&r.contacts_summary?`<p>联系人：${escapeHtml(shortText(r.contacts_summary,180))}</p>`:''}${decision?`<p>建议动作：${escapeHtml(shortText(decision,160))}</p>`:''}${rp?`<div class="report-inline">${r.evidence_url?`<a class="btn ghost small" href="${escapeAttr(r.evidence_url)}" target="_blank" rel="noopener">打开证据</a>`:''}${renderReportLink(rp,r.job_id)}</div>`:''}${j&&j.error?`<p>失败原因：${escapeHtml(shortText(j.error,220))}</p>`:''}`}
+    function renderReconFacts(r,j){const generatedAt=(j&&j.finished_at)||r.updated_at||'';const items=[['评分',r.score||'-'],['客户类型',r.customer_type||'-'],['行业/城市',[r.industry,r.city].filter(Boolean).join(' / ')||'-'],['质量状态',r.quality_status||r.contact_classification||'-'],['制裁状态',r.compliance_status||'-'],['制裁信号',r.sanction_source||'未命中'],['证据数量',`${r.evidence_count||'0'} 条`],['生成时间',generatedAt||'未生成'],['更新时间',r.updated_at||'-']];return`<div class="recon-facts">${items.map(([l,v])=>`<div class="recon-fact"><span>${escapeHtml(l)}</span><p>${escapeHtml(shortText(v,90))}</p></div>`).join('')}</div>`}
+    function renderReconStatusTag(s){const m={queued:'排队中',running:'执行中',done:'已完成',failed:'失败'},c=s==='failed'?'risk':(s==='running'||s==='queued'?'recon-running':'status');return`<span class="tag ${c}">${escapeHtml(m[s]||s||'未知')}</span>`}
+    function renderSanctionTag(r){if(!r||r.sanctioned!=='true')return'<span class="tag">未命中</span>';const l=[r.sanction_source,r.sanction_program].filter(Boolean).join(' ')||'制裁命中';return`<span class="tag sanction" title="${escapeAttr(l)}">${escapeHtml(shortText(l,32))}</span>`}
+    function renderReportLink(p,jid){if(!p)return'<span class="muted">-</span>';const c=String(p).trim();if(/^https?:\/\//i.test(c))return`<a class="btn ghost small" href="${escapeAttr(c)}" target="_blank" rel="noopener">打开报告</a>`;const rjid=jid||(state.reconResults.length?state.reconResults[0].job_id:'');if(rjid)return`<a class="btn ghost small" href="/api/report?job_id=${escapeAttr(rjid)}" target="_blank">查看报告</a>`;return`<span class="muted">${escapeHtml(shortText(c,80))}</span>`}
+    function getLatestReconJob(c){const ids=getReconIdentifiers(c),m=state.reconJobs.filter(j=>ids.includes(String(j.customer_id||'').trim()));return m[m.length-1]||null}
+    function getLatestReconResult(c){const ids=getReconIdentifiers(c),m=state.reconResults.filter(r=>ids.includes(String(r.customer_id||'').trim()));return m[m.length-1]||null}
+    function getReconCustomerId(c){return getReconIdentifiers(c)[0]||''}
+    function getReconIdentifiers(c){const v=[c.customerId,c.followId,c.domain,c.website,c.companyName].filter(Boolean).map(x=>String(x).trim());return v.filter((x,i)=>v.indexOf(x)===i)}
+    function upsertLocalJob(j){const i=state.reconJobs.findIndex(x=>x.job_id===j.job_id);if(i>=0)state.reconJobs.splice(i,1,j);else state.reconJobs.push(j)}
+    function renderReconStatusStrip(){const root=$('#reconStatusStrip');if(!root)return;const done=countReconStatus('done'),failed=countReconStatus('failed'),queued=countReconStatus('queued'),running=countReconStatus('running'),stale=(state.reconMonitor&&state.reconMonitor.summary&&state.reconMonitor.summary.stale_running)||0;root.innerHTML=[['排队',queued,''],['执行中',running,'warning'],['完成',done,''],['失败',failed,'danger'],['可能卡住',stale,stale?'warning':'']].map(([l,v,c])=>`<div class="recon-status-item ${c}"><span>${escapeHtml(l)}</span><strong>${Number(v||0)}</strong></div>`).join('')}
+    function handleTableSelection(e){const input=e.target.closest('[data-select-kind]');if(!input)return;const set=input.dataset.selectKind==='pool'?state.selectedPool:state.selectedCustomers;if(input.checked)set.add(String(input.dataset.selectId));else set.delete(String(input.dataset.selectId));updateBulkBars()}
+    function handleSelectAll(e){const kind=e.target.dataset.selectAll,set=kind==='pool'?state.selectedPool:state.selectedCustomers,rows=kind==='pool'?state.poolFiltered:state.filtered;set.clear();if(e.target.checked)rows.forEach(r=>set.add(String(kind==='pool'?r.customerId:r.followId)));kind==='pool'?renderPoolTable():renderTable();updateBulkBars()}
+    function updateBulkBars(){const pool=$('#poolBulkBar'),cust=$('#customerBulkBar');if(pool){pool.classList.toggle('show',state.selectedPool.size>0);pool.querySelector('span').textContent=`已选择 ${state.selectedPool.size} 个客户`}if(cust){cust.classList.toggle('show',state.selectedCustomers.size>0);cust.querySelector('span').textContent=`已选择 ${state.selectedCustomers.size} 个客户`}}
+    async function loadReconMonitor(silent){if(isFilePreview()){state.reconMonitor={ok:!0,updatedAt:new Date().toISOString(),summary:{queued:countReconStatus('queued'),running:countReconStatus('running'),done:countReconStatus('done'),failed:countReconStatus('failed'),stale_running:0,workers:1},workers:[{pid:'local-preview',etime:'--',command:'preview'}],jobs:state.reconJobs.map(j=>({...j,stage:j.status==='done'?'report_ready':j.status==='running'?'agent_running':'queued',stage_label:j.status==='done'?'报告已生成':j.status==='running'?'Hermes执行中':'排队中',artifacts:{},result:state.reconResults.find(r=>r.job_id===j.job_id)||null,report_url:j.job_id?`/api/report?job_id=${encodeURIComponent(j.job_id)}`:''})),logTail:['本地预览模式：未连接真实 worker。']};renderReconMonitor();renderReconStatusStrip();return}try{const data=await fetchJson(`${API_BASE}/recon-monitor`,void 0,!0);state.reconMonitor=data;renderReconMonitor();renderReconStatusStrip()}catch(e){if(!silent)showToast(e.message||'读取执行面板失败')}}
+    async function refreshReconDataSilently(showToastOnDone){try{const d=await fetchJson(`${API_BASE}/initial`,void 0,!0);hydrate(d);await loadReconMonitor(!0);if(showToastOnDone)showToast('执行面板已刷新')}catch(e){if(showToastOnDone)showToast(e.message||'刷新失败')}}
+    function startReconPolling(){if(state.reconPollHandle)window.clearInterval(state.reconPollHandle);state.reconPollHandle=window.setInterval(()=>{if(state.view!=='recon'||state.loading)return;loadReconMonitor(!0);if(Date.now()-state.lastReconHydrateAt>15000)refreshReconDataSilently(!1)},10000)}
+    function switchView(v){state.view=v;$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));$$('.section').forEach(s=>s.classList.remove('active'));$('#'+v+'View').classList.add('active');updateViewTitle();window.scrollTo({top:0,behavior:'smooth'});if(v==='recon'){loadReconMonitor(!0);refreshReconDataSilently(!1)}}
+    function updateViewTitle(){const map={dashboard:['控制台','关键指标、今日跟进和需确认提醒'],prospect:['搜客任务','输入目标、自动找候选、入池并触发 Recon'],pool:['线索库','全量客户、标签、池子和 Recon 状态'],customers:['客户详情','已进入跟进流程的客户和下一步动作'],kanban:['跟进看板','按跟进状态扫描客户'],recon:['Recon','任务状态、报告证据和机会摘要'],templates:['营销生成器','外联邮件和俄文话术']},item=map[state.view]||map.dashboard;$('#viewTitle').textContent=item[0];$('#viewSubtitle').textContent=item[1]}
+    function setDetailTab(tab){state.detailTab=tab||'overview';$$('.modal-tab').forEach(b=>b.classList.toggle('active',b.dataset.detailTab===state.detailTab));$$('.detail-pane').forEach(p=>p.classList.remove('active'));const pane=$(`#detailPane${state.detailTab.charAt(0).toUpperCase()+state.detailTab.slice(1)}`);if(pane)pane.classList.add('active')}
+    function closeModal(){$('#modalBackdrop').classList.remove('show');state.currentCustomer=null;$('.modal-actions').style.display='flex';state.currentReconTarget=null;state.currentTagTarget=null;updateAssistantContext()}
+    function setLoading(l){state.loading=l;const d=$('#loading');d.style.display=l?'grid':'none';$$('.section').forEach(s=>s.style.visibility=l?'hidden':'visible');if(l){d.innerHTML='<span>正在读取数据...</span>';window.setTimeout(()=>{if(state.loading&&d.querySelector('.loading-skip')===null){const b=document.createElement('button');b.className='btn secondary loading-skip';b.textContent='跳过，使用本地预览';b.style.marginTop='12px';b.addEventListener('click',()=>{hydrate({...fallbackData,stats:computeLocalStats(fallbackData.customers,fallbackData.customerPool),updatedAt:'本地预览模式'});showToast('已进入本地预览模式');setLoading(!1)});d.appendChild(b)}},4000)}}
+    async function postAppAction(a,p){if(isFilePreview()){if(a==='updateCustomer')return callServer('updateCustomer',p.followId,p.payload);if(a==='createReconJob')return callServer('createReconJob',p.customerId,p.source);if(a==='retryReconJob')return callServer('retryReconJob',p.jobId);if(a==='createTag')return callServer('createTag',p.payload);if(a==='setCustomerTags')return callServer('setCustomerTags',p.customerId,p.tagIds)}return fetchJson(`${API_BASE}/app`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a,...p})})}
+    function bindAssistantEvents(){const launcher=$('#assistantLauncher'),drawer=$('#assistantDrawer'),close=$('#assistantCloseBtn'),form=$('#assistantForm'),input=$('#assistantInput'),quick=$('#assistantQuickActions'),messages=$('#assistantMessages'),head=drawer&&drawer.querySelector('.assistant-head'),resize=$('#assistantResizeHandle');if(!launcher||!drawer||!form||!input)return;launcher.addEventListener('click',()=>toggleAssistant(!assistantState.open));close.addEventListener('click',()=>toggleAssistant(!1));$('#assistantClearBtn').addEventListener('click',clearAssistantChat);$('#assistantQuickToggleBtn').addEventListener('click',toggleAssistantQuick);$('#assistantDebugToggleBtn').addEventListener('click',toggleAssistantDebug);$('#assistantAskCurrentBtn').addEventListener('click',()=>sendAssistantMessage('基于当前客户的数据库资料、跟进记录和Recon信息，给出下一步跟进计划和开发优先级。'));form.addEventListener('submit',e=>{e.preventDefault();sendAssistantMessage()});input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAssistantMessage()}});if(quick)quick.addEventListener('click',e=>{const b=e.target.closest('[data-prompt]');if(!b)return;sendAssistantMessage(assistantPromptFromButton(b))});if(messages)messages.addEventListener('click',handleAssistantClick);if(head){head.addEventListener('pointerdown',startAssistantDrag);head.addEventListener('dblclick',resetAssistantLayout)}if(resize)resize.addEventListener('pointerdown',startAssistantResize);window.addEventListener('resize',keepAssistantInViewport);renderAssistantMessages();updateAssistantContext()}
+    function hasAssistantCurrentContext(){return !!(state.currentReconTarget&&state.currentReconTarget.customer||state.currentCustomer)}
+    function assistantPromptFromButton(button){return hasAssistantCurrentContext()&&button.dataset.currentPrompt?button.dataset.currentPrompt:button.dataset.prompt||''}
+    function toggleAssistant(open){assistantState.open=open;const drawer=$('#assistantDrawer');drawer.classList.toggle('open',open);drawer.classList.toggle('hide-quick',assistantState.quickCollapsed);drawer.classList.toggle('show-debug',assistantState.debug);$('#assistantLauncher').setAttribute('aria-expanded',open?'true':'false');if(open){applyAssistantLayout();updateAssistantContext();renderAssistantMessages();window.setTimeout(()=>$('#assistantInput').focus(),40)}}
+    function renderAssistantMessages(){const root=$('#assistantMessages');if(!root)return;if(!assistantState.messages.length){root.innerHTML='<div class="assistant-empty">可以直接问：哪些客户今天要跟进？哪些客户有 Recon 报告？找 MCU 线索、采购线索或需确认客户。</div>';return}root.innerHTML=assistantState.messages.map(renderAssistantMessage).join('');root.scrollTop=root.scrollHeight}
+    function renderAssistantMessage(m){const role=m.role==='user'?'user':'assistant',sources=role==='assistant'?renderAssistantSources(m.sources||[],m.content||''):'',actions=role==='assistant'?renderAssistantActions(m.actions||[]):'';return`<div class="assistant-msg ${role}"><div class="assistant-bubble">${role==='assistant'?renderAssistantContent(m.content||''):escapeHtml(m.content||'')}</div>${actions}${sources}</div>`}
+    function renderAssistantActions(actions){const clean=(actions||[]).filter(Boolean);if(!clean.length)return'';return`<div class="assistant-actions">${clean.map(a=>`<button class="btn secondary small assistant-action" type="button" data-action="${escapeAttr(a.type||'')}" data-cursor="${escapeAttr(a.cursor||'')}">${escapeHtml(a.label||'继续')}</button>`).join('')}</div>`}
+    function renderAssistantSources(sources,answer){const clean=filterAssistantSourcesForAnswer((sources||[]).filter(Boolean),answer).slice(0,16);if(!clean.length)return'';const groups={客户:[],Recon报告:[],证据:[],向量片段:[],公开搜索:[]};clean.forEach((s,i)=>{const t=String(s.type||'').toLowerCase(),key=t.includes('web')?'公开搜索':(t.includes('evidence')?'证据':(s.job_id||t.includes('recon')?'Recon报告':(t.includes('vector')||t.includes('report')?'向量片段':'客户')));groups[key].push({s,i})});const html=Object.entries(groups).filter(([,items])=>items.length).map(([name,items])=>`<div><span>${escapeHtml(name)}</span><div class="assistant-source-list">${items.map(({s,i})=>{const label=assistantSourceLabel(s),url=String(s.url||'').trim(),attrs=`class="assistant-source" data-source-index="${i}" data-action="${escapeAttr(s.action||'')}" data-customer-id="${escapeAttr(s.customer_id||'')}" data-follow-id="${escapeAttr(s.follow_id||'')}" data-job-id="${escapeAttr(s.job_id||'')}"`;if(/^https?:\/\//i.test(url)||url.startsWith('/api/report'))return`<a ${attrs} href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;return`<button ${attrs} type="button">${escapeHtml(label)}</button>`}).join('')}</div></div>`).join('');return`<div class="assistant-sources">${html}</div>`}
+    function assistantRefsFromText(text){return new Set((String(text||'').match(/[A-Z]{2}-\d{3,}|FU-\d{3,}|RR-\d{8,}[-A-Z0-9]*/gi)||[]).map(i=>i.toUpperCase()))}
+    function filterAssistantSourcesForAnswer(sources,answer){const refs=assistantRefsFromText(answer);if(!refs.size)return sources;const filtered=sources.filter(s=>String(s.type||'').toLowerCase().includes('web')||[s.customer_id,s.follow_id,s.job_id,s.title,s.url].filter(Boolean).some(v=>Array.from(refs).some(ref=>String(v).toUpperCase().includes(ref))));return filtered.length?filtered:[]}
+    function assistantSourceLabel(s){return[s.customer_id,s.follow_id,s.job_id,s.title||s.type].filter(Boolean).slice(0,3).join(' · ')||s.type||'CRM'}
+    async function sendAssistantMessage(override,cursor){if(assistantState.busy)return;const input=$('#assistantInput'),btn=$('#assistantSendBtn'),status=$('#assistantStatus'),message=String(override||input.value||'').trim();if(!message){showToast('请输入问题');return}assistantState.messages.push({role:'user',content:message});if(!override)input.value='';assistantState.busy=!0;btn.disabled=!0;btn.textContent='发送中';status.textContent='正在查询数据库，必要时补充公开搜索...';renderAssistantMessages();try{const history=assistantState.messages.slice(-8,-1).map(m=>({role:m.role,content:m.content})),context=buildAssistantContext(cursor);const r=await fetchJson(`${API_BASE}/assistant/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,history,context,cursor:cursor||''})});assistantState.lastCursor=r.nextCursor||'';assistantState.lastMeta={mode:r.retrievalMode||'',model:r.model||'',resultSets:r.resultSets||[],sources:(r.sources||[]).length,matched:(r.matchedCustomers||[]).length,nextCursor:r.nextCursor||''};assistantState.messages.push({role:'assistant',content:r.answer||'AI 没有返回有效内容，请重试。',sources:r.sources||[],matchedCustomers:r.matchedCustomers||[],actions:r.actions||[],nextCursor:r.nextCursor||'',resultSets:r.resultSets||[]});$('#assistantMeta').textContent=`${r.model||'DeepSeek'} · ${r.retrievalMode||'SQLite'}`;renderAssistantDebug()}catch(e){assistantState.lastMeta={error:e.message||'AI 助手请求失败'};assistantState.messages.push({role:'assistant',content:e.message||'AI 助手请求失败。',sources:[],actions:[]});renderAssistantDebug();showToast(e.message||'AI 助手请求失败')}finally{assistantState.busy=!1;btn.disabled=!1;btn.textContent='发送';status.textContent='';renderAssistantMessages();input.focus()}}
+    function buildAssistantContext(cursor){const target=state.currentReconTarget&&state.currentReconTarget.customer||state.currentCustomer||null,job=target?getLatestReconJob(target):null,result=target?getLatestReconResult(target):null;return{view:state.view,customerId:target&&target.customerId||'',followId:target&&target.followId||'',jobId:result&&result.job_id||job&&job.job_id||'',filters:{search:$('#searchInput').value||'',status:$('#statusFilter').value||'',type:$('#typeFilter').value||'',industry:$('#industryFilter').value||'',owner:$('#ownerFilter').value||'',tag:$('#tagFilter').value||'',riskOnly:$('#riskOnly').checked,todayOnly:$('#todayOnly').checked},lastCursor:cursor||assistantState.lastCursor||''}}
+    function renderAssistantContent(text){let html=escapeHtml(text);html=html.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');html=html.replace(/(^|\n)(\d+)\. /g,'$1<strong>$2.</strong> ');const lines=html.split('\n');let out=[],table=[];const flush=()=>{if(table.length){out.push(`<pre>${table.join('\n')}</pre>`);table=[]}};lines.forEach(line=>{if(line.trim().startsWith('|'))table.push(line);else{flush();out.push(line)}});flush();return out.join('\n')}
+    function clearAssistantChat(){assistantState.messages=[];assistantState.lastCursor='';assistantState.lastMeta=null;renderAssistantDebug();renderAssistantMessages()}
+    function toggleAssistantQuick(){assistantState.quickCollapsed=!assistantState.quickCollapsed;$('#assistantDrawer').classList.toggle('hide-quick',assistantState.quickCollapsed);$('#assistantQuickToggleBtn').textContent=assistantState.quickCollapsed?'展开模板':'收起模板'}
+    function toggleAssistantDebug(){assistantState.debug=!assistantState.debug;$('#assistantDrawer').classList.toggle('show-debug',assistantState.debug);$('#assistantDebugToggleBtn').textContent=assistantState.debug?'收起调试':'展开调试';renderAssistantDebug()}
+    function renderAssistantDebug(){const root=$('#assistantDebug');if(!root)return;root.textContent=assistantState.lastMeta?JSON.stringify(assistantState.lastMeta,null,2):'暂无调试信息'}
+    function updateAssistantContext(){const bar=$('#assistantContextBar'),text=$('#assistantContextText');if(!bar||!text)return;const c=state.currentReconTarget&&state.currentReconTarget.customer||state.currentCustomer;if(!c){bar.classList.remove('show');text.textContent='';return}const name=c.companyName||c.russianName||c.englishName||'-';text.textContent=`当前客户 ${c.customerId||c.followId||'-'} · ${name}`;bar.classList.add('show')}
+    function handleAssistantClick(e){const actionBtn=e.target.closest('.assistant-action');if(actionBtn){e.preventDefault();if(actionBtn.dataset.action==='continue')sendAssistantMessage('继续',actionBtn.dataset.cursor||assistantState.lastCursor);return}const source=e.target.closest('.assistant-source');if(!source)return;const action=source.dataset.action,cid=source.dataset.customerId,fid=source.dataset.followId,jid=source.dataset.jobId;if(action==='open_report'&&jid){e.preventDefault();window.open(`/api/report?job_id=${encodeURIComponent(jid)}`,'_blank');return}if(action==='open_customer'||cid||fid){e.preventDefault();openAssistantCustomer(cid,fid);return}}
+    function openAssistantCustomer(cid,fid){const follow=state.customers.find(i=>String(i.followId)===String(fid)||String(i.customerId)===String(cid));if(follow){openCustomer(follow.followId);return}const pool=state.customerPool.find(i=>String(i.customerId)===String(cid));if(pool){openPoolCustomer(pool.customerId);return}showToast('本页数据里没有找到这个客户，请刷新后再试')}
+    function assistantStorageKey(){return'crmAssistantDrawerLayout'}
+    function assistantBounds(){return{minW:Math.min(320,window.innerWidth-24),minH:Math.min(380,window.innerHeight-24),maxW:Math.max(320,window.innerWidth-24),maxH:Math.max(380,window.innerHeight-24),pad:12}}
+    function clampAssistantRect(rect){const b=assistantBounds(),w=Math.max(b.minW,Math.min(rect.width,b.maxW)),h=Math.max(b.minH,Math.min(rect.height,b.maxH)),left=Math.max(b.pad,Math.min(rect.left,window.innerWidth-w-b.pad)),top=Math.max(b.pad,Math.min(rect.top,window.innerHeight-h-b.pad));return{left,top,width:w,height:h}}
+    function applyAssistantRect(rect,save){const drawer=$('#assistantDrawer');if(!drawer)return;const r=clampAssistantRect(rect);drawer.style.left=`${Math.round(r.left)}px`;drawer.style.top=`${Math.round(r.top)}px`;drawer.style.right='auto';drawer.style.bottom='auto';drawer.style.width=`${Math.round(r.width)}px`;drawer.style.height=`${Math.round(r.height)}px`;if(save)try{localStorage.setItem(assistantStorageKey(),JSON.stringify(r))}catch(_e){}}
+    function applyAssistantLayout(){let saved=null;try{saved=JSON.parse(localStorage.getItem(assistantStorageKey())||'null')}catch(_e){saved=null}if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))applyAssistantRect(saved,!1)}
+    function resetAssistantLayout(e){if(e&&e.target.closest('button'))return;try{localStorage.removeItem(assistantStorageKey())}catch(_e){}const drawer=$('#assistantDrawer');if(!drawer)return;drawer.style.left='';drawer.style.top='';drawer.style.right='18px';drawer.style.bottom='84px';drawer.style.width='min(430px,calc(100vw - 36px))';drawer.style.height='min(640px,calc(100vh - 112px))'}
+    function keepAssistantInViewport(){const drawer=$('#assistantDrawer');if(!drawer||!assistantState.open)return;const r=drawer.getBoundingClientRect();applyAssistantRect({left:r.left,top:r.top,width:r.width,height:r.height},!0)}
+    function startAssistantDrag(e){if(e.button!==0||e.target.closest('button'))return;const drawer=$('#assistantDrawer'),start=drawer.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);const move=ev=>applyAssistantRect({left:start.left+ev.clientX-sx,top:start.top+ev.clientY-sy,width:start.width,height:start.height},!0),up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}
+    function startAssistantResize(e){if(e.button!==0)return;const drawer=$('#assistantDrawer'),start=drawer.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);const move=ev=>applyAssistantRect({left:start.left,top:start.top,width:start.width+ev.clientX-sx,height:start.height+ev.clientY-sy},!0),up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}
+    function callServer(fn,...args){if(fn==='getInitialData')return Promise.reject(new Error('Local preview'));if(fn==='updateCustomer')return Promise.resolve({ok:!0,message:'本地预览已模拟保存',customer:{...state.currentCustomer,...args[1]}});if(fn==='createTag'){const p=args[0]||{},tag={id:Date.now(),name:p.name,category:p.category,color:'#475467',isPreset:!1};state.tags.push(tag);return Promise.resolve({ok:!0,message:'本地预览已模拟新增标签',tag,tags:state.tags})}if(fn==='setCustomerTags'){const[ci,ids]=args,tags=state.tags.filter(t=>(ids||[]).map(String).includes(String(t.id)));return Promise.resolve({ok:!0,message:'本地预览已模拟保存标签',customerId:ci,tags})}if(fn==='createReconJob'){const[ci,s]=args,j={job_id:`LOCAL-${Date.now()}`,customer_id:ci,source:s,company_name:state.currentReconTarget&&state.currentReconTarget.customer.companyName,status:'queued',requested_at:new Date().toISOString().slice(0,19).replace('T',' '),updated_at:new Date().toISOString().slice(0,19).replace('T',' ')};upsertLocalJob(j);return Promise.resolve({ok:!0,message:'本地预览已模拟创建任务',job:j,reconState:{jobs:state.reconJobs,results:state.reconResults}})}if(fn==='retryReconJob'){const[jobId]=args,old=state.reconJobs.find(j=>String(j.job_id)===String(jobId));const j={job_id:`LOCAL-${Date.now()}`,customer_id:old&&old.customer_id||'',source:old&&old.source||'pool',company_name:old&&old.company_name||'',status:'queued',requested_at:new Date().toISOString().slice(0,19).replace('T',' '),updated_at:new Date().toISOString().slice(0,19).replace('T',' ')};upsertLocalJob(j);return Promise.resolve({ok:!0,message:'本地预览已模拟重新执行',job:j,reconState:{jobs:state.reconJobs,results:state.reconResults}})}return Promise.reject(new Error(`未知本地预览函数：${fn}`))}
+    function isFilePreview(){return window.location.protocol==='file:'}
+    async function fetchJson(u,o,ade){const r=await fetch(u,o),t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch(e){throw new Error(`API 返回了非 JSON 响应：${t.slice(0,160)}`)}if(!r.ok||(!ade&&d.ok===!1))throw new Error(d.error||`API 请求失败：${r.status}`);return d}
+    function computeLocalStats(cs,cp){const td=new Date().toISOString().slice(0,10),st={poolTotal:(cp||[]).length,total:cs.length,unassigned:0,waiting:0,contacted:0,noReply:0,interested:0,quoted:0,risk:0,dueToday:0,overdue:0,byStatus:{},byGroup:{},byOwner:{},byType:{}};cs.forEach(c=>{if(!c.owner)st.unassigned+=1;if(c.statusGroup==='待联系')st.waiting+=1;if(c.statusGroup==='已联系')st.contacted+=1;if(c.statusGroup==='暂无回复')st.noReply+=1;if(c.statusGroup==='有兴趣/询价')st.interested+=1;if(c.statusGroup==='已报价')st.quoted+=1;if(c.isRisk)st.risk+=1;if(c.nextFollowDateKey===td)st.dueToday+=1;if(c.nextFollowDateKey&&c.nextFollowDateKey<td)st.overdue+=1});return st}
+    function getStatusGroup(s){const g={'待联系':['未分配','已分配待联系'],'已联系':['已邮件联系','已电话联系','已WhatsApp/Telegram联系'],'暂无回复':['暂无回复'],'有兴趣/询价':['已回复-有兴趣','已询价'],'已报价':['已报价'],'需确认/无效':['联系方式无效','风险过高','放弃跟进']};return Object.keys(g).find(gr=>g[gr].includes(s))||'其他'}
+    function renderWebsite(w){if(!w)return'-';const c=String(w).trim(),h=/^https?:\/\//i.test(c)?c:'https://'+c;return`<a href="${escapeAttr(h)}" target="_blank" rel="noopener">${escapeHtml(c)}</a>`}
+    function copyText(t){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>showToast('已复制话术'));else showToast('当前浏览器不支持自动复制')}
+    function showToast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');window.clearTimeout(showToast.timer);showToast.timer=window.setTimeout(()=>t.classList.remove('show'),2200)}
+    function unique(v){return Array.from(new Set(v)).sort((a,b)=>String(a).localeCompare(String(b),'zh-CN'))}
+    function shortText(t,l){const v=String(t||'');return v.length>l?`${v.slice(0,l)}...`:v}
+    function toDateInput(v){const m=String(v||'').match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);if(!m)return'';return`${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`}
+    function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
+    function escapeAttr(v){return escapeHtml(v).replace(/`/g,'&#096;')}
+  </script>
+</body>
+</html>

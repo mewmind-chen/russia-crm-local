@@ -1,0 +1,36 @@
+{
+  "name": "russia-crm-local",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate": "node scripts/migrate.js",
+    "assistant:index": "node scripts/assistant_index.js",
+    "daily:import": "node scripts/import-daily-normalized.js",
+    "bot3:pipeline:import:dry": "node scripts/import-bot3-crm-pipeline.js",
+    "bot3:pipeline:import": "node scripts/import-bot3-crm-pipeline.js --apply",
+    "customer-ids:normalize": "node scripts/normalize-customer-ids.js --apply",
+    "customer-ids:check": "node scripts/normalize-customer-ids.js",
+    "grades:reset-unrecon": "node scripts/reset-unrecon-grades.js --apply",
+    "grades:check-unrecon": "node scripts/reset-unrecon-grades.js",
+    "bot3:blocklist:export": "node scripts/export-domain-blocklist.js",
+    "taxonomy:normalize": "node scripts/normalize-taxonomy.js",
+    "recon:backfill": "node scripts/backfill-recon-results.js",
+    "recon:v2": "node scripts/regenerate-recon-v2-from-evidence.js",
+    "recon:daily": "node scripts/recon-daily.js --limit 10 --enqueue-only --json-out tmp/codex-recon-today.json",
+    "recon:enqueue-daily": "node scripts/recon-daily.js --limit 10 --enqueue-only --json-out tmp/codex-recon-today.json",
+    "recon:hermes:daily": "node scripts/recon-daily.js --limit 10 --run-worker",
+    "recon:codex:submit": "node scripts/submit-codex-recon-result.js",
+    "recon:regrade": "node scripts/regrade-recon-results.js",
+    "recon:regrade:apply": "node scripts/regrade-recon-results.js --apply"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

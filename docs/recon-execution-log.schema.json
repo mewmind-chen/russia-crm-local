@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.russia-crm/recon-execution-log.schema.json",
+  "title": "Russia CRM Recon Execution Log",
+  "description": "Machine-readable audit records for one russia-recon run. The report, CRM evidence, and quality gates should prefer this log over prose claims.",
+  "type": "object",
+  "required": ["version", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "recon-execution-log-v1"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "action", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "step": {
+            "type": "string",
+            "description": "Step label such as Step 0, Step 1, Step 5, Step 5+, or preflight."
+          },
+          "action": {
+            "type": "string",
+            "description": "Human-readable action that was attempted."
+          },
+          "tool": {
+            "type": "string",
+            "description": "Tool or command used, for example network-sentinel fetch, api-sanctions, browser-fetch, or manual-public-url."
+          },
+          "query_or_url": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_result",
+              "blocked",
+              "failed",
+              "skipped_input_missing",
+              "skipped_capability_missing"
+            ]
+          },
+          "found": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          },
+          "evidence_type": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "product",
+              "contact",
+              "procurement",
+              "sanction",
+              "hiring",
+              "social",
+              "registry",
+              "inference",
+              "preflight",
+              "report_source"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "failure_reason": {
+            "type": "string"
+          },
+          "saved_body": {
+            "type": "string"
+          },
+          "route_group": {
+            "type": "string"
+          },
+          "route_node": {
+            "type": "string"
+          },
+          "route_warning": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

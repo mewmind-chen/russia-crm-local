@@ -1,0 +1,61 @@
+version = 1
+id = "crm-recon-hermes"
+kind = "cron"
+name = "每日 Hermes 客户 Recon"
+prompt = """
+执行 Russia CRM 的每日 Hermes recon 任务，退回原来的 worker 流程。
+
+【执行位置】
+必须在真实项目目录执行：
+- /Users/ylf/Desktop/projects/russia-crm-local
+
+【核心原则】
+- 必须运行 `/Users/ylf/.hermes/hermes-agent/venv/bin/hermes` 作为主执行器。
+- 通过 `scripts/recon_agent_worker.py` 处理每日队列，保持原 worker 流程。
+- 必须使用本地 `russia-recon` 技能的深度标准执行；项目内快照 `automation/hermes-skills/russia-recon/SKILL.md` 作为同源备份。
+- 也按本机 `russia-lead-gen` 思路找联系人，通过 Hermes 执行，不要绕开 worker。
+- 每天最多处理 10 个 recon 任务。
+- 每个任务必须有真实来源 URL 证据，不能编造联系人、邮箱、制裁、采购需求或公司结论。
+- 所有落库结果都通过 `npm run recon:codex:submit -- ...` 提交，统一评级由项目代码自动计算。
+- 不允许提交“精简 recon”。提交脚本会拒绝证据不足、章节不完整或 Step 5/5+ 未完成的报告。
+
+【执行步骤】
+1. `cd /Users/ylf/Desktop/projects/russia-crm-local`
+2. 运行 `npm run recon:hermes:daily`。这会入队并启动 Hermes worker，按原流程处理今日任务。
+3. 如果需要对今天已完成的任务重跑，先通过 `retryReconJob` 重新排队，再由 Hermes worker 领取。
+4. 对列表里的每个 job 执行 Hermes recon：
+   - 完整执行深度 recon，不要只做官网摘要。
+   - 身份锚定：官网、法定名称、INN/OGRN、城市、注册/公开档案；没有 INN 时说明查找路径和缺口。
+   - 官网核验：主页、关于/产品、联系方式/ реквизиты / contacts 等页面，提取真实业务和产品。
+   - 采购与公开痕迹：检查 zakupki/clearspending、公开 PDF/文件、招聘、展会/协会、新闻/项目记录；找不到也要写明查过哪些路径。
+   - 制裁核验：OpenSanctions、OFAC、EU、UK 能查则都查；只有四项都完成且无命中才能写 CLEAR，否则写 PARTIAL_CLEAR 或 UNKNOWN。命中写 HIT，并记录 source/program/date/evidence_url。
+   - 联系人 Step 5 必须执行：官网联系页、公开邮箱/电话、采购/供应链/销售入口、Telegram/WhatsApp/VK/LinkedIn/hh.ru/2GIS 等当前可用公开入口。
+   - 如果 Step 5 没有找到具名决策人/采购人，Step 5+ 必须执行：公开文件/PDF、招聘署名、注册主体/法人、域名邮箱模式、theHarvester/Maigret/holehe 等有前提可用工具；无前提时写“前提不满足 + 替代动作”。
+   - 每个报告至少 6 个有效证据 URL，优先官方/注册/制裁/采购/官网产品/联系入口来源。少于 6 个不得提交。
+5. 每个 job 在 `recon-runs/codex-YYYYMMDD-HHMMSS-<job_id>/` 下写 3 个源文件，提交脚本会自动生成同目录 `report.html`：
+   - `report.md`：中文 Markdown 深度报告，至少 2500 字符，标题必须包含：目标、Network Sentinel预检结果、核验事实、制裁标记、机会判断、联系人、Step 5执行记录、Step 5+执行记录、数据质量声明、证据链接、客户数据摘要。
+   - `result.json`：对象字段至少包含 company_name, website, industry, customer_type, city, phone, email, inn, products, description, opportunity_summary, sanctioned, sanction_status, sanction_source, sanction_program, sanction_checked_at, evidence_url, quality_status, missing_steps, step5_status, step5_plus_status, contact_classification, contact_name, contact_title, contacts_summary, outreach_angle, next_action, notes, opportunity_do, opportunity_need, opportunity_sell, opportunity_decision。
+   - `evidence.json`：数组，每条包含 field_name, value, source_url, source_title, checked_at, confidence, extractor。
+6. 写完每个 job 后运行：
+   由 worker 直接提交入库并生成 `report.html`，把 CRM `report_path` 指向 HTML 网页报告。
+7. 任务结束后运行 `npm run recon:regrade` 做 dry-run 检查，确认没有异常。
+
+【统一分类字段】
+customer_type 只能使用：终端制造商、终端客户、贸易公司、系统集成商、贴片厂/PCBA、EMS/方案商、原厂、平台型、混合型、服务商/非目标、待确认。
+industry 只能使用：电子设备制造、工业控制、电子制造服务、电子系统集成、电力电子、汽车电子、导航电子、医疗电子、铁路电子、工业自动化、航空电子、通信网络、电力能源、半导体/微电子、非目标/其他。
+sanction_status 只能使用：CLEAR、PARTIAL_CLEAR、UNKNOWN、HIT。
+contact_classification 只能使用：已验证联系人、入口联系人、未找到。
+
+【验收】
+- 今日最多 10 个 job 被处理为 done。
+- 每个 done job 都有可网页查看的 `report.html`，CRM `report_path` 指向 HTML，至少 6 条有效证据 URL。
+- 原 worker 流程必须保留，Hermes 进程可以出现并作为唯一主执行器。
+- 若报告不合格，必须补充 recon 后重跑，不得用 Codex 流程绕过原 worker。
+- 最终回复说明处理数量、失败任务、报告路径、提交后的 score/current_pool/rating。
+"""
+status = "ACTIVE"
+rrule = "FREQ=DAILY;BYHOUR=23;BYMINUTE=0;BYSECOND=0"
+model = "gpt-5.4-mini"
+reasoning_effort = "medium"
+execution_environment = "local"
+cwds = ["/Users/ylf/Desktop/projects/russia-crm-local"]
