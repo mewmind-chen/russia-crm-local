@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TradePulse · 电子元器件外贸CRM</title>
+  <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260719-4">
+  <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
+</head>
+<body data-app="sales">
+  <div id="loginScreen" class="login-screen">
+    <div class="login-brand">
+      <div class="login-mark">TP</div>
+      <p class="eyebrow">TRADEPULSE CRM</p>
+      <h1>不用逐个追问，<br>全盘进度自己说话。</h1>
+      <p>把客户动作变成管理信号：销售快速更新，系统自动识别停滞、介入时机与能力差异。</p>
+      <div class="login-points">
+        <span>实时客户时间线</span><span>异常驱动管理</span><span>销售能力画像</span>
+      </div>
+    </div>
+    <form id="loginForm" class="login-card">
+      <div>
+        <p class="eyebrow">团队入口</p>
+        <h2>登录经营工作台</h2>
+        <p class="subtle">根据身份自动显示管理全盘或个人客户。</p>
+      </div>
+      <label>工作邮箱<input name="email" type="email" autocomplete="username" required></label>
+      <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="button primary wide" type="submit">进入系统</button>
+      <p id="loginError" class="form-error"></p>
+      <div class="demo-hint">
+        <strong>本地初始管理员</strong>
+        <span>请使用管理员分配的工作账号登录</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar" id="salesSidebar">
+      <a class="brand-block unified-brand" href="/#dashboard">
+        <div class="brand-mark">TP</div>
+        <div><strong>TradePulse</strong><span>外贸客户系统</span></div>
+      </a>
+      <nav id="nav" class="nav">
+        <div class="nav-group"><div class="nav-group-label">今日工作</div>
+          <button data-view="dashboard" data-permission="view_dashboard" class="active"><i>◫</i><span>经营驾驶舱</span></button>
+          <button data-view="intake" data-permission="view_intake"><i>⇣</i><span>未开发线索分配</span><b id="navIntakeCount">0</b></button>
+          <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>异常与介入</span><b id="navAlertCount" class="danger-count">0</b></button>
+        </div>
+        <div class="nav-group"><div class="nav-group-label">客户经营</div>
+          <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
+          <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
+          <button data-view="insights" data-permission="view_insights"><i>✦</i><span>经理评价</span><b id="navInsightCount">0</b></button>
+        </div>
+        <div class="nav-group"><div class="nav-group-label">客户开发</div>
+          <button data-view="development" data-permission="view_development"><i>✦</i><span>客户开发工作台</span></button>
+          <button data-view="pool" data-permission="view_pool"><i>◈</i><span>未开发线索池</span><b id="navPoolCount">0</b></button>
+          <button data-view="contacts" data-permission="view_contacts"><i>◉</i><span>联系人速览</span><b id="navPeopleCount">0</b></button>
+          <button data-view="recon" data-permission="view_recon"><i>◎</i><span>Recon 结果速览</span></button>
+        </div>
+        <div class="nav-group"><div class="nav-group-label">经营分析</div>
+          <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
+          <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
+        </div>
+        <div class="nav-group"><div class="nav-group-label">系统</div>
+          <button data-view="users" data-permission="view_users"><i>⊕</i><span>用户与权限</span></button>
+        </div>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="account-mini">
+          <span id="userAvatar" class="avatar">管</span>
+          <div><strong id="userName">—</strong><small id="userRole">—</small></div>
+          <button id="changePasswordBtn" title="修改密码">•••</button>
+          <button id="logoutBtn" title="退出登录">↪</button>
+        </div>
+      </div>
+    </aside>
+    <div id="salesSidebarMask" class="sidebar-mask"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="salesMenuBtn" class="menu-button" type="button" aria-label="打开导航">☰</button>
+        <div>
+          <p id="viewEyebrow" class="eyebrow">MANAGEMENT OVERVIEW</p>
+          <h1 id="viewTitle">经营驾驶舱</h1>
+        </div>
+        <div class="top-actions">
+          <span class="workspace-chip">销售经营中心</span>
+          <div class="filters-inline">
+            <select id="countryFilter" aria-label="国家筛选"><option value="">全部国家</option></select>
+            <select id="ownerFilter" aria-label="销售筛选"><option value="">全部销售</option></select>
+            <select id="periodFilter" aria-label="周期筛选"><option value="90">近90天</option><option value="30">近30天</option><option value="7">近7天</option><option value="365">近一年</option></select>
+          </div>
+          <button id="newCustomerBtn" data-permission="create_customer" class="button secondary">＋ 新增CRM客户</button>
+          <button id="quickUpdateBtn" data-permission="record_activity" class="button primary">＋ 快速更新</button>
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active">
+        <div id="summaryCards" class="metric-grid"></div>
+        <div class="dashboard-grid">
+          <article class="panel span-8">
+            <div class="panel-head">
+              <div><p class="eyebrow">FUNNEL HEALTH</p><h2>CRM客户推进漏斗</h2></div>
+              <span class="panel-note">点击阶段查看客户</span>
+            </div>
+            <div id="funnelChart" class="funnel-chart"></div>
+          </article>
+          <article class="panel span-4 attention-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow red">NEEDS ATTENTION</p><h2>需要我处理</h2></div>
+              <button class="text-button" data-go="alerts">查看全部</button>
+            </div>
+            <div id="attentionList" class="attention-list"></div>
+          </article>
+          <article class="panel span-7">
+            <div class="panel-head">
+              <div><p class="eyebrow">MARKET SIGNAL</p><h2>国家转化与价值</h2></div>
+              <button class="text-button" data-go="markets">深度分析</button>
+            </div>
+            <div id="countrySnapshot" class="data-table compact"></div>
+          </article>
+          <article class="panel span-5">
+            <div class="panel-head">
+              <div><p class="eyebrow">ACTIVITY FEED</p><h2>最新有效动作</h2></div>
+              <span id="lastRefresh" class="panel-note"></span>
+            </div>
+            <div id="activityFeed" class="activity-feed"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="intakeView" class="view">
+        <div id="intakeSummary" class="metric-grid"></div>
+        <div class="section-intro">
+          <div><p class="eyebrow">DAILY CUSTOMER DELIVERY</p><h2 id="intakeHeading">每日客户入库与分配</h2><p id="intakeSubheading">筛选合格客户自动去重、标注联系质量、能力匹配、分配和追踪首次触达。</p></div>
+          <div id="intakeManagerActions" class="top-actions">
+            <button id="intakeSettingsBtn" class="button secondary">分配规则</button>
+            <button id="bulkAssignIntakeBtn" class="button secondary">批量按规则分配</button>
+            <button id="scanIntakeBtn" class="button primary">⇣ 同步今日未开发线索</button>
+          </div>
+        </div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="segmented" id="intakeTabs">
+              <button class="active" data-intake-status="">全部</button>
+              <button data-intake-status="pending">待审核</button>
+              <button data-intake-status="approved">待分配</button>
+              <button data-intake-status="assigned">待领取</button>
+              <button data-intake-status="claimed">已领取</button>
+              <button data-intake-status="returned">已退回</button>
+            </div>
+            <span id="intakeModeLabel" class="toolbar-count"></span>
+          </div>
+          <div id="intakeTable" class="data-table"></div>
+        </article>
+        <article id="intakeBatchPanel" class="panel intake-batches">
+          <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div></div>
+          <div id="intakeBatchTable" class="data-table compact"></div>
+        </article>
+      </section>
+
+      <section id="customersView" class="view">
+        <article class="panel">
+          <div class="toolbar">
+            <div class="search-box">⌕ <input id="customerSearch" placeholder="搜索公司、国家、行业或产品"></div>
+            <select id="stageFilter"><option value="">全部阶段</option></select>
+            <select id="priorityFilter"><option value="">全部优先级</option><option>A</option><option>B</option><option>C</option></select>
+            <label class="check"><input id="onlyOverdue" type="checkbox"> 仅看超期</label>
+            <span id="customerResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="customerTable" class="data-table"></div>
+        </article>
+      </section>
+
+      <section id="developmentView" class="view development-view development-workbench-host">
+        <div id="developmentWorkbenchLoading" class="workbench-loading">
+          <span class="workbench-loading-mark">✦</span>
+          <div><strong>正在载入完整客户开发工作台</strong><span>每日交付、跟进看板、未开发线索池、负责人、Recon、外贸智能体、话术模板和 AI 问答</span></div>
+        </div>
+        <iframe id="developmentWorkbenchFrame" class="development-frame" title="客户开发工作台" loading="lazy" allow="clipboard-write"></iframe>
+      </section>
+
+      <section id="poolView" class="view">
+        <div class="section-intro"><div><p class="eyebrow">UNDEVELOPED LEAD POOL</p><h2>未开发线索池</h2><p>这里的企业全部是尚未开发的线索，不计入 CRM 客户；销售领取后才正式进入 CRM。</p></div></div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="search-box">⌕ <input id="poolSearch" placeholder="搜索公司、国家、行业、网站或产品"></div>
+            <select id="poolGroupFilter"><option value="">全部分组</option><option>A</option><option>B</option><option>C</option><option>未分池</option></select>
+            <select id="poolCrmFilter"><option value="">全部线索状态</option><option value="crm">已领取进入CRM</option><option value="available">尚未进入CRM</option></select>
+            <span id="poolResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="unifiedPoolTable" class="data-table"></div>
+        </article>
+      </section>
+
+      <section id="contactsView" class="view">
+        <div class="section-intro"><div><p class="eyebrow">CONTACT EVIDENCE</p><h2>负责人线索</h2><p>候选联系人、任职证据和直接联系方式集中管理，确认后进入正式对接人。</p></div></div>
+        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="peopleSearch" placeholder="搜索公司、姓名、职位或联系方式"></div><select id="peopleLevelFilter"><option value="">全部等级</option><option>L3</option><option>L2</option><option>L1</option><option>L0</option></select><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div></article>
+      </section>
+
+      <section id="reconView" class="view">
+        <div class="section-intro"><div><p class="eyebrow">RECON INTELLIGENCE</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
+        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="reconSearch" placeholder="搜索客户、行业、需求或联系人"></div><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div></article>
+      </section>
+
+      <section id="pipelineView" class="view">
+        <div class="pipeline-head">
+          <div><h2>从资源到复购的完整推进</h2><p>阶段由销售动作自动推进，管理者可直接发现堵点。</p></div>
+          <div class="legend"><span><i class="dot critical"></i>超期</span><span><i class="dot warning"></i>需介入</span><span><i class="dot good"></i>正常</span></div>
+        </div>
+        <div id="pipelineBoard" class="pipeline-board"></div>
+      </section>
+
+      <section id="alertsView" class="view">
+        <div class="alert-summary" id="alertSummary"></div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="segmented" id="alertTabs">
+              <button class="active" data-severity="">全部异常</button>
+              <button data-severity="critical">立即处理</button>
+              <button data-severity="warning">需要关注</button>
+            </div>
+            <span class="toolbar-count">系统按动作时效自动判断，无需人工上报</span>
+          </div>
+          <div id="alertTable" class="data-table"></div>
+        </article>
+      </section>
+
+      <section id="insightsView" class="view">
+        <div id="insightSummary" class="metric-grid"></div>
+        <div class="section-intro">
+          <div><p class="eyebrow">MANAGER INTELLIGENCE</p><h2>经理评价中心</h2><p>集中维护企业判断、对接人评价和AI提取的赢单标签。</p></div>
+          <div class="method-note"><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
+        </div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索企业、国家、负责人或AI标签"></div>
+            <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
+            <span id="insightResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="insightCompanyList" class="insight-hub-list"></div>
+        </article>
+      </section>
+
+      <section id="teamView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">CAPABILITY REVIEW</p><h2>销售能力差异检视</h2><p>按同类客户漏斗拆解优势与短板，作为客户分配、培训和介入依据。</p></div>
+          <div class="method-note"><strong>公平口径</strong><span>样本不足时只提示趋势；不以邮件量代替有效推进。</span></div>
+        </div>
+        <div id="teamCards" class="team-grid"></div>
+        <article id="teamDetail" class="panel team-detail hidden"></article>
+      </section>
+
+      <section id="marketsView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">RESOURCE ALLOCATION</p><h2>市场策略分析</h2><p>不仅看回复率，更看询价、首单、复购、成交速度与每个客户资源的真实价值。</p></div>
+          <div class="strategy-kpi"><span>推荐核心指标</span><strong>90天毛利 ÷ 对口客户数</strong></div>
+        </div>
+        <div id="marketCards" class="market-cards"></div>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">COUNTRY MATRIX</p><h2>国家经营矩阵</h2></div><span class="panel-note">小于10个客户标记为样本不足</span></div>
+          <div id="marketTable" class="data-table"></div>
+        </article>
+        <article class="panel cohort-panel"><div class="panel-head"><div><p class="eyebrow">ASSIGNMENT COHORT</p><h2>分配批次转化</h2></div><span class="panel-note">避免把尚未成熟的新客户直接算作失败</span></div><div id="cohortTable" class="data-table"></div></article>
+        <div id="segmentGrid" class="segment-grid"></div>
+      </section>
+
+      <section id="usersView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>销售只查看自己的客户；经理查看团队全盘；管理员管理账号与系统配置。</p></div>
+          <button id="newUserBtn" class="button primary">＋ 新增用户</button>
+        </div>
+        <article class="panel"><div id="userTable" class="data-table"></div></article>
+        <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
+        <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
+      </section>
+    </main>
+  </div>
+
+  <aside id="customerDrawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <button class="icon-button" data-close-drawer>×</button>
+      <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
+      <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录动作</button>
+    </div>
+    <div id="drawerContent" class="drawer-content"></div>
+  </aside>
+  <div id="drawerBackdrop" class="backdrop" data-close-drawer></div>
+
+  <div id="modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-head"><div><p id="modalEyebrow" class="eyebrow">QUICK UPDATE</p><h2 id="modalTitle">快速更新</h2></div><button class="icon-button" data-close-modal>×</button></div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="/sales-assets/app.js?v=20260720-4"></script>
+</body>
+</html>

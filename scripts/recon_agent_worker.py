@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import time
+import socket
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -348,12 +349,13 @@ The eventual HTML destination is only for context:
 Structured summary format:
 - Start with a fenced block exactly ```json.
 - Include one JSON object with these keys:
-  customer_id, company_name, website, industry, customer_type, city, employees, phone, email, inn,
+  schema_version, customer_id, company_name, website, industry, customer_type, city, employees, phone, email, inn,
   rating, score, products, description, opportunity_summary, sanctioned, sanction_status, sanction_source, sanction_program,
   sanction_checked_at, evidence_url, quality_status, missing_steps, step5_status, step5_plus_status,
   contact_classification, contact_name, contact_title, contacts_summary, outreach_angle, next_action, notes,
   opportunity_do, opportunity_need, opportunity_sell, opportunity_contact, opportunity_decision, execution_log.
 - missing_steps must be an array of strings.
+- schema_version must be "3.0". The worker will validate and wrap this summary in the canonical V3 envelope.
 - Use empty string for unknown scalar fields and false for sanctioned when no direct hit is found.
 - Values for industry, products, description, contacts_summary, contact_title, outreach_angle, next_action, and notes must be Chinese-first. Do not put Russian-only values in these fields.
 - opportunity_summary must be a concise Chinese business opportunity judgment (80 chars max), not a process sentence such as "Now I have enough data" or "开始编译报告".
@@ -449,13 +451,70 @@ def validate_payload(result: dict[str, Any], evidence: list[dict[str, Any]]) -> 
         raise ValueError("result.json must contain a JSON object")
     if not isinstance(evidence, list):
         raise ValueError("evidence.json must contain a JSON array")
-    valid_evidence = [item for item in evidence if isinstance(item, dict) and item.get("field_name") and item.get("source_url")]
+    valid_evidence = [item for item in evidence if isinstance(item, dict) and item.get("field_name")]
     if not valid_evidence:
-        raise ValueError("evidence.json must include at least one row with field_name and source_url")
+        raise ValueError("evidence.json must include at least one row with field_name")
     if str(result.get("sanctioned")).lower() in ("true", "1", "yes"):
         missing = [key for key in ("sanction_source", "sanction_program", "sanction_checked_at", "evidence_url") if not result.get(key)]
         if missing:
             raise ValueError(f"sanctioned=true requires: {', '.join(missing)}")
+
+
+def build_v3_contract(job: dict[str, Any], result: dict[str, Any], evidence: list[dict[str, Any]], report_markdown: str) -> dict[str, Any]:
+    """Wrap today's flat Hermes output in the stable V3 contract."""
+    try:
+        score = max(0, min(100, int(float(str(result.get("score") or 0)))))
+    except (TypeError, ValueError):
+        score = 0
+    sanctioned = str(result.get("sanctioned") or "").lower() in {"true", "1", "yes"}
+    sanction_status = str(result.get("sanction_status") or "").upper()
+    sanction_result = "confirmed_match" if sanctioned or sanction_status == "HIT" else ("clear" if sanction_status == "CLEAR" else "unknown")
+    website_text = str(result.get("verified") or result.get("website_verification") or "").lower()
+    website_status = "verified" if website_text in {"1", "true", "yes", "valid", "是"} or "可访问" in website_text else ("blocked" if "拦截" in website_text else "unreachable" if "不可访问" in website_text else "unverified")
+    source_url = str(result.get("evidence_url") or "").strip()
+    methods = []
+    email = str(result.get("email") or "").strip()
+    phone = str(result.get("phone") or "").strip()
+    if email and "@" in email:
+        methods.append({"type": "email", "value": email, "status": "generic" if is_generic_mailbox(email) else "unverified", "source_url": source_url})
+    if phone:
+        methods.append({"type": "phone", "value": phone, "status": "unverified", "source_url": source_url})
+    contacts = []
+    if methods or result.get("contact_name") or result.get("contact_title"):
+        contacts.append({"name": str(result.get("contact_name") or ""), "title": str(result.get("contact_title") or ""), "department": "", "decision_role": str(result.get("contact_classification") or "unknown"), "source_url": source_url, "methods": methods})
+    v3_evidence = []
+    for index, item in enumerate(evidence, 1):
+        if not isinstance(item, dict) or not item.get("field_name"):
+            continue
+        confidence = str(item.get("confidence") or "medium")
+        v3_evidence.append({"evidence_id": str(item.get("evidence_id") or f"EV-{index:04d}"), "field_name": str(item.get("field_name")), "value": str(item.get("value") or ""), "source_url": str(item.get("source_url") or ""), "source_title": str(item.get("source_title") or ""), "checked_at": str(item.get("checked_at") or iso_now()), "confidence": confidence if confidence in {"low", "medium", "high"} else "medium", "evidence_type": str(item.get("evidence_type") or item.get("field_name") or "report_source"), "selected_for_report": bool(item.get("selected_for_report", True))})
+    issues = []
+    if any(not item["source_url"] for item in v3_evidence): issues.append("evidence_without_source_url")
+    if not contacts: issues.append("missing_contact")
+    if sanction_result == "unknown": issues.append("sanction_check_incomplete")
+    quality_status = {"完整": "complete", "部分": "partial", "需复核": "needs_review"}.get(str(result.get("quality_status") or ""), "needs_review" if issues else "partial")
+    products = [x.strip() for x in re.split(r"[,，;；]", str(result.get("recommended_products") or result.get("products") or "")) if x.strip()]
+    return {
+        "schema_version": "3.0", "job_id": str(job.get("job_id") or ""), "customer_id": str(job.get("customer_id") or ""), "generated_at": iso_now(),
+        "company": {"name": str(result.get("company_name") or job.get("company_name") or ""), "name_local": str(result.get("russian_name") or ""), "country_code": "RU", "website": str(result.get("website") or job.get("website") or ""), "industry": str(result.get("industry") or ""), "customer_type": str(result.get("customer_type") or ""), "description": str(result.get("description") or ""), "identifiers": ([{"type": "inn", "value": str(result.get("inn")), "source_url": source_url}] if result.get("inn") else [])},
+        "contacts": contacts,
+        "website_check": {"status": website_status, "http_status": None, "checked_at": iso_now(), "method": "hermes", "error_code": "", "note": str(result.get("website_verification") or "")},
+        "sanction_check": {"result": sanction_result, "review_status": "pending" if sanction_result in {"confirmed_match", "unknown"} else "not_required", "provider": str(result.get("sanction_source") or "Hermes russia-recon"), "checked_at": str(result.get("sanction_checked_at") or ""), "matches": ([{"program": str(result.get("sanction_program") or ""), "source_url": source_url}] if sanction_result == "confirmed_match" else [])},
+        "opportunity": {"summary": str(result.get("opportunity_summary") or ""), "need": str(result.get("opportunity_need") or ""), "recommended_products": products, "next_action": str(result.get("next_action") or ""), "outreach_angle": str(result.get("outreach_angle") or "")},
+        "quality": {"status": quality_status, "score": score, "issues": issues}, "evidence": v3_evidence,
+        "execution_log": result.get("execution_log") or {}, "report": {"markdown": report_markdown, "path": str(result.get("report_path") or "")},
+    }
+
+
+def validate_v3_contract(value: dict[str, Any], job: dict[str, Any]) -> None:
+    errors = []
+    if value.get("schema_version") != "3.0": errors.append("schema_version")
+    if value.get("job_id") != job.get("job_id"): errors.append("job_id mismatch")
+    if value.get("customer_id") != job.get("customer_id"): errors.append("customer_id mismatch")
+    if not value.get("evidence"): errors.append("evidence")
+    if value.get("sanction_check", {}).get("result") == "confirmed_match" and not value.get("sanction_check", {}).get("matches"): errors.append("sanction matches")
+    if errors:
+        raise ValueError("Recon V3 validation failed: " + ", ".join(errors))
 
 
 def unique_urls(text: str) -> list[str]:
@@ -1662,21 +1721,37 @@ def html_attr(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
 
-def linkify_escaped(text: str) -> str:
-    def repl(match: re.Match[str]) -> str:
-        url = match.group(1).rstrip(".,;:!?，。；：！？、")
-        suffix = match.group(1)[len(url):]
-        safe = html.escape(url, quote=True)
-        return f'<a href="{safe}" target="_blank" rel="noopener">{html.escape(url)}</a>{html.escape(suffix)}'
-    return re.sub(r"(https?://[^\s<>()]+)", repl, text)
+INLINE_URL_RE = re.compile(r"""https?://[^\s<>"'()\]]+""", re.IGNORECASE)
 
 
-def inline_markdown_to_html(text: str) -> str:
+def _format_inline_text(text: str) -> str:
     escaped = html.escape(text or "")
     escaped = re.sub(r"`([^`]+)`", lambda m: f"<code>{m.group(1)}</code>", escaped)
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
-    escaped = escaped.replace("**", "")
-    return linkify_escaped(escaped)
+    return escaped.replace("**", "")
+
+
+def _linkify_inline_segment(text: str) -> str:
+    output: list[str] = []
+    cursor = 0
+    for match in INLINE_URL_RE.finditer(text or ""):
+        raw_url = match.group(0)
+        url = raw_url.rstrip(".,;:!?，。；：！？、")
+        suffix = raw_url[len(url):]
+        output.append(_format_inline_text(text[cursor:match.start()]))
+        safe_url = html.escape(url, quote=True)
+        output.append(f'<a href="{safe_url}" target="_blank" rel="noopener">{html.escape(url)}</a>')
+        output.append(_format_inline_text(suffix))
+        cursor = match.end()
+    output.append(_format_inline_text((text or "")[cursor:]))
+    return "".join(output)
+
+
+def inline_markdown_to_html(text: str) -> str:
+    # Generated decision tables intentionally use <br> inside a cell. Preserve only
+    # that harmless tag, while escaping every other piece of source text.
+    segments = re.split(r"(?i)<br\s*/?>", text or "")
+    return "<br>".join(_linkify_inline_segment(segment) for segment in segments)
 
 
 def markdown_to_html(markdown: str) -> str:
@@ -1705,11 +1780,17 @@ def markdown_to_html(markdown: str) -> str:
             return
         rows = []
         body_rows = table_rows
+        expected_columns = 0
         if len(body_rows) > 1 and all(re.fullmatch(r"[:\-\s]+", cell) for cell in body_rows[1]):
             header = body_rows[0]
+            expected_columns = len(header)
             rows.append("<tr>" + "".join(f"<th>{inline_markdown_to_html(cell.strip())}</th>" for cell in header) + "</tr>")
             body_rows = body_rows[2:]
         for row in body_rows:
+            if expected_columns and len(row) > expected_columns:
+                row = row[:expected_columns - 1] + [" | ".join(row[expected_columns - 1:])]
+            elif expected_columns and len(row) < expected_columns:
+                row = row + [""] * (expected_columns - len(row))
             rows.append("<tr>" + "".join(f"<td>{inline_markdown_to_html(cell.strip())}</td>" for cell in row) + "</tr>")
         output.append("<table>" + "".join(rows) + "</table>")
         table_rows.clear()
@@ -2207,6 +2288,7 @@ def render_html_report(job: dict[str, Any], result: dict[str, Any], evidence: li
       --paper: #ffffff;
     }}
     * {{ box-sizing: border-box; }}
+    html, body {{ max-width: 100%; overflow-x: hidden; }}
     body {{ margin: 0; background: #eef3f7; color: var(--ink); font: 15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif; }}
     a {{ color: var(--accent); text-decoration: none; word-break: break-word; }}
     a:hover {{ text-decoration: underline; }}
@@ -2227,7 +2309,8 @@ def render_html_report(job: dict[str, Any], result: dict[str, Any], evidence: li
     .label {{ color: var(--muted); font-size: 12px; margin-bottom: 5px; }}
     .value {{ font-weight: 680; overflow-wrap: anywhere; }}
     .main {{ display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }}
-    .panel {{ background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }}
+    .main > *, .report-body {{ min-width: 0; }}
+    .panel {{ min-width: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }}
     .panel + .panel {{ margin-top: 18px; }}
     h2 {{ margin: 0 0 12px; font-size: 18px; color: var(--accent-ink); }}
     h3 {{ margin: 22px 0 8px; font-size: 16px; color: #26344d; }}
@@ -2235,8 +2318,8 @@ def render_html_report(job: dict[str, Any], result: dict[str, Any], evidence: li
     p {{ margin: 9px 0; }}
     ul {{ padding-left: 20px; }}
     li {{ margin: 5px 0; }}
-    table {{ width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }}
-    th, td {{ border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }}
+    table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }}
+    th, td {{ border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }}
     th {{ background: var(--soft); width: 34%; color: #34435d; }}
     pre {{ white-space: pre-wrap; overflow: auto; background: #101827; color: #edf4ff; padding: 14px; border-radius: 6px; }}
     code {{ background: #eef3f7; padding: 1px 5px; border-radius: 4px; font-size: 13px; }}
@@ -2376,7 +2459,15 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
     output_dir = (Path(args.output_dir).expanduser().resolve()
                   / f"{now_slug()}-{safe_name(job.get('company_name') or job_id)}-{safe_name(job_id)}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    post_json(args.webapp_url, args.token, "markJobRunning", {"job_id": job_id, "output_dir": str(output_dir)})
+    if job.get("worker_id"):
+        post_json(args.webapp_url, args.token, "heartbeatReconJob", {
+            "job_id": job_id,
+            "worker_id": args.worker_id,
+            "lease_seconds": max(1800, args.timeout + 300),
+            "output_dir": str(output_dir),
+        })
+    else:
+        post_json(args.webapp_url, args.token, "markJobRunning", {"job_id": job_id, "output_dir": str(output_dir)})
     try:
         capabilities = probe_execution_capabilities(job, output_dir)
         prompt = build_prompt(job, output_dir, capabilities)
@@ -2391,6 +2482,10 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
         execution_log_path.write_text(json.dumps(execution_log, ensure_ascii=False, indent=2), encoding="utf-8")
         (output_dir / "report.md").write_text(report_markdown, encoding="utf-8")
         validate_payload(result, evidence)
+        result_v3 = build_v3_contract(job, result, evidence, report_markdown)
+        validate_v3_contract(result_v3, job)
+        result_v3_path = output_dir / "result-v3.json"
+        result_v3_path.write_text(json.dumps(result_v3, ensure_ascii=False, indent=2), encoding="utf-8")
         html_report = render_html_report(job, result, evidence, report_markdown, html_path)
         html_path.write_text(html_report, encoding="utf-8")
         artifacts = {
@@ -2400,6 +2495,7 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
             "stderr_log": str(output_dir / "hermes_stderr.log"),
             "capabilities_json": str(output_dir / "capabilities.json"),
             "execution_log_json": str(execution_log_path),
+            "result_v3_json": str(result_v3_path),
         }
         result["artifacts_json"] = json.dumps(artifacts, ensure_ascii=False)
         result["source_file"] = job.get("source", "")
@@ -2410,6 +2506,9 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
             "report_path": str(html_path),
             "output_dir": str(output_dir),
             "artifacts": artifacts,
+            "result_v3": result_v3,
+            "schema_version": "3.0",
+            "parser_mode": "v3_envelope",
         })
         print(f"[done] {job_id} -> {output_dir}", flush=True)
     except Exception as exc:
@@ -2428,6 +2527,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hermes-skill", default=os.environ.get("RECON_HERMES_SKILL", DEFAULT_HERMES_SKILL))
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("RECON_AGENT_TIMEOUT", "1200")))
     parser.add_argument("--limit", type=int, default=1)
+    parser.add_argument("--worker-id", default=os.environ.get("RECON_WORKER_ID", f"{socket.gethostname()}-{os.getpid()}"))
     return parser.parse_args()
 
 
@@ -2439,8 +2539,16 @@ def main() -> int:
         return 2
     while True:
         try:
-            response = post_json(args.webapp_url, args.token, "listQueuedJobs", {"limit": args.limit})
-            jobs = response.get("jobs") or []
+            jobs = []
+            for _ in range(max(1, args.limit)):
+                response = post_json(args.webapp_url, args.token, "claimReconJob", {
+                    "worker_id": args.worker_id,
+                    "lease_seconds": max(1800, args.timeout + 300),
+                })
+                job = response.get("job")
+                if not job:
+                    break
+                jobs.append(job)
             if not jobs:
                 if args.once:
                     print("[idle] no queued jobs", flush=True)

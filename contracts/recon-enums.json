@@ -1,0 +1,11 @@
+{
+  "schema_version": "3.0",
+  "website_status": ["verified", "unverified", "unreachable", "blocked", "missing", "needs_review"],
+  "sanction_result": ["clear", "possible_match", "confirmed_match", "unknown", "error"],
+  "review_status": ["pending", "confirmed", "rejected", "not_required"],
+  "quality_status": ["complete", "partial", "needs_review", "invalid"],
+  "execution_status": ["ok", "no_result", "blocked", "failed", "skipped_input_missing", "skipped_capability_missing"],
+  "evidence_type": ["identity", "product", "contact", "procurement", "sanction", "hiring", "social", "registry", "inference", "preflight", "report_source"],
+  "contact_method_type": ["email", "phone", "telegram", "whatsapp", "linkedin", "contact_form"],
+  "contact_status": ["verified", "unverified", "invalid", "generic", "needs_review"]
+}

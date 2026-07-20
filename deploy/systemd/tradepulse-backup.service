@@ -1,0 +1,9 @@
+[Unit]
+Description=TradePulse encrypted data backup
+
+[Service]
+Type=oneshot
+User=tradepulse
+Group=tradepulse
+EnvironmentFile=/opt/tradepulse/.env
+ExecStart=/opt/tradepulse/deploy/backup.sh

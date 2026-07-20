@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.crm/contracts/recon-result-v3.schema.json",
+  "title": "Russia CRM Recon Result V3",
+  "type": "object",
+  "required": ["schema_version", "job_id", "customer_id", "generated_at", "company", "contacts", "website_check", "sanction_check", "opportunity", "quality", "evidence"],
+  "properties": {
+    "schema_version": { "const": "3.0" },
+    "job_id": { "type": "string", "minLength": 1 },
+    "customer_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "company": {
+      "type": "object",
+      "required": ["name", "country_code", "website", "identifiers"],
+      "properties": {
+        "name": { "type": "string" },
+        "name_local": { "type": "string" },
+        "country_code": { "type": "string", "pattern": "^[A-Z]{2}$" },
+        "website": { "type": "string" },
+        "industry": { "type": "string" },
+        "customer_type": { "type": "string" },
+        "description": { "type": "string" },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "value"],
+            "properties": {
+              "type": { "type": "string" },
+              "value": { "type": "string" },
+              "source_url": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "contacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "title", "decision_role", "methods"],
+        "properties": {
+          "name": { "type": "string" },
+          "title": { "type": "string" },
+          "department": { "type": "string" },
+          "decision_role": { "type": "string" },
+          "source_url": { "type": "string" },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "value", "status"],
+              "properties": {
+                "type": { "enum": ["email", "phone", "telegram", "whatsapp", "linkedin", "contact_form"] },
+                "value": { "type": "string" },
+                "status": { "enum": ["verified", "unverified", "invalid", "generic", "needs_review"] },
+                "source_url": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "website_check": {
+      "type": "object",
+      "required": ["status", "checked_at", "method"],
+      "properties": {
+        "status": { "enum": ["verified", "unverified", "unreachable", "blocked", "missing", "needs_review"] },
+        "http_status": { "type": ["integer", "null"] },
+        "checked_at": { "type": "string" },
+        "method": { "type": "string" },
+        "error_code": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "sanction_check": {
+      "type": "object",
+      "required": ["result", "review_status", "provider", "checked_at", "matches"],
+      "properties": {
+        "result": { "enum": ["clear", "possible_match", "confirmed_match", "unknown", "error"] },
+        "review_status": { "enum": ["pending", "confirmed", "rejected", "not_required"] },
+        "provider": { "type": "string" },
+        "checked_at": { "type": "string" },
+        "matches": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": true
+    },
+    "opportunity": {
+      "type": "object",
+      "required": ["summary", "need", "recommended_products", "next_action"],
+      "properties": {
+        "summary": { "type": "string" },
+        "need": { "type": "string" },
+        "recommended_products": { "type": "array", "items": { "type": "string" } },
+        "next_action": { "type": "string" },
+        "outreach_angle": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "quality": {
+      "type": "object",
+      "required": ["status", "score", "issues"],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "needs_review", "invalid"] },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "field_name", "value", "source_url", "confidence", "evidence_type"],
+        "properties": {
+          "evidence_id": { "type": "string", "minLength": 1 },
+          "field_name": { "type": "string", "minLength": 1 },
+          "value": { "type": "string" },
+          "source_url": { "type": "string" },
+          "source_title": { "type": "string" },
+          "checked_at": { "type": "string" },
+          "confidence": { "enum": ["low", "medium", "high"] },
+          "evidence_type": { "type": "string" },
+          "selected_for_report": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "execution_log": { "type": "object" },
+    "report": {
+      "type": "object",
+      "properties": {
+        "markdown": { "type": "string" },
+        "path": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

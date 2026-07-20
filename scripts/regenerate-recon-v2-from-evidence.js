@@ -153,8 +153,13 @@ function stripGeneratedSections(markdown) {
   text = text.replace(/^\s*所有关键数据已收集完毕。现在编译完整报告：\s*/m, '');
   const v2 = text.indexOf('## V2 销售决策卡');
   if (v2 >= 0) {
-    const next = text.indexOf('\n## ', v2 + '## V2 销售决策卡'.length);
-    text = next >= 0 ? `${text.slice(0, v2)}${text.slice(next + 1)}` : text.slice(0, v2);
+    const originalMarker = text.indexOf('## 原始执行流水', v2);
+    if (originalMarker >= 0) {
+      text = `${text.slice(0, v2)}${text.slice(originalMarker + '## 原始执行流水'.length)}`;
+    } else {
+      const next = text.indexOf('\n## ', v2 + '## V2 销售决策卡'.length);
+      text = next >= 0 ? `${text.slice(0, v2)}${text.slice(next + 1)}` : text.slice(0, v2);
+    }
   }
   const summary = text.search(/\n##\s*客户数据摘要\s*/);
   if (summary >= 0) text = text.slice(0, summary);
@@ -240,7 +245,14 @@ function supportProfile(grouped) {
 
 function evidenceCell(items) {
   if (!items.length) return '待确认';
-  return items.slice(0, 3).map(item => `${item.title}：${item.url}`).join('<br>');
+  return items.slice(0, 3).map(item => `${hostLabel(item.url)}：${item.url}`).join('<br>');
+}
+
+function markdownCell(value) {
+  return String(value ?? '')
+    .replace(/\r?\n/g, '<br>')
+    .replace(/\|/g, '｜')
+    .trim();
 }
 
 function inferDo(row, json, supported) {
@@ -432,13 +444,13 @@ function buildMarkdown(row, json, fields, quality, missing, grouped, flat, suppo
     markdownTable([
       '| 问题 | 结论 |',
       '|------|------|',
-      `| 这家公司做什么 | ${fields.opportunity_do} |`,
-      `| 它可能需要什么 | ${fields.opportunity_need} |`,
-      `| 我们能卖什么 | ${fields.opportunity_sell} |`,
-      `| 应该找谁 | ${contact} |`,
-      `| 为什么现在可开发 | ${developWhy} |`,
-      `| 先做什么 | ${fields.opportunity_decision} |`,
-      `| 风险 | ${risk} |`,
+      `| 这家公司做什么 | ${markdownCell(fields.opportunity_do)} |`,
+      `| 它可能需要什么 | ${markdownCell(fields.opportunity_need)} |`,
+      `| 我们能卖什么 | ${markdownCell(fields.opportunity_sell)} |`,
+      `| 应该找谁 | ${markdownCell(contact)} |`,
+      `| 为什么现在可开发 | ${markdownCell(developWhy)} |`,
+      `| 先做什么 | ${markdownCell(fields.opportunity_decision)} |`,
+      `| 风险 | ${markdownCell(risk)} |`,
     ]),
     '',
     '### 证据链快速表',
@@ -446,11 +458,11 @@ function buildMarkdown(row, json, fields, quality, missing, grouped, flat, suppo
     markdownTable([
       '| 结论 | 已有证据 | 证据强度 | 仍缺什么 |',
       '|------|----------|----------|----------|',
-      `| 身份/工商 | ${evidenceCell(identityEvidence)} | ${supported.identity ? '高/中' : '待确认'} | ${supported.identity ? '交易前复核最新登记' : 'INN/法人/地址公开源'} |`,
-      `| 产品/需求 | ${evidenceCell(productEvidence)} | ${supported.product ? '中/高' : '待确认'} | ${supported.product ? '具体型号/BOM/年用量' : '官网产品页/规格书/目录'} |`,
-      `| 联系入口 | ${evidenceCell(contactEvidence)} | ${supported.contact ? '中/高' : '待确认'} | ${supported.contact ? '采购负责人个人通道' : '官网联系页/2GIS/电话验证'} |`,
-      `| 制裁状态 | ${evidenceCell(sanctionEvidence)} | ${supported.sanction ? '中/高' : '待确认'} | ${supported.sanction ? '交易前复核' : 'OpenSanctions/OFAC/EU/UK'} |`,
-      `| 采购实证 | ${evidenceCell(procurementEvidence)} | ${supported.procurement ? '中/高' : '低/待确认'} | 海关/招标/供应商记录 |`,
+      `| 身份/工商 | ${markdownCell(evidenceCell(identityEvidence))} | ${supported.identity ? '高/中' : '待确认'} | ${supported.identity ? '交易前复核最新登记' : 'INN/法人/地址公开源'} |`,
+      `| 产品/需求 | ${markdownCell(evidenceCell(productEvidence))} | ${supported.product ? '中/高' : '待确认'} | ${supported.product ? '具体型号/BOM/年用量' : '官网产品页/规格书/目录'} |`,
+      `| 联系入口 | ${markdownCell(evidenceCell(contactEvidence))} | ${supported.contact ? '中/高' : '待确认'} | ${supported.contact ? '采购负责人个人通道' : '官网联系页/2GIS/电话验证'} |`,
+      `| 制裁状态 | ${markdownCell(evidenceCell(sanctionEvidence))} | ${supported.sanction ? '中/高' : '待确认'} | ${supported.sanction ? '交易前复核' : 'OpenSanctions/OFAC/EU/UK'} |`,
+      `| 采购实证 | ${markdownCell(evidenceCell(procurementEvidence))} | ${supported.procurement ? '中/高' : '低/待确认'} | 海关/招标/供应商记录 |`,
     ]),
     '',
     '### Step 0-9 输出一览',
@@ -458,7 +470,7 @@ function buildMarkdown(row, json, fields, quality, missing, grouped, flat, suppo
     markdownTable([
       '| Step | 能得出的结果/结论 | 当前证据 | 可执行性 |',
       '|------|------------------|----------|----------|',
-      ...stepRows.map(rowValues => `| ${rowValues.join(' | ')} |`),
+      ...stepRows.map(rowValues => `| ${rowValues.map(markdownCell).join(' | ')} |`),
     ]),
     '',
     '### 信息缺口转执行任务',

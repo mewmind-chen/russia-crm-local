@@ -1,7 +1,8 @@
 ---
 name: russia-recon
-version: 5.8
+version: 5.9
 engine: lightpanda
+# 5.9: Recon V3 数据契约 — 联系方式纯值、证据关联、制裁疑似/确认分离、Legacy兼容
 # 5.8: CloakBrowser 首选浏览器后端 — browser-fetch/stealth-fetch 默认先试 CloakBrowser，再回退 Playwright/rebrowser
 # 5.6: API Broker + Scrapling fallback 对齐 — api-* 主路径，scrapling-fetch 网页兜底，浏览器层最后
 # 5.5: Scrapling 集成 — scrapling_fetcher.py 三级抓取 + 自适应选择器，CF绕过 + SSRF自动回退
@@ -19,6 +20,18 @@ description: |
 # Russia Recon — 俄罗斯 B2B 客户侦察一体化技能
 
 > 从公司名单到可触达的决策人，一套完整流程。
+
+## Recon V3 输出纪律
+
+本技能由 CRM Worker 调用时，最终结构化摘要会被 Worker 包装为
+`contracts/recon-result-v3.schema.json`。必须遵守：
+
+- 邮箱、电话字段只能写真实联系方式；`未找到`、`not found`、`via site` 等只能写入状态或备注。
+- 事实、推断和待确认项必须分开；重要结论必须能关联公开来源证据。
+- 制裁结果区分 `possible_match` 与 `confirmed_match`；未经实体标识和来源确认不得写成确认命中。
+- 不自行决定数据库最终证据总数。输出证据与报告采用关系，由 CRM 入库后统一计数。
+- 来源URL缺失时保留事实缺口并降低质量状态，不得伪造URL补齐。
+- JSON结构化摘要为主通道，文末 `## 客户数据摘要` 仅作为迁移期 Legacy 回退，二者语义必须一致。
 
 ---
 

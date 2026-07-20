@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+const Database=require('better-sqlite3'),path=require('path');const {ensureTables}=require('../lib/db');ensureTables();
+const db=new Database(path.join(__dirname,'..','data','crm.db'));const now=new Date().toISOString();
+db.transaction(()=>{
+  db.prepare(`UPDATE person_candidates SET procurement_relevance=CASE WHEN role_category IN ('procurement','supply_chain') AND decision_role IN ('decision_maker','influencer') THEN 'P3' WHEN role_category IN ('technical','engineering','production','executive') AND decision_role IN ('decision_maker','influencer') THEN 'P2' WHEN role_category='commercial' OR decision_role='entry' THEN 'P1' ELSE 'P0' END`).run();
+  db.prepare(`UPDATE person_candidates SET sales_ready=CASE WHEN contact_level='L3' AND procurement_relevance IN ('P2','P3') THEN 1 ELSE 0 END,delivery_status=CASE WHEN contact_level='L3' AND procurement_relevance IN ('P2','P3') THEN 'sales_ready' WHEN contact_level='L3' THEN 'verified_entry_only' WHEN contact_level='L2' THEN 'manual_review' ELSE 'research_only' END,last_verified_at=CASE WHEN contact_level IN ('L2','L3') AND last_verified_at='' THEN updated_at ELSE last_verified_at END`).run();
+  db.prepare(`UPDATE customer_pool SET sales_ready_contact_count=(SELECT count(*) FROM person_candidates p WHERE p.customer_id=customer_pool.customer_id AND p.sales_ready=1),contact_next_action=CASE WHEN EXISTS(SELECT 1 FROM person_candidates p WHERE p.customer_id=customer_pool.customer_id AND p.sales_ready=1) THEN '交给业务跟进' WHEN EXISTS(SELECT 1 FROM person_candidates p WHERE p.customer_id=customer_pool.customer_id AND p.contact_level='L3') THEN '已有真实入口人，继续获取采购/技术负责人' ELSE contact_next_action END`).run();
+})();
+const stats=db.prepare(`SELECT procurement_relevance,count(*) people,SUM(sales_ready) sales_ready FROM person_candidates GROUP BY procurement_relevance`).all();db.close();console.log(JSON.stringify({updated_at:now,stats},null,2));

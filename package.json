@@ -3,8 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test": "node --test",
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "crm:setup": "node -e \"require('./lib/sales_crm').installSalesCrm(); console.log('Sales CRM ready')\"",
+    "crm:intake:daily": "node scripts/import-daily-sales-crm.js",
+    "crm:migrate:unified:dry": "node scripts/migrate-unified-crm.js",
+    "crm:migrate:unified": "node scripts/migrate-unified-crm.js --apply",
+    "crm:reset-to-leads": "node scripts/reset-crm-to-undeveloped-leads.js",
+    "crm:notify": "node scripts/dispatch-crm-notifications.js",
     "migrate": "node scripts/migrate.js",
     "assistant:index": "node scripts/assistant_index.js",
     "daily:import": "node scripts/import-daily-normalized.js",
@@ -21,9 +28,32 @@
     "recon:daily": "node scripts/recon-daily.js --limit 10 --enqueue-only --json-out tmp/codex-recon-today.json",
     "recon:enqueue-daily": "node scripts/recon-daily.js --limit 10 --enqueue-only --json-out tmp/codex-recon-today.json",
     "recon:hermes:daily": "node scripts/recon-daily.js --limit 10 --run-worker",
+    "contact-recon:once": "python3 scripts/contact_recon_worker.py --once",
+    "contact-recon:worker": "python3 scripts/contact_recon_worker.py",
     "recon:codex:submit": "node scripts/submit-codex-recon-result.js",
     "recon:regrade": "node scripts/regrade-recon-results.js",
-    "recon:regrade:apply": "node scripts/regrade-recon-results.js --apply"
+    "recon:regrade:apply": "node scripts/regrade-recon-results.js --apply",
+    "quality:audit": "node scripts/audit-data-quality.js",
+    "quality:audit:strict": "node scripts/audit-data-quality.js --strict",
+    "quality:normalize": "node scripts/normalize-data-quality.js",
+    "quality:normalize:apply": "node scripts/normalize-data-quality.js --apply",
+    "contact-quality:migrate": "node scripts/migrate-contact-quality.js",
+    "contact-quality:migrate:apply": "node scripts/migrate-contact-quality.js --apply"
+    ,"company-screening:preview": "node scripts/classify-company-pool.js"
+    ,"company-screening:run": "node scripts/classify-company-pool.js --apply"
+    ,"contact-recon:enqueue": "node scripts/enqueue-contact-recon.js"
+    ,"contact-recon:enqueue:dry": "node scripts/enqueue-contact-recon.js --dry-run"
+    ,"delivery:generate": "node scripts/generate-daily-delivery.js"
+    ,"delivery:daily": "node scripts/daily-customer-delivery.js"
+    ,"delivery:daily:enqueue": "node scripts/daily-customer-delivery.js --enqueue"
+    ,"delivery:services:install": "node scripts/install-daily-services.js"
+    ,"contact-recon:replay": "python3 scripts/replay_contact_recon_failures.py"
+    ,"contact-recon:replay:apply": "python3 scripts/replay_contact_recon_failures.py --apply"
+    ,"contact-recon:notify:dry": "node scripts/notify-contact-recon-complete.js --dry-run"
+    ,"contact-recon:notify:force": "node scripts/notify-contact-recon-complete.js --force"
+    ,"contact-delivery:regrade": "node scripts/regrade-contact-delivery.js"
+    ,"reports:share:setup": "node scripts/setup-report-sharing.js"
+    ,"contact-reports:generate": "node scripts/generate-contact-recon-reports.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

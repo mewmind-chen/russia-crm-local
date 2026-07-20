@@ -18,16 +18,25 @@ data/*.md
 # Local logs, run artifacts, generated reports, and scratch output.
 logs/
 recon-runs/
+contact-recon-runs/
+reports/
+contact-recon-reports/
+backups/
+screenshots/
 tmp/
 output/
 memory/
 crm/
 new-*.json
+tmp*.json
 crm-domain-blocklist*
 finder-copy-test.txt
 _node_write_test.txt
 *.pid
 *.log
+*-客户背调报告.html
+*-背调报告.html
+*recon-report.html
 
 # Local machine/editor noise.
 .DS_Store

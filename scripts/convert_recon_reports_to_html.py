@@ -113,6 +113,19 @@ def convert_report(conn: sqlite3.Connection, worker: Any, row: sqlite3.Row, dry_
     report_markdown = md_path.read_text(encoding="utf-8")
     html_path = md_path.with_name("report.html")
     result, evidence = worker.build_payload_from_report(job_dict, report_markdown, html_path)
+    if render_only:
+        # A render-only pass must not silently downgrade fields already validated
+        # and stored by the CRM. Use the stored result as the authority, while
+        # retaining newly derived values only for columns that are still empty.
+        for key, value in dict(row).items():
+            if clean(value):
+                result[key] = value
+        stored_evidence = conn.execute(
+            "SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id",
+            (row["job_id"],),
+        ).fetchall()
+        if stored_evidence:
+            evidence = [dict(item) for item in stored_evidence]
     result["customer_id"] = clean(row["customer_id"])
     if pool:
         pool_dict = dict(pool)

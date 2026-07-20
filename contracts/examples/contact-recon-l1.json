@@ -1,0 +1,13 @@
+{
+  "schema_version": "contact-recon-v1",
+  "job_id": "CR-EXAMPLE-L1",
+  "customer_id": "RU-0002",
+  "target_roles": ["采购负责人", "供应商开发经理"],
+  "people": [],
+  "company_entry_points": [
+    { "type": "email", "value": "sales@example.ru", "discovery_type": "company_generic", "verification_status": "verified", "source_url": "https://example.ru/contacts" }
+  ],
+  "evidence": [],
+  "search_gaps": ["未找到具体采购负责人"],
+  "recommended_next_searches": ["搜索招标PDF和展会参展联系人"]
+}

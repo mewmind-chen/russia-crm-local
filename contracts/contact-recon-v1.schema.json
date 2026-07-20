@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.crm/contracts/contact-recon-v1.schema.json",
+  "title": "Contact Recon Result V1",
+  "type": "object",
+  "required": ["schema_version", "job_id", "customer_id", "target_roles", "people", "company_entry_points", "evidence", "search_gaps", "recommended_next_searches"],
+  "properties": {
+    "schema_version": { "const": "contact-recon-v1" },
+    "job_id": { "type": "string", "minLength": 1 },
+    "customer_id": { "type": "string", "minLength": 1 },
+    "target_roles": { "type": "array", "items": { "type": "string" } },
+    "people": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["person_id", "full_name", "title", "role_category", "decision_role", "employment", "methods", "contact_level", "sales_ready", "quality_issues"],
+        "properties": {
+          "person_id": { "type": "string", "minLength": 1 },
+          "full_name": { "type": "string" },
+          "full_name_local": { "type": "string" },
+          "title": { "type": "string" },
+          "department": { "type": "string" },
+          "role_category": { "enum": ["procurement", "supply_chain", "technical", "engineering", "production", "commercial", "executive", "unknown"] },
+          "decision_role": { "enum": ["decision_maker", "influencer", "information_source", "entry", "unknown"] },
+          "employment": {
+            "type": "object",
+            "required": ["status", "confidence", "evidence_ids"],
+            "properties": {
+              "status": { "enum": ["verified_current", "likely_current", "historical", "left_company", "unverified", "conflicting"] },
+              "confidence": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "evidence_ids": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "value", "discovery_type", "verification_status", "is_direct", "is_generic", "is_inferred", "evidence_ids"],
+              "properties": {
+                "type": { "enum": ["email", "phone", "telegram", "whatsapp", "linkedin", "vk", "contact_form"] },
+                "value": { "type": "string" },
+                "discovery_type": { "enum": ["public_direct", "document_extracted", "social_profile", "email_pattern", "pattern_inferred", "switchboard", "company_generic", "manual"] },
+                "verification_status": { "enum": ["verified", "likely_valid", "unverified", "invalid", "risky", "expired"] },
+                "is_direct": { "type": "boolean" },
+                "is_generic": { "type": "boolean" },
+                "is_inferred": { "type": "boolean" },
+                "source_url": { "type": "string" },
+                "evidence_ids": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "contact_level": { "enum": ["L0", "L1", "L2", "L3"] },
+          "sales_ready": { "type": "boolean" },
+          "quality_issues": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "company_entry_points": { "type": "array", "items": { "type": "object" } },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "evidence_type", "field_name", "value", "source_url", "confidence"],
+        "properties": {
+          "evidence_id": { "type": "string", "minLength": 1 },
+          "person_id": { "type": "string" },
+          "evidence_type": { "type": "string" },
+          "field_name": { "type": "string" },
+          "value": { "type": "string" },
+          "source_url": { "type": "string" },
+          "source_title": { "type": "string" },
+          "source_date": { "type": "string" },
+          "checked_at": { "type": "string" },
+          "confidence": { "enum": ["low", "medium", "high"] },
+          "supports_current_employment": { "type": "boolean" },
+          "supports_decision_role": { "type": "boolean" }
+        }
+      }
+    },
+    "search_gaps": { "type": "array", "items": { "type": "string" } },
+    "recommended_next_searches": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

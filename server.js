@@ -4,18 +4,135 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 
 const {
   getInitialData, updateCustomer, createTag, setCustomerTags, createReconJob,
-  retryReconJob, listQueuedJobs, markJobRunning, markJobFailed, submitReconResult,
+  retryReconJob, listQueuedJobs, claimReconJob, heartbeatReconJob, markJobRunning, markJobFailed, submitReconResult,
   createProspectTask, promoteProspectCandidate,
+  createContactReconJob, claimContactReconJob, heartbeatContactReconJob, failContactReconJob,
+  submitContactReconResult, getContactReconState, getCustomerPeople,
 } = require('./lib/db');
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
+const { registerSalesCrm, requireUnifiedUser, hasPermission } = require('./lib/sales_crm');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(__dirname));
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'production' || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = String(req.get('origin') || '');
+  if (!origin) return next();
+  try {
+    if (new URL(origin).host !== req.get('host')) return res.status(403).json({ ok: false, error: '请求来源校验失败' });
+  } catch (_error) {
+    return res.status(403).json({ ok: false, error: '请求来源校验失败' });
+  }
+  next();
+});
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
+if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
+  app.get('/legacy', (_req, res) => res.sendFile(path.join(__dirname, 'Index.html')));
+}
+if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
+  app.get('/tradelead-v2.html', (_req, res) => res.sendFile(path.join(__dirname, 'tradelead-v2.html')));
+}
+app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
+registerSalesCrm(app);
+app.get('/development-workbench', requireUnifiedUser, (req, res) => {
+  if (!hasPermission(req.salesUser, 'view_development')) return res.status(403).send('当前账号没有客户开发工作台权限');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.sendFile(path.join(__dirname, 'Index.html'));
+});
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/sales-auth/') || req.path.startsWith('/sales-crm/')
+    || req.path === '/recon' || req.path === '/contact-recon') return next();
+  return requireUnifiedUser(req, res, () => {
+    const allowed = key => hasPermission(req.salesUser, key);
+    const any = keys => keys.some(allowed);
+    if (req.path.startsWith('/delivery/')) {
+      if (!allowed('view_intake')) return res.status(403).json({ ok: false, error: '没有未开发线索分配权限' });
+      return next();
+    }
+    if (req.path === '/assistant/chat') {
+      if (!allowed('use_ai_assistant')) return res.status(403).json({ ok: false, error: '没有AI经营助手权限' });
+      return next();
+    }
+    if (req.path === '/prospect-agent') {
+      if (!allowed('use_prospect_agent')) return res.status(403).json({ ok: false, error: '没有外贸智能体权限' });
+      return next();
+    }
+    if (req.path === '/app') {
+      const reconActions = new Set(['createReconJob','retryReconJob','createContactReconJob']);
+      const required = reconActions.has(String(req.body?.action || '')) ? 'run_recon' : 'edit_customer';
+      if (!allowed(required)) return res.status(403).json({ ok: false, error: required === 'run_recon' ? '没有Recon执行权限' : '没有客户资料编辑权限' });
+    }
+    if (req.path.startsWith('/recon/') && req.method !== 'GET' && !allowed('run_recon')) return res.status(403).json({ ok: false, error: '没有Recon执行权限' });
+    if (!any(['view_development','view_pool','view_contacts','view_recon'])) {
+      return res.status(403).json({ ok: false, error: '没有客户开发数据权限' });
+    }
+    return next();
+  });
+});
+
+app.get('/share/report/:token/:jobId', (req, res) => {
+  const expected = String(process.env.REPORT_SHARE_TOKEN || '');
+  const supplied = String(req.params.token || '');
+  if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
+  const jobId = String(req.params.jobId || '').trim();
+  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const row = db.prepare('SELECT report_path FROM recon_results WHERE job_id=?').get(jobId); db.close();
+  if (!row?.report_path) return res.status(404).send('报告不存在');
+  const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
+  const reportPath = path.resolve(row.report_path);
+  if (!reportPath.startsWith(`${reportRoot}${path.sep}`) || !fs.existsSync(reportPath) || !/\.html?$/i.test(reportPath)) return res.status(404).send('报告不可用');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.sendFile(reportPath);
+});
+
+app.get('/share/contact-report/:token/:jobId', (req, res) => {
+  const expected = String(process.env.REPORT_SHARE_TOKEN || ''), supplied = String(req.params.token || '');
+  if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
+  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const row = db.prepare('SELECT report_path FROM contact_recon_jobs WHERE job_id=? AND status=\'done\'').get(String(req.params.jobId || '')); db.close();
+  const root = path.resolve(path.join(__dirname, 'contact-recon-reports')), reportPath = path.resolve(row?.report_path || '');
+  if (!row?.report_path || !reportPath.startsWith(`${root}${path.sep}`) || !fs.existsSync(reportPath)) return res.status(404).send('报告不存在');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive'); res.setHeader('Referrer-Policy', 'no-referrer');
+  res.sendFile(reportPath);
+});
+
+app.get('/api/delivery/latest', (_req, res) => {
+  const root = path.join(__dirname, 'reports', 'daily');
+  try {
+    const dates = fs.readdirSync(root, { withFileTypes: true }).filter(x => x.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(x.name)).map(x => x.name).sort().reverse();
+    const date = dates[0] || '';
+    if (!date) return res.json({ ok: true, date: '', manifest: {}, files: [] });
+    const dir = path.join(root, date), manifestPath = path.join(dir, 'manifest.json');
+    const files = fs.readdirSync(dir).filter(x => /\.(csv|md|json)$/i.test(x)).sort();
+    const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : {};
+    res.json({ ok: true, date, manifest, files: files.map(name => ({ name, url: `/api/delivery/file?date=${encodeURIComponent(date)}&name=${encodeURIComponent(name)}` })) });
+  } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
+});
+
+app.get('/api/delivery/file', (req, res) => {
+  const date = String(req.query.date || ''), name = String(req.query.name || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^[\w.-]+\.(csv|md|json)$/i.test(name)) return res.status(400).send('invalid file');
+  const file = path.join(__dirname, 'reports', 'daily', date, name);
+  if (!fs.existsSync(file)) return res.status(404).send('not found');
+  res.download(file, name);
+});
 
 const DB_PATH = path.join(__dirname, 'data', 'crm.db');
 const RECON_LOG_PATH = path.join(__dirname, 'logs', 'recon_worker.log');
@@ -30,6 +147,7 @@ function compactAssistantPayload(body = {}) {
   return {
     message: truncateLogValue(body.message, 2000),
     cursor: body.cursor || '',
+    sessionId: body.sessionId || '',
     context: body.context || {},
     history: Array.isArray(body.history)
       ? body.history.slice(-8).map(item => ({
@@ -45,6 +163,10 @@ function compactAssistantResult(result = {}) {
     ok: result.ok !== false,
     retrievalMode: result.retrievalMode || '',
     model: result.model || '',
+    engine: result.engine || '',
+    guardrails: result.guardrails || null,
+    fallbackReason: result.fallbackReason || '',
+    sessionId: result.sessionId || '',
     answer: truncateLogValue(result.answer, 6000),
     nextCursor: result.nextCursor || '',
     resultSets: result.resultSets || [],
@@ -330,8 +452,8 @@ function buildReconMonitorPayload() {
     ok: true,
     updatedAt: new Date().toISOString(),
     summary,
-    workers: workerProcesses,
-    hermesProcesses,
+    workers: workerProcesses.map(({ pid, etime }) => ({ pid, etime })),
+    hermesProcesses: hermesProcesses.map(({ pid, etime, type, customer_id, company_name, preview }) => ({ pid, etime, type, customer_id, company_name, preview })),
     jobs: enrichedJobs.slice(0, 30),
     capabilitySnapshot,
     capabilitySource: capabilityJob ? capabilityJob.job_id : '',
@@ -365,6 +487,61 @@ app.get('/api/initial', (_req, res) => {
   }
 });
 
+function pagination(query) {
+  const page = Math.max(1, Number(query.page || 1) || 1);
+  const pageSize = Math.max(1, Math.min(Number(query.page_size || 50) || 50, 200));
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+app.get('/api/customers', (req, res) => {
+  const db = getDb();
+  try {
+    const { page, pageSize, offset } = pagination(req.query);
+    const search = String(req.query.search || '').trim();
+    const like = `%${search}%`;
+    const where = search ? 'WHERE company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?' : '';
+    const params = search ? [like, like, like] : [];
+    const total = db.prepare(`SELECT COUNT(*) total FROM customer_pool ${where}`).get(...params).total;
+    const rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    res.json({ ok: true, page, pageSize, total, rows });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  } finally {
+    db.close();
+  }
+});
+
+app.get('/api/recon/results/:jobId', (req, res) => {
+  const db = getDb();
+  try {
+    const result = db.prepare('SELECT * FROM recon_results WHERE job_id = ?').get(req.params.jobId);
+    if (!result) return res.status(404).json({ ok: false, error: '未找到Recon结果' });
+    const evidence = db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId);
+    let resultV3 = null;
+    try { resultV3 = result.result_json ? JSON.parse(result.result_json) : null; } catch (_e) {}
+    res.json({ ok: true, result, resultV3, evidence });
+  } finally {
+    db.close();
+  }
+});
+
+app.get('/api/quality/issues', (_req, res) => {
+  const db = getDb();
+  try {
+    const value = sql => Number(Object.values(db.prepare(sql).get())[0] || 0);
+    res.json({ ok: true, issues: [
+      { code: 'invalid_email', severity: 'error', count: value("SELECT COUNT(*) n FROM customer_pool WHERE trim(email) != '' AND email NOT LIKE '%@%'") },
+      { code: 'missing_owner', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(owner) = ''") },
+      { code: 'missing_next_action', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_action) = ''") },
+      { code: 'missing_next_follow_date', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_follow_date) = ''") },
+      { code: 'evidence_count_mismatch', severity: 'error', count: value("SELECT COUNT(*) n FROM recon_results r WHERE CAST(r.evidence_count AS INTEGER) != (SELECT COUNT(*) FROM recon_evidence e WHERE e.job_id=r.job_id)") },
+      { code: 'missing_sanction_checked_at', severity: 'warning', count: value("SELECT COUNT(*) n FROM recon_results WHERE trim(sanction_checked_at) = ''") },
+    ] });
+  } finally {
+    db.close();
+  }
+});
+
 // --- /api/app ---
 
 app.post('/api/app', (req, res) => {
@@ -388,6 +565,10 @@ app.post('/api/app', (req, res) => {
     }
     if (action === 'retryReconJob') {
       const r = retryReconJob(req.body.jobId);
+      return res.json({ ok: true, action, ...r });
+    }
+    if (action === 'createContactReconJob') {
+      const r = createContactReconJob(req.body.customerId, req.body.options || {});
       return res.json({ ok: true, action, ...r });
     }
     throw new Error(`未知 action：${action}`);
@@ -429,7 +610,7 @@ app.post('/api/recon', (req, res) => {
   if (!token || req.body.token !== token) {
     return res.status(401).json({ ok: false, error: 'worker token 校验失败' });
   }
-  const handlers = { listQueuedJobs, markJobRunning, markJobFailed, submitReconResult };
+  const handlers = { listQueuedJobs, claimReconJob, heartbeatReconJob, markJobRunning, markJobFailed, submitReconResult };
   try {
     const { action } = req.body;
     if (!handlers[action]) throw new Error(`未知 action：${action}`);
@@ -437,6 +618,29 @@ app.post('/api/recon', (req, res) => {
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
+});
+
+app.post('/api/contact-recon', (req, res) => {
+  const token = process.env.RECON_WORKER_TOKEN;
+  if (!token || req.body.token !== token) return res.status(401).json({ ok: false, error: 'worker token 校验失败' });
+  const handlers = { claimContactReconJob, heartbeatContactReconJob, failContactReconJob, submitContactReconResult };
+  try {
+    const { action } = req.body;
+    if (!handlers[action]) throw new Error(`未知 contact recon action：${action}`);
+    res.json({ ok: true, action, ...handlers[action](req.body) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/contact-recon/state', (req, res) => {
+  try { res.json({ ok: true, ...getContactReconState({ limit: req.query.limit }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/customers/:customerId/people', (req, res) => {
+  try { res.json({ ok: true, customerId: req.params.customerId, people: getCustomerPeople(req.params.customerId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // --- /api/assistant ---
@@ -496,7 +700,12 @@ app.get('/api/report', (req, res) => {
       return;
     }
 
-    const reportPath = row.report_path;
+    const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
+    const reportPath = path.resolve(row.report_path);
+    if (reportPath !== reportRoot && !reportPath.startsWith(`${reportRoot}${path.sep}`)) {
+      res.status(403).send('报告路径不在允许目录');
+      return;
+    }
     let report = '';
     if (fs.existsSync(reportPath)) {
       report = fs.readFileSync(reportPath, 'utf8');
@@ -528,7 +737,7 @@ app.get('/api/recon-monitor', (_req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 
 app.listen(PORT, HOST, () => {
   console.log(`✅ Russia CRM running at http://localhost:${PORT}`);

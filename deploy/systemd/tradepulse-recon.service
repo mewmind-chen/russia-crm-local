@@ -1,0 +1,16 @@
+[Unit]
+Description=TradePulse Recon worker
+After=tradepulse.service network-online.target
+
+[Service]
+Type=simple
+User=tradepulse
+Group=tradepulse
+WorkingDirectory=/opt/tradepulse
+EnvironmentFile=/opt/tradepulse/.env
+ExecStart=/opt/tradepulse/.venv/bin/python /opt/tradepulse/scripts/recon_agent_worker.py --poll 10 --webapp-url http://127.0.0.1:3000/api/recon
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

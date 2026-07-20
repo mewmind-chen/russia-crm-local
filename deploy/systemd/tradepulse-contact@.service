@@ -1,0 +1,17 @@
+[Unit]
+Description=TradePulse contact research worker %i
+After=tradepulse.service network-online.target
+
+[Service]
+Type=simple
+User=tradepulse
+Group=tradepulse
+WorkingDirectory=/opt/tradepulse
+EnvironmentFile=/opt/tradepulse/.env
+Environment=CONTACT_RECON_WORKER_ID=contact-%i
+ExecStart=/opt/tradepulse/.venv/bin/python /opt/tradepulse/scripts/contact_recon_worker.py --url http://127.0.0.1:3000/api/contact-recon --poll 15
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

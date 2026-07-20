@@ -2,6 +2,22 @@
 
 > **Context**: `recon_agent_worker.py` is an automation scheduler that polls the CRM webapp API for queued recon jobs, builds a prompt for Hermes + russia-recon skill, calls it via subprocess, parses the report markdown, and submits structured results + evidence back to the API.
 
+## Current Contract Version
+
+The canonical storage contract is `contracts/recon-result-v3.schema.json` in the CRM project.
+Hermes remains responsible for sourced research and the structured summary. The worker wraps the
+validated Hermes summary, execution log, contacts and evidence in the V3 envelope. During migration,
+the legacy `## 客户数据摘要` block remains mandatory as a fallback only.
+
+Contract rules:
+
+- Contact values contain real contact values only; `not found`, `via site`, and similar states are not emails.
+- Facts and inferences are separate and every important conclusion points to evidence.
+- `possible_match` and `confirmed_match` are distinct sanctions outcomes.
+- Hermes supplies evidence; the CRM server computes final evidence totals after storage.
+- Missing source URLs are retained for audit but force a quality issue and manual review.
+- The worker submits `schema_version=3.0`, `parser_mode`, and `result_v3` together with legacy fields.
+
 ## Architecture
 
 ```
@@ -154,7 +170,9 @@ notes: 官网有俄英双语，建议用俄语联系
 | `infer_company_names()` | Extracts `ООО «...»` from text |
 | `score_to_rating()`/`score_to_pool()` | Numeric score → ⭐ / S/A/B/C/D |
 | `unique_urls()` | Extracts all https?:// URLs from markdown |
-| `validate_payload()` | Ensures sanctioned=true has required fields; evidence has field_name+source_url |
+| `validate_payload()` | Ensures sanctioned=true has required fields and evidence has field_name |
+| `build_v3_contract()` | Wraps validated Hermes output in the shared V3 contract |
+| `validate_v3_contract()` | Verifies identity, evidence, and confirmed sanction matches before submission |
 | `cleanup_value()` | Strips emoji/markdown cruft from extracted values |
 
 ### Two Active Copies

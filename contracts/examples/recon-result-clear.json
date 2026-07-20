@@ -1,0 +1,15 @@
+{
+  "schema_version": "3.0",
+  "job_id": "RR-EXAMPLE-CLEAR",
+  "customer_id": "RU-0001",
+  "generated_at": "2026-07-11T00:00:00Z",
+  "company": { "name": "Example LLC", "name_local": "ООО Пример", "country_code": "RU", "website": "https://example.ru", "industry": "electronics", "customer_type": "manufacturer", "identifiers": [] },
+  "contacts": [{ "name": "", "title": "", "department": "sales", "decision_role": "entry", "source_url": "https://example.ru/contact", "methods": [{ "type": "email", "value": "info@example.ru", "status": "generic", "source_url": "https://example.ru/contact" }] }],
+  "website_check": { "status": "verified", "http_status": 200, "checked_at": "2026-07-11T00:00:00Z", "method": "official_site", "error_code": "", "note": "" },
+  "sanction_check": { "result": "clear", "review_status": "not_required", "provider": "OpenSanctions", "checked_at": "2026-07-11T00:00:00Z", "matches": [] },
+  "opportunity": { "summary": "公开产品与供应方向匹配。", "need": "具体采购型号仍需确认。", "recommended_products": ["MCU"], "next_action": "向通用入口确认采购负责人。", "outreach_angle": "以可追溯现货和替代料切入。" },
+  "quality": { "status": "partial", "score": 70, "issues": ["generic_contact_only"] },
+  "evidence": [{ "evidence_id": "EV-1", "field_name": "company.website", "value": "https://example.ru", "source_url": "https://example.ru", "source_title": "Official site", "checked_at": "2026-07-11T00:00:00Z", "confidence": "high", "evidence_type": "identity", "selected_for_report": true }],
+  "execution_log": {},
+  "report": { "markdown": "# Example", "path": "" }
+}

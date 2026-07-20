@@ -1,0 +1,11 @@
+[Unit]
+Description=TradePulse daily screening and customer allocation
+After=tradepulse.service
+
+[Service]
+Type=oneshot
+User=tradepulse
+Group=tradepulse
+WorkingDirectory=/opt/tradepulse
+EnvironmentFile=/opt/tradepulse/.env
+ExecStart=/usr/bin/node /opt/tradepulse/scripts/daily-customer-delivery.js
