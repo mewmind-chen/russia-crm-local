@@ -28,6 +28,7 @@
       <label>工作邮箱<input name="email" type="email" autocomplete="username" required></label>
       <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
       <button class="button primary wide" type="submit">进入系统</button>
+      <p id="loginStatus" class="form-status" role="status" aria-live="polite"></p>
       <p id="loginError" class="form-error"></p>
       <div class="demo-hint">
         <strong>本地初始管理员</strong>
@@ -192,17 +193,18 @@
             <span id="poolResultCount" class="toolbar-count"></span>
           </div>
           <div id="unifiedPoolTable" class="data-table"></div>
+          <div class="load-more-row"><button id="poolLoadMore" class="button secondary hidden" type="button" data-load-research="pool">继续加载</button></div>
         </article>
       </section>
 
       <section id="contactsView" class="view">
         <div class="section-intro"><div><p class="eyebrow">CONTACT EVIDENCE</p><h2>负责人线索</h2><p>候选联系人、任职证据和直接联系方式集中管理，确认后进入正式对接人。</p></div></div>
-        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="peopleSearch" placeholder="搜索公司、姓名、职位或联系方式"></div><select id="peopleLevelFilter"><option value="">全部等级</option><option>L3</option><option>L2</option><option>L1</option><option>L0</option></select><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div></article>
+        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="peopleSearch" placeholder="搜索公司、姓名、职位或联系方式"></div><select id="peopleLevelFilter"><option value="">全部等级</option><option>L3</option><option>L2</option><option>L1</option><option>L0</option></select><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div class="load-more-row"><button id="peopleLoadMore" class="button secondary hidden" type="button" data-load-research="people">继续加载</button></div></article>
       </section>
 
       <section id="reconView" class="view">
         <div class="section-intro"><div><p class="eyebrow">RECON INTELLIGENCE</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
-        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="reconSearch" placeholder="搜索客户、行业、需求或联系人"></div><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div></article>
+        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="reconSearch" placeholder="搜索客户、行业、需求或联系人"></div><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div class="load-more-row"><button id="reconLoadMore" class="button secondary hidden" type="button" data-load-research="recon">继续加载</button></div></article>
       </section>
 
       <section id="pipelineView" class="view">

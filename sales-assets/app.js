@@ -11,6 +11,12 @@
     intakeStatus: '',
     teamUserId: '',
     activityType: 'email',
+    loginPending: false,
+    research: {
+      pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
+      people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
+      recon: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
+    },
   };
 
   const viewMeta = {
@@ -86,23 +92,54 @@
     toast.timer = setTimeout(() => el.classList.remove('show'), 2300);
   }
   async function api(url, options = {}) {
-    const response = await fetch(url, {
-      credentials: 'same-origin',
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || result.ok === false) {
-      const error = new Error(result.error || '请求失败');
-      error.status = response.status;
+    const timeoutMs = Number(options.timeoutMs || 0);
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        ...options,
+        signal: controller?.signal || options.signal,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) {
+        const error = new Error(result.error || '请求失败');
+        error.status = response.status;
+        throw error;
+      }
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('请求超时，请检查网络后重试');
       throw error;
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
-    return result;
   }
 
-  async function load() {
+  function setLoginState(stage = '') {
+    const form = $('#loginForm');
+    const button = form?.querySelector('button[type=submit]');
+    const status = $('#loginStatus');
+    const labels = { login: '正在登录…', workspace: '正在加载工作台…' };
+    if (button) {
+      button.disabled = Boolean(stage);
+      button.textContent = labels[stage] || '进入系统';
+    }
+    if (form) form.setAttribute('aria-busy', stage ? 'true' : 'false');
+    if (status) status.textContent = stage === 'login' ? '正在验证账号，请稍候。' : stage === 'workspace' ? '账号已验证，正在载入首页数据。' : '';
+  }
+
+  function resetResearchState() {
+    for (const [kind, meta] of Object.entries(state.research)) {
+      Object.assign(meta, { page: 0, total: Number(state.data?.researchTotals?.[kind] || 0), hasMore: false, loading: false, loaded: false, reloadPending: false });
+    }
+  }
+
+  async function load({ fromLogin = false } = {}) {
     try {
-      state.data = await api('/api/sales-crm/bootstrap');
+      state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      resetResearchState();
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
       applyUser();
@@ -112,12 +149,16 @@
       const firstAllowedView = Object.keys(viewMeta).find(view => can(`view_${view}`)) || 'dashboard';
       switchView(viewMeta[requestedView] && can(`view_${requestedView}`) ? requestedView : firstAllowedView, false);
       if (state.data.user.mustChangePassword) setTimeout(openPasswordModal, 80);
+      return true;
     } catch (error) {
       if (error.status === 401) {
         $('#app').classList.add('hidden');
         $('#loginScreen').classList.remove('hidden');
+        return false;
       } else {
+        if (fromLogin) throw error;
         toast(error.message);
+        return false;
       }
     }
   }
@@ -166,8 +207,8 @@
     $('#navAlertCount').textContent = state.data.alerts.filter(item => item.severity === 'critical').length;
     $('#navIntakeCount').textContent = (state.data.intake?.stats.assigned || 0) + (state.data.intake?.stats.pending || 0) + (state.data.intake?.stats.approved || 0);
     $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
-    $('#navPoolCount').textContent = state.data.customerPool?.length || 0;
-    $('#navPeopleCount').textContent = state.data.people?.length || 0;
+    $('#navPoolCount').textContent = state.data.researchTotals?.pool || 0;
+    $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
     $('#lastRefresh').textContent = `更新于 ${shortDate(state.data.generatedAt, true)}`;
     renderDashboard();
     renderIntake();
@@ -208,7 +249,7 @@
     const accounts = scopedAccounts();
     const summary = computeSummary(accounts);
     const cards = [
-      ['未开发线索', state.data.customerPool?.filter(item => !item.in_crm).length || 0, '等待每日分配', ''],
+      ['未开发线索', state.data.researchTotals?.poolAvailable || 0, '等待每日分配', ''],
       ['CRM客户', summary.accounts, '已领取并开始开发', ''],
       ['获得回复', summary.replies, `触达后 ${percent(summary.replies, summary.contacted)}`, ''],
       ['深度会议', summary.meetings, `回复后 ${percent(summary.meetings, summary.replies)}`, ''],
@@ -267,20 +308,86 @@
     return `<table ${attrs}><thead><tr>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
+  const researchConfig = {
+    pool: { dataKey: 'customerPool', render: renderUnifiedPool, button: '#poolLoadMore' },
+    people: { dataKey: 'people', render: renderUnifiedPeople, button: '#peopleLoadMore' },
+    recon: { dataKey: 'reconResults', render: renderUnifiedRecon, button: '#reconLoadMore' },
+  };
+
+  function researchQuery(kind) {
+    if (kind === 'pool') return {
+      search: $('#poolSearch')?.value || '',
+      group: $('#poolGroupFilter')?.value || '',
+      crm: $('#poolCrmFilter')?.value || '',
+    };
+    if (kind === 'people') return { search: $('#peopleSearch')?.value || '', level: $('#peopleLevelFilter')?.value || '' };
+    return { search: $('#reconSearch')?.value || '' };
+  }
+
+  function updateResearchButton(kind) {
+    const meta = state.research[kind];
+    const button = $(researchConfig[kind].button);
+    if (!button) return;
+    button.classList.toggle('hidden', !meta.loaded || !meta.hasMore);
+    button.disabled = meta.loading;
+    button.textContent = meta.loading ? '正在加载…' : `继续加载（已显示 ${state.data[researchConfig[kind].dataKey].length} / ${meta.total}）`;
+  }
+
+  async function loadResearch(kind, { reset = false } = {}) {
+    const config = researchConfig[kind];
+    const meta = state.research[kind];
+    if (!config) return;
+    if (meta.loading) {
+      if (reset) meta.reloadPending = true;
+      return;
+    }
+    if (reset) {
+      state.data[config.dataKey] = [];
+      Object.assign(meta, { page: 0, total: 0, hasMore: false, loaded: false });
+    }
+    meta.loading = true;
+    config.render();
+    updateResearchButton(kind);
+    try {
+      const params = new URLSearchParams({ page: String(meta.page + 1), pageSize: '100' });
+      Object.entries(researchQuery(kind)).forEach(([key, value]) => { if (value) params.set(key, value); });
+      const result = await api(`/api/sales-crm/research/${kind}?${params}`, { timeoutMs: 12000 });
+      state.data[config.dataKey] = reset ? result.rows : [...state.data[config.dataKey], ...result.rows];
+      Object.assign(meta, { page: result.page, total: result.total, hasMore: result.hasMore, loaded: true });
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      meta.loading = false;
+      config.render();
+      updateResearchButton(kind);
+      if (meta.reloadPending) {
+        meta.reloadPending = false;
+        void loadResearch(kind, { reset: true });
+      }
+    }
+  }
+
+  function researchLoading(kind) {
+    const meta = state.research[kind];
+    if (meta.loading && !meta.loaded) return '<div class="empty">正在加载数据…</div>';
+    if (!meta.loaded) return '<div class="empty">进入本模块后加载数据</div>';
+    return '';
+  }
+
+  function scheduleResearchReload(kind) {
+    clearTimeout(scheduleResearchReload.timers?.[kind]);
+    scheduleResearchReload.timers ||= {};
+    scheduleResearchReload.timers[kind] = setTimeout(() => loadResearch(kind, { reset: true }), 300);
+  }
+
   function renderUnifiedPool() {
     const root = $('#unifiedPoolTable');
     if (!root) return;
-    const query = ($('#poolSearch')?.value || '').trim().toLowerCase();
-    const group = $('#poolGroupFilter')?.value || '';
-    const crm = $('#poolCrmFilter')?.value || '';
-    const rows = (state.data.customerPool || []).filter(item => {
-      const haystack = [item.customer_id,item.company_name,item.country,item.city,item.website,item.industry,item.customer_type,item.products].join(' ').toLowerCase();
-      return (!query || haystack.includes(query))
-        && (!group || (item.current_pool || '未分池') === group)
-        && (!crm || (crm === 'crm' ? item.in_crm : !item.in_crm));
-    });
-    $('#poolResultCount').textContent = `${rows.length} 条未开发线索`;
-    root.innerHTML = table(['线索企业','国家/行业','分组','联系人质量','线索状态','分配销售','资料'], rows.slice(0,500).map(item => [
+    const loading = researchLoading('pool');
+    if (loading) { root.innerHTML = loading; $('#poolResultCount').textContent = ''; return; }
+    const rows = state.data.customerPool || [];
+    $('#poolResultCount').textContent = `已显示 ${rows.length} / ${state.research.pool.total} 条未开发线索`;
+    root.innerHTML = table(['线索企业','国家/行业','分组','联系人质量','线索状态','分配销售','资料'], rows.map(item => [
       `<div class="company-cell"><strong>${esc(item.company_name || '未命名客户')}</strong><span>${esc(item.customer_id)} · ${esc(item.website || '无官网')}</span></div>`,
       `${esc(item.country || '未标注')}<br><span class="subtle">${esc(item.industry || '未标注')}</span>`,
       `<span class="pill ${item.current_pool === 'A' ? '' : 'gray'}">${esc(item.current_pool || '未分池')}</span>`,
@@ -296,17 +403,13 @@
   function renderUnifiedPeople() {
     const root = $('#unifiedPeopleTable');
     if (!root) return;
-    const query = ($('#peopleSearch')?.value || '').trim().toLowerCase();
-    const level = $('#peopleLevelFilter')?.value || '';
-    const companyMap = Object.fromEntries((state.data.customerPool || []).map(item => [item.customer_id, item.company_name]));
-    const rows = (state.data.people || []).filter(item => {
-      const haystack = [companyMap[item.customer_id],item.customer_id,item.name,item.title,item.department,item.methods_summary].join(' ').toLowerCase();
-      return (!query || haystack.includes(query)) && (!level || item.contact_level === level);
-    });
-    $('#peopleResultCount').textContent = `${rows.length} 条线索`;
-    root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','证据状态'], rows.slice(0,500).map(item => [
-      `<div class="company-cell"><strong>${esc(companyMap[item.customer_id] || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
-      `<strong>${esc(item.name || '未识别')}</strong>`,
+    const loading = researchLoading('people');
+    if (loading) { root.innerHTML = loading; $('#peopleResultCount').textContent = ''; return; }
+    const rows = state.data.people || [];
+    $('#peopleResultCount').textContent = `已显示 ${rows.length} / ${state.research.people.total} 条线索`;
+    root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','证据状态'], rows.map(item => [
+      `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
+      `<strong>${esc(item.name || item.full_name || item.full_name_local || '未识别')}</strong>`,
       `${esc(item.title || '未标注')}<br><span class="subtle">${esc(item.department || '')}</span>`,
       `<span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>`,
       esc(item.methods_summary || '未找到直接联系方式'),
@@ -317,11 +420,11 @@
   function renderUnifiedRecon() {
     const root = $('#unifiedReconTable');
     if (!root) return;
-    const query = ($('#reconSearch')?.value || '').trim().toLowerCase();
-    const rows = (state.data.reconResults || []).filter(item =>
-      !query || [item.company_name,item.customer_id,item.industry,item.customer_type,item.opportunity_summary,item.contacts_summary].join(' ').toLowerCase().includes(query));
-    $('#reconResultCount').textContent = `${rows.length} 份结果`;
-    root.innerHTML = table(['客户','评分/分组','客户画像','需求与机会','联系人','报告'], rows.slice(0,500).map(item => [
+    const loading = researchLoading('recon');
+    if (loading) { root.innerHTML = loading; $('#reconResultCount').textContent = ''; return; }
+    const rows = state.data.reconResults || [];
+    $('#reconResultCount').textContent = `已显示 ${rows.length} / ${state.research.recon.total} 份结果`;
+    root.innerHTML = table(['客户','评分/分组','客户画像','需求与机会','联系人','报告'], rows.map(item => [
       `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
       `<span class="pill">${esc(item.score || '—')} · ${esc(item.current_pool || '未分池')}</span>`,
       `<span>${esc(item.customer_type || item.industry || '待确认')}</span>`,
@@ -962,7 +1065,12 @@
   }
 
   async function refresh(message = '') {
-    state.data = await api('/api/sales-crm/bootstrap');
+    const previous = state.data;
+    const next = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+    for (const config of Object.values(researchConfig)) {
+      if (previous?.[config.dataKey]?.length) next[config.dataKey] = previous[config.dataKey];
+    }
+    state.data = next;
     populateFilters();
     renderAll();
     closeModal();
@@ -990,9 +1098,13 @@
     const form = event.target;
     try {
       if (form.id === 'loginForm') {
+        if (state.loginPending) return;
+        state.loginPending = true;
         $('#loginError').textContent = '';
-        await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)) });
-        await load();
+        setLoginState('login');
+        await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)), timeoutMs: 10000 });
+        setLoginState('workspace');
+        await load({ fromLogin: true });
       } else if (form.id === 'activityForm') {
         const payload = formPayload(form);
         payload.nextActionAt = apiTime(payload.nextActionAt);
@@ -1073,6 +1185,11 @@
     } catch (error) {
       if (form.id === 'loginForm') $('#loginError').textContent = error.message;
       else toast(error.message);
+    } finally {
+      if (form.id === 'loginForm') {
+        state.loginPending = false;
+        setLoginState('');
+      }
     }
   });
 
@@ -1089,7 +1206,7 @@
       switchView('pool');
       const search = $('#poolSearch');
       if (search) search.value = customerId;
-      renderUnifiedPool();
+      await loadResearch('pool', { reset: true });
     }
     const stageJump = event.target.closest('[data-stage-jump]');
     if (stageJump) {
@@ -1130,6 +1247,8 @@
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#newUserBtn')) openUserModal();
+    const loadMore = event.target.closest('[data-load-research]');
+    if (loadMore) await loadResearch(loadMore.dataset.loadResearch);
     if (event.target.closest('#changePasswordBtn')) openPasswordModal();
     if (event.target.closest('#intakeSettingsBtn')) openIntakeSettingsModal();
     if (event.target.closest('#bulkAssignIntakeBtn')) {
@@ -1207,6 +1326,7 @@
     $('#viewTitle').textContent = viewMeta[view][1];
     document.body.classList.toggle('development-active', view === 'development');
     if (view === 'development') renderDevelopment();
+    if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
     closeDrawer();
     document.body.classList.remove('sidebar-open');
     if (location.hash !== `#${view}`) history.replaceState(null, '', `#${view}`);
@@ -1220,14 +1340,14 @@
   }));
   document.addEventListener('input', event => {
     if (event.target.id === 'insightSearch') renderInsightsHub();
-    if (event.target.id === 'poolSearch') renderUnifiedPool();
-    if (event.target.id === 'peopleSearch') renderUnifiedPeople();
-    if (event.target.id === 'reconSearch') renderUnifiedRecon();
+    if (event.target.id === 'poolSearch') scheduleResearchReload('pool');
+    if (event.target.id === 'peopleSearch') scheduleResearchReload('people');
+    if (event.target.id === 'reconSearch') scheduleResearchReload('recon');
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
-    if (['poolGroupFilter','poolCrmFilter'].includes(event.target.id)) renderUnifiedPool();
-    if (event.target.id === 'peopleLevelFilter') renderUnifiedPeople();
+    if (['poolGroupFilter','poolCrmFilter'].includes(event.target.id)) void loadResearch('pool', { reset: true });
+    if (event.target.id === 'peopleLevelFilter') void loadResearch('people', { reset: true });
     if (event.target.matches('#userForm select[name="role"]')) {
       const defaults = state.data.rolePermissions?.[event.target.value] || {};
       Object.keys(state.data.permissionDefinitions || {}).forEach(key => {

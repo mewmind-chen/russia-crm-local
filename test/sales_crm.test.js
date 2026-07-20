@@ -10,6 +10,7 @@ const {
   buildTeamReport,
   chooseIntakeOwner,
   hasPermission,
+  normalizeListQuery,
 } = require('../lib/sales_crm');
 
 test('sales CRM has a complete electronic-components export funnel', () => {
@@ -104,4 +105,16 @@ test('daily intake matching uses country, language, channel and quota', () => {
   assert.equal(picked.userId, 'BR');
   const quotaBlocked = chooseIntakeOwner({ country: '巴西', contact_methods: 'WhatsApp' }, users, {}, { BR: 5, RU: 1 }, 5);
   assert.equal(quotaBlocked.userId, 'RU');
+});
+
+test('research list pagination is bounded and normalizes invalid input', () => {
+  assert.deepEqual(normalizeListQuery({ page: '2', pageSize: '150', search: ' 采购 ' }), {
+    page: 2,
+    pageSize: 150,
+    offset: 150,
+    search: '采购',
+  });
+  assert.equal(normalizeListQuery({ page: '-4', pageSize: '9999' }).page, 1);
+  assert.equal(normalizeListQuery({ pageSize: '9999' }).pageSize, 200);
+  assert.equal(normalizeListQuery({ pageSize: '1' }).pageSize, 20);
 });
