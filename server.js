@@ -15,7 +15,8 @@ const {
 } = require('./lib/db');
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
-const { registerSalesCrm, requireUnifiedUser, hasPermission } = require('./lib/sales_crm');
+const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
+const { policyForLegacyRequest } = require('./lib/access_control');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -53,6 +54,25 @@ if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
 }
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
 registerSalesCrm(app);
+app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
+  const permissions = req.accessContext.permissions;
+  const modules = [
+    ['intake', 'view_intake'],
+    ['customers', 'view_customers'],
+    ['pool', 'view_pool'],
+    ['contacts', 'view_contacts'],
+    ['recon', 'view_recon'],
+    ['prospect', 'use_prospect_agent'],
+    ['assistant', 'use_ai_assistant'],
+  ].filter(([, permission]) => permissions[permission]).map(([key]) => key);
+  res.json({
+    ok: true,
+    user: safeUser(req.salesUser),
+    permissions,
+    canViewAllCustomers: req.accessContext.canViewAllCustomers,
+    modules,
+  });
+});
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
   if (!hasPermission(req.salesUser, 'view_development')) return res.status(403).send('当前账号没有客户开发工作台权限');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -62,29 +82,12 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/sales-auth/') || req.path.startsWith('/sales-crm/')
     || req.path === '/recon' || req.path === '/contact-recon') return next();
   return requireUnifiedUser(req, res, () => {
-    const allowed = key => hasPermission(req.salesUser, key);
-    const any = keys => keys.some(allowed);
-    if (req.path.startsWith('/delivery/')) {
-      if (!allowed('view_intake')) return res.status(403).json({ ok: false, error: '没有未开发线索分配权限' });
-      return next();
-    }
-    if (req.path === '/assistant/chat') {
-      if (!allowed('use_ai_assistant')) return res.status(403).json({ ok: false, error: '没有AI经营助手权限' });
-      return next();
-    }
-    if (req.path === '/prospect-agent') {
-      if (!allowed('use_prospect_agent')) return res.status(403).json({ ok: false, error: '没有外贸智能体权限' });
-      return next();
-    }
-    if (req.path === '/app') {
-      const reconActions = new Set(['createReconJob','retryReconJob','createContactReconJob']);
-      const required = reconActions.has(String(req.body?.action || '')) ? 'run_recon' : 'edit_customer';
-      if (!allowed(required)) return res.status(403).json({ ok: false, error: required === 'run_recon' ? '没有Recon执行权限' : '没有客户资料编辑权限' });
-    }
-    if (req.path.startsWith('/recon/') && req.method !== 'GET' && !allowed('run_recon')) return res.status(403).json({ ok: false, error: '没有Recon执行权限' });
-    if (!any(['view_development','view_pool','view_contacts','view_recon'])) {
-      return res.status(403).json({ ok: false, error: '没有客户开发数据权限' });
-    }
+    const action = String(req.body?.action || '');
+    const policy = policyForLegacyRequest(req.method, req.path, action);
+    if (policy.deny) return res.status(403).json({ ok: false, error: '该接口未配置访问权限' });
+    const missing = (policy.permissions || []).find(permission => !req.accessContext.permissions[permission]);
+    if (missing) return res.status(403).json({ ok: false, error: `没有权限：${missing}` });
+    req.accessPolicy = policy;
     return next();
   });
 });
@@ -469,9 +472,9 @@ function buildReconMonitorPayload() {
 
 // --- /api/initial ---
 
-app.get('/api/initial', (_req, res) => {
+app.get('/api/initial', (req, res) => {
   try {
-    const data = getInitialData();
+    const data = getInitialData(req.accessContext);
     res.json(data);
   } catch (e) {
     res.json({
