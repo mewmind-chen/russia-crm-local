@@ -17,6 +17,11 @@ const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission } = require('./lib/sales_crm');
 
+function databasePath() {
+  return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
+}
+
+function createApp() {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.disable('x-powered-by');
@@ -89,7 +94,7 @@ app.get('/share/report/:token/:jobId', (req, res) => {
   const supplied = String(req.params.token || '');
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
   const jobId = String(req.params.jobId || '').trim();
-  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM recon_results WHERE job_id=?').get(jobId); db.close();
   if (!row?.report_path) return res.status(404).send('报告不存在');
   const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
@@ -105,7 +110,7 @@ app.get('/share/report/:token/:jobId', (req, res) => {
 app.get('/share/contact-report/:token/:jobId', (req, res) => {
   const expected = String(process.env.REPORT_SHARE_TOKEN || ''), supplied = String(req.params.token || '');
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
-  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM contact_recon_jobs WHERE job_id=? AND status=\'done\'').get(String(req.params.jobId || '')); db.close();
   const root = path.resolve(path.join(__dirname, 'contact-recon-reports')), reportPath = path.resolve(row?.report_path || '');
   if (!row?.report_path || !reportPath.startsWith(`${root}${path.sep}`) || !fs.existsSync(reportPath)) return res.status(404).send('报告不存在');
@@ -134,7 +139,7 @@ app.get('/api/delivery/file', (req, res) => {
   res.download(file, name);
 });
 
-const DB_PATH = path.join(__dirname, 'data', 'crm.db');
+const DB_PATH = databasePath();
 const RECON_LOG_PATH = path.join(__dirname, 'logs', 'recon_worker.log');
 const ASSISTANT_LOG_PATH = path.join(__dirname, 'logs', 'assistant.log');
 
@@ -691,7 +696,7 @@ app.get('/api/report', (req, res) => {
 
   try {
     const Database = require('better-sqlite3');
-    const db = new Database(path.join(__dirname, 'data', 'crm.db'));
+    const db = new Database(databasePath());
     const row = db.prepare('SELECT job_id, company_name, report_path FROM recon_results WHERE job_id = ?').get(jobId);
     db.close();
 
@@ -736,10 +741,17 @@ app.get('/api/recon-monitor', (_req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+return app;
+}
 
-app.listen(PORT, HOST, () => {
-  console.log(`✅ Russia CRM running at http://localhost:${PORT}`);
-  console.log(`   LAN access: http://${HOST === '0.0.0.0' ? '你的IP' : HOST}:${PORT}`);
-});
+function startServer({ port = process.env.PORT || 3000, host = process.env.HOST || '127.0.0.1' } = {}) {
+  const app = createApp();
+  return app.listen(port, host, () => {
+    console.log(`✅ Russia CRM running at http://localhost:${port}`);
+    console.log(`   LAN access: http://${host === '0.0.0.0' ? '你的IP' : host}:${port}`);
+  });
+}
+
+if (require.main === module) startServer();
+
+module.exports = { createApp, startServer, databasePath };
