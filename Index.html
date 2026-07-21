@@ -940,22 +940,27 @@
     document.addEventListener('DOMContentLoaded',async()=>{try{bindEvents();bindContactEvents();const deliveryRefresh=$('#deliveryRefreshBtn');if(deliveryRefresh)deliveryRefresh.addEventListener('click',loadDailyDelivery);await loadCapabilities();bootstrapData();if(moduleAllowed('recon'))startReconPolling()}catch(e){showFatalInitError(e)}});
     function moduleAllowed(key){return state.allowedModules.has(key)}
     let refreshingCapabilities=!1;
+    function purgeContactBearingState(){
+      state.customers=[];state.filtered=[];state.customerPool=[];state.poolFiltered=[];state.people=[];state.contactReconJobs=[];state.contactQualityStats={};state.reconResults=[];state.prospectCandidates=[];state.currentCustomer=null;state.currentReconTarget=null;state.currentTagTarget=null;closeModal();
+      assistantState.messages=[];assistantState.lastCursor='';assistantState.lastMeta=null;assistantState.sessionId='';try{localStorage.removeItem(assistantConversationKey())}catch(_e){}
+      const messages=$('#assistantMessages');if(messages)messages.textContent='';const debug=$('#assistantDebug');if(debug)debug.textContent='';
+    }
     function revokeModule(key){
       if(key==='customers'||key==='kanban'){state.customers=[];state.filtered=[];state.currentCustomer=null}
       if(key==='pool'){state.customerPool=[];state.poolFiltered=[];state.selectedPool.clear()}
-      if(key==='contacts'){state.people=[];state.contactReconJobs=[];state.contactQualityStats={}}
+      if(key==='contacts'){purgeContactBearingState()}
       if(key==='recon'){state.reconJobs=[];state.reconResults=[];state.reconMonitor=null;state.currentReconTarget=null;if(state.reconPollHandle){clearInterval(state.reconPollHandle);state.reconPollHandle=null}}
       if(key==='prospect'){state.prospectTasks=[];state.prospectCandidates=[];state.prospectSources=[];state.prospectActiveTaskId=''}
       if(key==='assistant'){assistantState.messages=[];assistantState.sessionId='';assistantState.lastMeta=null;$('#assistantLauncher')?.remove();$('#assistantDrawer')?.remove()}
       $$(`[data-view="${key}"]`).forEach(node=>node.remove());const view=$(`#${key}View`);if(view)view.remove();
       if(state.view===key){const fallback=Array.from(state.allowedModules).find(item=>item!==key&&$(`#${item}View`));if(fallback)switchView(fallback)}
     }
-    async function refreshCapabilitiesAfterForbidden(){if(refreshingCapabilities||isFilePreview())return;refreshingCapabilities=!0;try{await loadCapabilities()}catch(e){console.error(e)}finally{refreshingCapabilities=!1}}
+    async function refreshCapabilitiesAfterForbidden(){if(refreshingCapabilities||isFilePreview())return;refreshingCapabilities=!0;const hadContacts=Boolean(state.capabilities.permissions&&state.capabilities.permissions.view_contacts);try{await loadCapabilities();if(hadContacts&&!state.capabilities.permissions.view_contacts&&moduleAllowed('dashboard'))await loadData()}catch(e){console.error(e)}finally{refreshingCapabilities=!1}}
     async function loadCapabilities(){
       if(isFilePreview()){
         state.capabilities={permissions:Object.fromEntries(Object.values(MODULE_PERMISSION).map(key=>[key,!0])),modules:Object.keys(MODULE_PERMISSION)};
       }else state.capabilities=await fetchJson('/api/session/capabilities');
-      const nextAllowed=new Set(Object.entries(MODULE_PERMISSION).filter(([,permission])=>state.capabilities.permissions&&state.capabilities.permissions[permission]).map(([key])=>key));
+      const nextAllowed=new Set(Object.entries(MODULE_PERMISSION).filter(([key,permission])=>state.capabilities.permissions&&state.capabilities.permissions[permission]&&(key!=='prospect'||state.capabilities.permissions.view_all_customers&&state.capabilities.permissions.view_contacts)).map(([key])=>key));
       state.allowedModules=nextAllowed;
       Object.keys(MODULE_PERMISSION).forEach(key=>{if(!moduleAllowed(key))revokeModule(key)});
       $$('.nav-group').forEach(group=>{if(!group.querySelector('[data-view],.module-link'))group.remove()});

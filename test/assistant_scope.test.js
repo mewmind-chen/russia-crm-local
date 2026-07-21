@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { seededFixture } = require('./helpers/permission_fixture');
 const { buildAccessContext } = require('../lib/access_control');
 const { searchCrmContext } = require('../lib/assistant');
+const { ensureAssistantTables, vectorSearch, vectorToBlob } = require('../lib/assistant_index');
 
 async function json(response) {
   return { response, body: await response.json() };
@@ -76,6 +77,11 @@ test('assistant generic SQL context is cropped before prompt construction', asyn
 test('assistant never retrieves contact fields without view_contacts', async () => {
   const fx = await seededFixture({ permissions: { use_ai_assistant: true, view_contacts: false } });
   try {
+    fx.db.prepare("UPDATE customers SET notes='hidden-note person@secret.test' WHERE customer_id='RU-9001'").run();
+    const user = fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-WU');
+    const scopedContext = searchCrmContext('hidden-note', buildAccessContext(fx.db, user));
+    assert.doesNotMatch(JSON.stringify(scopedContext), /person@secret\.test/);
+    assert.equal(scopedContext.customers.length, 0);
     const { response, body } = await json(await fx.request('/api/assistant/chat', {
       cookie: fx.cookie,
       method: 'POST',
@@ -101,6 +107,29 @@ test('assistant never retrieves Recon rows without view_recon', async () => {
     assert.equal(response.status, 200);
     const serialized = JSON.stringify(body);
     assert.doesNotMatch(serialized, /JOB-OWN|Hidden Recon Finding|reports\/secret\.html/);
+  } finally {
+    await fx.close();
+  }
+});
+
+test('assistant vector retrieval is disabled when contacts are forbidden', async () => {
+  const fx = await seededFixture();
+  try {
+    ensureAssistantTables(fx.db);
+    const info = fx.db.prepare(`INSERT INTO assistant_documents
+      (doc_key,doc_type,source_table,source_id,customer_id,title,content,content_hash,updated_at)
+      VALUES ('secret-doc','customer_pool','customer_pool','RU-9001','RU-9001','Wu Fixture',
+              '联系方式: person@secret.test +7-secret','hash','2026-07-21 08:00:00')`).run();
+    fx.db.prepare(`INSERT INTO assistant_embeddings
+      (document_id,provider,model,dimensions,embedding,content_hash,updated_at)
+      VALUES (?,?,?,?,?,?,?)`).run(
+      info.lastInsertRowid, 'qwen', 'qwen3-vl-embedding', 1024,
+      vectorToBlob(Array(1024).fill(0)), 'hash', '2026-07-21 08:00:00',
+    );
+    const result = await vectorSearch('联系方式', {
+      allowedCustomerIds: ['RU-9001'], canViewContacts: false, canViewRecon: true,
+    });
+    assert.deepEqual(result.results, []);
   } finally {
     await fx.close();
   }

@@ -339,4 +339,83 @@ test('Legacy UI revokes module data after a permission-changing 403', () => {
   assert.match(source, /function revokeModule/);
   assert.match(source, /function refreshCapabilitiesAfterForbidden/);
   assert.match(source, /r\.status===403/);
+  assert.match(source, /localStorage\.removeItem\(assistantConversationKey\(\)\)/);
+});
+
+test('Recon responses cannot bypass a disabled contact permission', async t => {
+  const fx = await fixtures.seededFixture({ permissions: { view_recon: true, view_contacts: false } });
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO recon_results
+    (job_id,customer_id,company_name,email,phone,contacts_summary,result_json,updated_at)
+    VALUES ('JOB-WU','RU-9001','Wu Fixture','recon@secret.test','+7-recon','Secret Buyer',?,?)`)
+    .run(JSON.stringify({ contacts_summary: 'Secret Buyer', contactSignal: 'recon@secret.test' }), '2026-07-21 08:00:00');
+  fx.db.prepare(`INSERT INTO recon_jobs(job_id,customer_id,company_name,status,requested_at,updated_at)
+    VALUES ('JOB-WU','RU-9001','Wu Fixture','done',?,?)`).run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
+  fx.db.prepare("UPDATE recon_jobs SET error='recon@secret.test in worker output' WHERE job_id='JOB-WU'").run();
+  fx.db.prepare(`INSERT INTO recon_evidence(job_id,customer_id,field_name,value,source_url)
+    VALUES ('JOB-WU','RU-9001','contact_email','recon@secret.test','https://example.test')`).run();
+
+  const result = await fx.request('/api/recon/results/JOB-WU', { cookie: fx.cookie });
+  assert.equal(result.status, 200);
+  const resultText = await result.text();
+  for (const secret of ['recon@secret.test', '+7-recon', 'Secret Buyer', 'contact_email']) {
+    assert.equal(resultText.includes(secret), false, secret);
+  }
+  const initialText = await (await fx.request('/api/initial', { cookie: fx.cookie })).text();
+  for (const secret of ['recon@secret.test', '+7-recon', 'Secret Buyer', 'contact_email']) {
+    assert.equal(initialText.includes(secret), false, `initial:${secret}`);
+  }
+  const monitorText = await (await fx.request('/api/recon-monitor', { cookie: fx.cookie })).text();
+  for (const secret of ['recon@secret.test', '+7-recon', 'Secret Buyer']) {
+    assert.equal(monitorText.includes(secret), false, secret);
+  }
+  assert.equal((await fx.request('/api/report?job_id=JOB-WU', { cookie: fx.cookie })).status, 403);
+});
+
+test('Sales bootstrap cross-permissions hide contacts, alerts, and markets', async t => {
+  const fx = await fixtures.seededFixture({ permissions: {
+    view_dashboard: true, view_insights: true, view_contacts: false,
+    view_alerts: false, view_markets: false,
+  } });
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO crm_account_contacts
+    (id,customer_id,name,title,phone,email,created_by,created_at,updated_at)
+    VALUES ('LOCAL-SECRET','CRM-WU','Secret Buyer','Procurement','+7-local','local@secret.test','U-WU',?,?)`)
+    .run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
+  const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
+  assert.deepEqual(body.alerts, []);
+  assert.deepEqual(body.countryReport, []);
+  assert.deepEqual(body.cohortReport, []);
+  assert.deepEqual(body.insights.contacts, []);
+  assert.doesNotMatch(JSON.stringify(body.insights), /Secret Buyer|local@secret\.test|\+7-local/);
+});
+
+test('scoped users cannot use the global prospect-agent store', async t => {
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: {
+    use_prospect_agent: true, view_contacts: true,
+  } });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/prospect-agent', {
+    cookie: fx.cookie, method: 'POST', body: { action: 'createTask', query: 'Fixture' },
+  });
+  assert.equal(response.status, 403);
+});
+
+test('denied Sales writes are audited without target identifiers or payloads', async t => {
+  const fx = await fixtures.seededFixture({ permissions: { edit_customer: false } });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/accounts/CRM-WU', {
+    cookie: fx.cookie, method: 'PATCH', body: { notes: 'sensitive sales payload' },
+  });
+  assert.equal(response.status, 403);
+  const audit = fx.db.prepare("SELECT * FROM crm_audit_log WHERE action='permission_denied' ORDER BY created_at DESC LIMIT 1").get();
+  assert.ok(audit);
+  assert.equal(audit.entity_id, '');
+  assert.doesNotMatch(audit.detail_json, /CRM-WU|sensitive sales payload/);
+});
+
+test('unknown Sales CRM routes are default-denied', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  assert.equal((await fx.request('/api/sales-crm/unmapped', { cookie: fx.cookie })).status, 403);
 });

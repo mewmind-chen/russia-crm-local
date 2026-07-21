@@ -51,11 +51,22 @@ test('contact redaction recursively removes sensitive fields', () => {
   assert.deepEqual(output, { nested: [{ company_name: 'Safe' }] });
 });
 
+test('contact redaction covers serialized snake and camel case fields', () => {
+  const { redactContactFields } = accessControl();
+  const output = redactContactFields({
+    company_name: 'Safe', contacts_summary: 'Buyer secret', contactSignal: 'email secret',
+    bestPersonId: 'PERSON-1', nested: { result_json: '{"email":"secret"}', contactCount: 3 },
+  });
+  assert.deepEqual(output, { company_name: 'Safe', nested: {} });
+});
+
 test('unknown browser route and action are denied by default', () => {
-  const { policyForLegacyRequest } = accessControl();
+  const { policyForLegacyRequest, policyForSalesRequest } = accessControl();
   assert.equal(typeof policyForLegacyRequest, 'function');
   assert.deepEqual(policyForLegacyRequest('GET', '/unknown', ''), { deny: true });
   assert.deepEqual(policyForLegacyRequest('POST', '/app', 'unknown'), { deny: true });
+  assert.deepEqual(policyForSalesRequest('GET', '/unmapped'), { deny: true });
+  assert.deepEqual(policyForSalesRequest('PATCH', '/accounts/CRM-1'), { permissions: ['edit_customer'] });
 });
 
 test('every browser API has an explicit permission policy or separate token boundary', () => {

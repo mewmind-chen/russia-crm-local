@@ -16,7 +16,7 @@ const {
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
-const { policyForLegacyRequest, assertExternalCustomerAccess } = require('./lib/access_control');
+const { policyForLegacyRequest, assertExternalCustomerAccess, redactContactFields } = require('./lib/access_control');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -64,7 +64,9 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     ['recon', 'view_recon'],
     ['prospect', 'use_prospect_agent'],
     ['assistant', 'use_ai_assistant'],
-  ].filter(([, permission]) => permissions[permission]).map(([key]) => key);
+  ].filter(([key, permission]) => permissions[permission]
+    && (key !== 'prospect' || (permissions.view_all_customers && permissions.view_contacts)))
+    .map(([key]) => key);
   res.json({
     ok: true,
     user: safeUser(req.salesUser),
@@ -508,6 +510,35 @@ function buildReconMonitorPayload(accessContext) {
   };
 }
 
+function contactRestrictedReconMonitor(payload) {
+  return {
+    ok: true,
+    updatedAt: payload.updatedAt,
+    summary: payload.summary,
+    workers: [],
+    hermesProcesses: [],
+    jobs: (payload.jobs || []).map(job => ({
+      job_id: job.job_id,
+      customer_id: job.customer_id,
+      company_name: job.company_name,
+      status: job.status,
+      requested_at: job.requested_at,
+      started_at: job.started_at,
+      finished_at: job.finished_at,
+      updated_at: job.updated_at,
+      has_result: job.has_result,
+      stage: job.stage,
+      stage_label: job.stage_label,
+      stale: job.stale,
+      stale_minutes: job.stale_minutes,
+    })),
+    capabilitySnapshot: null,
+    capabilitySource: '',
+    logTail: [],
+    terminal: null,
+  };
+}
+
 // --- /api/initial ---
 
 app.get('/api/initial', (req, res) => {
@@ -567,13 +598,19 @@ app.get('/api/customers', (req, res) => {
 app.get('/api/recon/results/:jobId', (req, res) => {
   const db = getDb();
   try {
-    const result = db.prepare('SELECT * FROM recon_results WHERE job_id = ?').get(req.params.jobId);
-    if (!result) return res.status(404).json({ ok: false, error: '未找到Recon结果' });
-    assertRequestCustomer(req, result.customer_id);
-    const evidence = db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId);
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const result = db.prepare(`SELECT * FROM recon_results WHERE job_id = ? AND customer_id IN (${placeholders})`)
+      .get(req.params.jobId, ...allowedIds);
+    if (!result) return res.status(403).json({ ok: false, error: '无权访问该客户' });
+    const canViewContacts = Boolean(req.accessContext.permissions.view_contacts);
+    const evidence = canViewContacts
+      ? db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId)
+      : [];
     let resultV3 = null;
     try { resultV3 = result.result_json ? JSON.parse(result.result_json) : null; } catch (_e) {}
-    res.json({ ok: true, result, resultV3, evidence });
+    const payload = { ok: true, result, resultV3, evidence };
+    res.json(canViewContacts ? payload : redactContactFields(payload));
   } finally {
     db.close();
   }
@@ -752,14 +789,22 @@ app.get('/api/report', (req, res) => {
     return;
   }
 
+  if (!req.accessContext.permissions.view_contacts) {
+    res.status(403).send('无权访问该报告');
+    return;
+  }
+
   try {
     const Database = require('better-sqlite3');
     const db = new Database(databasePath());
-    const row = db.prepare('SELECT job_id, customer_id, company_name, report_path FROM recon_results WHERE job_id = ?').get(jobId);
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const row = db.prepare(`SELECT job_id, customer_id, company_name, report_path FROM recon_results
+      WHERE job_id = ? AND customer_id IN (${placeholders})`).get(jobId, ...allowedIds);
     db.close();
 
     if (!row) {
-      res.status(404).send('未找到报告');
+      res.status(403).send('无权访问该报告');
       return;
     }
     assertRequestCustomer(req, row.customer_id);
@@ -795,7 +840,8 @@ app.get('/api/report', (req, res) => {
 
 app.get('/api/recon-monitor', (req, res) => {
   try {
-    res.json(buildReconMonitorPayload(req.accessContext));
+    const payload = buildReconMonitorPayload(req.accessContext);
+    res.json(req.accessContext.permissions.view_contacts ? payload : contactRestrictedReconMonitor(payload));
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message || String(e) });
   }
