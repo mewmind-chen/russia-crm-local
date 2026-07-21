@@ -479,7 +479,7 @@ test('Sales user creation assigns a role default group and effective overrides',
   assert.equal(capabilities.permissions.use_ai_assistant, true);
 });
 
-test('Sales user updates realign the role group and translate effective overrides', async t => {
+test('Sales user updates assign an explicit matching group before dedicated overrides', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
@@ -490,11 +490,17 @@ test('Sales user updates realign the role group and translate effective override
     method: 'PATCH',
     body: {
       role: 'manager',
-      permissions: { view_all_customers: false, use_ai_assistant: false },
+      permissionGroupId: 'PGRP-MANAGER-DEFAULT',
     },
   });
   const body = await response.json();
   assert.equal(response.status, 200, body.error);
+  const overrides = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.cookie,
+    method: 'PUT',
+    body: { view_all_customers: 'deny', use_ai_assistant: 'deny' },
+  });
+  assert.equal(overrides.status, 200);
   const user = fx.db.prepare('SELECT role,permission_group_id,permissions_json FROM sales_users WHERE id=?').get('U-OTHER');
   assert.deepEqual(user, { role: 'manager', permission_group_id: 'PGRP-MANAGER-DEFAULT', permissions_json: '{}' });
   assert.deepEqual(fx.db.prepare(`SELECT permission_key,effect FROM user_permission_overrides

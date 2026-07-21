@@ -104,7 +104,9 @@ test('every browser API has an explicit permission policy or separate token boun
     'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
     'GET /research/recon', 'POST /accounts', 'PATCH /accounts/:customerId',
     'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
-    'PATCH /users/:userId', 'POST /migration-review/:reviewId', 'POST /password',
+    'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
+    'PATCH /permission-groups/:groupId', 'PUT /users/:userId/permission-overrides',
+    'POST /migration-review/:reviewId', 'POST /password',
     'POST /intake/scan', 'POST /intake/action', 'PATCH /intake/settings',
     'POST /contacts', 'POST /evaluations', 'POST /evaluations/:evaluationId/retry',
   ];

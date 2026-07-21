@@ -145,4 +145,33 @@ async function fixtureWithPermission(permission, value) {
   return seededFixture({ permissions: { [permission]: value } });
 }
 
-module.exports = { createPermissionFixture, seededFixture, fixtureWithPermission };
+async function adminFixture(options = {}) {
+  const fx = await seededFixture();
+  const { hashPassword } = require('../../lib/sales_crm');
+  const password = hashPassword('Admin123!', 'abcdef0123456789abcdef0123456789');
+  fx.db.prepare(`UPDATE sales_users SET email='admin@example.com',password_hash=?,password_salt=?,
+    must_change_password=0,active=1 WHERE id='USR-ADMIN'`).run(password.hash, password.salt);
+  if (options.adminCount === 2) {
+    fx.db.prepare(`INSERT INTO sales_users
+      (id,email,name,role,password_hash,password_salt,active,must_change_password,
+       languages_json,countries_json,channels_json,permissions_json,permission_group_id,created_at,updated_at)
+      SELECT 'U-ADMIN2','admin2@example.com','Admin Two','admin',password_hash,password_salt,1,0,
+       '[]','[]','[]','{}',permission_group_id,created_at,updated_at FROM sales_users WHERE id='USR-ADMIN'`).run();
+  }
+  fx.adminCookie = await fx.login('admin@example.com', 'Admin123!');
+  fx.otherCookie = await fx.login('other@example.com', 'Password123!');
+  fx.adminGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='admin-default'").get().id;
+  fx.managerGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='manager-default'").get().id;
+  fx.salesGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='sales-default'").get().id;
+  fx.requestJson = async (route, options) => (await fx.request(route, options)).json();
+  fx.loginStatus = async (email, candidate) => {
+    const response = await fetch(`${fx.baseUrl}/api/sales-auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: candidate }),
+    });
+    return response.status;
+  };
+  return fx;
+}
+
+module.exports = { createPermissionFixture, seededFixture, fixtureWithPermission, adminFixture };
