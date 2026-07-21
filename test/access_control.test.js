@@ -7,6 +7,12 @@ function accessControl() {
   catch (_error) { return {}; }
 }
 
+test('permissionsFor trusts only hydrated group permissions', () => {
+  const { permissionsFor } = accessControl();
+  assert.equal(permissionsFor({ role: 'admin', permissions_json: '{"view_users":true}' }).view_users, false);
+  assert.equal(permissionsFor({ permissions: { view_users: true } }).view_users, true);
+});
+
 test('view_all_customers false scopes a manager to owned active accounts', () => {
   const { buildAccessContext, assertAccountAccess } = accessControl();
   assert.equal(typeof buildAccessContext, 'function');
@@ -16,7 +22,7 @@ test('view_all_customers false scopes a manager to owned active accounts', () =>
   db.prepare('INSERT INTO crm_accounts VALUES (?,?,?,?)').run('RETURNED', 'EXT-RETURNED', 'U1', 'returned');
   db.prepare('INSERT INTO crm_accounts VALUES (?,?,?,?)').run('OTHER', 'EXT-OTHER', 'U2', 'claimed');
   const context = buildAccessContext(db, {
-    id: 'U1', role: 'manager', permissions_json: '{"view_all_customers":false}',
+    id: 'U1', permissions: { view_all_customers: false },
   });
   assert.deepEqual([...context.accountIds], ['OWN']);
   assert.doesNotThrow(() => assertAccountAccess(context, { id: 'OWN' }));
@@ -34,7 +40,7 @@ test('view_all_customers true includes every account regardless of role', () => 
   db.exec('CREATE TABLE crm_accounts(id TEXT, external_customer_id TEXT, owner_id TEXT, assignment_status TEXT)');
   db.prepare('INSERT INTO crm_accounts VALUES (?,?,?,?)').run('OTHER', 'EXT-OTHER', 'U2', 'claimed');
   const context = buildAccessContext(db, {
-    id: 'U1', role: 'sales', permissions_json: '{"view_all_customers":true}',
+    id: 'U1', permissions: { view_all_customers: true },
   });
   assert.deepEqual([...context.accountIds], ['OTHER']);
   db.close();

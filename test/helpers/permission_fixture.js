@@ -48,6 +48,19 @@ async function createPermissionFixture() {
         body: body ? JSON.stringify(body) : undefined,
       });
     },
+    setUserPermissions(userId, patch) {
+      const group = db.prepare(`SELECT g.permissions_json FROM sales_users u
+        JOIN permission_groups g ON g.id=u.permission_group_id WHERE u.id=?`).get(userId);
+      const defaults = JSON.parse(group.permissions_json);
+      const now = '2026-07-21 08:00:00';
+      for (const [permission, desired] of Object.entries(patch)) {
+        db.prepare('DELETE FROM user_permission_overrides WHERE user_id=? AND permission_key=?').run(userId, permission);
+        if (Boolean(defaults[permission]) === Boolean(desired)) continue;
+        db.prepare(`INSERT INTO user_permission_overrides
+          (user_id,permission_key,effect,created_at,updated_at) VALUES (?,?,?,?,?)`)
+          .run(userId, permission, desired ? 'allow' : 'deny', now, now);
+      }
+    },
     async close() {
       db.close();
       await new Promise(resolve => server.close(resolve));
@@ -67,20 +80,22 @@ async function seededFixture(options = {}) {
   const now = '2026-07-21 08:00:00';
   const insertUser = fx.db.prepare(`INSERT INTO sales_users
     (id,email,name,role,password_hash,password_salt,active,must_change_password,
-     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at)
     VALUES (?,?,?,?,?,?,1,0,'[]','[]','[]',?,?,?)`);
   insertUser.run(
     'U-WU', 'wu@example.com', 'Wu', 'manager', password.hash, password.salt,
-    JSON.stringify({ view_development: true, view_contacts: false, ...options.permissions }), now, now,
+    'PGRP-MANAGER-DEFAULT', now, now,
   );
   insertUser.run(
     'U-MGR', 'manager@example.com', 'Manager', 'manager', password.hash, password.salt,
-    JSON.stringify({ view_all_customers: options.managerViewAll !== false, ...options.permissions }), now, now,
+    'PGRP-MANAGER-DEFAULT', now, now,
   );
   insertUser.run(
     'U-OTHER', 'other@example.com', 'Other', 'sales', password.hash, password.salt,
-    '{}', now, now,
+    'PGRP-SALES-DEFAULT', now, now,
   );
+  fx.setUserPermissions('U-WU', { view_development: true, view_contacts: false, ...options.permissions });
+  fx.setUserPermissions('U-MGR', { view_all_customers: options.managerViewAll !== false, ...options.permissions });
 
   const insertAccount = fx.db.prepare(`INSERT INTO crm_accounts
     (id,external_customer_id,company_name,owner_id,stage,assignment_status,created_at,updated_at)
