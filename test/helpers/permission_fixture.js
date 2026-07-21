@@ -104,6 +104,9 @@ async function seededFixture(options = {}) {
   fx.db.prepare(`INSERT INTO recon_results(job_id,customer_id,company_name,email,phone,updated_at)
     VALUES ('JOB-OWN','RU-9002','Owned Fixture','','','2026-07-21 08:00:00'),
            ('JOB-OTHER','RU-9003','Other Fixture','hidden@secret.test','+7-other','2026-07-21 08:00:00')`).run();
+  fx.db.prepare(`INSERT INTO recon_jobs(job_id,customer_id,company_name,status,requested_at,updated_at)
+    VALUES ('JOB-OWN','RU-9002','Owned Fixture','done',?,?),
+           ('JOB-OTHER','RU-9003','Other Fixture','done',?,?)`).run(now, now, now, now);
   fx.db.prepare(`INSERT INTO contact_recon_jobs(job_id,customer_id,company_name,status,created_at,updated_at)
     VALUES ('CONTACT-WU','RU-9001','Wu Fixture','done',?,?)`).run(now, now);
   fx.db.prepare(`INSERT INTO person_candidates

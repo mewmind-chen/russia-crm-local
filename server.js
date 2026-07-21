@@ -16,7 +16,7 @@ const {
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
-const { policyForLegacyRequest } = require('./lib/access_control');
+const { policyForLegacyRequest, assertExternalCustomerAccess } = require('./lib/access_control');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -84,9 +84,15 @@ app.use('/api', (req, res, next) => {
   return requireUnifiedUser(req, res, () => {
     const action = String(req.body?.action || '');
     const policy = policyForLegacyRequest(req.method, req.path, action);
-    if (policy.deny) return res.status(403).json({ ok: false, error: '该接口未配置访问权限' });
+    if (policy.deny) {
+      auditDeniedWrite(req, action);
+      return res.status(403).json({ ok: false, error: '该接口未配置访问权限' });
+    }
     const missing = (policy.permissions || []).find(permission => !req.accessContext.permissions[permission]);
-    if (missing) return res.status(403).json({ ok: false, error: `没有权限：${missing}` });
+    if (missing) {
+      auditDeniedWrite(req, action);
+      return res.status(403).json({ ok: false, error: `没有权限：${missing}` });
+    }
     req.accessPolicy = policy;
     return next();
   });
@@ -196,6 +202,41 @@ function logAssistantChat(entry) {
 
 function getDb() {
   return new Database(DB_PATH);
+}
+
+function externalCustomerForFollowId(followId) {
+  const value = getDb();
+  try { return value.prepare('SELECT customer_id FROM customers WHERE follow_id=?').get(String(followId || ''))?.customer_id || ''; }
+  finally { value.close(); }
+}
+
+function externalCustomerForJob(table, jobId) {
+  const allowedTables = new Set(['recon_jobs', 'recon_results', 'contact_recon_jobs']);
+  if (!allowedTables.has(table)) throw new Error('不支持的任务类型');
+  const value = getDb();
+  try { return value.prepare(`SELECT customer_id FROM ${table} WHERE job_id=?`).get(String(jobId || ''))?.customer_id || ''; }
+  finally { value.close(); }
+}
+
+function assertRequestCustomer(req, customerId) {
+  assertExternalCustomerAccess(req.accessContext, String(customerId || ''));
+}
+
+function auditDeniedWrite(req, action = '') {
+  if (!req.salesUser || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+  const value = getDb();
+  try {
+    value.prepare(`INSERT INTO crm_audit_log
+      (id,user_id,action,entity_type,entity_id,detail_json,created_at)
+      VALUES (?,?,?,?,?,?,datetime('now'))`).run(
+        crypto.randomUUID(), req.salesUser.id, 'permission_denied', 'legacy_api', '',
+        JSON.stringify({ route: req.path, action: String(action || '') }),
+      );
+  } catch (error) {
+    console.error(`denied write audit failed: ${error.message}`);
+  } finally {
+    value.close();
+  }
 }
 
 function safeStat(filePath) {
@@ -396,14 +437,17 @@ function selectHermesTerminal(enrichedJobs) {
   };
 }
 
-function buildReconMonitorPayload() {
+function buildReconMonitorPayload(accessContext) {
   const db = getDb();
-  const jobs = db.prepare('SELECT * FROM recon_jobs ORDER BY updated_at DESC').all();
-  const results = db.prepare('SELECT * FROM recon_results ORDER BY updated_at DESC').all();
+  const allowedIds = [...(accessContext?.externalCustomerIds || [])];
+  const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+  const jobs = db.prepare(`SELECT * FROM recon_jobs WHERE customer_id IN (${placeholders}) ORDER BY updated_at DESC`).all(...allowedIds);
+  const results = db.prepare(`SELECT * FROM recon_results WHERE customer_id IN (${placeholders}) ORDER BY updated_at DESC`).all(...allowedIds);
   db.close();
 
-  const workerProcesses = listReconWorkers();
-  const hermesProcesses = listHermesProcesses();
+  const fullScope = Boolean(accessContext?.canViewAllCustomers);
+  const workerProcesses = fullScope ? listReconWorkers() : [];
+  const hermesProcesses = fullScope ? listHermesProcesses() : [];
   const resultsByJob = new Map(results.map(row => [row.job_id, row]));
   const enrichedJobs = jobs.map(job => {
     const outputDir = String(job.output_dir || '').trim();
@@ -465,7 +509,7 @@ function buildReconMonitorPayload() {
     jobs: enrichedJobs.slice(0, 30),
     capabilitySnapshot,
     capabilitySource: capabilityJob ? capabilityJob.job_id : '',
-    logTail: readLogTail(RECON_LOG_PATH, 24),
+    logTail: fullScope ? readLogTail(RECON_LOG_PATH, 24) : [],
     terminal: selectHermesTerminal(enrichedJobs),
   };
 }
@@ -507,8 +551,15 @@ app.get('/api/customers', (req, res) => {
     const { page, pageSize, offset } = pagination(req.query);
     const search = String(req.query.search || '').trim();
     const like = `%${search}%`;
-    const where = search ? 'WHERE company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?' : '';
-    const params = search ? [like, like, like] : [];
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const clauses = [`customer_id IN (${placeholders})`];
+    const params = [...allowedIds];
+    if (search) {
+      clauses.push('(company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?)');
+      params.push(like, like, like);
+    }
+    const where = `WHERE ${clauses.join(' AND ')}`;
     const total = db.prepare(`SELECT COUNT(*) total FROM customer_pool ${where}`).get(...params).total;
     const rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
     res.json({ ok: true, page, pageSize, total, rows });
@@ -524,6 +575,7 @@ app.get('/api/recon/results/:jobId', (req, res) => {
   try {
     const result = db.prepare('SELECT * FROM recon_results WHERE job_id = ?').get(req.params.jobId);
     if (!result) return res.status(404).json({ ok: false, error: '未找到Recon结果' });
+    assertRequestCustomer(req, result.customer_id);
     const evidence = db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId);
     let resultV3 = null;
     try { resultV3 = result.result_json ? JSON.parse(result.result_json) : null; } catch (_e) {}
@@ -556,6 +608,7 @@ app.post('/api/app', (req, res) => {
   const { action } = req.body;
   try {
     if (action === 'updateCustomer') {
+      assertRequestCustomer(req, externalCustomerForFollowId(req.body.followId));
       const r = updateCustomer(req.body.followId, req.body.payload);
       return res.json({ ok: true, action, ...r });
     }
@@ -564,24 +617,29 @@ app.post('/api/app', (req, res) => {
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'setCustomerTags') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = setCustomerTags(req.body.customerId, req.body.tagIds);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'createReconJob') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = createReconJob(req.body.customerId, req.body.source);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'retryReconJob') {
+      assertRequestCustomer(req, externalCustomerForJob('recon_jobs', req.body.jobId));
       const r = retryReconJob(req.body.jobId);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'createContactReconJob') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = createContactReconJob(req.body.customerId, req.body.options || {});
       return res.json({ ok: true, action, ...r });
     }
     throw new Error(`未知 action：${action}`);
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    if (e.statusCode === 403) auditDeniedWrite(req, action);
+    res.status(e.statusCode || 400).json({ ok: false, error: e.message });
   }
 });
 
@@ -642,13 +700,16 @@ app.post('/api/contact-recon', (req, res) => {
 });
 
 app.get('/api/contact-recon/state', (req, res) => {
-  try { res.json({ ok: true, ...getContactReconState({ limit: req.query.limit }) }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  try { res.json({ ok: true, ...getContactReconState({ limit: req.query.limit, accessContext: req.accessContext }) }); }
+  catch (e) { res.status(e.statusCode || 500).json({ ok: false, error: e.message }); }
 });
 
 app.get('/api/customers/:customerId/people', (req, res) => {
-  try { res.json({ ok: true, customerId: req.params.customerId, people: getCustomerPeople(req.params.customerId) }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  try {
+    assertRequestCustomer(req, req.params.customerId);
+    res.json({ ok: true, customerId: req.params.customerId, people: getCustomerPeople(req.params.customerId) });
+  }
+  catch (e) { res.status(e.statusCode || 500).json({ ok: false, error: e.message }); }
 });
 
 // --- /api/assistant ---
@@ -700,13 +761,15 @@ app.get('/api/report', (req, res) => {
   try {
     const Database = require('better-sqlite3');
     const db = new Database(databasePath());
-    const row = db.prepare('SELECT job_id, company_name, report_path FROM recon_results WHERE job_id = ?').get(jobId);
+    const row = db.prepare('SELECT job_id, customer_id, company_name, report_path FROM recon_results WHERE job_id = ?').get(jobId);
     db.close();
 
-    if (!row || !row.report_path) {
+    if (!row) {
       res.status(404).send('未找到报告');
       return;
     }
+    assertRequestCustomer(req, row.customer_id);
+    if (!row.report_path) return res.status(404).send('未找到报告');
 
     const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
     const reportPath = path.resolve(row.report_path);
@@ -732,13 +795,13 @@ app.get('/api/report', (req, res) => {
     }
     res.send(report);
   } catch (e) {
-    res.status(500).send('读取报告失败: ' + (e.message || String(e)));
+    res.status(e.statusCode || 500).send(e.statusCode === 403 ? '无权访问该报告' : '读取报告失败: ' + (e.message || String(e)));
   }
 });
 
-app.get('/api/recon-monitor', (_req, res) => {
+app.get('/api/recon-monitor', (req, res) => {
   try {
-    res.json(buildReconMonitorPayload());
+    res.json(buildReconMonitorPayload(req.accessContext));
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message || String(e) });
   }
