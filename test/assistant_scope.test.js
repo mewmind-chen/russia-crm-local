@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { seededFixture } = require('./helpers/permission_fixture');
 const { buildAccessContext } = require('../lib/access_control');
-const { searchCrmContext } = require('../lib/assistant');
+const { searchCrmContext, fetchWebPagesContext } = require('../lib/assistant');
 const { ensureAssistantTables, vectorSearch, vectorToBlob } = require('../lib/assistant_index');
 
 async function json(response) {
@@ -78,10 +78,22 @@ test('assistant never retrieves contact fields without view_contacts', async () 
   const fx = await seededFixture({ permissions: { use_ai_assistant: true, view_contacts: false } });
   try {
     fx.db.prepare("UPDATE customers SET notes='hidden-note person@secret.test' WHERE customer_id='RU-9001'").run();
+    fx.db.prepare(`UPDATE customer_pool SET
+      description='assistant-description-marker assistant-description@secret.test',
+      products='assistant-products-marker +7-assistant-products'
+      WHERE customer_id='RU-9001'`).run();
     const user = fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-WU');
-    const scopedContext = searchCrmContext('hidden-note', buildAccessContext(fx.db, user));
+    const accessContext = buildAccessContext(fx.db, user);
+    const scopedContext = searchCrmContext('hidden-note', accessContext);
     assert.doesNotMatch(JSON.stringify(scopedContext), /person@secret\.test/);
     assert.equal(scopedContext.customers.length, 0);
+    const narrativeContext = searchCrmContext('assistant-description-marker assistant-products-marker', accessContext);
+    assert.doesNotMatch(JSON.stringify({
+      customers: narrativeContext.customers,
+      recon: narrativeContext.recon,
+      evidence: narrativeContext.evidence,
+      intentLists: narrativeContext.intentLists,
+    }), /assistant-(?:description|products)/);
     const { response, body } = await json(await fx.request('/api/assistant/chat', {
       cookie: fx.cookie,
       method: 'POST',
@@ -89,9 +101,31 @@ test('assistant never retrieves contact fields without view_contacts', async () 
     }));
     assert.equal(response.status, 200);
     const serialized = JSON.stringify(body);
-    assert.doesNotMatch(serialized, /person@secret\.test|\+7-secret|Verified Buyer|Procurement/);
+    assert.doesNotMatch(serialized, /person@secret\.test|\+7-secret|Verified Buyer|Procurement|assistant-(?:description|products)|\+7-assistant/);
   } finally {
     await fx.close();
+  }
+});
+
+test('assistant does not fetch direct URLs when contacts are forbidden', async () => {
+  assert.equal(typeof fetchWebPagesContext, 'function');
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    throw new Error('network should not be called');
+  };
+  try {
+    const result = await fetchWebPagesContext(
+      '打开 https://example.test/contact',
+      {},
+      null,
+      { permissions: { view_contacts: false } },
+    );
+    assert.equal(calls, 0);
+    assert.deepEqual(result, { ok: false, skipped: true, reason: 'contact_permission', pages: [] });
+  } finally {
+    global.fetch = originalFetch;
   }
 });
 

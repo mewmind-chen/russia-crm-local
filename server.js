@@ -605,7 +605,13 @@ app.get('/api/recon/results/:jobId', (req, res) => {
     const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
     const result = db.prepare(`SELECT * FROM recon_results WHERE job_id = ? AND customer_id IN (${placeholders})`)
       .get(req.params.jobId, ...allowedIds);
-    if (!result) return res.status(403).json({ ok: false, error: '无权访问该客户' });
+    if (!result) {
+      const fullScope = req.accessContext.canViewAllCustomers;
+      return res.status(fullScope ? 404 : 403).json({
+        ok: false,
+        error: fullScope ? 'Recon 结果不存在' : '无权访问该客户',
+      });
+    }
     const canViewContacts = Boolean(req.accessContext.permissions.view_contacts);
     const evidence = canViewContacts
       ? db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId)
@@ -681,25 +687,29 @@ app.post('/api/app', (req, res) => {
 
 app.post('/api/prospect-agent', async (req, res) => {
   const { action } = req.body || {};
+  const sendProspect = payload => res.json(
+    req.accessContext.permissions.view_contacts ? payload : redactContactFields(payload),
+  );
   try {
     if (action === 'createTask') {
       const ownerId = req.accessContext.user.id;
       const created = createProspectTask(req.body.payload || req.body, ownerId);
       const executed = await runProspectTask(created.task.taskId, { ownerId, accessContext: req.accessContext });
-      return res.json({ ok: true, action, task: created.task, ...executed });
+      return sendProspect({ ok: true, action, task: created.task, ...executed });
     }
     if (action === 'rerunTask') {
       const taskId = String(req.body.taskId || '').trim();
       if (!taskId) throw new Error('缺少任务ID');
       const ownerId = req.accessContext.user.id;
       const executed = await runProspectTask(taskId, { ownerId, accessContext: req.accessContext });
-      return res.json({ ok: true, action, ...executed });
+      return sendProspect({ ok: true, action, ...executed });
     }
     if (action === 'promoteCandidate') {
       const r = promoteProspectCandidate(req.body.candidateId, {
         createRecon: Boolean(req.body.createRecon), ownerId: req.accessContext.user.id,
+        accessContext: req.accessContext,
       });
-      return res.json({ ok: true, action, ...r });
+      return sendProspect({ ok: true, action, ...r });
     }
     throw new Error(`未知 prospect action：${action}`);
   } catch (e) {
@@ -811,7 +821,8 @@ app.get('/api/report', (req, res) => {
     db.close();
 
     if (!row) {
-      res.status(403).send('无权访问该报告');
+      res.status(req.accessContext.canViewAllCustomers ? 404 : 403)
+        .send(req.accessContext.canViewAllCustomers ? '报告不存在' : '无权访问该报告');
       return;
     }
     assertRequestCustomer(req, row.customer_id);

@@ -444,7 +444,7 @@
       `<span>${esc(item.customer_type || item.industry || '待确认')}</span>`,
       `<span>${esc(item.opportunity_summary || item.next_action || '待确认')}</span>`,
       `<span>${esc(item.contacts_summary || item.contact_name || '未找到')}</span>`,
-      item.job_id && state.data.user.role !== 'sales' ? `<a class="text-button" href="/api/report?job_id=${encodeURIComponent(item.job_id)}" target="_blank">查看报告</a>` : '<span class="subtle">已关联档案</span>',
+      item.job_id && can('view_recon') && can('view_contacts') ? `<a class="text-button" href="/api/report?job_id=${encodeURIComponent(item.job_id)}" target="_blank">查看报告</a>` : '<span class="subtle">已关联档案</span>',
     ]));
   }
 
@@ -614,7 +614,7 @@
   }
 
   function renderInsightsHub() {
-    if (state.data.user.role === 'sales') return;
+    if (!can('view_insights')) return;
     const insightData = state.data.insights || { contacts: [], evaluations: [] };
     const companyEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'company').map(item => item.customerId));
     const contactEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'contact').map(item => item.customerId));
@@ -653,7 +653,7 @@
   }
 
   function renderTeam() {
-    if (state.data.user.role === 'sales') return;
+    if (!can('view_team')) return;
     const rows = state.data.teamReport.filter(item => !$('#ownerFilter').value || item.user.id === $('#ownerFilter').value);
     $('#teamCards').innerHTML = rows.map(item => {
       const topScores = Object.entries(item.scores).sort((a, b) => b[1] - a[1]).slice(0, 4);
@@ -690,7 +690,7 @@
   }
 
   function renderMarkets() {
-    if (state.data.user.role === 'sales') return;
+    if (!can('view_markets')) return;
     const rows = countryReportFor(scopedAccounts());
     const bestValue = rows[0];
     const bestReply = rows.slice().sort((a, b) => b.replyRate - a.replyRate)[0];

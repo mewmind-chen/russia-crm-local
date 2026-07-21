@@ -49,6 +49,26 @@ test('Wu Wei cannot receive contact data through initial or direct contact route
   );
 });
 
+test('GET initial does not seed or auto-tag customer data', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO customer_pool
+    (customer_id,company_name,industry,products)
+    VALUES ('RU-9901','Read Only Fixture','工业控制','MCU 连接器')`).run();
+  const before = {
+    tags: fx.db.prepare('SELECT COUNT(*) count FROM tags').get().count,
+    customerTags: fx.db.prepare('SELECT COUNT(*) count FROM customer_tags').get().count,
+  };
+
+  const response = await fx.request('/api/initial', { cookie: fx.cookie });
+  assert.equal(response.status, 200);
+
+  assert.deepEqual({
+    tags: fx.db.prepare('SELECT COUNT(*) count FROM tags').get().count,
+    customerTags: fx.db.prepare('SELECT COUNT(*) count FROM customer_tags').get().count,
+  }, before);
+});
+
 test('each disabled legacy module permission denies its direct API', async () => {
   const cases = [
     ['view_pool', '/api/customers'],
@@ -165,6 +185,39 @@ test('scoped manager cannot list, read, report, or mutate another owner', async 
   assert.equal(after, before);
 });
 
+test('scoped resource misses are non-enumerable while full-scope misses are 404', async t => {
+  const scoped = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
+  t.after(() => scoped.close());
+  scoped.db.prepare(`INSERT INTO crm_manager_evaluations
+    (id,customer_id,subject_type,evaluation_text,author_id,author_name,created_at,updated_at)
+    VALUES ('EVAL-OTHER','CRM-OTHER','company','Scoped fixture','U-OTHER','Other',?,?)`)
+    .run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
+  const scopedRequests = [
+    ['/api/sales-crm/accounts/CRM-MISSING', { method: 'PATCH', body: { priority: 'A' } }],
+    ['/api/sales-crm/evaluations/EVAL-MISSING/retry', { method: 'POST', body: {} }],
+    ['/api/sales-crm/evaluations/EVAL-OTHER/retry', { method: 'POST', body: {} }],
+    ['/api/recon/results/JOB-MISSING', {}],
+    ['/api/report?job_id=JOB-MISSING', {}],
+  ];
+  for (const [route, options] of scopedRequests) {
+    const response = await scoped.request(route, { cookie: scoped.cookie, ...options });
+    assert.equal(response.status, 403, `scoped:${route}`);
+  }
+
+  const full = await fixtures.seededFixture({ permissions: { view_contacts: true } });
+  t.after(() => full.close());
+  const fullRequests = [
+    ['/api/sales-crm/accounts/CRM-MISSING', { method: 'PATCH', body: { priority: 'A' } }],
+    ['/api/sales-crm/evaluations/EVAL-MISSING/retry', { method: 'POST', body: {} }],
+    ['/api/recon/results/JOB-MISSING', {}],
+    ['/api/report?job_id=JOB-MISSING', {}],
+  ];
+  for (const [route, options] of fullRequests) {
+    const response = await full.request(route, { cookie: full.cookie, ...options });
+    assert.equal(response.status, 404, `full:${route}`);
+  }
+});
+
 test('scoped manager monitor and contact state contain only owned customer rows', async t => {
   const fx = await fixtures.seededFixture({ managerViewAll: false });
   t.after(() => fx.close());
@@ -263,6 +316,35 @@ test('manager without manage_intake cannot claim another user intake item', asyn
   assert.equal(fx.db.prepare('SELECT status FROM crm_intake_items WHERE id=?').get('INTAKE-OTHER').status, 'assigned');
 });
 
+test('non-sales users cannot use sales-only intake self actions', async t => {
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: {
+    view_intake: true, manage_intake: false,
+  } });
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE crm_intake_items SET assigned_owner_id='U-MGR' WHERE id='INTAKE-OTHER'").run();
+
+  const response = await fx.request('/api/sales-crm/intake/action', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { action: 'claim', itemId: 'INTAKE-OTHER' },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(fx.db.prepare("SELECT status FROM crm_intake_items WHERE id='INTAKE-OTHER'").get().status, 'assigned');
+});
+
+test('intake assignment rejects owners who are not active sales users', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+
+  const response = await fx.request('/api/sales-crm/intake/action', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { action: 'reassign', itemId: 'INTAKE-OTHER', ownerId: 'U-WU' },
+  });
+  assert.equal(response.status, 400);
+  assert.equal(fx.db.prepare("SELECT assigned_owner_id FROM crm_intake_items WHERE id='INTAKE-OTHER'").get().assigned_owner_id, 'U-OTHER');
+});
+
 test('explicit permissions are authoritative even when the account role is sales', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
@@ -284,6 +366,53 @@ test('explicit permissions are authoritative even when the account role is sales
     cookie, method: 'POST', body: { customerId: 'CRM-OTHER', name: 'Authorized Contact' },
   });
   assert.notEqual(contact.status, 403);
+});
+
+test('sales-role create_customer honors an explicitly selected sales owner', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO sales_users
+    (id,email,name,role,password_hash,password_salt,active,must_change_password,
+     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+    SELECT 'U-SALES2','sales2@example.com','Sales Two','sales',password_hash,password_salt,1,0,
+      '[]','[]','[]','{}',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
+  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?')
+    .run(JSON.stringify({ create_customer: true }), 'U-OTHER');
+  fx.db.prepare("INSERT INTO customer_pool(customer_id,company_name) VALUES ('RU-9010','Delegated Fixture')").run();
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const response = await fx.request('/api/sales-crm/accounts', {
+    cookie,
+    method: 'POST',
+    body: { companyName: 'Delegated Fixture', externalCustomerId: 'RU-9010', ownerId: 'U-SALES2' },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE id=?').get(body.customerId).owner_id, 'U-SALES2');
+});
+
+test('sales-role edit_customer applies explicit owner and stage updates', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO sales_users
+    (id,email,name,role,password_hash,password_salt,active,must_change_password,
+     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+    SELECT 'U-SALES2','sales2@example.com','Sales Two','sales',password_hash,password_salt,1,0,
+      '[]','[]','[]','{}',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
+  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?')
+    .run(JSON.stringify({ edit_customer: true }), 'U-OTHER');
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const response = await fx.request('/api/sales-crm/accounts/CRM-OTHER', {
+    cookie,
+    method: 'PATCH',
+    body: { ownerId: 'U-SALES2', stage: 'won' },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    fx.db.prepare("SELECT owner_id,stage FROM crm_accounts WHERE id='CRM-OTHER'").get(),
+    { owner_id: 'U-SALES2', stage: 'won' },
+  );
 });
 
 test('Sales contact writes require both contact view and customer edit permissions', async t => {
@@ -334,6 +463,15 @@ test('Sales UI clears forbidden state after a permission-changing 403', () => {
   assert.match(source, /error\.status\s*===\s*403/);
 });
 
+test('Sales UI uses explicit permissions instead of sales-role shortcuts', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+  assert.doesNotMatch(source, /if \(state\.data\.user\.role === 'sales'\) return;/);
+  assert.match(source, /function renderInsightsHub\(\) \{\s*if \(!can\('view_insights'\)\) return;/);
+  assert.match(source, /function renderTeam\(\) \{\s*if \(!can\('view_team'\)\) return;/);
+  assert.match(source, /function renderMarkets\(\) \{\s*if \(!can\('view_markets'\)\) return;/);
+  assert.match(source, /item\.job_id && can\('view_recon'\) && can\('view_contacts'\)/);
+});
+
 test('Legacy UI revokes module data after a permission-changing 403', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8');
   assert.match(source, /function revokeModule/);
@@ -380,7 +518,8 @@ test('Pool and Sales research routes redact contacts when view_contacts is disab
     view_pool: true, view_recon: true, view_contacts: false,
   } });
   t.after(() => fx.close());
-  fx.db.prepare(`UPDATE customer_pool SET email='pool-secret@example.test',phone='+7-pool',notes='Ask Pool Buyer' WHERE customer_id='RU-9001'`).run();
+  fx.db.prepare(`UPDATE customer_pool SET email='pool-secret@example.test',phone='+7-pool',notes='Ask Pool Buyer',
+    source_file='source-file-contact-marker' WHERE customer_id='RU-9001'`).run();
   fx.db.prepare(`INSERT INTO recon_results
     (job_id,customer_id,company_name,email,phone,contacts_summary,opportunity_summary,outreach_angle,next_action,updated_at)
     VALUES ('JOB-RESEARCH','RU-9001','Wu Fixture','research-secret@example.test','+7-research','Research Buyer',
@@ -390,7 +529,7 @@ test('Pool and Sales research routes redact contacts when view_contacts is disab
     const response = await fx.request(route, { cookie: fx.cookie });
     assert.equal(response.status, 200, route);
     const text = await response.text();
-    assert.doesNotMatch(text, /pool-secret|research-secret|\+7-pool|\+7-research|Pool Buyer|Research Buyer/, route);
+    assert.doesNotMatch(text, /pool-secret|research-secret|\+7-pool|\+7-research|Pool Buyer|Research Buyer|source-file-contact-marker/, route);
   }
 });
 
@@ -404,12 +543,73 @@ test('Sales bootstrap cross-permissions hide contacts, alerts, and markets', asy
     (id,customer_id,name,title,phone,email,created_by,created_at,updated_at)
     VALUES ('LOCAL-SECRET','CRM-WU','Secret Buyer','Procurement','+7-local','local@secret.test','U-WU',?,?)`)
     .run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
+  fx.db.prepare(`UPDATE crm_intake_items SET
+    contact_name='Bootstrap Intake Buyer',contact_title='Bootstrap Intake Title',
+    contact_methods='bootstrap-intake@secret.test',evidence_urls='https://secret.test/intake-evidence',
+    report_url='/secret-intake-report',decision_reason='Call Bootstrap Intake Buyer'
+    WHERE id='INTAKE-OTHER'`).run();
+  fx.db.prepare(`UPDATE customer_pool SET
+    description='Bootstrap Pool Buyer bootstrap-pool@secret.test',
+    deep_report='Bootstrap Deep Report +7-bootstrap-pool'
+    WHERE customer_id='RU-9001'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET next_action='Call Bootstrap Account Buyer +7-bootstrap-account'
+    WHERE id='CRM-WU'`).run();
+  fx.db.prepare(`INSERT INTO crm_activities
+    (id,customer_id,user_id,activity_type,channel,outcome,summary,next_action,occurred_at,created_at)
+    VALUES ('ACT-BOOTSTRAP','CRM-WU','U-WU','note','email','Bootstrap Outcome Buyer',
+      'bootstrap-activity@secret.test','Call +7-bootstrap-activity',?,?)`)
+    .run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
+  fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,created_at)
+    VALUES ('NOTE-BOOTSTRAP','U-WU','CRM-WU','TEST','info','Bootstrap notice',
+      'Notify Bootstrap Buyer bootstrap-notify@secret.test','unread','bootstrap-contact-leak',?)`)
+    .run('2026-07-21 08:00:00');
   const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
   assert.deepEqual(body.alerts, []);
   assert.deepEqual(body.countryReport, []);
   assert.deepEqual(body.cohortReport, []);
   assert.deepEqual(body.insights.contacts, []);
   assert.doesNotMatch(JSON.stringify(body.insights), /Secret Buyer|local@secret\.test|\+7-local/);
+  assert.doesNotMatch(JSON.stringify(body), /Bootstrap (?:Intake|Pool|Deep|Account|Outcome)|bootstrap-(?:intake|pool|activity|notify)|\+7-bootstrap|secret-intake/);
+});
+
+test('scoped Sales bootstrap notifications stay within the account scope', async t => {
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  const insert = fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,created_at)
+    VALUES (?,?,?,?,? ,?,?,'unread',?,?)`);
+  insert.run('NOTE-OWN','U-MGR','CRM-OWN','OWN','info','Owned notification','Owned detail','owned-notification',now);
+  insert.run('NOTE-OTHER','U-OTHER','CRM-OTHER','OTHER','info','Other notification','Other detail','other-notification',now);
+  insert.run('NOTE-STALE','U-MGR','CRM-OTHER','STALE','info','Stale notification','Stale detail','stale-notification',now);
+  insert.run('NOTE-GLOBAL','U-MGR','','GLOBAL','info','Global notification','Global detail','global-notification',now);
+
+  const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
+  assert.deepEqual(body.notifications.map(row => row.id).sort(), ['NOTE-GLOBAL', 'NOTE-OWN']);
+});
+
+test('contact-restricted Sales bootstrap strips company evaluation narratives', async t => {
+  const fx = await fixtures.seededFixture({ permissions: { view_insights: true, view_contacts: false } });
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO crm_manager_evaluations
+    (id,customer_id,subject_type,subject_name,evaluation_text,author_id,author_name,
+     ai_status,ai_summary,ai_labels_json,ai_order_keys_json,ai_risks_json,ai_strategy,ai_error,created_at,updated_at)
+    VALUES ('EVAL-CONTACT-NARRATIVE','CRM-WU','company','Wu Fixture',?,'U-WU','Wu','done',?,?,?,?,?,?,?,?)`)
+    .run(
+      'evaluation-contact@secret.test',
+      'summary-contact@secret.test',
+      '["labels-contact@secret.test"]',
+      '["keys-contact@secret.test"]',
+      '["risks-contact@secret.test"]',
+      'strategy-contact@secret.test',
+      'error-contact@secret.test',
+      '2026-07-21 08:00:00',
+      '2026-07-21 08:00:00',
+    );
+
+  const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
+  assert.doesNotMatch(JSON.stringify(body.insights.evaluations), /(?:evaluation|summary|labels|keys|risks|strategy|error)-contact/);
 });
 
 test('scoped users can run isolated prospect tasks without global CRM access', async t => {
@@ -432,6 +632,100 @@ test('scoped users can run isolated prospect tasks without global CRM access', a
     cookie: otherCookie, method: 'POST', body: { action: 'rerunTask', taskId: body.task.taskId },
   });
   assert.equal(crossUser.status, 403);
+});
+
+test('contact-restricted initial data redacts stored prospect narratives and sources', async t => {
+  const fx = await fixtures.seededFixture({ permissions: { use_prospect_agent: true, view_contacts: false } });
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  fx.db.prepare(`INSERT INTO prospect_tasks
+    (task_id,created_by,query,status,created_at,updated_at)
+    VALUES ('TASK-REDACT-GET','U-WU','query-prospect@secret.test','done',?,?)`).run(now, now);
+  fx.db.prepare(`INSERT INTO prospect_candidates
+    (candidate_id,task_id,company_name,description,products,need_signal,sell_signal,contact_signal,
+     decision,source_summary,score,created_at,updated_at)
+    VALUES ('CAND-REDACT-GET','TASK-REDACT-GET','Safe Prospect',?,?,?,?,?,?,?,70,?,?)`)
+    .run(
+      'description-prospect@secret.test', 'products-prospect@secret.test',
+      'need-prospect@secret.test', 'sell-prospect@secret.test', 'contact-prospect@secret.test',
+      'decision-prospect@secret.test', 'summary-prospect@secret.test', now, now,
+    );
+  fx.db.prepare(`INSERT INTO prospect_sources
+    (candidate_id,task_id,source_type,title,url,snippet,confidence,fetched_at)
+    VALUES ('CAND-REDACT-GET','TASK-REDACT-GET','web_search',?,?,?,'medium',?)`)
+    .run('title-prospect@secret.test', 'https://secret.test/contact', 'snippet-prospect@secret.test', now);
+
+  const response = await fx.request('/api/initial', { cookie: fx.cookie });
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(await response.text(), /(?:query|description|products|need|sell|contact|decision|summary|title|snippet)-prospect|secret\.test\/contact/);
+});
+
+test('contact-restricted prospect mutation responses redact stored narratives and sources', async t => {
+  const fx = await fixtures.seededFixture({ permissions: {
+    use_prospect_agent: true, edit_customer: true, view_contacts: false,
+  } });
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  fx.db.prepare(`INSERT INTO prospect_tasks
+    (task_id,created_by,query,status,created_at,updated_at)
+    VALUES ('TASK-REDACT-POST','U-WU','query-post@secret.test','done',?,?)`).run(now, now);
+  fx.db.prepare(`INSERT INTO prospect_candidates
+    (candidate_id,task_id,company_name,domain,website,description,need_signal,contact_signal,
+     decision,source_summary,score,created_at,updated_at)
+    VALUES ('CAND-REDACT-POST','TASK-REDACT-POST','Safe New Prospect','new-prospect.test',
+      'https://new-prospect.test',?,?,?,?,?,75,?,?)`)
+    .run(
+      'description-post@secret.test', 'need-post@secret.test', 'contact-post@secret.test',
+      'decision-post@secret.test', 'summary-post@secret.test', now, now,
+    );
+  fx.db.prepare(`INSERT INTO prospect_sources
+    (candidate_id,task_id,source_type,title,url,snippet,confidence,fetched_at)
+    VALUES ('CAND-REDACT-POST','TASK-REDACT-POST','web_search',?,?,?,'medium',?)`)
+    .run('title-post@secret.test', 'https://secret.test/post-contact', 'snippet-post@secret.test', now);
+
+  const response = await fx.request('/api/prospect-agent', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { action: 'promoteCandidate', candidateId: 'CAND-REDACT-POST', createRecon: false },
+  });
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(await response.text(), /(?:query|description|need|contact|decision|summary|title|snippet)-post|secret\.test\/post-contact/);
+});
+
+test('scoped users cannot promote prospects onto another owner customer', async t => {
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: {
+    use_prospect_agent: true, edit_customer: true, run_recon: true, view_recon: true,
+  } });
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  fx.db.prepare("UPDATE customer_pool SET domain='other-owner.test',website='https://other-owner.test' WHERE customer_id='RU-9003'").run();
+  fx.db.prepare(`INSERT INTO prospect_tasks
+    (task_id,created_by,query,status,created_at,updated_at)
+    VALUES ('TASK-SCOPE','U-MGR','scope test','done',?,?)`).run(now, now);
+  fx.db.prepare(`INSERT INTO prospect_candidates
+    (candidate_id,task_id,existing_customer_id,company_name,created_at,updated_at)
+    VALUES ('CAND-ID','TASK-SCOPE','RU-9003','Other Fixture',?,?)`).run(now, now);
+  fx.db.prepare(`INSERT INTO prospect_candidates
+    (candidate_id,task_id,company_name,domain,website,created_at,updated_at)
+    VALUES ('CAND-DOMAIN','TASK-SCOPE','Other Domain','other-owner.test','https://other-owner.test',?,?)`).run(now, now);
+  const beforeRecon = fx.db.prepare("SELECT COUNT(*) count FROM recon_jobs WHERE customer_id='RU-9003'").get().count;
+
+  for (const [candidateId, createRecon] of [['CAND-ID', false], ['CAND-DOMAIN', true]]) {
+    const response = await fx.request('/api/prospect-agent', {
+      cookie: fx.cookie,
+      method: 'POST',
+      body: { action: 'promoteCandidate', candidateId, createRecon },
+    });
+    assert.equal(response.status, 403, candidateId);
+  }
+
+  const candidates = fx.db.prepare(`SELECT candidate_id,status,promoted_customer_id
+    FROM prospect_candidates WHERE task_id='TASK-SCOPE' ORDER BY candidate_id`).all();
+  assert.deepEqual(candidates, [
+    { candidate_id: 'CAND-DOMAIN', status: 'candidate', promoted_customer_id: '' },
+    { candidate_id: 'CAND-ID', status: 'candidate', promoted_customer_id: '' },
+  ]);
+  assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM recon_jobs WHERE customer_id='RU-9003'").get().count, beforeRecon);
 });
 
 test('denied Sales writes are audited without target identifiers or payloads', async t => {

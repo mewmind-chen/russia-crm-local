@@ -86,7 +86,7 @@ Issue #3 的多管理员与身份检查不进入本 PR；它将在本安全边�
 | `/api/customers/:customerId/people` | `view_contacts` | customerId 必须在可见范围 |
 | `/api/contact-recon/state` | `view_contacts` | jobs/people 仅可见范围 |
 | `/api/recon/results/:jobId` | `view_recon` | job 对应客户必须可见 |
-| `/api/report` | `view_recon` | job 对应客户必须可见；继续校验报告根目录 |
+| `/api/report` | `view_recon` + `view_contacts` | job 对应客户必须可见；继续校验报告根目录 |
 | `/api/recon-monitor` | `view_recon` | jobs、进程展示和日志不得包含其他客户；非全量用户不返回共享日志尾部 |
 | `/api/quality/issues` | `view_recon` + `view_all_customers` | 仅管理全局质量指标 |
 | `/api/delivery/latest`、`/api/delivery/file` | `view_intake` | 文件名校验保持不变 |

@@ -60,11 +60,22 @@ test('contact redaction covers serialized snake and camel case fields', () => {
   assert.deepEqual(output, { company_name: 'Safe', nested: {} });
 });
 
+test('contact redaction removes narrative fields that can embed contacts', () => {
+  const { redactContactFields } = accessControl();
+  const output = redactContactFields({
+    company_name: 'Safe Company', notes: 'Call buyer@example.test',
+    opportunitySummary: 'Ask Secret Buyer', next_action: 'Phone +7-secret',
+  });
+  assert.deepEqual(output, { company_name: 'Safe Company' });
+});
+
 test('unknown browser route and action are denied by default', () => {
   const { policyForLegacyRequest, policyForSalesRequest } = accessControl();
   assert.equal(typeof policyForLegacyRequest, 'function');
   assert.deepEqual(policyForLegacyRequest('GET', '/unknown', ''), { deny: true });
   assert.deepEqual(policyForLegacyRequest('POST', '/app', 'unknown'), { deny: true });
+  assert.deepEqual(policyForLegacyRequest('POST', '/prospect-agent', 'runTask'), { deny: true });
+  assert.deepEqual(policyForLegacyRequest('GET', '/report', ''), { permissions: ['view_recon', 'view_contacts'] });
   assert.deepEqual(policyForSalesRequest('GET', '/unmapped'), { deny: true });
   assert.deepEqual(policyForSalesRequest('PATCH', '/accounts/CRM-1'), { permissions: ['edit_customer'] });
 });
@@ -82,7 +93,7 @@ test('every browser API has an explicit permission policy or separate token boun
     'updateCustomer', 'createTag', 'setCustomerTags', 'createReconJob',
     'retryReconJob', 'createContactReconJob',
   ];
-  const prospectActions = ['createTask', 'runTask', 'rerunTask', 'promoteCandidate'];
+  const prospectActions = ['createTask', 'rerunTask', 'promoteCandidate'];
   const salesRoutes = [
     'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
     'GET /research/recon', 'POST /accounts', 'PATCH /accounts/:customerId',
