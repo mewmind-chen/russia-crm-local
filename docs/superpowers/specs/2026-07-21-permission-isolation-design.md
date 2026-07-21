@@ -82,7 +82,7 @@ Issue #3 的多管理员与身份检查不进入本 PR；它将在本安全边�
 | `/development-workbench` | `view_development` | 仅壳页面 |
 | `/api/session/capabilities` | 已登录 | 仅权限摘要 |
 | `/api/initial` | `view_development` | 按各模块权限裁剪集合和字段，并应用行级范围 |
-| `/api/customers` | `view_customers` | 仅可见 external customer ID |
+| `/api/customers` | `view_pool` | 该 Legacy 接口实际查询 `customer_pool`；仅返回可见 external customer ID |
 | `/api/customers/:customerId/people` | `view_contacts` | customerId 必须在可见范围 |
 | `/api/contact-recon/state` | `view_contacts` | jobs/people 仅可见范围 |
 | `/api/recon/results/:jobId` | `view_recon` | job 对应客户必须可见 |
