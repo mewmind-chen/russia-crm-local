@@ -68,3 +68,26 @@ Result: 103 passing, 0 failing (13.15 seconds).
 ## Concerns
 
 - User creation continues to accept the Task 2 compatibility `permissions` payload. Task 4's plan explicitly changes creation to require an explicit matching group and removes that compatibility payload, so this task leaves that change for Task 4.
+
+## Review Follow-Up Evidence
+
+Added two real API regression tests in `test/permission_group_api.test.js`:
+
+- `inherit` first replaces a sales user's `view_recon` override with `deny`, then removes it through the override endpoint and verifies bootstrap restores the current group default and omits the override metadata.
+- The sole valid admin attempts assignment to two newly-created admin-role groups, one without `view_users` and one without `manage_users`. Each request returns HTTP 409 with `LAST_ADMIN_REQUIRED`; bootstrap verifies the original default group and both permissions remain in effect.
+
+Focused command:
+
+```sh
+/opt/homebrew/bin/node --test test/permission_group_api.test.js
+```
+
+Result: 7 passing, 0 failing (2.46 seconds).
+
+Full command:
+
+```sh
+/opt/homebrew/bin/node --test
+```
+
+Result: 105 passing, 0 failing (13.39 seconds).

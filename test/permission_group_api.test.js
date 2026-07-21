@@ -54,6 +54,52 @@ test('group APIs validate permissions and deny non-administrators', async t => {
   assert.equal(invalid.status, 400);
 });
 
+test('inherit removes an existing override and restores the current group default', async t => {
+  const fx = await fixtures.adminFixture();
+  t.after(() => fx.close());
+  const denied = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.adminCookie, method: 'PUT', body: { view_recon: 'deny' },
+  });
+  assert.equal(denied.status, 200);
+  const overridden = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
+  assert.equal(overridden.user.permissions.view_recon, false);
+  assert.equal(overridden.user.permissionOverrides.view_recon, 'deny');
+
+  const inherited = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.adminCookie, method: 'PUT', body: { view_recon: 'inherit' },
+  });
+  assert.equal(inherited.status, 200);
+  const restored = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
+  assert.equal(restored.user.permissions.view_recon, true);
+  assert.equal(Object.hasOwn(restored.user.permissionOverrides, 'view_recon'), false);
+});
+
+test('the sole valid admin cannot be assigned to a restricted admin-role group', async t => {
+  const fx = await fixtures.adminFixture({ adminCount: 1 });
+  t.after(() => fx.close());
+  for (const permission of ['view_users', 'manage_users']) {
+    const created = await fx.requestJson('/api/sales-crm/permission-groups', {
+      cookie: fx.adminCookie, method: 'POST', body: {
+        name: `Restricted admin ${permission}`,
+        role: 'admin',
+        permissions: { ...ROLE_PERMISSIONS.admin, [permission]: false },
+      },
+    });
+    assert.ok(created.groupId, created.error);
+    const assigned = await fx.request('/api/sales-crm/users/USR-ADMIN', {
+      cookie: fx.adminCookie, method: 'PATCH', body: { permissionGroupId: created.groupId },
+    });
+    const payload = await assigned.json();
+    assert.equal(assigned.status, 409, payload.error);
+    assert.equal(payload.code, 'LAST_ADMIN_REQUIRED');
+    const bootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.adminCookie });
+    assert.equal(bootstrap.user.role, 'admin');
+    assert.equal(bootstrap.user.permissionGroupId, fx.adminGroupId);
+    assert.equal(bootstrap.user.permissions.view_users, true);
+    assert.equal(bootstrap.user.permissions.manage_users, true);
+  }
+});
+
 test('role status group and override changes cannot remove the last valid administrator', async t => {
   const fx = await fixtures.adminFixture({ adminCount: 1 });
   t.after(() => fx.close());
