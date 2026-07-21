@@ -40,3 +40,17 @@ test('hydrated permissions ignore later legacy permissions_json changes', () => 
   assert.equal(user.permissions.view_all_customers, false);
   db.close();
 });
+
+test('reinstall ignores legacy changes after a user has a valid permission group', () => {
+  const db = legacyDb();
+  db.prepare('INSERT INTO sales_users VALUES (?,?,1,?)')
+    .run('U1', 'manager', JSON.stringify({ view_contacts: false }));
+  installPermissionGroups(db);
+  const before = effectivePermissionsFor(db, 'U1');
+  db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?')
+    .run('{"view_contacts":true}', 'U1');
+
+  assert.doesNotThrow(() => installPermissionGroups(db));
+  assert.deepEqual(effectivePermissionsFor(db, 'U1'), before);
+  db.close();
+});

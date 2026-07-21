@@ -62,3 +62,49 @@ Result: passed. Test runner summary: 94 passed, 0 failed, 0 skipped, duration 19
 ## Concerns
 
 None identified for Task 1. Future tasks must switch runtime authorization and user-management writes from `permissions_json` to the new group/override model; that intentionally remains out of scope here.
+
+## Follow-up Fix: Completed Migration Semantics
+
+### Root Cause
+
+The initial migration snapshot and self-check evaluated every `sales_users` row on every `installPermissionGroups()` call. A user that had already been migrated to a valid group could later have `permissions_json` changed by the still-legacy runtime. On the next installation, that stale field was treated as migration input and could disagree with the authoritative group/override result, aborting startup.
+
+### Implementation
+
+- A user is now considered pending legacy migration only when its assigned permission group is missing or has a different `role_key` from the user role.
+- Only pending users are snapshotted, assigned a role-default group, converted to overrides, and included in the migration self-check.
+- Users already assigned to a valid same-role group ignore subsequent `permissions_json` mutations during repeated installation.
+
+### RED
+
+Command:
+
+```sh
+/opt/homebrew/bin/node --test test/permission_groups.test.js
+```
+
+Result: failed as expected. The new `reinstall ignores legacy changes after a user has a valid permission group` test raised `权限迁移校验失败：U1 view_contacts`. Test runner summary: 2 passed, 1 failed.
+
+### GREEN
+
+Command:
+
+```sh
+/opt/homebrew/bin/node --test test/permission_groups.test.js
+```
+
+Result: passed. Test runner summary: 3 passed, 0 failed.
+
+### Full Suite
+
+Command:
+
+```sh
+/opt/homebrew/bin/node --test
+```
+
+Result: passed. Test runner summary: 95 passed, 0 failed, 0 skipped, duration 12775 ms.
+
+### Scope
+
+The change is confined to migration completion semantics and its regression test. User creation and role-update API behavior remain intentionally deferred to Task 3.
