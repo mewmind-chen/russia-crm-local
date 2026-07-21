@@ -159,16 +159,11 @@ function truncateLogValue(value, limit = 4000) {
 
 function compactAssistantPayload(body = {}) {
   return {
-    message: truncateLogValue(body.message, 2000),
-    cursor: body.cursor || '',
-    sessionId: body.sessionId || '',
-    context: body.context || {},
-    history: Array.isArray(body.history)
-      ? body.history.slice(-8).map(item => ({
-        role: item && item.role,
-        content: truncateLogValue(item && item.content, 1200),
-      }))
-      : [],
+    messageLength: String(body.message || '').length,
+    hasCursor: Boolean(body.cursor),
+    hasSessionId: Boolean(body.sessionId),
+    contextKeys: Object.keys(body.context || {}).sort(),
+    historyCount: Array.isArray(body.history) ? body.history.length : 0,
   };
 }
 
@@ -180,13 +175,12 @@ function compactAssistantResult(result = {}) {
     engine: result.engine || '',
     guardrails: result.guardrails || null,
     fallbackReason: result.fallbackReason || '',
-    sessionId: result.sessionId || '',
-    answer: truncateLogValue(result.answer, 6000),
-    nextCursor: result.nextCursor || '',
-    resultSets: result.resultSets || [],
-    sources: (result.sources || []).slice(0, 30),
-    matchedCustomers: (result.matchedCustomers || []).slice(0, 30),
-    actions: result.actions || [],
+    answerLength: String(result.answer || '').length,
+    hasNextCursor: Boolean(result.nextCursor),
+    resultSetCount: Array.isArray(result.resultSets) ? result.resultSets.length : 0,
+    sourceCount: Array.isArray(result.sources) ? result.sources.length : 0,
+    matchedCustomerCount: Array.isArray(result.matchedCustomers) ? result.matchedCustomers.length : 0,
+    actionCount: Array.isArray(result.actions) ? result.actions.length : 0,
     usage: result.usage || null,
   };
 }
@@ -719,7 +713,7 @@ app.post('/api/assistant/chat', async (req, res) => {
   const requestId = `asst-${startedAt.toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
   const input = compactAssistantPayload(req.body || {});
   try {
-    const result = await answerAssistantQuestion(req.body || {});
+    const result = await answerAssistantQuestion(req.body || {}, req.accessContext);
     logAssistantChat({
       ts: new Date().toISOString(),
       requestId,
