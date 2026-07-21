@@ -4,6 +4,7 @@ const {
   STAGES,
   ACTIVITY_STAGE,
   hashPassword,
+  ROLE_PERMISSIONS,
   buildAlerts,
   buildCountryReport,
   buildCohortReport,
@@ -33,12 +34,12 @@ test('password hashing is salted and deterministic with the same salt', () => {
 });
 
 test('role permissions can be narrowed per account without expanding sales data scope', () => {
-  const sales = { role: 'sales', permissions_json: JSON.stringify({ view_recon: false, record_quote: false }) };
+  const sales = { permissions: { ...ROLE_PERMISSIONS.sales, view_recon: false, record_quote: false } };
   assert.equal(hasPermission(sales, 'view_customers'), true);
   assert.equal(hasPermission(sales, 'view_all_customers'), false);
   assert.equal(hasPermission(sales, 'view_recon'), false);
   assert.equal(hasPermission(sales, 'record_quote'), false);
-  const manager = { role: 'manager', permissions_json: JSON.stringify({ view_all_customers: false }) };
+  const manager = { permissions: { ...ROLE_PERMISSIONS.manager, view_all_customers: false } };
   assert.equal(hasPermission(manager, 'view_team'), true);
   assert.equal(hasPermission(manager, 'view_all_customers'), false);
 });

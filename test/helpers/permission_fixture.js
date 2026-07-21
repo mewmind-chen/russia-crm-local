@@ -1,3 +1,4 @@
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -48,6 +49,19 @@ async function createPermissionFixture() {
         body: body ? JSON.stringify(body) : undefined,
       });
     },
+    setUserPermissions(userId, patch) {
+      const group = db.prepare(`SELECT g.permissions_json FROM sales_users u
+        JOIN permission_groups g ON g.id=u.permission_group_id WHERE u.id=?`).get(userId);
+      const defaults = JSON.parse(group.permissions_json);
+      const now = '2026-07-21 08:00:00';
+      for (const [permission, desired] of Object.entries(patch)) {
+        db.prepare('DELETE FROM user_permission_overrides WHERE user_id=? AND permission_key=?').run(userId, permission);
+        if (Boolean(defaults[permission]) === Boolean(desired)) continue;
+        db.prepare(`INSERT INTO user_permission_overrides
+          (user_id,permission_key,effect,created_at,updated_at) VALUES (?,?,?,?,?)`)
+          .run(userId, permission, desired ? 'allow' : 'deny', now, now);
+      }
+    },
     async close() {
       db.close();
       await new Promise(resolve => server.close(resolve));
@@ -67,20 +81,22 @@ async function seededFixture(options = {}) {
   const now = '2026-07-21 08:00:00';
   const insertUser = fx.db.prepare(`INSERT INTO sales_users
     (id,email,name,role,password_hash,password_salt,active,must_change_password,
-     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at)
     VALUES (?,?,?,?,?,?,1,0,'[]','[]','[]',?,?,?)`);
   insertUser.run(
     'U-WU', 'wu@example.com', 'Wu', 'manager', password.hash, password.salt,
-    JSON.stringify({ view_development: true, view_contacts: false, ...options.permissions }), now, now,
+    'PGRP-MANAGER-DEFAULT', now, now,
   );
   insertUser.run(
     'U-MGR', 'manager@example.com', 'Manager', 'manager', password.hash, password.salt,
-    JSON.stringify({ view_all_customers: options.managerViewAll !== false, ...options.permissions }), now, now,
+    'PGRP-MANAGER-DEFAULT', now, now,
   );
   insertUser.run(
     'U-OTHER', 'other@example.com', 'Other', 'sales', password.hash, password.salt,
-    '{}', now, now,
+    'PGRP-SALES-DEFAULT', now, now,
   );
+  fx.setUserPermissions('U-WU', { view_development: true, view_contacts: false, ...options.permissions });
+  fx.setUserPermissions('U-MGR', { view_all_customers: options.managerViewAll !== false, ...options.permissions });
 
   const insertAccount = fx.db.prepare(`INSERT INTO crm_accounts
     (id,external_customer_id,company_name,owner_id,stage,assignment_status,created_at,updated_at)
@@ -130,4 +146,44 @@ async function fixtureWithPermission(permission, value) {
   return seededFixture({ permissions: { [permission]: value } });
 }
 
-module.exports = { createPermissionFixture, seededFixture, fixtureWithPermission };
+async function adminFixture(options = {}) {
+  const fx = await seededFixture();
+  const { hashPassword } = require('../../lib/sales_crm');
+  const password = hashPassword('Admin123!', 'abcdef0123456789abcdef0123456789');
+  fx.db.prepare(`UPDATE sales_users SET email='admin@example.com',password_hash=?,password_salt=?,
+    must_change_password=0,active=1 WHERE id='USR-ADMIN'`).run(password.hash, password.salt);
+  if (options.adminCount === 2) {
+    fx.db.prepare(`INSERT INTO sales_users
+      (id,email,name,role,password_hash,password_salt,active,must_change_password,
+       languages_json,countries_json,channels_json,permissions_json,permission_group_id,created_at,updated_at)
+      SELECT 'U-ADMIN2','admin2@example.com','Admin Two','admin',password_hash,password_salt,1,0,
+       '[]','[]','[]','{}',permission_group_id,created_at,updated_at FROM sales_users WHERE id='USR-ADMIN'`).run();
+  }
+  fx.adminCookie = await fx.login('admin@example.com', 'Admin123!');
+  fx.otherCookie = await fx.login('other@example.com', 'Password123!');
+  fx.adminGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='admin-default'").get().id;
+  fx.managerGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='manager-default'").get().id;
+  fx.salesGroupId = fx.db.prepare("SELECT id FROM permission_groups WHERE system_key='sales-default'").get().id;
+  fx.requestJson = async (route, options) => (await fx.request(route, options)).json();
+  fx.loginStatus = async (email, candidate) => {
+    const response = await fetch(`${fx.baseUrl}/api/sales-auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: candidate }),
+    });
+    return response.status;
+  };
+  fx.startImpersonation = async targetUserId => {
+    const response = await fx.request('/api/sales-crm/impersonation/start', {
+      cookie: fx.adminCookie, method: 'POST', body: { targetUserId },
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  fx.expireCurrentImpersonation = () => {
+    fx.db.prepare(`UPDATE sales_sessions SET impersonation_expires_at='2000-01-01 00:00:00'
+      WHERE impersonation_context_id!=''`).run();
+  };
+  return fx;
+}
+
+module.exports = { createPermissionFixture, seededFixture, fixtureWithPermission, adminFixture };

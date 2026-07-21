@@ -18,16 +18,23 @@ test('capabilities contain permissions but no business data', async t => {
   assert.equal(JSON.stringify(body).includes('person@secret.test'), false);
 });
 
-test('permission changes affect the existing session on the next request', async t => {
+test('group and personal permission changes affect an existing session immediately', async t => {
   assert.equal(typeof fixtures.seededFixture, 'function');
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const cookie = await fx.login('wu@example.com', 'Password123!');
   assert.equal((await fx.request('/development-workbench', { cookie })).status, 200);
-  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE email=?')
-    .run('{"view_development":false}', 'wu@example.com');
-  const response = await fx.request('/development-workbench', { cookie });
-  assert.equal(response.status, 403);
+  const group = fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get('PGRP-MANAGER-DEFAULT');
+  fx.db.prepare('UPDATE permission_groups SET permissions_json=? WHERE id=?').run(
+    JSON.stringify({ ...JSON.parse(group.permissions_json), view_development: false }),
+    'PGRP-MANAGER-DEFAULT',
+  );
+  assert.equal((await fx.request('/development-workbench', { cookie })).status, 403);
+  fx.setUserPermissions('U-WU', { view_development: true });
+  assert.equal((await fx.request('/development-workbench', { cookie })).status, 200);
+  fx.setUserPermissions('U-WU', { view_development: false });
+  assert.equal((await fx.request('/development-workbench', { cookie })).status, 403);
 });
 
 test('Wu Wei cannot receive contact data through initial or direct contact routes', async t => {
@@ -348,13 +355,13 @@ test('intake assignment rejects owners who are not active sales users', async t 
 test('explicit permissions are authoritative even when the account role is sales', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
-  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?').run(JSON.stringify({
+  fx.setUserPermissions('U-OTHER', {
     view_intake: true,
     manage_intake: true,
     view_contacts: true,
     edit_customer: true,
     manage_evaluations: true,
-  }), 'U-OTHER');
+  });
   const cookie = await fx.login('other@example.com', 'Password123!');
 
   const scan = await fx.request('/api/sales-crm/intake/scan', {
@@ -373,11 +380,10 @@ test('sales-role create_customer honors an explicitly selected sales owner', asy
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO sales_users
     (id,email,name,role,password_hash,password_salt,active,must_change_password,
-     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at)
     SELECT 'U-SALES2','sales2@example.com','Sales Two','sales',password_hash,password_salt,1,0,
-      '[]','[]','[]','{}',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
-  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?')
-    .run(JSON.stringify({ create_customer: true }), 'U-OTHER');
+      '[]','[]','[]','PGRP-SALES-DEFAULT',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
+  fx.setUserPermissions('U-OTHER', { create_customer: true });
   fx.db.prepare("INSERT INTO customer_pool(customer_id,company_name) VALUES ('RU-9010','Delegated Fixture')").run();
   const cookie = await fx.login('other@example.com', 'Password123!');
 
@@ -396,11 +402,10 @@ test('sales-role edit_customer applies explicit owner and stage updates', async 
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO sales_users
     (id,email,name,role,password_hash,password_salt,active,must_change_password,
-     languages_json,countries_json,channels_json,permissions_json,created_at,updated_at)
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at)
     SELECT 'U-SALES2','sales2@example.com','Sales Two','sales',password_hash,password_salt,1,0,
-      '[]','[]','[]','{}',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
-  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?')
-    .run(JSON.stringify({ edit_customer: true }), 'U-OTHER');
+      '[]','[]','[]','PGRP-SALES-DEFAULT',created_at,updated_at FROM sales_users WHERE id='U-OTHER'`).run();
+  fx.setUserPermissions('U-OTHER', { edit_customer: true });
   const cookie = await fx.login('other@example.com', 'Password123!');
 
   const response = await fx.request('/api/sales-crm/accounts/CRM-OTHER', {
@@ -432,9 +437,10 @@ test('Sales contact writes require both contact view and customer edit permissio
 test('Sales user management requires view_users as well as manage_users', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
-  fx.db.prepare('UPDATE sales_users SET role=?,permissions_json=? WHERE id=?').run(
-    'admin', '{"view_users":false,"manage_users":true}', 'U-WU',
+  fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
+    'admin', 'PGRP-ADMIN-DEFAULT', 'U-WU',
   );
+  fx.setUserPermissions('U-WU', { view_users: false, manage_users: true });
   const response = await fx.request('/api/sales-crm/users', {
     cookie: fx.cookie,
     method: 'POST',
@@ -442,6 +448,63 @@ test('Sales user management requires view_users as well as manage_users', async 
   });
   assert.equal(response.status, 403);
   assert.equal(fx.db.prepare('SELECT COUNT(*) n FROM sales_users WHERE email=?').get('blocked@example.com').n, 0);
+});
+
+test('Sales user creation requires an explicit group and does not create personal overrides', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
+    'admin', 'PGRP-ADMIN-DEFAULT', 'U-WU',
+  );
+  const response = await fx.request('/api/sales-crm/users', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      email: 'created@example.com', password: 'Password123!', name: 'Created', role: 'sales',
+      permissionGroupId: 'PGRP-SALES-DEFAULT',
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const user = fx.db.prepare('SELECT permission_group_id,permissions_json FROM sales_users WHERE id=?').get(body.userId);
+  assert.deepEqual(user, { permission_group_id: 'PGRP-SALES-DEFAULT', permissions_json: '{}' });
+  assert.deepEqual(fx.db.prepare('SELECT permission_key,effect FROM user_permission_overrides WHERE user_id=?')
+    .all(body.userId), []);
+});
+
+test('Sales user updates assign an explicit matching group before dedicated overrides', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
+    'admin', 'PGRP-ADMIN-DEFAULT', 'U-WU',
+  );
+  const response = await fx.request('/api/sales-crm/users/U-OTHER', {
+    cookie: fx.cookie,
+    method: 'PATCH',
+    body: {
+      role: 'manager',
+      permissionGroupId: 'PGRP-MANAGER-DEFAULT',
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const overrides = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.cookie,
+    method: 'PUT',
+    body: { view_all_customers: 'deny', use_ai_assistant: 'deny' },
+  });
+  assert.equal(overrides.status, 200);
+  const user = fx.db.prepare('SELECT role,permission_group_id,permissions_json FROM sales_users WHERE id=?').get('U-OTHER');
+  assert.deepEqual(user, { role: 'manager', permission_group_id: 'PGRP-MANAGER-DEFAULT', permissions_json: '{}' });
+  assert.deepEqual(fx.db.prepare(`SELECT permission_key,effect FROM user_permission_overrides
+    WHERE user_id=? ORDER BY permission_key`).all('U-OTHER'), [
+    { permission_key: 'use_ai_assistant', effect: 'deny' },
+    { permission_key: 'view_all_customers', effect: 'deny' },
+  ]);
+  const cookie = await fx.login('other@example.com', 'Password123!');
+  const capabilities = await (await fx.request('/api/session/capabilities', { cookie })).json();
+  assert.equal(capabilities.permissions.view_all_customers, false);
+  assert.equal(capabilities.permissions.use_ai_assistant, false);
 });
 
 test('intake settings require view_intake as well as manage_intake', async t => {
@@ -626,8 +689,7 @@ test('scoped users can run isolated prospect tasks without global CRM access', a
   assert.deepEqual(body.prospectState.candidates, []);
 
   const otherCookie = await fx.login('other@example.com', 'Password123!');
-  fx.db.prepare("UPDATE sales_users SET permissions_json=? WHERE id='U-OTHER'")
-    .run(JSON.stringify({ use_prospect_agent: true }));
+  fx.setUserPermissions('U-OTHER', { use_prospect_agent: true });
   const crossUser = await fx.request('/api/prospect-agent', {
     cookie: otherCookie, method: 'POST', body: { action: 'rerunTask', taskId: body.task.taskId },
   });

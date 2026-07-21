@@ -18,8 +18,9 @@ const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
 const {
   policyForLegacyRequest, assertExternalCustomerAccess, redactContactFields,
-  contactSafePoolRecord, contactSafeReconRecord,
+  contactSafePoolRecord, contactSafeReconRecord, assertPolicyAllowed,
 } = require('./lib/access_control');
+const { auditIdentity } = require('./lib/impersonation');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -96,6 +97,12 @@ app.use('/api', (req, res, next) => {
     if (missing) {
       auditDeniedWrite(req, action);
       return res.status(403).json({ ok: false, error: `没有权限：${missing}` });
+    }
+    try {
+      assertPolicyAllowed(policy, { isImpersonating: Boolean(req.impersonation) });
+    } catch (error) {
+      auditDeniedWrite(req, action);
+      return res.status(error.statusCode || 403).json({ ok: false, error: error.message, code: error.code });
     }
     req.accessPolicy = policy;
     return next();
@@ -222,13 +229,15 @@ function assertRequestCustomer(req, customerId) {
 
 function auditDeniedWrite(req, action = '') {
   if (!req.salesUser || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+  const identity = auditIdentity(req);
   const value = getDb();
   try {
     value.prepare(`INSERT INTO crm_audit_log
-      (id,user_id,action,entity_type,entity_id,detail_json,created_at)
-      VALUES (?,?,?,?,?,?,datetime('now'))`).run(
-        crypto.randomUUID(), req.salesUser.id, 'permission_denied', 'legacy_api', '',
+      (id,user_id,action,entity_type,entity_id,detail_json,created_at,real_user_id,effective_user_id,impersonation_context_id)
+      VALUES (?,?,?,?,?,?,datetime('now'),?,?,?)`).run(
+        crypto.randomUUID(), identity.userId, 'permission_denied', 'legacy_api', '',
         JSON.stringify({ route: req.path, action: String(action || '') }),
+        identity.realUserId, identity.effectiveUserId, identity.contextId,
       );
   } catch (error) {
     console.error(`denied write audit failed: ${error.message}`);

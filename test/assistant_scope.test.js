@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { seededFixture } = require('./helpers/permission_fixture');
 const { buildAccessContext } = require('../lib/access_control');
+const { hydrateUserPermissions } = require('../lib/permission_groups');
 const { searchCrmContext, fetchWebPagesContext } = require('../lib/assistant');
 const { ensureAssistantTables, vectorSearch, vectorToBlob } = require('../lib/assistant_index');
 
@@ -60,7 +61,7 @@ test('assistant deterministic queries only return customers in the account scope
 test('assistant generic SQL context is cropped before prompt construction', async () => {
   const fx = await seededFixture({ managerViewAll: false, permissions: { use_ai_assistant: true } });
   try {
-    const user = fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-MGR');
+    const user = hydrateUserPermissions(fx.db, fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-MGR'));
     const accessContext = buildAccessContext(fx.db, user);
     const context = searchCrmContext('Fixture', accessContext);
     const serialized = JSON.stringify(context);
@@ -82,7 +83,7 @@ test('assistant never retrieves contact fields without view_contacts', async () 
       description='assistant-description-marker assistant-description@secret.test',
       products='assistant-products-marker +7-assistant-products'
       WHERE customer_id='RU-9001'`).run();
-    const user = fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-WU');
+    const user = hydrateUserPermissions(fx.db, fx.db.prepare('SELECT * FROM sales_users WHERE id=?').get('U-WU'));
     const accessContext = buildAccessContext(fx.db, user);
     const scopedContext = searchCrmContext('hidden-note', accessContext);
     assert.doesNotMatch(JSON.stringify(scopedContext), /person@secret\.test/);

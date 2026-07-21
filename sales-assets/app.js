@@ -12,6 +12,8 @@
     teamUserId: '',
     activityType: 'email',
     loginPending: false,
+    impersonationTimer: null,
+    impersonationRecovery: false,
     research: {
       pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
@@ -84,6 +86,9 @@
   function can(permission) {
     return Boolean(state.data?.user?.permissions?.[permission]);
   }
+  function roleLabel(role) {
+    return ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[role] || role || '—';
+  }
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -104,6 +109,61 @@
     resetResearchState();
     setTimeout(() => load(), 0);
   }
+
+  function handleImpersonationEnded() {
+    if (state.impersonationRecovery) return;
+    state.impersonationRecovery = true;
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    if (state.data) {
+      Object.assign(state.data, {
+        accounts: [], activities: [], rfqs: [], quotes: [], orders: [], alerts: [],
+        countryReport: [], cohortReport: [], teamReport: [], funnel: [], summary: {},
+        intake: { settings: {}, stats: {}, items: [], batches: [] },
+        insights: { contacts: [], evaluations: [] }, customerPool: [], people: [], reconResults: [],
+        users: state.data.user ? [state.data.user] : [], auditLog: [], migrationReview: [],
+        researchTotals: { pool: 0, poolAvailable: 0, people: 0, recon: 0 }, impersonation: null,
+      });
+    }
+    state.selectedCustomerId = '';
+    resetResearchState();
+    closeModal();
+    toast('身份检查已结束，正在恢复管理员账号');
+    setTimeout(() => { state.impersonationRecovery = false; void load(); }, 800);
+  }
+
+  function renderImpersonationBanner() {
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    const banner = $('#impersonationBanner');
+    if (!banner) return;
+    const context = state.data?.impersonation;
+    banner.classList.toggle('hidden', !context);
+    if (!context) return;
+    $('#impersonationTitle').textContent = `正在以 ${state.data.user.name}（${roleLabel(state.data.user.role)}）身份检查`;
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((new Date(context.expiresAt.replace(' ', 'T') + 'Z').getTime() - Date.now()) / 1000));
+      $('#impersonationRemaining').textContent = `剩余 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+      if (!seconds) load();
+    };
+    tick();
+    state.impersonationTimer = setInterval(tick, 1000);
+  }
+
+  async function startIdentityInspection(userId) {
+    await api('/api/sales-crm/impersonation/start', { method: 'POST', body: JSON.stringify({ targetUserId: userId }) });
+    closeModal();
+    await load();
+    toast('已进入身份检查，所有操作将以该账号权限执行');
+  }
+
+  async function stopIdentityInspection() {
+    await api('/api/sales-crm/impersonation/stop', { method: 'POST', body: '{}' });
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    await load();
+    toast('已返回管理员账号');
+  }
   async function api(url, options = {}) {
     const timeoutMs = Number(options.timeoutMs || 0);
     const controller = timeoutMs ? new AbortController() : null;
@@ -119,7 +179,9 @@
       if (!response.ok || result.ok === false) {
         const error = new Error(result.error || '请求失败');
         error.status = response.status;
-        if (error.status === 403) clearForbiddenState();
+        error.code = result.code || '';
+        if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
+        else if (error.status === 403 && error.code !== 'IMPERSONATION_ACTION_BLOCKED') clearForbiddenState();
         throw error;
       }
       return result;
@@ -159,6 +221,7 @@
       applyUser();
       populateFilters();
       renderAll();
+      renderImpersonationBanner();
       const requestedView = location.hash.replace(/^#/, '');
       const firstAllowedView = Object.keys(viewMeta).find(view => can(`view_${view}`)) || 'dashboard';
       switchView(viewMeta[requestedView] && can(`view_${requestedView}`) ? requestedView : firstAllowedView, false);
@@ -183,6 +246,9 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    if (state.data.impersonation) {
+      $$('#nav [data-view="users"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
+    }
     $$('#nav .nav-group').forEach(group => {
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
       group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
@@ -458,7 +524,7 @@
     const salesView = !can('manage_intake');
     $('#intakeHeading').textContent = salesView ? '我的每日未开发线索' : '未开发线索每日分配中心';
     $('#intakeSubheading').textContent = salesView ? '这里都是公司分配的未开发线索；领取后才进入你的CRM客户，并开始计算首次触达时限。' : '线索池与CRM严格分开；全部1901条线索进入分配管理，风险项待审核，其余按配额自动推送；销售领取后才创建CRM客户。';
-    $('#intakeManagerActions').classList.toggle('hidden', salesView);
+    $('#intakeManagerActions').classList.toggle('hidden', salesView || Boolean(state.data.impersonation));
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
     $('#intakeModeLabel').innerHTML = `<span class="intake-mode">${intake.settings.enabled ? '自动入库已启用' : '自动入库已停用'} · ${intake.settings.approvalMode === 'automatic' ? '自动分配' : '管理者审核'} · 每人每天 ${intake.settings.dailyPerSales} 个</span>`;
     const stats = intake.stats;
@@ -760,21 +826,25 @@
 
   function renderUsers() {
     if (!can('view_users')) return;
+    const canMutate = can('manage_users') && !state.data.impersonation;
     $('#userTable').innerHTML = table(
-      ['用户', '角色', '可见范围', '优势国家', '主要渠道', '状态', '操作'],
+      ['用户', '角色', '权限组', '覆盖数', '状态', '操作'],
       state.data.users.map(user => [
         `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
-        `<span class="pill">${({ admin: '管理员', manager: '经理', sales: '销售' })[user.role]}</span>`,
-        `<span class="subtle">${Object.entries(user.permissions || {}).filter(([key,value]) => value && key.startsWith('view_') && key !== 'view_all_customers').length} 个模块 · ${user.permissions?.view_all_customers ? '团队全盘' : '仅本人客户'}</span>`,
-        esc(user.countries.join('、') || '—'), esc(user.channels.join('、') || '—'),
+        `<span class="pill">${roleLabel(user.role)}</span>`,
+        esc(user.permissionGroupName || '—'),
+        user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项覆盖</span>` : '<span class="subtle">继承组默认</span>',
         `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
-        `<div class="assignment-actions"><button class="text-button" data-edit-permissions="${user.id}">配置权限</button>${user.id === state.data.user.id ? '<span class="subtle">当前账号</span>' : `<button class="text-button" data-toggle-user="${user.id}" data-active="${user.active ? '1' : '0'}">${user.active ? '停用' : '启用'}</button>`}</div>`,
+        canMutate
+          ? `<div class="assignment-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button>${user.id === state.data.user.id ? '<span class="subtle">当前账号</span>' : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}<button class="text-button" data-toggle-user="${user.id}" data-active="${user.active ? '1' : '0'}">${user.active ? '停用' : '启用'}</button>`}</div>`
+          : '<span class="subtle">无变更权限</span>',
       ]),
     );
+    renderPermissionGroups(canMutate);
     $('#auditTable').innerHTML = table(
       ['时间','操作人','动作','对象','详情'],
       (state.data.auditLog || []).map(row => [
-        esc(shortDate(row.created_at, true)), esc(row.user_name || row.user_id || '系统'),
+        esc(shortDate(row.created_at, true)), esc(auditOperator(row)),
         `<strong>${esc(row.action)}</strong>`, `${esc(row.entity_type)} · ${esc(row.entity_id || '—')}`,
         `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`,
       ]),
@@ -792,6 +862,28 @@
           `<button class="text-button" data-resolve-review="${esc(review.id)}">确认迁移</button>`,
         ];
       }),
+    );
+  }
+
+  function auditOperator(row) {
+    if (row.real_user_id && row.effective_user_id && row.real_user_id !== row.effective_user_id) {
+      return `${row.real_user_name || row.real_user_id} → ${row.effective_user_name || row.effective_user_id}`;
+    }
+    return row.user_name || row.real_user_name || row.user_id || '系统';
+  }
+
+  function renderPermissionGroups(canMutate = can('manage_users') && !state.data.impersonation) {
+    const root = $('#permissionGroupTable');
+    if (!root) return;
+    root.innerHTML = table(
+      ['权限组', '角色', '权限', '成员', '操作'],
+      (state.data.permissionGroups || []).map(group => [
+        `<div class="company-cell"><strong>${esc(group.name)}</strong><span>${esc(group.description || '—')}</span></div>`,
+        `<span class="pill">${roleLabel(group.role)}</span>`,
+        `<span class="subtle">${Object.values(group.permissions || {}).filter(Boolean).length} 项允许</span>`,
+        `${group.memberCount} 人`,
+        canMutate ? `<button class="text-button" data-edit-group="${esc(group.id)}">编辑</button>` : '<span class="subtle">—</span>',
+      ]),
     );
   }
 
@@ -959,14 +1051,19 @@
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">确认订单</button></div>
     </form>`);
   }
+  function groupOptions(role, selected = '') {
+    return (state.data.permissionGroups || []).filter(group => group.role === role)
+      .map(group => `<option value="${esc(group.id)}" ${group.id === selected ? 'selected' : ''}>${esc(group.name)}</option>`).join('');
+  }
+
   function openUserModal() {
-    const defaults = state.data.rolePermissions?.sales || {};
     openModal('新增团队用户', 'USER & ROLE', `<form id="userForm" class="form-grid two">
       <label>姓名<input name="name" required></label><label>工作邮箱<input name="email" type="email" required></label>
-      <label>角色<select name="role"><option value="sales">销售代表</option><option value="manager">销售经理</option><option value="admin">系统管理员</option></select></label><label>初始密码<input name="password" value="Sales123!" minlength="8" required></label>
+      <label>角色<select name="role" data-role-source><option value="sales">销售代表</option><option value="manager">销售经理</option><option value="admin">系统管理员</option></select></label>
+      <label>权限组<select name="permissionGroupId" data-role-group required>${groupOptions('sales')}</select></label>
+      <label>初始密码<input name="password" value="Sales123!" minlength="8" autocomplete="new-password" required></label>
       <label class="span-2">语言（用逗号分隔）<input name="languages" placeholder="英文, 俄语"></label>
       <label>优势国家<input name="countries" placeholder="俄罗斯, 哈萨克斯坦"></label><label>优势渠道<input name="channels" placeholder="电话, Telegram"></label>
-      <div class="span-2 permission-editor">${permissionFields(defaults)}</div>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">创建用户</button></div>
     </form>`);
   }
@@ -981,14 +1078,74 @@
       `<label class="permission-check"><input type="checkbox" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''}><span>${esc(definitions[key])}</span></label>`).join('')}</div></fieldset>`).join('');
   }
 
-  function openPermissionModal(userId) {
+  function openEditUserModal(userId) {
     const user = state.data.users.find(item => item.id === userId);
     if (!user) return;
-    openModal(`配置权限 · ${user.name}`, 'ACCESS MATRIX', `<form id="permissionForm" class="form-grid">
+    openModal(`编辑账号 · ${user.name}`, 'ACCOUNT & GROUP', `<form id="editUserForm" class="form-grid two">
       <input type="hidden" name="userId" value="${esc(user.id)}">
-      <div class="recommendation"><strong>${esc(user.email)}</strong><br>角色模板提供默认权限；这里的勾选结果会作为该账号的实际权限，前端菜单和后端接口同时生效。</div>
-      <div class="permission-editor">${permissionFields(user.permissions || {})}</div>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存权限</button></div>
+      <label>姓名<input name="name" value="${esc(user.name)}" required></label>
+      <label>角色<select name="role" data-role-source>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === user.role ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
+      <label>权限组<select name="permissionGroupId" data-role-group required>${groupOptions(user.role, user.permissionGroupId)}</select></label>
+      <label>状态<select name="active"><option value="true" ${user.active ? 'selected' : ''}>启用</option><option value="false" ${user.active ? '' : 'selected'}>停用</option></select></label>
+      <label class="span-2">语言（用逗号分隔）<input name="languages" value="${esc(user.languages.join(', '))}"></label>
+      <label>优势国家<input name="countries" value="${esc(user.countries.join(', '))}"></label>
+      <label>优势渠道<input name="channels" value="${esc(user.channels.join(', '))}"></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存账号</button></div>
+    </form>`);
+  }
+
+  function openPermissionGroupModal(groupId = '') {
+    const group = groupId ? (state.data.permissionGroups || []).find(item => item.id === groupId) : null;
+    if (groupId && !group) return;
+    const permissions = group?.permissions || state.data.rolePermissions?.sales || {};
+    openModal(group ? `编辑权限组 · ${group.name}` : '新建权限组', 'PERMISSION GROUP', `<form id="permissionGroupForm" class="form-grid">
+      <input type="hidden" name="groupId" value="${esc(group?.id || '')}">
+      <div class="form-grid two">
+        <label>名称<input name="name" value="${esc(group?.name || '')}" required></label>
+        <label>角色<select name="role" ${group ? 'disabled' : ''}>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === (group?.role || 'sales') ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
+      </div>
+      <label>描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
+      <div class="recommendation"><strong>组默认权限</strong><br>成员默认继承这里的布尔权限；个人差异通过用户行的“个人权限”做继承/允许/拒绝三态覆盖。${group ? '' : '切换角色会套用该角色的默认模板。'}</div>
+      <div class="permission-editor">${permissionFields(permissions)}</div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
+    </form>`);
+  }
+
+  function permissionOverrideFields(user) {
+    return Object.entries(state.data.permissionDefinitions || {}).map(([key, label]) => {
+      const inherited = Boolean(state.data.permissionGroups.find(group => group.id === user.permissionGroupId)?.permissions[key]);
+      const selected = user.permissionOverrides?.[key] || 'inherit';
+      return `<div class="permission-override-row">
+        <div><strong>${esc(label)}</strong><small>组默认：${inherited ? '允许' : '拒绝'} · 当前：${user.permissions[key] ? '允许' : '拒绝'}</small></div>
+        <select name="override__${esc(key)}">
+          <option value="inherit" ${selected === 'inherit' ? 'selected' : ''}>继承</option>
+          <option value="allow" ${selected === 'allow' ? 'selected' : ''}>允许</option>
+          <option value="deny" ${selected === 'deny' ? 'selected' : ''}>拒绝</option>
+        </select>
+      </div>`;
+    }).join('');
+  }
+
+  function openOverridesModal(userId) {
+    const user = state.data.users.find(item => item.id === userId);
+    if (!user) return;
+    openModal(`个人权限 · ${user.name}`, 'GROUP DEFAULTS + OVERRIDES', `<form id="permissionOverrideForm" class="form-grid">
+      <input type="hidden" name="userId" value="${esc(user.id)}">
+      <div class="recommendation"><strong>${esc(user.email)}</strong><br>权限组：${esc(user.permissionGroupName || '未分配')}。“继承”跟随组默认并随组调整自动更新；“允许 / 拒绝”只影响该账号。</div>
+      <div class="permission-override-list">${permissionOverrideFields(user)}</div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存个人权限</button></div>
+    </form>`);
+  }
+
+  function openAdminPasswordResetModal(userId) {
+    const user = state.data.users.find(item => item.id === userId);
+    if (!user) return;
+    openModal(`重置密码 · ${user.name}`, 'ADMIN PASSWORD RESET', `<form id="adminPasswordResetForm" class="form-grid">
+      <input type="hidden" name="userId" value="${esc(user.id)}">
+      <div class="recommendation"><strong>${esc(user.email)}</strong><br>重置为永久密码，无需首次登录修改；该账号的全部现有登录态会立即失效。</div>
+      <label>新密码<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label>确认新密码<input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">重置密码</button></div>
     </form>`);
   }
   function openEditAccountModal(customerId) {
@@ -1087,6 +1244,7 @@
     state.data = next;
     populateFilters();
     renderAll();
+    renderImpersonationBanner();
     closeModal();
     if (message) toast(message);
   }
@@ -1147,16 +1305,54 @@
         payload.languages = splitTags(payload.languages);
         payload.countries = splitTags(payload.countries);
         payload.channels = splitTags(payload.channels);
-        payload.permissions = permissionsFromPayload(payload);
         await api('/api/sales-crm/users', { method: 'POST', body: JSON.stringify(payload) });
         await refresh('新用户已创建');
-      } else if (form.id === 'permissionForm') {
+      } else if (form.id === 'editUserForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
-        delete payload.userId;
-        payload.permissions = permissionsFromPayload(payload);
-        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        await refresh('账号权限已更新');
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({
+          name: String(payload.name || '').trim(),
+          role: payload.role,
+          active: payload.active === 'true',
+          permissionGroupId: payload.permissionGroupId,
+          languages: splitTags(payload.languages),
+          countries: splitTags(payload.countries),
+          channels: splitTags(payload.channels),
+        }) });
+        await refresh('账号已更新');
+      } else if (form.id === 'permissionGroupForm') {
+        const payload = formPayload(form);
+        const groupId = payload.groupId;
+        const body = {
+          name: String(payload.name || '').trim(),
+          description: String(payload.description || ''),
+          permissions: permissionsFromPayload(payload),
+        };
+        if (groupId) {
+          await api(`/api/sales-crm/permission-groups/${encodeURIComponent(groupId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+          await refresh('权限组已更新');
+        } else {
+          await api('/api/sales-crm/permission-groups', { method: 'POST', body: JSON.stringify({ ...body, role: payload.role }) });
+          await refresh('权限组已创建');
+        }
+      } else if (form.id === 'permissionOverrideForm') {
+        const payload = formPayload(form);
+        const userId = payload.userId;
+        const overrides = {};
+        Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
+          overrides[key] = ['inherit', 'allow', 'deny'].includes(payload[`override__${key}`]) ? payload[`override__${key}`] : 'inherit';
+        });
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, { method: 'PUT', body: JSON.stringify(overrides) });
+        await refresh('个人权限已更新');
+      } else if (form.id === 'adminPasswordResetForm') {
+        const payload = formPayload(form);
+        const userId = payload.userId;
+        if (payload.password !== payload.passwordConfirm) throw new Error('两次输入的新密码不一致');
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/password-reset`, {
+          method: 'POST', body: JSON.stringify({ password: payload.password, passwordConfirm: payload.passwordConfirm }),
+        });
+        form.reset();
+        await refresh('密码已重置，该账号的现有登录态已失效');
       } else if (form.id === 'editAccountForm') {
         const payload = formPayload(form);
         const customerId = payload.customerId;
@@ -1316,8 +1512,24 @@
         await refresh('用户状态已更新');
       } catch (error) { toast(error.message); }
     }
-    const editPermissions = event.target.closest('[data-edit-permissions]');
-    if (editPermissions) openPermissionModal(editPermissions.dataset.editPermissions);
+    const editUser = event.target.closest('[data-edit-user]');
+    if (editUser) openEditUserModal(editUser.dataset.editUser);
+    const editOverrides = event.target.closest('[data-edit-overrides]');
+    if (editOverrides) openOverridesModal(editOverrides.dataset.editOverrides);
+    const resetPassword = event.target.closest('[data-reset-password]');
+    if (resetPassword) openAdminPasswordResetModal(resetPassword.dataset.resetPassword);
+    const editGroup = event.target.closest('[data-edit-group]');
+    if (editGroup) openPermissionGroupModal(editGroup.dataset.editGroup);
+    if (event.target.closest('#newPermissionGroupBtn')) openPermissionGroupModal();
+    const startInspection = event.target.closest('[data-start-impersonation]');
+    if (startInspection) {
+      try { await startIdentityInspection(startInspection.dataset.startImpersonation); }
+      catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#stopImpersonationBtn')) {
+      try { await stopIdentityInspection(); }
+      catch (error) { toast(error.message); }
+    }
     const resolveReview = event.target.closest('[data-resolve-review]');
     if (resolveReview) {
       const reviewId = resolveReview.dataset.resolveReview;
@@ -1362,10 +1574,14 @@
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
     if (['poolGroupFilter','poolCrmFilter'].includes(event.target.id)) void loadResearch('pool', { reset: true });
     if (event.target.id === 'peopleLevelFilter') void loadResearch('people', { reset: true });
-    if (event.target.matches('#userForm select[name="role"]')) {
+    if (event.target.matches('select[data-role-source]')) {
+      const groupSelect = event.target.closest('form')?.querySelector('select[data-role-group]');
+      if (groupSelect) groupSelect.innerHTML = groupOptions(event.target.value);
+    }
+    if (event.target.matches('#permissionGroupForm select[name="role"]')) {
       const defaults = state.data.rolePermissions?.[event.target.value] || {};
       Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-        const input = document.querySelector(`#userForm [name="permission__${CSS.escape(key)}"]`);
+        const input = document.querySelector(`#permissionGroupForm [name="permission__${CSS.escape(key)}"]`);
         if (input) input.checked = Boolean(defaults[key]);
       });
     }

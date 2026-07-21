@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260719-4">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260721-2">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -80,6 +80,10 @@
     <div id="salesSidebarMask" class="sidebar-mask"></div>
 
     <main class="main">
+      <div id="impersonationBanner" class="impersonation-banner hidden" role="status">
+        <div><strong id="impersonationTitle"></strong><span id="impersonationRemaining"></span></div>
+        <button id="stopImpersonationBtn" class="button secondary" type="button">返回管理员账号</button>
+      </div>
       <header class="topbar">
         <button id="salesMenuBtn" class="menu-button" type="button" aria-label="打开导航">☰</button>
         <div>
@@ -272,9 +276,16 @@
       <section id="usersView" class="view">
         <div class="section-intro">
           <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>销售只查看自己的客户；经理查看团队全盘；管理员管理账号与系统配置。</p></div>
-          <button id="newUserBtn" class="button primary">＋ 新增用户</button>
+          <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
         </div>
         <article class="panel"><div id="userTable" class="data-table"></div></article>
+        <article class="panel access-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2></div>
+            <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
+          </div>
+          <div id="permissionGroupTable" class="data-table"></div>
+        </article>
         <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
         <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
       </section>
@@ -298,6 +309,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260720-4"></script>
+  <script src="/sales-assets/app.js?v=20260721-2"></script>
 </body>
 </html>
