@@ -33,7 +33,7 @@
 | `record_order` | `POST /api/sales-crm/orders` | allowed account ID | Sales write policy coverage |
 | `manage_evaluations` | create/retry manager evaluation | allowed account ID | explicit permissions are authoritative |
 | `run_recon` | Legacy create/retry Recon/contact Recon | target scope; also matching `view_recon` or `view_contacts` | scoped manager cannot start jobs for another owner |
-| `use_prospect_agent` | Legacy prospect create/rerun/promote | the current global candidate store additionally requires `view_all_customers+view_contacts`; promote needs `edit_customer`; `createRecon=true` also needs `run_recon+view_recon` | scoped users cannot access the global prospect store |
+| `use_prospect_agent` | Legacy prospect create/rerun/promote | tasks are isolated by creator; public search can run without CRM read access; local pool/Recon retrieval additionally obeys module permission, row scope, and contact permission; promote needs `edit_customer`; `createRecon=true` also needs `run_recon+view_recon` | scoped users cannot read or rerun another creator's task |
 | `use_ai_assistant` | `POST /api/assistant/chat` | SQL, deterministic, report, source and matched-customer results are query-scoped; the contact-rich vector index and web-search path are disabled when `view_contacts=false` | assistant scope suite |
 | `manage_users` | create/patch users; migration review | also `view_users` | Sales user management requires both permissions |
 
