@@ -340,14 +340,17 @@ test('Legacy UI revokes module data after a permission-changing 403', () => {
   assert.match(source, /function refreshCapabilitiesAfterForbidden/);
   assert.match(source, /r\.status===403/);
   assert.match(source, /localStorage\.removeItem\(assistantConversationKey\(\)\)/);
+  assert.match(source, /async function loadData\(\).*await loadCapabilities\(\)/s);
 });
 
 test('Recon responses cannot bypass a disabled contact permission', async t => {
   const fx = await fixtures.seededFixture({ permissions: { view_recon: true, view_contacts: false } });
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO recon_results
-    (job_id,customer_id,company_name,email,phone,contacts_summary,result_json,updated_at)
-    VALUES ('JOB-WU','RU-9001','Wu Fixture','recon@secret.test','+7-recon','Secret Buyer',?,?)`)
+    (job_id,customer_id,company_name,email,phone,contacts_summary,result_json,
+     opportunity_summary,outreach_angle,next_action,updated_at)
+    VALUES ('JOB-WU','RU-9001','Wu Fixture','recon@secret.test','+7-recon','Secret Buyer',?,
+      'Secret Buyer recon@secret.test','Call +7-recon','Ask Secret Buyer',?)`)
     .run(JSON.stringify({ contacts_summary: 'Secret Buyer', contactSignal: 'recon@secret.test' }), '2026-07-21 08:00:00');
   fx.db.prepare(`INSERT INTO recon_jobs(job_id,customer_id,company_name,status,requested_at,updated_at)
     VALUES ('JOB-WU','RU-9001','Wu Fixture','done',?,?)`).run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
@@ -372,6 +375,25 @@ test('Recon responses cannot bypass a disabled contact permission', async t => {
   assert.equal((await fx.request('/api/report?job_id=JOB-WU', { cookie: fx.cookie })).status, 403);
 });
 
+test('Pool and Sales research routes redact contacts when view_contacts is disabled', async t => {
+  const fx = await fixtures.seededFixture({ permissions: {
+    view_pool: true, view_recon: true, view_contacts: false,
+  } });
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE customer_pool SET email='pool-secret@example.test',phone='+7-pool',notes='Ask Pool Buyer' WHERE customer_id='RU-9001'`).run();
+  fx.db.prepare(`INSERT INTO recon_results
+    (job_id,customer_id,company_name,email,phone,contacts_summary,opportunity_summary,outreach_angle,next_action,updated_at)
+    VALUES ('JOB-RESEARCH','RU-9001','Wu Fixture','research-secret@example.test','+7-research','Research Buyer',
+      'Research Buyer research-secret@example.test','Call +7-research','Ask Research Buyer',?)`)
+    .run('2026-07-21 08:00:00');
+  for (const route of ['/api/customers', '/api/sales-crm/research/pool', '/api/sales-crm/research/recon']) {
+    const response = await fx.request(route, { cookie: fx.cookie });
+    assert.equal(response.status, 200, route);
+    const text = await response.text();
+    assert.doesNotMatch(text, /pool-secret|research-secret|\+7-pool|\+7-research|Pool Buyer|Research Buyer/, route);
+  }
+});
+
 test('Sales bootstrap cross-permissions hide contacts, alerts, and markets', async t => {
   const fx = await fixtures.seededFixture({ permissions: {
     view_dashboard: true, view_insights: true, view_contacts: false,
@@ -390,15 +412,26 @@ test('Sales bootstrap cross-permissions hide contacts, alerts, and markets', asy
   assert.doesNotMatch(JSON.stringify(body.insights), /Secret Buyer|local@secret\.test|\+7-local/);
 });
 
-test('scoped users cannot use the global prospect-agent store', async t => {
+test('scoped users can run isolated prospect tasks without global CRM access', async t => {
   const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: {
-    use_prospect_agent: true, view_contacts: true,
+    use_prospect_agent: true, view_contacts: false, view_pool: false, view_recon: false,
   } });
   t.after(() => fx.close());
   const response = await fx.request('/api/prospect-agent', {
     cookie: fx.cookie, method: 'POST', body: { action: 'createTask', query: 'Fixture' },
   });
-  assert.equal(response.status, 403);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.prospectState.tasks.length, 1);
+  assert.deepEqual(body.prospectState.candidates, []);
+
+  const otherCookie = await fx.login('other@example.com', 'Password123!');
+  fx.db.prepare("UPDATE sales_users SET permissions_json=? WHERE id='U-OTHER'")
+    .run(JSON.stringify({ use_prospect_agent: true }));
+  const crossUser = await fx.request('/api/prospect-agent', {
+    cookie: otherCookie, method: 'POST', body: { action: 'rerunTask', taskId: body.task.taskId },
+  });
+  assert.equal(crossUser.status, 403);
 });
 
 test('denied Sales writes are audited without target identifiers or payloads', async t => {

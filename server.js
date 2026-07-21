@@ -16,7 +16,10 @@ const {
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
-const { policyForLegacyRequest, assertExternalCustomerAccess, redactContactFields } = require('./lib/access_control');
+const {
+  policyForLegacyRequest, assertExternalCustomerAccess, redactContactFields,
+  contactSafePoolRecord, contactSafeReconRecord,
+} = require('./lib/access_control');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -64,8 +67,7 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     ['recon', 'view_recon'],
     ['prospect', 'use_prospect_agent'],
     ['assistant', 'use_ai_assistant'],
-  ].filter(([key, permission]) => permissions[permission]
-    && (key !== 'prospect' || (permissions.view_all_customers && permissions.view_contacts)))
+  ].filter(([, permission]) => permissions[permission])
     .map(([key]) => key);
   res.json({
     ok: true,
@@ -586,7 +588,8 @@ app.get('/api/customers', (req, res) => {
     }
     const where = `WHERE ${clauses.join(' AND ')}`;
     const total = db.prepare(`SELECT COUNT(*) total FROM customer_pool ${where}`).get(...params).total;
-    const rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    let rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    if (!req.accessContext.permissions.view_contacts) rows = rows.map(contactSafePoolRecord);
     res.json({ ok: true, page, pageSize, total, rows });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -610,7 +613,7 @@ app.get('/api/recon/results/:jobId', (req, res) => {
     let resultV3 = null;
     try { resultV3 = result.result_json ? JSON.parse(result.result_json) : null; } catch (_e) {}
     const payload = { ok: true, result, resultV3, evidence };
-    res.json(canViewContacts ? payload : redactContactFields(payload));
+    res.json(canViewContacts ? payload : { ok: true, result: contactSafeReconRecord(result), resultV3: null, evidence: [] });
   } finally {
     db.close();
   }
@@ -680,23 +683,27 @@ app.post('/api/prospect-agent', async (req, res) => {
   const { action } = req.body || {};
   try {
     if (action === 'createTask') {
-      const created = createProspectTask(req.body.payload || req.body);
-      const executed = await runProspectTask(created.task.taskId);
+      const ownerId = req.accessContext.user.id;
+      const created = createProspectTask(req.body.payload || req.body, ownerId);
+      const executed = await runProspectTask(created.task.taskId, { ownerId, accessContext: req.accessContext });
       return res.json({ ok: true, action, task: created.task, ...executed });
     }
     if (action === 'rerunTask') {
       const taskId = String(req.body.taskId || '').trim();
       if (!taskId) throw new Error('缺少任务ID');
-      const executed = await runProspectTask(taskId);
+      const ownerId = req.accessContext.user.id;
+      const executed = await runProspectTask(taskId, { ownerId, accessContext: req.accessContext });
       return res.json({ ok: true, action, ...executed });
     }
     if (action === 'promoteCandidate') {
-      const r = promoteProspectCandidate(req.body.candidateId, { createRecon: Boolean(req.body.createRecon) });
+      const r = promoteProspectCandidate(req.body.candidateId, {
+        createRecon: Boolean(req.body.createRecon), ownerId: req.accessContext.user.id,
+      });
       return res.json({ ok: true, action, ...r });
     }
     throw new Error(`未知 prospect action：${action}`);
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || String(e) });
+    res.status(e.statusCode || 400).json({ ok: false, error: e.message || String(e) });
   }
 });
 
