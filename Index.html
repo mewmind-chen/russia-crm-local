@@ -939,14 +939,25 @@
     const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
     document.addEventListener('DOMContentLoaded',async()=>{try{bindEvents();bindContactEvents();const deliveryRefresh=$('#deliveryRefreshBtn');if(deliveryRefresh)deliveryRefresh.addEventListener('click',loadDailyDelivery);await loadCapabilities();bootstrapData();if(moduleAllowed('recon'))startReconPolling()}catch(e){showFatalInitError(e)}});
     function moduleAllowed(key){return state.allowedModules.has(key)}
+    let refreshingCapabilities=!1;
+    function revokeModule(key){
+      if(key==='customers'||key==='kanban'){state.customers=[];state.filtered=[];state.currentCustomer=null}
+      if(key==='pool'){state.customerPool=[];state.poolFiltered=[];state.selectedPool.clear()}
+      if(key==='contacts'){state.people=[];state.contactReconJobs=[];state.contactQualityStats={}}
+      if(key==='recon'){state.reconJobs=[];state.reconResults=[];state.reconMonitor=null;state.currentReconTarget=null;if(state.reconPollHandle){clearInterval(state.reconPollHandle);state.reconPollHandle=null}}
+      if(key==='prospect'){state.prospectTasks=[];state.prospectCandidates=[];state.prospectSources=[];state.prospectActiveTaskId=''}
+      if(key==='assistant'){assistantState.messages=[];assistantState.sessionId='';assistantState.lastMeta=null;$('#assistantLauncher')?.remove();$('#assistantDrawer')?.remove()}
+      $$(`[data-view="${key}"]`).forEach(node=>node.remove());const view=$(`#${key}View`);if(view)view.remove();
+      if(state.view===key){const fallback=Array.from(state.allowedModules).find(item=>item!==key&&$(`#${item}View`));if(fallback)switchView(fallback)}
+    }
+    async function refreshCapabilitiesAfterForbidden(){if(refreshingCapabilities||isFilePreview())return;refreshingCapabilities=!0;try{await loadCapabilities()}catch(e){console.error(e)}finally{refreshingCapabilities=!1}}
     async function loadCapabilities(){
       if(isFilePreview()){
         state.capabilities={permissions:Object.fromEntries(Object.values(MODULE_PERMISSION).map(key=>[key,!0])),modules:Object.keys(MODULE_PERMISSION)};
       }else state.capabilities=await fetchJson('/api/session/capabilities');
-      state.allowedModules=new Set(Object.entries(MODULE_PERMISSION).filter(([,permission])=>state.capabilities.permissions&&state.capabilities.permissions[permission]).map(([key])=>key));
-      $$('[data-view]').forEach(node=>{if(!moduleAllowed(node.dataset.view))node.remove()});
-      Object.keys(MODULE_PERMISSION).forEach(key=>{if(!moduleAllowed(key)){const view=$(`#${key}View`);if(view)view.remove()}});
-      if(!moduleAllowed('assistant')){$('#assistantLauncher')?.remove();$('#assistantDrawer')?.remove();assistantState.messages=[];assistantState.sessionId=''}
+      const nextAllowed=new Set(Object.entries(MODULE_PERMISSION).filter(([,permission])=>state.capabilities.permissions&&state.capabilities.permissions[permission]).map(([key])=>key));
+      state.allowedModules=nextAllowed;
+      Object.keys(MODULE_PERMISSION).forEach(key=>{if(!moduleAllowed(key))revokeModule(key)});
       $$('.nav-group').forEach(group=>{if(!group.querySelector('[data-view],.module-link'))group.remove()});
       document.body.classList.remove('permissions-pending');
     }
@@ -1105,7 +1116,7 @@
     function callServer(fn,...args){if(fn==='getInitialData')return Promise.reject(new Error('Local preview'));if(fn==='updateCustomer')return Promise.resolve({ok:!0,message:'本地预览已模拟保存',customer:{...state.currentCustomer,...args[1]}});if(fn==='createTag'){const p=args[0]||{},tag={id:Date.now(),name:p.name,category:p.category,color:'#475467',isPreset:!1};state.tags.push(tag);return Promise.resolve({ok:!0,message:'本地预览已模拟新增标签',tag,tags:state.tags})}if(fn==='setCustomerTags'){const[ci,ids]=args,tags=state.tags.filter(t=>(ids||[]).map(String).includes(String(t.id)));return Promise.resolve({ok:!0,message:'本地预览已模拟保存标签',customerId:ci,tags})}if(fn==='createReconJob'){const[ci,s]=args,j={job_id:`LOCAL-${Date.now()}`,customer_id:ci,source:s,company_name:state.currentReconTarget&&state.currentReconTarget.customer.companyName,status:'queued',requested_at:new Date().toISOString().slice(0,19).replace('T',' '),updated_at:new Date().toISOString().slice(0,19).replace('T',' ')};upsertLocalJob(j);return Promise.resolve({ok:!0,message:'本地预览已模拟创建任务',job:j,reconState:{jobs:state.reconJobs,results:state.reconResults}})}if(fn==='retryReconJob'){const[jobId]=args,old=state.reconJobs.find(j=>String(j.job_id)===String(jobId));const j={job_id:`LOCAL-${Date.now()}`,customer_id:old&&old.customer_id||'',source:old&&old.source||'pool',company_name:old&&old.company_name||'',status:'queued',requested_at:new Date().toISOString().slice(0,19).replace('T',' '),updated_at:new Date().toISOString().slice(0,19).replace('T',' ')};upsertLocalJob(j);return Promise.resolve({ok:!0,message:'本地预览已模拟重新执行',job:j,reconState:{jobs:state.reconJobs,results:state.reconResults}})}return Promise.reject(new Error(`未知本地预览函数：${fn}`))}
     function isFilePreview(){return window.location.protocol==='file:'}
     function crmAccessToken(){try{const q=new URLSearchParams(location.search).get('token');if(q){localStorage.setItem('crmAccessToken',q);history.replaceState(null,'',location.pathname);return q}return localStorage.getItem('crmAccessToken')||''}catch(_e){return''}}
-    async function fetchJson(u,o={},ade){const token=crmAccessToken(),options={...o,headers:{...(o.headers||{}),...(token?{'X-CRM-Token':token}:{})}},r=await fetch(u,options),t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch(e){throw new Error(`API 返回了非 JSON 响应：${t.slice(0,160)}`)}if(!r.ok||(!ade&&d.ok===!1))throw new Error(d.error||`API 请求失败：${r.status}`);return d}
+    async function fetchJson(u,o={},ade){const token=crmAccessToken(),options={...o,headers:{...(o.headers||{}),...(token?{'X-CRM-Token':token}:{})}},r=await fetch(u,options),t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch(e){throw new Error(`API 返回了非 JSON 响应：${t.slice(0,160)}`)}if(!r.ok||(!ade&&d.ok===!1)){if(r.status===403)await refreshCapabilitiesAfterForbidden();const error=new Error(d.error||`API 请求失败：${r.status}`);error.status=r.status;throw error}return d}
     function computeLocalStats(cs,cp){const td=new Date().toISOString().slice(0,10),st={poolTotal:(cp||[]).length,total:cs.length,unassigned:0,waiting:0,contacted:0,noReply:0,interested:0,quoted:0,risk:0,dueToday:0,overdue:0,byStatus:{},byGroup:{},byOwner:{},byType:{}};cs.forEach(c=>{if(!c.owner)st.unassigned+=1;if(c.statusGroup==='待联系')st.waiting+=1;if(c.statusGroup==='已联系')st.contacted+=1;if(c.statusGroup==='暂无回复')st.noReply+=1;if(c.statusGroup==='有兴趣/询价')st.interested+=1;if(c.statusGroup==='已报价')st.quoted+=1;if(c.isRisk)st.risk+=1;if(c.nextFollowDateKey===td)st.dueToday+=1;if(c.nextFollowDateKey&&c.nextFollowDateKey<td)st.overdue+=1});return st}
     function getStatusGroup(s){const g={'待联系':['未分配','已分配待联系'],'已联系':['已邮件联系','已电话联系','已WhatsApp/Telegram联系'],'暂无回复':['暂无回复'],'有兴趣/询价':['已回复-有兴趣','已询价'],'已报价':['已报价'],'需确认/无效':['联系方式无效','风险过高','放弃跟进']};return Object.keys(g).find(gr=>g[gr].includes(s))||'其他'}
     function renderWebsite(w){if(!w)return'-';const c=String(w).trim(),h=/^https?:\/\//i.test(c)?c:'https://'+c;return`<a href="${escapeAttr(h)}" target="_blank" rel="noopener">${escapeHtml(c)}</a>`}

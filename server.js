@@ -83,7 +83,7 @@ app.use('/api', (req, res, next) => {
     || req.path === '/recon' || req.path === '/contact-recon') return next();
   return requireUnifiedUser(req, res, () => {
     const action = String(req.body?.action || '');
-    const policy = policyForLegacyRequest(req.method, req.path, action);
+    const policy = policyForLegacyRequest(req.method, req.path, action, req.body || {});
     if (policy.deny) {
       auditDeniedWrite(req, action);
       return res.status(403).json({ ok: false, error: '该接口未配置访问权限' });

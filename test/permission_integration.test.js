@@ -76,6 +76,61 @@ test('workbench bootstraps from capabilities without embedded business contacts'
   assert.match(html, /MODULE_PERMISSION/);
   assert.equal(html.includes('sales@chipdip.ru'), false);
   assert.equal(html.includes('+7 (495) 544-00-08'), false);
+  for (const secret of ['RU-9001', 'RU-9002', 'RU-9003', 'person@secret.test', '+7-secret']) {
+    assert.equal(html.includes(secret), false, secret);
+  }
+});
+
+test('complete legacy deny matrix returns 403 before business handlers run', async () => {
+  const cases = [
+    ['view_development', 'GET', '/api/initial'],
+    ['view_pool', 'GET', '/api/customers'],
+    ['view_contacts', 'GET', '/api/customers/RU-9001/people'],
+    ['view_contacts', 'GET', '/api/contact-recon/state'],
+    ['view_recon', 'GET', '/api/recon/results/JOB-OWN'],
+    ['view_recon', 'GET', '/api/report?job_id=JOB-OWN'],
+    ['view_recon', 'GET', '/api/recon-monitor'],
+    ['view_all_customers', 'GET', '/api/quality/issues'],
+    ['view_intake', 'GET', '/api/delivery/latest'],
+    ['view_intake', 'GET', '/api/delivery/file?name=missing.csv'],
+    ['use_ai_assistant', 'POST', '/api/assistant/chat', { message: 'summary' }],
+    ['use_prospect_agent', 'POST', '/api/prospect-agent', { action: 'createTask' }],
+    ['edit_customer', 'POST', '/api/app', { action: 'updateCustomer', followId: 'FOLLOW-WU', payload: { status: '未分配' } }],
+    ['run_recon', 'POST', '/api/app', { action: 'createReconJob', customerId: 'RU-9001' }],
+  ];
+  for (const [permission, method, route, body] of cases) {
+    const fx = await fixtures.seededFixture({ permissions: { [permission]: false } });
+    try {
+      const response = await fx.request(route, { cookie: fx.cookie, method, body });
+      assert.equal(response.status, 403, `${permission} ${method} ${route}`);
+    } finally {
+      await fx.close();
+    }
+  }
+});
+
+test('unknown legacy actions are denied by the default policy', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  for (const route of ['/api/app', '/api/prospect-agent']) {
+    const response = await fx.request(route, {
+      cookie: fx.cookie, method: 'POST', body: { action: 'unmappedAction' },
+    });
+    assert.equal(response.status, 403, route);
+  }
+});
+
+test('promoting a prospect with Recon requires Recon permissions', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { use_prospect_agent: true, edit_customer: true, run_recon: false, view_recon: false },
+  });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/prospect-agent', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { action: 'promoteCandidate', candidateId: 'CANDIDATE-UNKNOWN', createRecon: true },
+  });
+  assert.equal(response.status, 403);
 });
 
 test('scoped manager cannot list, read, report, or mutate another owner', async t => {
@@ -208,6 +263,29 @@ test('manager without manage_intake cannot claim another user intake item', asyn
   assert.equal(fx.db.prepare('SELECT status FROM crm_intake_items WHERE id=?').get('INTAKE-OTHER').status, 'assigned');
 });
 
+test('explicit permissions are authoritative even when the account role is sales', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET permissions_json=? WHERE id=?').run(JSON.stringify({
+    view_intake: true,
+    manage_intake: true,
+    view_contacts: true,
+    edit_customer: true,
+    manage_evaluations: true,
+  }), 'U-OTHER');
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const scan = await fx.request('/api/sales-crm/intake/scan', {
+    cookie, method: 'POST', body: { force: true },
+  });
+  assert.notEqual(scan.status, 403);
+
+  const contact = await fx.request('/api/sales-crm/contacts', {
+    cookie, method: 'POST', body: { customerId: 'CRM-OTHER', name: 'Authorized Contact' },
+  });
+  assert.notEqual(contact.status, 403);
+});
+
 test('Sales contact writes require both contact view and customer edit permissions', async t => {
   const fx = await fixtures.seededFixture({
     permissions: { view_contacts: false, edit_customer: true },
@@ -254,4 +332,11 @@ test('Sales UI clears forbidden state after a permission-changing 403', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
   assert.match(source, /function clearForbiddenState/);
   assert.match(source, /error\.status\s*===\s*403/);
+});
+
+test('Legacy UI revokes module data after a permission-changing 403', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8');
+  assert.match(source, /function revokeModule/);
+  assert.match(source, /function refreshCapabilitiesAfterForbidden/);
+  assert.match(source, /r\.status===403/);
 });

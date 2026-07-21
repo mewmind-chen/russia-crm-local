@@ -57,3 +57,31 @@ test('unknown browser route and action are denied by default', () => {
   assert.deepEqual(policyForLegacyRequest('GET', '/unknown', ''), { deny: true });
   assert.deepEqual(policyForLegacyRequest('POST', '/app', 'unknown'), { deny: true });
 });
+
+test('every browser API has an explicit permission policy or separate token boundary', () => {
+  const { LEGACY_ROUTE_POLICIES, LEGACY_ACTION_POLICIES, SALES_ROUTE_POLICIES } = accessControl();
+  const legacyRoutes = [
+    'GET /session/capabilities', 'GET /initial', 'GET /customers',
+    'GET /customers/:customerId/people', 'GET /contact-recon/state',
+    'GET /recon/results/:jobId', 'GET /report', 'GET /recon-monitor',
+    'GET /quality/issues', 'GET /delivery/latest', 'GET /delivery/file',
+    'POST /assistant/chat',
+  ];
+  const appActions = [
+    'updateCustomer', 'createTag', 'setCustomerTags', 'createReconJob',
+    'retryReconJob', 'createContactReconJob',
+  ];
+  const prospectActions = ['createTask', 'runTask', 'rerunTask', 'promoteCandidate'];
+  const salesRoutes = [
+    'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
+    'GET /research/recon', 'POST /accounts', 'PATCH /accounts/:customerId',
+    'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
+    'PATCH /users/:userId', 'POST /migration-review/:reviewId', 'POST /password',
+    'POST /intake/scan', 'POST /intake/action', 'PATCH /intake/settings',
+    'POST /contacts', 'POST /evaluations', 'POST /evaluations/:evaluationId/retry',
+  ];
+  for (const key of legacyRoutes) assert.ok(LEGACY_ROUTE_POLICIES[key], key);
+  for (const action of appActions) assert.ok(LEGACY_ACTION_POLICIES.app[action], `app:${action}`);
+  for (const action of prospectActions) assert.ok(LEGACY_ACTION_POLICIES['prospect-agent'][action], `prospect:${action}`);
+  for (const key of salesRoutes) assert.ok(SALES_ROUTE_POLICIES[key], key);
+});
