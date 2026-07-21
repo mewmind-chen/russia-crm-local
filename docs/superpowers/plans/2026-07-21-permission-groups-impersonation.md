@@ -881,7 +881,7 @@ Expected: FAIL because legacy Recon policies lack inspection blocks and audit ro
 
 - [ ] **Step 3: Mark every forbidden route/action explicitly**
 
-Add `blockedWhileImpersonating: true` to legacy `createReconJob`, `retryReconJob`, and `createContactReconJob`; Sales user/group/override/password/self-password/migration-review/start-inspection/intake-setting security policies; and any other admin-only security route found by the policy enumeration test.
+Add `blockedWhileImpersonating: true` to legacy `createReconJob`, `retryReconJob`, and `createContactReconJob`; Sales user/group/override/password/self-password/migration-review/start-inspection security policies; and any other account-security route found by the policy enumeration test. Do not block ordinary intake actions or target-authorized intake settings merely because inspection is active.
 
 ```js
 function assertPolicyAllowed(policy, identity) {
@@ -1158,9 +1158,9 @@ Run: `git diff --check`
 
 Expected: no output.
 
-Run: `rg -n "T(BD)|TO(DO)|FIX(ME)|permissions_json" lib server.js sales-assets test`
+Run: `rg -n "T(BD)|TO(DO)|FIX(ME)|sales_users.*permissions_json|permissions_json.*sales_users" lib server.js sales-assets test`
 
-Expected: no runtime read/write of `permissions_json`; matches are limited to schema compatibility and explicit migration tests.
+Expected: no runtime read/write of `sales_users.permissions_json`; matches are limited to schema compatibility and explicit migration tests. Runtime reads of `permission_groups.permissions_json` are expected because that field is authoritative.
 
 - [ ] **Step 2: Run the complete automated suite with the supported runtime**
 
