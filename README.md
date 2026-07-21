@@ -181,6 +181,40 @@ node --check server.js
 python3 -m compileall -q scripts automation/hermes-skills/russia-recon/scripts
 ```
 
+权限隔离的路由、数据范围与回归测试对照表见
+[`docs/permission-matrix.md`](docs/permission-matrix.md)。使用生产数据库验证时，禁止让测试直接连接运行中的数据库；先生成一致性副本，再由测试夹具制作第二份临时副本：
+
+```bash
+CRM_FIXTURE_BASE_DB=/absolute/path/to/crm-production-copy.db \
+  NODE_ENV=test node --test test/access_control.test.js \
+  test/permission_integration.test.js test/assistant_scope.test.js
+```
+
+测试只向系统临时目录中的第二份副本写入匿名夹具，结束后自动删除。
+
+## Deploy, health check, and rollback
+
+合并并更新 `/opt/tradepulse` 后，Linux 生产环境使用：
+
+```bash
+sudo systemctl restart tradepulse.service
+sudo systemctl status --no-pager tradepulse.service
+curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
+```
+
+当前 Mac + Cloudflare Named Tunnel 环境使用：
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.russia-crm.server
+launchctl kickstart -k gui/$(id -u)/com.russia-crm.cloudflare-tunnel
+launchctl print gui/$(id -u)/com.russia-crm.server
+curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
+```
+
+公网检查还应验证登录页返回 200，并用低权限测试账号确认禁止模块返回 403。若出现 502，先检查本地健康检查和服务日志；Cloudflare 显示 `Host Error` 通常表示源站服务未监听或隧道无法连接源站。
+
+回滚顺序：停止 CRM 与 Worker，切回上一稳定提交，恢复上线前 SQLite `.backup` 产物，再启动 CRM、Worker 和隧道并重复健康检查。不要用普通文件复制替换正在运行的 WAL 数据库。
+
 ## Backup and rollback
 
 上线前备份：

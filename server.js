@@ -15,8 +15,17 @@ const {
 } = require('./lib/db');
 const { answerAssistantQuestion } = require('./lib/assistant');
 const { runProspectTask } = require('./lib/prospect_agent');
-const { registerSalesCrm, requireUnifiedUser, hasPermission } = require('./lib/sales_crm');
+const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
+const {
+  policyForLegacyRequest, assertExternalCustomerAccess, redactContactFields,
+  contactSafePoolRecord, contactSafeReconRecord,
+} = require('./lib/access_control');
 
+function databasePath() {
+  return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
+}
+
+function createApp() {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.disable('x-powered-by');
@@ -48,6 +57,26 @@ if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
 }
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
 registerSalesCrm(app);
+app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
+  const permissions = req.accessContext.permissions;
+  const modules = [
+    ['intake', 'view_intake'],
+    ['customers', 'view_customers'],
+    ['pool', 'view_pool'],
+    ['contacts', 'view_contacts'],
+    ['recon', 'view_recon'],
+    ['prospect', 'use_prospect_agent'],
+    ['assistant', 'use_ai_assistant'],
+  ].filter(([, permission]) => permissions[permission])
+    .map(([key]) => key);
+  res.json({
+    ok: true,
+    user: safeUser(req.salesUser),
+    permissions,
+    canViewAllCustomers: req.accessContext.canViewAllCustomers,
+    modules,
+  });
+});
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
   if (!hasPermission(req.salesUser, 'view_development')) return res.status(403).send('当前账号没有客户开发工作台权限');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -57,29 +86,18 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/sales-auth/') || req.path.startsWith('/sales-crm/')
     || req.path === '/recon' || req.path === '/contact-recon') return next();
   return requireUnifiedUser(req, res, () => {
-    const allowed = key => hasPermission(req.salesUser, key);
-    const any = keys => keys.some(allowed);
-    if (req.path.startsWith('/delivery/')) {
-      if (!allowed('view_intake')) return res.status(403).json({ ok: false, error: '没有未开发线索分配权限' });
-      return next();
+    const action = String(req.body?.action || '');
+    const policy = policyForLegacyRequest(req.method, req.path, action, req.body || {});
+    if (policy.deny) {
+      auditDeniedWrite(req, action);
+      return res.status(403).json({ ok: false, error: '该接口未配置访问权限' });
     }
-    if (req.path === '/assistant/chat') {
-      if (!allowed('use_ai_assistant')) return res.status(403).json({ ok: false, error: '没有AI经营助手权限' });
-      return next();
+    const missing = (policy.permissions || []).find(permission => !req.accessContext.permissions[permission]);
+    if (missing) {
+      auditDeniedWrite(req, action);
+      return res.status(403).json({ ok: false, error: `没有权限：${missing}` });
     }
-    if (req.path === '/prospect-agent') {
-      if (!allowed('use_prospect_agent')) return res.status(403).json({ ok: false, error: '没有外贸智能体权限' });
-      return next();
-    }
-    if (req.path === '/app') {
-      const reconActions = new Set(['createReconJob','retryReconJob','createContactReconJob']);
-      const required = reconActions.has(String(req.body?.action || '')) ? 'run_recon' : 'edit_customer';
-      if (!allowed(required)) return res.status(403).json({ ok: false, error: required === 'run_recon' ? '没有Recon执行权限' : '没有客户资料编辑权限' });
-    }
-    if (req.path.startsWith('/recon/') && req.method !== 'GET' && !allowed('run_recon')) return res.status(403).json({ ok: false, error: '没有Recon执行权限' });
-    if (!any(['view_development','view_pool','view_contacts','view_recon'])) {
-      return res.status(403).json({ ok: false, error: '没有客户开发数据权限' });
-    }
+    req.accessPolicy = policy;
     return next();
   });
 });
@@ -89,7 +107,7 @@ app.get('/share/report/:token/:jobId', (req, res) => {
   const supplied = String(req.params.token || '');
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
   const jobId = String(req.params.jobId || '').trim();
-  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM recon_results WHERE job_id=?').get(jobId); db.close();
   if (!row?.report_path) return res.status(404).send('报告不存在');
   const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
@@ -105,7 +123,7 @@ app.get('/share/report/:token/:jobId', (req, res) => {
 app.get('/share/contact-report/:token/:jobId', (req, res) => {
   const expected = String(process.env.REPORT_SHARE_TOKEN || ''), supplied = String(req.params.token || '');
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
-  const db = new Database(path.join(__dirname, 'data', 'crm.db'), { readonly: true });
+  const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM contact_recon_jobs WHERE job_id=? AND status=\'done\'').get(String(req.params.jobId || '')); db.close();
   const root = path.resolve(path.join(__dirname, 'contact-recon-reports')), reportPath = path.resolve(row?.report_path || '');
   if (!row?.report_path || !reportPath.startsWith(`${root}${path.sep}`) || !fs.existsSync(reportPath)) return res.status(404).send('报告不存在');
@@ -134,7 +152,7 @@ app.get('/api/delivery/file', (req, res) => {
   res.download(file, name);
 });
 
-const DB_PATH = path.join(__dirname, 'data', 'crm.db');
+const DB_PATH = databasePath();
 const RECON_LOG_PATH = path.join(__dirname, 'logs', 'recon_worker.log');
 const ASSISTANT_LOG_PATH = path.join(__dirname, 'logs', 'assistant.log');
 
@@ -145,16 +163,11 @@ function truncateLogValue(value, limit = 4000) {
 
 function compactAssistantPayload(body = {}) {
   return {
-    message: truncateLogValue(body.message, 2000),
-    cursor: body.cursor || '',
-    sessionId: body.sessionId || '',
-    context: body.context || {},
-    history: Array.isArray(body.history)
-      ? body.history.slice(-8).map(item => ({
-        role: item && item.role,
-        content: truncateLogValue(item && item.content, 1200),
-      }))
-      : [],
+    messageLength: String(body.message || '').length,
+    hasCursor: Boolean(body.cursor),
+    hasSessionId: Boolean(body.sessionId),
+    contextKeys: Object.keys(body.context || {}).sort(),
+    historyCount: Array.isArray(body.history) ? body.history.length : 0,
   };
 }
 
@@ -166,13 +179,12 @@ function compactAssistantResult(result = {}) {
     engine: result.engine || '',
     guardrails: result.guardrails || null,
     fallbackReason: result.fallbackReason || '',
-    sessionId: result.sessionId || '',
-    answer: truncateLogValue(result.answer, 6000),
-    nextCursor: result.nextCursor || '',
-    resultSets: result.resultSets || [],
-    sources: (result.sources || []).slice(0, 30),
-    matchedCustomers: (result.matchedCustomers || []).slice(0, 30),
-    actions: result.actions || [],
+    answerLength: String(result.answer || '').length,
+    hasNextCursor: Boolean(result.nextCursor),
+    resultSetCount: Array.isArray(result.resultSets) ? result.resultSets.length : 0,
+    sourceCount: Array.isArray(result.sources) ? result.sources.length : 0,
+    matchedCustomerCount: Array.isArray(result.matchedCustomers) ? result.matchedCustomers.length : 0,
+    actionCount: Array.isArray(result.actions) ? result.actions.length : 0,
     usage: result.usage || null,
   };
 }
@@ -188,6 +200,41 @@ function logAssistantChat(entry) {
 
 function getDb() {
   return new Database(DB_PATH);
+}
+
+function externalCustomerForFollowId(followId) {
+  const value = getDb();
+  try { return value.prepare('SELECT customer_id FROM customers WHERE follow_id=?').get(String(followId || ''))?.customer_id || ''; }
+  finally { value.close(); }
+}
+
+function externalCustomerForJob(table, jobId) {
+  const allowedTables = new Set(['recon_jobs', 'recon_results', 'contact_recon_jobs']);
+  if (!allowedTables.has(table)) throw new Error('不支持的任务类型');
+  const value = getDb();
+  try { return value.prepare(`SELECT customer_id FROM ${table} WHERE job_id=?`).get(String(jobId || ''))?.customer_id || ''; }
+  finally { value.close(); }
+}
+
+function assertRequestCustomer(req, customerId) {
+  assertExternalCustomerAccess(req.accessContext, String(customerId || ''));
+}
+
+function auditDeniedWrite(req, action = '') {
+  if (!req.salesUser || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+  const value = getDb();
+  try {
+    value.prepare(`INSERT INTO crm_audit_log
+      (id,user_id,action,entity_type,entity_id,detail_json,created_at)
+      VALUES (?,?,?,?,?,?,datetime('now'))`).run(
+        crypto.randomUUID(), req.salesUser.id, 'permission_denied', 'legacy_api', '',
+        JSON.stringify({ route: req.path, action: String(action || '') }),
+      );
+  } catch (error) {
+    console.error(`denied write audit failed: ${error.message}`);
+  } finally {
+    value.close();
+  }
 }
 
 function safeStat(filePath) {
@@ -388,14 +435,17 @@ function selectHermesTerminal(enrichedJobs) {
   };
 }
 
-function buildReconMonitorPayload() {
+function buildReconMonitorPayload(accessContext) {
   const db = getDb();
-  const jobs = db.prepare('SELECT * FROM recon_jobs ORDER BY updated_at DESC').all();
-  const results = db.prepare('SELECT * FROM recon_results ORDER BY updated_at DESC').all();
+  const allowedIds = [...(accessContext?.externalCustomerIds || [])];
+  const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+  const jobs = db.prepare(`SELECT * FROM recon_jobs WHERE customer_id IN (${placeholders}) ORDER BY updated_at DESC`).all(...allowedIds);
+  const results = db.prepare(`SELECT * FROM recon_results WHERE customer_id IN (${placeholders}) ORDER BY updated_at DESC`).all(...allowedIds);
   db.close();
 
-  const workerProcesses = listReconWorkers();
-  const hermesProcesses = listHermesProcesses();
+  const fullScope = Boolean(accessContext?.canViewAllCustomers);
+  const workerProcesses = fullScope ? listReconWorkers() : [];
+  const hermesProcesses = fullScope ? listHermesProcesses() : [];
   const resultsByJob = new Map(results.map(row => [row.job_id, row]));
   const enrichedJobs = jobs.map(job => {
     const outputDir = String(job.output_dir || '').trim();
@@ -457,16 +507,45 @@ function buildReconMonitorPayload() {
     jobs: enrichedJobs.slice(0, 30),
     capabilitySnapshot,
     capabilitySource: capabilityJob ? capabilityJob.job_id : '',
-    logTail: readLogTail(RECON_LOG_PATH, 24),
+    logTail: fullScope ? readLogTail(RECON_LOG_PATH, 24) : [],
     terminal: selectHermesTerminal(enrichedJobs),
+  };
+}
+
+function contactRestrictedReconMonitor(payload) {
+  return {
+    ok: true,
+    updatedAt: payload.updatedAt,
+    summary: payload.summary,
+    workers: [],
+    hermesProcesses: [],
+    jobs: (payload.jobs || []).map(job => ({
+      job_id: job.job_id,
+      customer_id: job.customer_id,
+      company_name: job.company_name,
+      status: job.status,
+      requested_at: job.requested_at,
+      started_at: job.started_at,
+      finished_at: job.finished_at,
+      updated_at: job.updated_at,
+      has_result: job.has_result,
+      stage: job.stage,
+      stage_label: job.stage_label,
+      stale: job.stale,
+      stale_minutes: job.stale_minutes,
+    })),
+    capabilitySnapshot: null,
+    capabilitySource: '',
+    logTail: [],
+    terminal: null,
   };
 }
 
 // --- /api/initial ---
 
-app.get('/api/initial', (_req, res) => {
+app.get('/api/initial', (req, res) => {
   try {
-    const data = getInitialData();
+    const data = getInitialData(req.accessContext);
     res.json(data);
   } catch (e) {
     res.json({
@@ -499,10 +578,18 @@ app.get('/api/customers', (req, res) => {
     const { page, pageSize, offset } = pagination(req.query);
     const search = String(req.query.search || '').trim();
     const like = `%${search}%`;
-    const where = search ? 'WHERE company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?' : '';
-    const params = search ? [like, like, like] : [];
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const clauses = [`customer_id IN (${placeholders})`];
+    const params = [...allowedIds];
+    if (search) {
+      clauses.push('(company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?)');
+      params.push(like, like, like);
+    }
+    const where = `WHERE ${clauses.join(' AND ')}`;
     const total = db.prepare(`SELECT COUNT(*) total FROM customer_pool ${where}`).get(...params).total;
-    const rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    let rows = db.prepare(`SELECT * FROM customer_pool ${where} ORDER BY customer_id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+    if (!req.accessContext.permissions.view_contacts) rows = rows.map(contactSafePoolRecord);
     res.json({ ok: true, page, pageSize, total, rows });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -514,12 +601,25 @@ app.get('/api/customers', (req, res) => {
 app.get('/api/recon/results/:jobId', (req, res) => {
   const db = getDb();
   try {
-    const result = db.prepare('SELECT * FROM recon_results WHERE job_id = ?').get(req.params.jobId);
-    if (!result) return res.status(404).json({ ok: false, error: '未找到Recon结果' });
-    const evidence = db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId);
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const result = db.prepare(`SELECT * FROM recon_results WHERE job_id = ? AND customer_id IN (${placeholders})`)
+      .get(req.params.jobId, ...allowedIds);
+    if (!result) {
+      const fullScope = req.accessContext.canViewAllCustomers;
+      return res.status(fullScope ? 404 : 403).json({
+        ok: false,
+        error: fullScope ? 'Recon 结果不存在' : '无权访问该客户',
+      });
+    }
+    const canViewContacts = Boolean(req.accessContext.permissions.view_contacts);
+    const evidence = canViewContacts
+      ? db.prepare('SELECT * FROM recon_evidence WHERE job_id = ? ORDER BY id').all(req.params.jobId)
+      : [];
     let resultV3 = null;
     try { resultV3 = result.result_json ? JSON.parse(result.result_json) : null; } catch (_e) {}
-    res.json({ ok: true, result, resultV3, evidence });
+    const payload = { ok: true, result, resultV3, evidence };
+    res.json(canViewContacts ? payload : { ok: true, result: contactSafeReconRecord(result), resultV3: null, evidence: [] });
   } finally {
     db.close();
   }
@@ -548,6 +648,7 @@ app.post('/api/app', (req, res) => {
   const { action } = req.body;
   try {
     if (action === 'updateCustomer') {
+      assertRequestCustomer(req, externalCustomerForFollowId(req.body.followId));
       const r = updateCustomer(req.body.followId, req.body.payload);
       return res.json({ ok: true, action, ...r });
     }
@@ -556,24 +657,29 @@ app.post('/api/app', (req, res) => {
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'setCustomerTags') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = setCustomerTags(req.body.customerId, req.body.tagIds);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'createReconJob') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = createReconJob(req.body.customerId, req.body.source);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'retryReconJob') {
+      assertRequestCustomer(req, externalCustomerForJob('recon_jobs', req.body.jobId));
       const r = retryReconJob(req.body.jobId);
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'createContactReconJob') {
+      assertRequestCustomer(req, req.body.customerId);
       const r = createContactReconJob(req.body.customerId, req.body.options || {});
       return res.json({ ok: true, action, ...r });
     }
     throw new Error(`未知 action：${action}`);
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    if (e.statusCode === 403) auditDeniedWrite(req, action);
+    res.status(e.statusCode || 400).json({ ok: false, error: e.message });
   }
 });
 
@@ -581,25 +687,33 @@ app.post('/api/app', (req, res) => {
 
 app.post('/api/prospect-agent', async (req, res) => {
   const { action } = req.body || {};
+  const sendProspect = payload => res.json(
+    req.accessContext.permissions.view_contacts ? payload : redactContactFields(payload),
+  );
   try {
     if (action === 'createTask') {
-      const created = createProspectTask(req.body.payload || req.body);
-      const executed = await runProspectTask(created.task.taskId);
-      return res.json({ ok: true, action, task: created.task, ...executed });
+      const ownerId = req.accessContext.user.id;
+      const created = createProspectTask(req.body.payload || req.body, ownerId);
+      const executed = await runProspectTask(created.task.taskId, { ownerId, accessContext: req.accessContext });
+      return sendProspect({ ok: true, action, task: created.task, ...executed });
     }
     if (action === 'rerunTask') {
       const taskId = String(req.body.taskId || '').trim();
       if (!taskId) throw new Error('缺少任务ID');
-      const executed = await runProspectTask(taskId);
-      return res.json({ ok: true, action, ...executed });
+      const ownerId = req.accessContext.user.id;
+      const executed = await runProspectTask(taskId, { ownerId, accessContext: req.accessContext });
+      return sendProspect({ ok: true, action, ...executed });
     }
     if (action === 'promoteCandidate') {
-      const r = promoteProspectCandidate(req.body.candidateId, { createRecon: Boolean(req.body.createRecon) });
-      return res.json({ ok: true, action, ...r });
+      const r = promoteProspectCandidate(req.body.candidateId, {
+        createRecon: Boolean(req.body.createRecon), ownerId: req.accessContext.user.id,
+        accessContext: req.accessContext,
+      });
+      return sendProspect({ ok: true, action, ...r });
     }
     throw new Error(`未知 prospect action：${action}`);
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || String(e) });
+    res.status(e.statusCode || 400).json({ ok: false, error: e.message || String(e) });
   }
 });
 
@@ -634,13 +748,16 @@ app.post('/api/contact-recon', (req, res) => {
 });
 
 app.get('/api/contact-recon/state', (req, res) => {
-  try { res.json({ ok: true, ...getContactReconState({ limit: req.query.limit }) }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  try { res.json({ ok: true, ...getContactReconState({ limit: req.query.limit, accessContext: req.accessContext }) }); }
+  catch (e) { res.status(e.statusCode || 500).json({ ok: false, error: e.message }); }
 });
 
 app.get('/api/customers/:customerId/people', (req, res) => {
-  try { res.json({ ok: true, customerId: req.params.customerId, people: getCustomerPeople(req.params.customerId) }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  try {
+    assertRequestCustomer(req, req.params.customerId);
+    res.json({ ok: true, customerId: req.params.customerId, people: getCustomerPeople(req.params.customerId) });
+  }
+  catch (e) { res.status(e.statusCode || 500).json({ ok: false, error: e.message }); }
 });
 
 // --- /api/assistant ---
@@ -650,7 +767,7 @@ app.post('/api/assistant/chat', async (req, res) => {
   const requestId = `asst-${startedAt.toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
   const input = compactAssistantPayload(req.body || {});
   try {
-    const result = await answerAssistantQuestion(req.body || {});
+    const result = await answerAssistantQuestion(req.body || {}, req.accessContext);
     logAssistantChat({
       ts: new Date().toISOString(),
       requestId,
@@ -689,16 +806,27 @@ app.get('/api/report', (req, res) => {
     return;
   }
 
+  if (!req.accessContext.permissions.view_contacts) {
+    res.status(403).send('无权访问该报告');
+    return;
+  }
+
   try {
     const Database = require('better-sqlite3');
-    const db = new Database(path.join(__dirname, 'data', 'crm.db'));
-    const row = db.prepare('SELECT job_id, company_name, report_path FROM recon_results WHERE job_id = ?').get(jobId);
+    const db = new Database(databasePath());
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const row = db.prepare(`SELECT job_id, customer_id, company_name, report_path FROM recon_results
+      WHERE job_id = ? AND customer_id IN (${placeholders})`).get(jobId, ...allowedIds);
     db.close();
 
-    if (!row || !row.report_path) {
-      res.status(404).send('未找到报告');
+    if (!row) {
+      res.status(req.accessContext.canViewAllCustomers ? 404 : 403)
+        .send(req.accessContext.canViewAllCustomers ? '报告不存在' : '无权访问该报告');
       return;
     }
+    assertRequestCustomer(req, row.customer_id);
+    if (!row.report_path) return res.status(404).send('未找到报告');
 
     const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
     const reportPath = path.resolve(row.report_path);
@@ -724,22 +852,30 @@ app.get('/api/report', (req, res) => {
     }
     res.send(report);
   } catch (e) {
-    res.status(500).send('读取报告失败: ' + (e.message || String(e)));
+    res.status(e.statusCode || 500).send(e.statusCode === 403 ? '无权访问该报告' : '读取报告失败: ' + (e.message || String(e)));
   }
 });
 
-app.get('/api/recon-monitor', (_req, res) => {
+app.get('/api/recon-monitor', (req, res) => {
   try {
-    res.json(buildReconMonitorPayload());
+    const payload = buildReconMonitorPayload(req.accessContext);
+    res.json(req.accessContext.permissions.view_contacts ? payload : contactRestrictedReconMonitor(payload));
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message || String(e) });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+return app;
+}
 
-app.listen(PORT, HOST, () => {
-  console.log(`✅ Russia CRM running at http://localhost:${PORT}`);
-  console.log(`   LAN access: http://${HOST === '0.0.0.0' ? '你的IP' : HOST}:${PORT}`);
-});
+function startServer({ port = process.env.PORT || 3000, host = process.env.HOST || '127.0.0.1' } = {}) {
+  const app = createApp();
+  return app.listen(port, host, () => {
+    console.log(`✅ Russia CRM running at http://localhost:${port}`);
+    console.log(`   LAN access: http://${host === '0.0.0.0' ? '你的IP' : host}:${port}`);
+  });
+}
+
+if (require.main === module) startServer();
+
+module.exports = { createApp, startServer, databasePath };
