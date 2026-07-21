@@ -12,6 +12,8 @@
     teamUserId: '',
     activityType: 'email',
     loginPending: false,
+    impersonationTimer: null,
+    impersonationRecovery: false,
     research: {
       pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
@@ -107,6 +109,61 @@
     resetResearchState();
     setTimeout(() => load(), 0);
   }
+
+  function handleImpersonationEnded() {
+    if (state.impersonationRecovery) return;
+    state.impersonationRecovery = true;
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    if (state.data) {
+      Object.assign(state.data, {
+        accounts: [], activities: [], rfqs: [], quotes: [], orders: [], alerts: [],
+        countryReport: [], cohortReport: [], teamReport: [], funnel: [], summary: {},
+        intake: { settings: {}, stats: {}, items: [], batches: [] },
+        insights: { contacts: [], evaluations: [] }, customerPool: [], people: [], reconResults: [],
+        users: state.data.user ? [state.data.user] : [], auditLog: [], migrationReview: [],
+        researchTotals: { pool: 0, poolAvailable: 0, people: 0, recon: 0 }, impersonation: null,
+      });
+    }
+    state.selectedCustomerId = '';
+    resetResearchState();
+    closeModal();
+    toast('身份检查已结束，正在恢复管理员账号');
+    setTimeout(() => { state.impersonationRecovery = false; void load(); }, 800);
+  }
+
+  function renderImpersonationBanner() {
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    const banner = $('#impersonationBanner');
+    if (!banner) return;
+    const context = state.data?.impersonation;
+    banner.classList.toggle('hidden', !context);
+    if (!context) return;
+    $('#impersonationTitle').textContent = `正在以 ${state.data.user.name}（${roleLabel(state.data.user.role)}）身份检查`;
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((new Date(context.expiresAt.replace(' ', 'T') + 'Z').getTime() - Date.now()) / 1000));
+      $('#impersonationRemaining').textContent = `剩余 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+      if (!seconds) load();
+    };
+    tick();
+    state.impersonationTimer = setInterval(tick, 1000);
+  }
+
+  async function startIdentityInspection(userId) {
+    await api('/api/sales-crm/impersonation/start', { method: 'POST', body: JSON.stringify({ targetUserId: userId }) });
+    closeModal();
+    await load();
+    toast('已进入身份检查，所有操作将以该账号权限执行');
+  }
+
+  async function stopIdentityInspection() {
+    await api('/api/sales-crm/impersonation/stop', { method: 'POST', body: '{}' });
+    clearInterval(state.impersonationTimer);
+    state.impersonationTimer = null;
+    await load();
+    toast('已返回管理员账号');
+  }
   async function api(url, options = {}) {
     const timeoutMs = Number(options.timeoutMs || 0);
     const controller = timeoutMs ? new AbortController() : null;
@@ -122,7 +179,9 @@
       if (!response.ok || result.ok === false) {
         const error = new Error(result.error || '请求失败');
         error.status = response.status;
-        if (error.status === 403) clearForbiddenState();
+        error.code = result.code || '';
+        if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
+        else if (error.status === 403 && error.code !== 'IMPERSONATION_ACTION_BLOCKED') clearForbiddenState();
         throw error;
       }
       return result;
@@ -162,6 +221,7 @@
       applyUser();
       populateFilters();
       renderAll();
+      renderImpersonationBanner();
       const requestedView = location.hash.replace(/^#/, '');
       const firstAllowedView = Object.keys(viewMeta).find(view => can(`view_${view}`)) || 'dashboard';
       switchView(viewMeta[requestedView] && can(`view_${requestedView}`) ? requestedView : firstAllowedView, false);
@@ -186,6 +246,9 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    if (state.data.impersonation) {
+      $$('#nav [data-view="users"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
+    }
     $$('#nav .nav-group').forEach(group => {
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
       group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
@@ -461,7 +524,7 @@
     const salesView = !can('manage_intake');
     $('#intakeHeading').textContent = salesView ? '我的每日未开发线索' : '未开发线索每日分配中心';
     $('#intakeSubheading').textContent = salesView ? '这里都是公司分配的未开发线索；领取后才进入你的CRM客户，并开始计算首次触达时限。' : '线索池与CRM严格分开；全部1901条线索进入分配管理，风险项待审核，其余按配额自动推送；销售领取后才创建CRM客户。';
-    $('#intakeManagerActions').classList.toggle('hidden', salesView);
+    $('#intakeManagerActions').classList.toggle('hidden', salesView || Boolean(state.data.impersonation));
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
     $('#intakeModeLabel').innerHTML = `<span class="intake-mode">${intake.settings.enabled ? '自动入库已启用' : '自动入库已停用'} · ${intake.settings.approvalMode === 'automatic' ? '自动分配' : '管理者审核'} · 每人每天 ${intake.settings.dailyPerSales} 个</span>`;
     const stats = intake.stats;
@@ -1181,6 +1244,7 @@
     state.data = next;
     populateFilters();
     renderAll();
+    renderImpersonationBanner();
     closeModal();
     if (message) toast(message);
   }
@@ -1457,6 +1521,15 @@
     const editGroup = event.target.closest('[data-edit-group]');
     if (editGroup) openPermissionGroupModal(editGroup.dataset.editGroup);
     if (event.target.closest('#newPermissionGroupBtn')) openPermissionGroupModal();
+    const startInspection = event.target.closest('[data-start-impersonation]');
+    if (startInspection) {
+      try { await startIdentityInspection(startInspection.dataset.startImpersonation); }
+      catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#stopImpersonationBtn')) {
+      try { await stopIdentityInspection(); }
+      catch (error) { toast(error.message); }
+    }
     const resolveReview = event.target.closest('[data-resolve-review]');
     if (resolveReview) {
       const reviewId = resolveReview.dataset.resolveReview;

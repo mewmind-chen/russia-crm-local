@@ -28,3 +28,12 @@
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .permission-check{display:flex;gap:6px;align-items:center;font-size:11px;color:#435149}
 @media(max-width:780px){.permission-override-row{grid-template-columns:1fr}.permission-override-row select{width:100%}.permission-grid{grid-template-columns:1fr 1fr}.assignment-actions{flex-wrap:wrap}.access-panel .panel-head{flex-wrap:wrap}}
+
+/* Identity inspection banner */
+.impersonation-banner{margin:14px 0 0;background:#102b22;color:#fff;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.impersonation-banner>div{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.impersonation-banner strong{font-size:13px}
+.impersonation-banner span{color:var(--lime);font-weight:800;font-size:12px;white-space:nowrap}
+.impersonation-banner .button.secondary{border-color:#36584a;background:transparent;color:#fff;white-space:nowrap}
+.impersonation-banner .button.secondary:hover{background:#214238}
+@media(max-width:780px){.impersonation-banner{flex-direction:column;align-items:stretch;text-align:center}.impersonation-banner>div{justify-content:center}.impersonation-banner .button{width:100%}}

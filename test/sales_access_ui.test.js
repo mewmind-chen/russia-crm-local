@@ -70,3 +70,45 @@ test('override editor styles exist and asset versions are refreshed', () => {
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });
+
+test('identity inspection UI has a persistent banner and explicit return flow', () => {
+  const html = readAsset('sales-crm.html');
+  const js = readAsset('sales-assets', 'app.js');
+  assert.match(html, /id="impersonationBanner"/);
+  assert.match(html, /id="stopImpersonationBtn"/);
+  assert.match(js, /IMPERSONATION_ENDED/);
+  assert.match(js, /\/api\/sales-crm\/impersonation\/start/);
+  assert.match(js, /\/api\/sales-crm\/impersonation\/stop/);
+  assert.match(js, /setInterval/);
+});
+
+test('inspection banner lives at the top of the main column without a dismiss control', () => {
+  const html = readAsset('sales-crm.html');
+  const css = readAsset('sales-assets', 'app.css');
+  const mainStart = html.indexOf('<main class="main">');
+  const banner = html.indexOf('id="impersonationBanner"');
+  const topbar = html.indexOf('class="topbar"');
+  assert.ok(mainStart > -1 && banner > mainStart, 'banner inside .main');
+  assert.ok(topbar > banner, 'banner before .topbar');
+  assert.doesNotMatch(html.slice(banner, topbar), /data-close|icon-button/);
+  assert.match(css, /impersonation-banner/);
+});
+
+test('inspection flow renders countdown from server expiry and suppresses forbidden UI', () => {
+  const js = readAsset('sales-assets', 'app.js');
+  assert.match(js, /function renderImpersonationBanner/);
+  assert.match(js, /function startIdentityInspection/);
+  assert.match(js, /function stopIdentityInspection/);
+  assert.match(js, /expiresAt\.replace\(' ', 'T'\)/);
+  assert.match(js, /身份检查已结束，正在恢复管理员账号/);
+  assert.match(js, /state\.data\.impersonation/);
+  assert.match(js, /data-view="users"/);
+});
+
+test('impersonation action blocked responses keep business state intact', () => {
+  const js = readAsset('sales-assets', 'app.js');
+  assert.match(js, /IMPERSONATION_ACTION_BLOCKED/);
+  const apiMatch = js.match(/async function api\(url, options = \{\}\) \{[\s\S]*?\n  \}/);
+  assert.ok(apiMatch, 'api helper found');
+  assert.match(apiMatch[0], /error\.code\s*=\s*result\.code/);
+});
