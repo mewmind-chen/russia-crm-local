@@ -1,3 +1,4 @@
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -170,6 +171,17 @@ async function adminFixture(options = {}) {
       body: JSON.stringify({ email, password: candidate }),
     });
     return response.status;
+  };
+  fx.startImpersonation = async targetUserId => {
+    const response = await fx.request('/api/sales-crm/impersonation/start', {
+      cookie: fx.adminCookie, method: 'POST', body: { targetUserId },
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  fx.expireCurrentImpersonation = () => {
+    fx.db.prepare(`UPDATE sales_sessions SET impersonation_expires_at='2000-01-01 00:00:00'
+      WHERE impersonation_context_id!=''`).run();
   };
   return fx;
 }
