@@ -106,7 +106,7 @@ test('every browser API has an explicit permission policy or separate token boun
     'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
     'POST /users/:userId/password-reset', 'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
     'PATCH /permission-groups/:groupId', 'PUT /users/:userId/permission-overrides',
-    'POST /migration-review/:reviewId', 'POST /password',
+    'POST /migration-review/:reviewId', 'POST /impersonation/start', 'POST /impersonation/stop', 'POST /password',
     'POST /intake/scan', 'POST /intake/action', 'PATCH /intake/settings',
     'POST /contacts', 'POST /evaluations', 'POST /evaluations/:evaluationId/retry',
   ];
@@ -114,4 +114,42 @@ test('every browser API has an explicit permission policy or separate token boun
   for (const action of appActions) assert.ok(LEGACY_ACTION_POLICIES.app[action], `app:${action}`);
   for (const action of prospectActions) assert.ok(LEGACY_ACTION_POLICIES['prospect-agent'][action], `prospect:${action}`);
   for (const key of salesRoutes) assert.ok(SALES_ROUTE_POLICIES[key], key);
+});
+
+test('identity inspection blocks exactly the Recon and account-security policies', () => {
+  const { LEGACY_ACTION_POLICIES, SALES_ROUTE_POLICIES, policyForLegacyRequest, assertPolicyAllowed } = accessControl();
+  const blockedApp = Object.entries(LEGACY_ACTION_POLICIES.app)
+    .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action).sort();
+  assert.deepEqual(blockedApp, ['createContactReconJob', 'createReconJob', 'retryReconJob']);
+  const blockedProspect = Object.entries(LEGACY_ACTION_POLICIES['prospect-agent'])
+    .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action);
+  assert.deepEqual(blockedProspect, []);
+  assert.equal(
+    policyForLegacyRequest('POST', '/prospect-agent', 'promoteCandidate', { createRecon: true }).blockedWhileImpersonating,
+    true,
+  );
+  assert.equal(
+    policyForLegacyRequest('POST', '/prospect-agent', 'promoteCandidate', { createRecon: false }).blockedWhileImpersonating,
+    undefined,
+  );
+  const blockedSales = Object.entries(SALES_ROUTE_POLICIES)
+    .filter(([, policy]) => policy.blockedWhileImpersonating).map(([key]) => key).sort();
+  assert.deepEqual(blockedSales, [
+    'PATCH /permission-groups/:groupId',
+    'PATCH /users/:userId',
+    'POST /impersonation/start',
+    'POST /migration-review/:reviewId',
+    'POST /password',
+    'POST /permission-groups',
+    'POST /users',
+    'POST /users/:userId/password-reset',
+    'PUT /users/:userId/permission-overrides',
+  ]);
+  assert.equal(typeof assertPolicyAllowed, 'function');
+  assert.doesNotThrow(() => assertPolicyAllowed(SALES_ROUTE_POLICIES['POST /users'], { isImpersonating: false }));
+  assert.throws(
+    () => assertPolicyAllowed(SALES_ROUTE_POLICIES['POST /users'], { isImpersonating: true }),
+    error => error.statusCode === 403 && error.code === 'IMPERSONATION_ACTION_BLOCKED',
+  );
+  assert.doesNotThrow(() => assertPolicyAllowed(SALES_ROUTE_POLICIES['POST /activities'], { isImpersonating: true }));
 });

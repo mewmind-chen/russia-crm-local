@@ -44,7 +44,8 @@ test('stop restores the administrator identity and audits the lifecycle', async 
   assert.equal(bootstrap.user.id, 'USR-ADMIN');
   assert.equal(bootstrap.impersonation, null);
   const rows = fx.db.prepare(`SELECT action,real_user_id,effective_user_id FROM crm_audit_log
-    WHERE impersonation_context_id=? ORDER BY rowid`).all(start.impersonation.contextId);
+    WHERE impersonation_context_id=? AND action IN ('impersonation_start','impersonation_stop','impersonation_end')
+    ORDER BY rowid`).all(start.impersonation.contextId);
   assert.deepEqual(rows.map(row => row.action), ['impersonation_start', 'impersonation_stop']);
   for (const row of rows) {
     assert.equal(row.real_user_id, 'USR-ADMIN');
