@@ -450,7 +450,7 @@ test('Sales user management requires view_users as well as manage_users', async 
   assert.equal(fx.db.prepare('SELECT COUNT(*) n FROM sales_users WHERE email=?').get('blocked@example.com').n, 0);
 });
 
-test('Sales user creation assigns a role default group and effective overrides', async t => {
+test('Sales user creation requires an explicit group and does not create personal overrides', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
@@ -461,22 +461,15 @@ test('Sales user creation assigns a role default group and effective overrides',
     method: 'POST',
     body: {
       email: 'created@example.com', password: 'Password123!', name: 'Created', role: 'sales',
-      permissions: { view_development: false, use_ai_assistant: true },
+      permissionGroupId: 'PGRP-SALES-DEFAULT',
     },
   });
   const body = await response.json();
   assert.equal(response.status, 200, body.error);
   const user = fx.db.prepare('SELECT permission_group_id,permissions_json FROM sales_users WHERE id=?').get(body.userId);
   assert.deepEqual(user, { permission_group_id: 'PGRP-SALES-DEFAULT', permissions_json: '{}' });
-  assert.deepEqual(fx.db.prepare(`SELECT permission_key,effect FROM user_permission_overrides
-    WHERE user_id=? ORDER BY permission_key`).all(body.userId), [
-    { permission_key: 'use_ai_assistant', effect: 'allow' },
-    { permission_key: 'view_development', effect: 'deny' },
-  ]);
-  const cookie = await fx.login('created@example.com', 'Password123!');
-  const capabilities = await (await fx.request('/api/session/capabilities', { cookie })).json();
-  assert.equal(capabilities.permissions.view_development, false);
-  assert.equal(capabilities.permissions.use_ai_assistant, true);
+  assert.deepEqual(fx.db.prepare('SELECT permission_key,effect FROM user_permission_overrides WHERE user_id=?')
+    .all(body.userId), []);
 });
 
 test('Sales user updates assign an explicit matching group before dedicated overrides', async t => {
