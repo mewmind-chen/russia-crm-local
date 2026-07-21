@@ -91,6 +91,19 @@
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => el.classList.remove('show'), 2300);
   }
+  function clearForbiddenState() {
+    if (!state.data) return;
+    Object.assign(state.data, {
+      accounts: [], activities: [], rfqs: [], quotes: [], orders: [], alerts: [],
+      countryReport: [], cohortReport: [], teamReport: [], funnel: [], summary: {},
+      intake: { settings: {}, stats: {}, items: [], batches: [] },
+      insights: { contacts: [], evaluations: [] }, customerPool: [], people: [], reconResults: [],
+      researchTotals: { pool: 0, poolAvailable: 0, people: 0, recon: 0 },
+    });
+    state.selectedCustomerId = '';
+    resetResearchState();
+    setTimeout(() => load(), 0);
+  }
   async function api(url, options = {}) {
     const timeoutMs = Number(options.timeoutMs || 0);
     const controller = timeoutMs ? new AbortController() : null;
@@ -106,6 +119,7 @@
       if (!response.ok || result.ok === false) {
         const error = new Error(result.error || '请求失败');
         error.status = response.status;
+        if (error.status === 403) clearForbiddenState();
         throw error;
       }
       return result;

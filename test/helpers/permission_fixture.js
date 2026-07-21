@@ -115,6 +115,11 @@ async function seededFixture(options = {}) {
   fx.db.prepare(`INSERT INTO contact_methods
     (contact_id,person_id,customer_id,method_type,value,normalized_value,status)
     VALUES ('METHOD-WU','PERSON-WU','RU-9001','email','person@secret.test','person@secret.test','verified')`).run();
+  fx.db.prepare(`INSERT INTO crm_intake_batches(id,batch_date,status,created_at)
+    VALUES ('BATCH-TEST','2026-07-21','done',?)`).run(now);
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,created_at,updated_at)
+    VALUES ('INTAKE-OTHER','BATCH-TEST','BR-9004','Intake Other','assigned','U-OTHER',?,?)`).run(now, now);
 
   const activeEmail = options.managerViewAll === false ? 'manager@example.com' : 'wu@example.com';
   fx.cookie = await fx.login(activeEmail, 'Password123!');

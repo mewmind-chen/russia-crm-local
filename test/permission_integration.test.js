@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const fixtures = require('./helpers/permission_fixture');
 
 test('capabilities contain permissions but no business data', async t => {
@@ -157,4 +159,99 @@ test('denied high-risk writes are audited without target identifiers or payloads
   assert.equal(audit.entity_id, '');
   assert.equal(audit.detail_json.includes('FOLLOW-OTHER'), false);
   assert.equal(audit.detail_json.includes('sensitive payload'), false);
+});
+
+test('Sales bootstrap and research do not use view_development as a data permission', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: {
+      view_development: true,
+      view_customers: false,
+      view_contacts: false,
+      view_recon: false,
+      view_intake: false,
+    },
+  });
+  t.after(() => fx.close());
+  const bootstrap = await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie });
+  assert.equal(bootstrap.status, 200);
+  const body = await bootstrap.json();
+  assert.deepEqual(body.accounts, []);
+  assert.deepEqual(body.intake.items, []);
+  assert.equal(JSON.stringify(body).includes('INTAKE-OTHER'), false);
+  assert.equal((await fx.request('/api/sales-crm/research/people', { cookie: fx.cookie })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/research/recon', { cookie: fx.cookie })).status, 403);
+});
+
+test('Sales account writes obey view_all_customers for managers', async t => {
+  const fx = await fixtures.seededFixture({ managerViewAll: false });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/accounts/CRM-OTHER', {
+    cookie: fx.cookie,
+    method: 'PATCH',
+    body: { priority: 'A' },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(fx.db.prepare('SELECT priority FROM crm_accounts WHERE id=?').get('CRM-OTHER').priority, 'B');
+});
+
+test('manager without manage_intake cannot claim another user intake item', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { view_intake: true, manage_intake: false },
+  });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/intake/action', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { action: 'claim', itemId: 'INTAKE-OTHER' },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(fx.db.prepare('SELECT status FROM crm_intake_items WHERE id=?').get('INTAKE-OTHER').status, 'assigned');
+});
+
+test('Sales contact writes require both contact view and customer edit permissions', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { view_contacts: false, edit_customer: true },
+  });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/contacts', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { customerId: 'CRM-WU', name: 'Hidden Person' },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) n FROM crm_account_contacts').get().n, 0);
+});
+
+test('Sales user management requires view_users as well as manage_users', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET role=?,permissions_json=? WHERE id=?').run(
+    'admin', '{"view_users":false,"manage_users":true}', 'U-WU',
+  );
+  const response = await fx.request('/api/sales-crm/users', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { email: 'blocked@example.com', password: 'Password123!', name: 'Blocked', role: 'sales' },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) n FROM sales_users WHERE email=?').get('blocked@example.com').n, 0);
+});
+
+test('intake settings require view_intake as well as manage_intake', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { view_intake: false, manage_intake: true },
+  });
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/intake/settings', {
+    cookie: fx.cookie,
+    method: 'PATCH',
+    body: { enabled: false, approvalMode: 'manual' },
+  });
+  assert.equal(response.status, 403);
+});
+
+test('Sales UI clears forbidden state after a permission-changing 403', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+  assert.match(source, /function clearForbiddenState/);
+  assert.match(source, /error\.status\s*===\s*403/);
 });
