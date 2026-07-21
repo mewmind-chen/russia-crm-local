@@ -48,4 +48,24 @@ Runtime authorization now consumes only hydrated `user.permissions`. Session res
 
 ## Concerns
 
-- Existing user create/update endpoints still write the legacy permission field. It is intentionally no longer authoritative at runtime; replacing those mutations with group/override management is deferred by this task's stated scope.
+- Explicit permission-group selection and group CRUD remain deferred to Task 3. Until then, create and role-changing update operations intentionally use the matching system default group.
+
+## Review Remediation
+
+### RED Evidence
+
+1. Added API-level regressions for creating a sales user with effective permission changes and changing an existing sales user to manager with effective permission changes.
+2. Ran `/opt/homebrew/bin/node --test test/permission_integration.test.js` before the compatibility implementation.
+3. Result: 39 passing, 2 failing. Creation persisted an empty `permission_group_id` and wrote the requested values to `sales_users.permissions_json`; update retained `PGRP-SALES-DEFAULT` after changing the role to manager and also wrote legacy JSON.
+
+### GREEN Evidence
+
+1. `createUser` now atomically assigns the requested role's system default group and converts supplied effective booleans to override rows relative to that group's permissions.
+2. `updateUser` now atomically changes both role and default group, then applies supplied effective booleans as overrides relative to the resulting group.
+3. Neither path writes `sales_users.permissions_json`.
+4. The new regressions verify persisted group/override state, unchanged legacy JSON, and effective permissions through the target user's session.
+5. Re-ran `/opt/homebrew/bin/node --test test/permission_integration.test.js`: 41 passing, 0 failing.
+
+### Full Suite Evidence
+
+`/opt/homebrew/bin/node --test` completed with 98 passing, 0 failing in 13.1 seconds.

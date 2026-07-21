@@ -450,6 +450,64 @@ test('Sales user management requires view_users as well as manage_users', async 
   assert.equal(fx.db.prepare('SELECT COUNT(*) n FROM sales_users WHERE email=?').get('blocked@example.com').n, 0);
 });
 
+test('Sales user creation assigns a role default group and effective overrides', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
+    'admin', 'PGRP-ADMIN-DEFAULT', 'U-WU',
+  );
+  const response = await fx.request('/api/sales-crm/users', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      email: 'created@example.com', password: 'Password123!', name: 'Created', role: 'sales',
+      permissions: { view_development: false, use_ai_assistant: true },
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const user = fx.db.prepare('SELECT permission_group_id,permissions_json FROM sales_users WHERE id=?').get(body.userId);
+  assert.deepEqual(user, { permission_group_id: 'PGRP-SALES-DEFAULT', permissions_json: '{}' });
+  assert.deepEqual(fx.db.prepare(`SELECT permission_key,effect FROM user_permission_overrides
+    WHERE user_id=? ORDER BY permission_key`).all(body.userId), [
+    { permission_key: 'use_ai_assistant', effect: 'allow' },
+    { permission_key: 'view_development', effect: 'deny' },
+  ]);
+  const cookie = await fx.login('created@example.com', 'Password123!');
+  const capabilities = await (await fx.request('/api/session/capabilities', { cookie })).json();
+  assert.equal(capabilities.permissions.view_development, false);
+  assert.equal(capabilities.permissions.use_ai_assistant, true);
+});
+
+test('Sales user updates realign the role group and translate effective overrides', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE sales_users SET role=?,permission_group_id=? WHERE id=?').run(
+    'admin', 'PGRP-ADMIN-DEFAULT', 'U-WU',
+  );
+  const response = await fx.request('/api/sales-crm/users/U-OTHER', {
+    cookie: fx.cookie,
+    method: 'PATCH',
+    body: {
+      role: 'manager',
+      permissions: { view_all_customers: false, use_ai_assistant: false },
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const user = fx.db.prepare('SELECT role,permission_group_id,permissions_json FROM sales_users WHERE id=?').get('U-OTHER');
+  assert.deepEqual(user, { role: 'manager', permission_group_id: 'PGRP-MANAGER-DEFAULT', permissions_json: '{}' });
+  assert.deepEqual(fx.db.prepare(`SELECT permission_key,effect FROM user_permission_overrides
+    WHERE user_id=? ORDER BY permission_key`).all('U-OTHER'), [
+    { permission_key: 'use_ai_assistant', effect: 'deny' },
+    { permission_key: 'view_all_customers', effect: 'deny' },
+  ]);
+  const cookie = await fx.login('other@example.com', 'Password123!');
+  const capabilities = await (await fx.request('/api/session/capabilities', { cookie })).json();
+  assert.equal(capabilities.permissions.view_all_customers, false);
+  assert.equal(capabilities.permissions.use_ai_assistant, false);
+});
+
 test('intake settings require view_intake as well as manage_intake', async t => {
   const fx = await fixtures.seededFixture({
     permissions: { view_intake: false, manage_intake: true },
