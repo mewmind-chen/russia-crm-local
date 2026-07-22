@@ -13,7 +13,11 @@ const {
   createContactReconJob, claimContactReconJob, heartbeatContactReconJob, failContactReconJob,
   submitContactReconResult, getContactReconState, getCustomerPeople,
 } = require('./lib/db');
-const { answerAssistantQuestion } = require('./lib/assistant');
+const {
+  answerAssistantQuestion, assistantRuntimeState, setAssistantRuntimeMode,
+  recheckAssistantEngines, startAssistantRuntimeMonitor,
+} = require('./lib/assistant');
+const { createAssistantRuntimeHandlers, serializeAssistantEngineError } = require('./lib/assistant_runtime_api');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
 const {
@@ -175,6 +179,7 @@ function compactAssistantPayload(body = {}) {
     messageLength: String(body.message || '').length,
     hasCursor: Boolean(body.cursor),
     hasSessionId: Boolean(body.sessionId),
+    sessionEngine: String(body.sessionEngine || ''),
     contextKeys: Object.keys(body.context || {}).sort(),
     historyCount: Array.isArray(body.history) ? body.history.length : 0,
   };
@@ -186,6 +191,8 @@ function compactAssistantResult(result = {}) {
     retrievalMode: result.retrievalMode || '',
     model: result.model || '',
     engine: result.engine || '',
+    sessionEngine: result.sessionEngine || '',
+    engineAttempts: Array.isArray(result.engineAttempts) ? result.engineAttempts : [],
     guardrails: result.guardrails || null,
     fallbackReason: result.fallbackReason || '',
     answerLength: String(result.answer || '').length,
@@ -196,6 +203,11 @@ function compactAssistantResult(result = {}) {
     actionCount: Array.isArray(result.actions) ? result.actions.length : 0,
     usage: result.usage || null,
   };
+}
+
+function assistantRuntimeMode() {
+  try { return assistantRuntimeState().mode || ''; }
+  catch (_error) { return ''; }
 }
 
 function logAssistantChat(entry) {
@@ -773,22 +785,35 @@ app.get('/api/customers/:customerId/people', (req, res) => {
 
 // --- /api/assistant ---
 
+const runtimeHandlers = createAssistantRuntimeHandlers({
+  hasPermission,
+  runtimeState: assistantRuntimeState,
+  setMode: setAssistantRuntimeMode,
+  recheck: recheckAssistantEngines,
+});
+
+app.get('/api/assistant/runtime', runtimeHandlers.get);
+app.patch('/api/assistant/runtime', runtimeHandlers.patch);
+app.post('/api/assistant/runtime/recheck', runtimeHandlers.recheck);
+
 app.post('/api/assistant/chat', async (req, res) => {
   const startedAt = Date.now();
   const requestId = `asst-${startedAt.toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
   const input = compactAssistantPayload(req.body || {});
   try {
     const result = await answerAssistantQuestion(req.body || {}, req.accessContext);
+    const runtimeMode = assistantRuntimeMode();
     logAssistantChat({
       ts: new Date().toISOString(),
       requestId,
       status: 'ok',
       durationMs: Date.now() - startedAt,
       input,
-      output: compactAssistantResult(result),
+      output: { ...compactAssistantResult(result), runtimeMode },
     });
     res.json(result);
   } catch (e) {
+    const runtimeMode = assistantRuntimeMode();
     logAssistantChat({
       ts: new Date().toISOString(),
       requestId,
@@ -798,13 +823,17 @@ app.post('/api/assistant/chat', async (req, res) => {
       error: {
         message: e.message || String(e),
         statusCode: e.statusCode || 500,
+        code: e.code || '',
+        engines: e.engines || undefined,
+        engineAttempts: Array.isArray(e.engineAttempts) ? e.engineAttempts : [],
+        sessionEngine: input.sessionEngine,
+        runtimeMode,
         stack: truncateLogValue(e.stack, 3000),
       },
     });
-    res.status(e.statusCode || 500).json({
-      ok: false,
-      error: e.message || String(e),
-    });
+    res.status(e.statusCode || 500).json(
+      serializeAssistantEngineError(e, hasPermission(req.salesUser, 'manage_users')),
+    );
   }
 });
 
@@ -881,10 +910,12 @@ return app;
 
 function startServer({ port = process.env.PORT || 3000, host = process.env.HOST || '127.0.0.1' } = {}) {
   const app = createApp();
-  return app.listen(port, host, () => {
+  const server = app.listen(port, host, () => {
     console.log(`✅ Russia CRM running at http://localhost:${port}`);
     console.log(`   LAN access: http://${host === '0.0.0.0' ? '你的IP' : host}:${port}`);
+    startAssistantRuntimeMonitor();
   });
+  return server;
 }
 
 if (require.main === module) startServer();

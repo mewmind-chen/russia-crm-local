@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   buildHermesArgs,
   buildHermesPrompt,
+  effectiveHermesTimeout,
   parseHermesOutput,
   pickHermesSkills,
   validHermesSessionId,
@@ -114,4 +115,10 @@ test('Hermes session ids are parsed and resumed without shell interpretation', (
   const args = buildHermesArgs('继续回答', { sessionId });
   assert.equal(args[args.indexOf('--resume') + 1], sessionId);
   assert.ok(!args.includes('--pass-session-id'));
+});
+
+test('Hermes accepts a bounded per-request timeout without changing global config', () => {
+  const configured = require('../lib/hermes_assistant').hermesConfig().timeoutMs;
+  assert.equal(effectiveHermesTimeout({ timeoutMs: 12000 }), 12000);
+  assert.equal(require('../lib/hermes_assistant').hermesConfig().timeoutMs, configured);
 });

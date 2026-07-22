@@ -61,6 +61,23 @@ body.customer-profile-active .top-actions{display:none}
 @media(max-width:780px){.customer-profile-view.active{height:calc(100dvh - 95px);min-height:500px}.customer-profile-toolbar{padding:8px 0}.customer-profile-toolbar h2{font-size:15px}}
 
 /* Administrator data maintenance */
+.assistant-runtime-panel{margin:0 0 18px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.assistant-runtime-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}
+.assistant-runtime-head h2{font-size:17px;margin:3px 0 4px}
+.assistant-runtime-head p:last-child{margin:0;color:var(--muted);font-size:12px}
+.assistant-runtime-actions{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+.assistant-runtime-actions label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:750}
+.assistant-runtime-actions select{height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);padding:0 30px 0 10px}
+.assistant-runtime-status{min-height:18px;margin:12px 0 8px;color:var(--muted);font-size:12px}
+.assistant-runtime-rows{border-top:1px solid var(--line)}
+.assistant-runtime-row{display:grid;grid-template-columns:100px 92px 86px 140px minmax(0,1fr);gap:12px;align-items:center;min-height:42px;border-bottom:1px solid var(--line);font-size:12px}
+.assistant-runtime-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.assistant-runtime-state{font-weight:750}
+.assistant-runtime-state.healthy{color:var(--green)}
+.assistant-runtime-state.unhealthy{color:var(--red)}
+.assistant-runtime-state.checking{color:#966713}
+@media(max-width:780px){.assistant-runtime-head{align-items:stretch;flex-direction:column}.assistant-runtime-actions{display:grid;grid-template-columns:minmax(0,1fr) auto}.assistant-runtime-actions select{width:100%}.assistant-runtime-row{grid-template-columns:78px 72px 72px 1fr;gap:7px;padding:8px 0;align-items:start}.assistant-runtime-row>span:last-child{grid-column:2/-1;white-space:normal;overflow-wrap:anywhere}.assistant-runtime-row>span:nth-child(4){white-space:nowrap}}
+
 .maintenance-panel{border-top:3px solid var(--red)}
 .maintenance-form{padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .maintenance-form label,.maintenance-confirm label{display:grid;gap:6px;font-size:11px;font-weight:750;color:#425149}

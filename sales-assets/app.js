@@ -19,6 +19,9 @@
     impersonationRecovery: false,
     maintenancePreview: null,
     maintenanceRuns: [],
+    assistantRuntime: null,
+    assistantRuntimeError: '',
+    assistantRuntimePending: false,
     research: {
       pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
@@ -224,6 +227,9 @@
   async function load({ fromLogin = false } = {}) {
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      state.assistantRuntime = null;
+      state.assistantRuntimeError = '';
+      state.assistantRuntimePending = false;
       resetResearchState();
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
@@ -231,6 +237,7 @@
       populateFilters();
       renderAll();
       renderImpersonationBanner();
+      if (can('manage_users') && !state.data.impersonation) void loadAssistantRuntime();
       const requestedView = location.hash.replace(/^#/, '');
       const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
@@ -886,6 +893,7 @@
       ]),
     );
     renderPermissionGroups(canMutate);
+    renderAssistantRuntime();
     $('#auditTable').innerHTML = table(
       ['时间','操作人','动作','对象','详情'],
       (state.data.auditLog || []).map(row => [
@@ -908,6 +916,94 @@
         ];
       }),
     );
+  }
+
+  const assistantEngineLabels = {
+    'kimi-cli': 'Kimi', hermes: 'Hermes', deepseek: 'DeepSeek', auto: '自动',
+  };
+
+  function assistantRuntimeError(value) {
+    return String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+  }
+
+  function renderAssistantRuntime() {
+    const panel = $('#assistantRuntimePanel');
+    if (!panel) return;
+    const allowed = can('manage_users') && !state.data?.impersonation;
+    panel.classList.toggle('hidden', !allowed);
+    if (!allowed) return;
+    const runtime = state.assistantRuntime;
+    const mode = $('#assistantRuntimeMode');
+    const recheck = $('#assistantRuntimeRecheck');
+    const status = $('#assistantRuntimeStatus');
+    const rows = $('#assistantRuntimeRows');
+    const pending = state.assistantRuntimePending;
+    mode.disabled = pending || !runtime;
+    recheck.disabled = pending || !runtime;
+    recheck.textContent = pending ? '检测中…' : '重新检测';
+    if (!runtime) {
+      status.textContent = state.assistantRuntimeError || '正在加载运行状态…';
+      rows.innerHTML = ['kimi-cli', 'hermes', 'deepseek'].map(engine => `<div class="assistant-runtime-row"><strong>${assistantEngineLabels[engine]}</strong><span>等待状态</span><span>—</span><span>—</span><span>—</span></div>`).join('');
+      return;
+    }
+    mode.value = runtime.mode || 'auto';
+    const active = runtime.activeEngine ? `当前优先使用 ${assistantEngineLabels[runtime.activeEngine] || runtime.activeEngine}` : '当前没有健康引擎';
+    status.textContent = state.assistantRuntimeError || `${assistantEngineLabels[runtime.mode] || runtime.mode}模式 · ${active}`;
+    rows.innerHTML = ['kimi-cli', 'hermes', 'deepseek'].map(engine => {
+      const health = runtime.engines?.[engine] || {};
+      const error = assistantRuntimeError(health.errorMessage || health.errorCode);
+      return `<div class="assistant-runtime-row">
+        <strong>${assistantEngineLabels[engine]}</strong>
+        <span class="assistant-runtime-state ${esc(health.status || 'unknown')}">${esc(health.status || 'unknown')}</span>
+        <span>${health.latencyMs ? `${Number(health.latencyMs)} ms` : '—'}</span>
+        <span>${esc(shortDate(health.lastCheckedAt, true))}</span>
+        <span title="${esc(error)}">${esc(error || '—')}</span>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadAssistantRuntime() {
+    if (!can('manage_users') || state.data?.impersonation) return;
+    state.assistantRuntimeError = '';
+    try {
+      state.assistantRuntime = await api('/api/assistant/runtime');
+    } catch (error) {
+      state.assistantRuntime = null;
+      state.assistantRuntimeError = assistantRuntimeError(error.message || '无法加载 AI 引擎状态');
+    }
+    renderAssistantRuntime();
+  }
+
+  async function setAssistantRuntimeMode(mode) {
+    if (state.assistantRuntimePending || !can('manage_users')) return;
+    state.assistantRuntimePending = true;
+    state.assistantRuntimeError = '';
+    renderAssistantRuntime();
+    try {
+      state.assistantRuntime = await api('/api/assistant/runtime', { method: 'PATCH', body: JSON.stringify({ mode }) });
+      toast('AI 引擎模式已更新');
+    } catch (error) {
+      state.assistantRuntimeError = assistantRuntimeError(error.message || '无法更新 AI 引擎模式');
+    } finally {
+      state.assistantRuntimePending = false;
+      renderAssistantRuntime();
+    }
+  }
+
+  async function recheckAssistantRuntime() {
+    if (state.assistantRuntimePending || !can('manage_users')) return;
+    state.assistantRuntimePending = true;
+    state.assistantRuntimeError = '';
+    renderAssistantRuntime();
+    try {
+      state.assistantRuntime = await api('/api/assistant/runtime/recheck', { method: 'POST', body: '{}' });
+      toast('AI 引擎状态已重新检测');
+    } catch (error) {
+      state.assistantRuntimeError = assistantRuntimeError(error.message || 'AI 引擎检测失败');
+    } finally {
+      state.assistantRuntimePending = false;
+      renderAssistantRuntime();
+    }
   }
 
   function auditOperator(row) {
@@ -1758,6 +1854,9 @@
     const editGroup = event.target.closest('[data-edit-group]');
     if (editGroup) openPermissionGroupModal(editGroup.dataset.editGroup);
     if (event.target.closest('#newPermissionGroupBtn')) openPermissionGroupModal();
+    if (event.target.closest('#assistantRuntimeRecheck')) {
+      await recheckAssistantRuntime();
+    }
     if (event.target.closest('#maintenancePreviewBtn')) {
       try { await previewMaintenance(); } catch (error) { toast(error.message); }
     }
@@ -1785,6 +1884,10 @@
         await refresh('旧跟进已迁移到统一客户档案');
       } catch (error) { toast(error.message); }
     }
+  });
+
+  document.addEventListener('change', event => {
+    if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
   });
 
   function switchView(view) {

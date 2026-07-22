@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   buildKimiArgs,
   buildKimiPrompt,
+  effectiveKimiTimeout,
   parseKimiOutput,
 } = require('../lib/kimi_assistant');
 
@@ -12,6 +13,12 @@ test('Kimi CLI prompt keeps the CRM evidence boundary', () => {
   assert.match(prompt, /受限 Kimi CLI 外贸研究助手/);
   assert.match(prompt, /只读证据包/);
   assert.match(prompt, /禁止修改 CRM/);
+});
+
+test('Kimi accepts a bounded per-request timeout without changing global config', () => {
+  const configured = require('../lib/kimi_assistant').kimiConfig().timeoutMs;
+  assert.equal(effectiveKimiTimeout({ timeoutMs: 12000 }), 12000);
+  assert.equal(require('../lib/kimi_assistant').kimiConfig().timeoutMs, configured);
 });
 
 test('Kimi CLI uses print mode, isolated skills and a resumable session', () => {

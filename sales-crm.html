@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-4">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-5">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -269,12 +269,23 @@
         <div id="segmentGrid" class="segment-grid"></div>
       </section>
 
-      <section id="usersView" class="view">
-        <div class="section-intro">
-          <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>销售只查看自己的客户；经理查看团队全盘；管理员管理账号与系统配置。</p></div>
-          <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
-        </div>
-        <article class="panel"><div id="userTable" class="data-table"></div></article>
+          <section id="usersView" class="view">
+            <div class="section-intro">
+              <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>销售只查看自己的客户；经理查看团队全盘；管理员管理账号与系统配置。</p></div>
+              <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
+            </div>
+            <section id="assistantRuntimePanel" class="assistant-runtime-panel hidden" aria-labelledby="assistantRuntimeTitle">
+              <div class="assistant-runtime-head">
+                <div><p class="eyebrow">AI ENGINE RUNTIME</p><h2 id="assistantRuntimeTitle">AI 引擎运行状态</h2><p>切换全局对话引擎模式，重新检测会更新健康状态。</p></div>
+                <div class="assistant-runtime-actions">
+                  <label>运行模式<select id="assistantRuntimeMode" aria-label="AI 引擎运行模式"><option value="auto">Automatic（自动）</option><option value="kimi-cli">Kimi</option><option value="hermes">Hermes</option><option value="deepseek">DeepSeek</option></select></label>
+                  <button id="assistantRuntimeRecheck" class="button secondary" type="button">重新检测</button>
+                </div>
+              </div>
+              <p id="assistantRuntimeStatus" class="assistant-runtime-status" role="status" aria-live="polite"></p>
+              <div id="assistantRuntimeRows" class="assistant-runtime-rows"></div>
+            </section>
+            <article class="panel"><div id="userTable" class="data-table"></div></article>
         <article class="panel access-panel">
           <div class="panel-head">
             <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2></div>
@@ -328,6 +339,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260722-4"></script>
+  <script src="/sales-assets/app.js?v=20260722-5"></script>
 </body>
 </html>
