@@ -148,3 +148,48 @@ test('DeepSeek tags network failures before exposing them to the router', async 
     else process.env.DEEPSEEK_API_KEY = oldKey;
   }
 });
+
+test('DeepSeek replaces system network codes with a provider network code', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.fetch = async () => {
+    const error = new Error('socket reset with sensitive upstream detail');
+    error.code = 'ECONNRESET';
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }]),
+      error => error.code === 'DEEPSEEK_NETWORK_ERROR'
+        && error.statusCode === 502
+        && /sensitive upstream detail/.test(error.message),
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});
+
+test('DeepSeek preserves already-tagged provider failures', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.fetch = async () => {
+    const error = new Error('tagged provider failure');
+    error.code = 'DEEPSEEK_PROXY_FAILED';
+    error.statusCode = 504;
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }]),
+      error => error.code === 'DEEPSEEK_PROXY_FAILED' && error.statusCode === 504,
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});

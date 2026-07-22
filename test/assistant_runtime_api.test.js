@@ -146,6 +146,19 @@ test('ordinary chat users receive a generic message for direct provider failures
   assert.equal(manager.code, 'KIMI_CLI_FAILED');
 });
 
+test('ordinary chat users receive a generic message for normalized DeepSeek network failures', () => {
+  const error = Object.assign(new Error('socket reset with sensitive upstream detail'), {
+    code: 'DEEPSEEK_NETWORK_ERROR',
+    statusCode: 502,
+  });
+
+  assert.deepEqual(serializeAssistantEngineError(error, false), {
+    ok: false,
+    error: 'AI 引擎暂时不可用，请稍后重试或联系管理员。',
+    code: 'DEEPSEEK_NETWORK_ERROR',
+  });
+});
+
 test('ordinary chat users receive generic and redacted exhausted-engine failures', () => {
   const error = Object.assign(new Error('all providers failed: kimi stderr and hermes trace'), {
     code: 'ASSISTANT_ENGINES_UNAVAILABLE',
