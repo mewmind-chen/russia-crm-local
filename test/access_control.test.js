@@ -135,8 +135,12 @@ test('identity inspection blocks exactly the Recon and account-security policies
   const blockedSales = Object.entries(SALES_ROUTE_POLICIES)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([key]) => key).sort();
   assert.deepEqual(blockedSales, [
+    'GET /data-maintenance/capabilities',
+    'GET /data-maintenance/runs',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
+    'POST /data-maintenance/execute',
+    'POST /data-maintenance/preview',
     'POST /impersonation/start',
     'POST /migration-review/:reviewId',
     'POST /password',

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-3">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-4">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -59,6 +59,7 @@
           <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
           <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
           <button data-view="users" data-permission="view_users"><i>⊕</i><span>用户与权限</span></button>
+          <button data-view="maintenance" data-permission="manage_data_maintenance"><i>⌫</i><span>数据维护</span></button>
         </div>
       </nav>
       <div class="sidebar-foot">
@@ -284,6 +285,29 @@
         <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
         <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
       </section>
+
+      <section id="maintenanceView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow red">ADMIN DATA MAINTENANCE</p><h2>数据维护</h2><p>先预览影响范围并自动备份，再把指定客户安全恢复到待分配状态。</p></div>
+          <span class="pill red">仅真实管理员可执行</span>
+        </div>
+        <article class="panel maintenance-panel">
+          <div class="panel-head"><div><p class="eyebrow">RESET ASSIGNMENTS</p><h2>重置客户分配</h2></div><span class="panel-note">保留客户主档、Recon 与联系人研究</span></div>
+          <div class="maintenance-form">
+            <label>导入批次<select id="maintenanceBatch"><option value="">全部批次</option></select></label>
+            <label>当前负责人<select id="maintenanceOwner"><option value="">全部负责人</option></select></label>
+            <label class="span-2">指定线索 ID<textarea id="maintenanceItemIds" rows="2" placeholder="多个 ID 用逗号或换行分隔；留空则按上方范围"></textarea></label>
+            <label class="maintenance-check span-2"><input id="maintenanceAllAssigned" type="checkbox"> 明确重置全部已分配、已领取和已退回线索</label>
+            <div class="maintenance-warning span-2"><strong>将删除：</strong>目标 CRM 客户及其跟进、询价、报价、订单、CRM 联系人、经理评价和直接通知。<br><strong>将保留：</strong>客户主档、导入批次、Recon、联系人研究、AI 索引、用户和权限。</div>
+            <div class="form-actions span-2"><button id="maintenancePreviewBtn" class="button secondary" type="button">预览影响范围</button></div>
+          </div>
+        </article>
+        <article id="maintenancePreviewPanel" class="panel maintenance-preview hidden"></article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">MAINTENANCE HISTORY</p><h2>最近维护记录</h2></div><button id="maintenanceRefreshRuns" class="text-button" type="button">刷新</button></div>
+          <div id="maintenanceRunsTable" class="data-table compact"><div class="empty">打开页面后加载维护记录</div></div>
+        </article>
+      </section>
     </main>
   </div>
 
@@ -304,6 +328,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260722-3"></script>
+  <script src="/sales-assets/app.js?v=20260722-4"></script>
 </body>
 </html>

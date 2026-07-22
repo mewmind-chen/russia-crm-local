@@ -54,3 +54,25 @@ test('reinstall ignores legacy changes after a user has a valid permission group
   assert.deepEqual(effectivePermissionsFor(db, 'U1'), before);
   db.close();
 });
+
+test('reinstall adds new permissions to system groups without replacing existing choices', () => {
+  const db = legacyDb();
+  db.prepare('INSERT INTO sales_users VALUES (?,?,1,?)').run('ADMIN', 'admin', '{}');
+  installPermissionGroups(db);
+  for (const role of ['admin', 'manager']) {
+    const group = db.prepare('SELECT id,permissions_json FROM permission_groups WHERE system_key=?').get(`${role}-default`);
+    const permissions = JSON.parse(group.permissions_json);
+    delete permissions.manage_data_maintenance;
+    permissions.view_dashboard = false;
+    db.prepare('UPDATE permission_groups SET permissions_json=? WHERE id=?').run(JSON.stringify(permissions), group.id);
+  }
+
+  installPermissionGroups(db);
+  const admin = JSON.parse(db.prepare("SELECT permissions_json FROM permission_groups WHERE system_key='admin-default'").get().permissions_json);
+  const manager = JSON.parse(db.prepare("SELECT permissions_json FROM permission_groups WHERE system_key='manager-default'").get().permissions_json);
+  assert.equal(admin.manage_data_maintenance, true);
+  assert.equal(manager.manage_data_maintenance, false);
+  assert.equal(admin.view_dashboard, false);
+  assert.equal(manager.view_dashboard, false);
+  db.close();
+});

@@ -17,6 +17,8 @@
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
+    maintenancePreview: null,
+    maintenanceRuns: [],
     research: {
       pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
@@ -40,8 +42,9 @@
     team: ['CAPABILITY REVIEW', '销售能力'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
+    maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
-  const viewPermissions = { pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers' };
+  const viewPermissions = { pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers', maintenance: 'manage_data_maintenance' };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
     social: ['社媒联系', '社'], reply: ['客户回复', '回'], meeting: ['视频/电话会议', '会'],
@@ -259,7 +262,7 @@
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
     if (state.data.impersonation) {
-      $$('#nav [data-view="users"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
+      $$('#nav [data-view="users"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
     }
     $$('#nav .nav-group').forEach(group => {
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
@@ -318,6 +321,7 @@
     renderTeam();
     renderMarkets();
     renderUsers();
+    renderMaintenance();
     if (state.selectedCustomerId && state.data.accounts.some(item => item.id === state.selectedCustomerId)) renderDrawer();
   }
 
@@ -911,6 +915,108 @@
       return `${row.real_user_name || row.real_user_id} → ${row.effective_user_name || row.effective_user_id}`;
     }
     return row.user_name || row.real_user_name || row.user_id || '系统';
+  }
+
+  function maintenanceList(value) {
+    return String(value || '').split(/[\s,，]+/).map(item => item.trim()).filter(Boolean);
+  }
+
+  function renderMaintenance() {
+    if (!can('manage_data_maintenance')) return;
+    const batch = $('#maintenanceBatch');
+    const owner = $('#maintenanceOwner');
+    if (batch) {
+      const current = batch.value;
+      batch.innerHTML = '<option value="">全部批次</option>' + (state.data.intake?.batches || []).map(item =>
+        `<option value="${esc(item.id)}">${esc(item.batch_date || item.id)} · ${esc(item.id)}</option>`).join('');
+      batch.value = current;
+    }
+    if (owner) {
+      const current = owner.value;
+      owner.innerHTML = '<option value="">全部负责人</option>' + state.data.users.filter(user => user.role === 'sales').map(user =>
+        `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+      owner.value = current;
+    }
+    renderMaintenancePreview();
+    renderMaintenanceRuns();
+  }
+
+  function renderMaintenancePreview() {
+    const panel = $('#maintenancePreviewPanel');
+    if (!panel) return;
+    const preview = state.maintenancePreview;
+    panel.classList.toggle('hidden', !preview);
+    if (!preview) return;
+    const counts = preview.counts || {};
+    const metrics = [
+      ['线索', counts.intakeItems], ['CRM客户', counts.accounts], ['跟进', counts.activities],
+      ['询价', counts.rfqs], ['报价', counts.quotes], ['订单', counts.orders],
+      ['CRM联系人', counts.contacts], ['经理评价', counts.evaluations], ['通知', counts.notifications],
+    ];
+    const blocked = Number(counts.conflicts || 0) > 0;
+    panel.innerHTML = `<div class="panel-head"><div><p class="eyebrow red">IMPACT PREVIEW</p><h2>影响范围预览</h2></div><span class="panel-note">预览有效至 ${esc(shortDate(preview.expiresAt, true))}</span></div>
+      <div class="maintenance-impact">${metrics.map(([label, value]) => `<div><span>${label}</span><strong>${Number(value || 0)}</strong></div>`).join('')}</div>
+      ${blocked ? `<div class="maintenance-conflict">检测到 ${counts.conflicts} 个数据关系冲突，已禁止执行。请先检查关联数据。</div>` : ''}
+      ${counts.skippedByStatus ? `<div class="maintenance-note">${counts.skippedByStatus} 条指定线索因状态不适用而跳过。</div>` : ''}
+      <div class="maintenance-confirm">
+        <label>输入确认文字 <strong>${esc(preview.confirmationText)}</strong><input id="maintenanceConfirmation" autocomplete="off" placeholder="完整输入上方文字"></label>
+        <button id="maintenanceExecuteBtn" class="button danger" type="button" ${blocked || !counts.intakeItems ? 'disabled' : ''}>备份并执行重置</button>
+      </div>`;
+  }
+
+  function renderMaintenanceRuns() {
+    const root = $('#maintenanceRunsTable');
+    if (!root || !can('manage_data_maintenance')) return;
+    root.innerHTML = table(['时间', '操作人', '状态', '目标', '备份'], (state.maintenanceRuns || []).map(run => [
+      esc(shortDate(run.createdAt, true)), esc(userById(run.realUserId)?.name || run.realUserId || '系统'),
+      `<span class="pill ${run.status === 'completed' ? '' : run.status === 'failed' ? 'red' : 'amber'}">${esc(run.status)}</span>`,
+      `${Number(run.resultCounts?.resetIntakeItems ?? run.previewCounts?.intakeItems ?? 0)} 条分配`,
+      run.backupFile ? `<span class="subtle">${esc(run.backupFile)}</span>` : '<span class="subtle">—</span>',
+    ]));
+  }
+
+  async function loadMaintenanceRuns() {
+    if (!can('manage_data_maintenance') || state.data.impersonation) return;
+    const result = await api('/api/sales-crm/data-maintenance/runs?limit=20');
+    state.maintenanceRuns = result.runs || [];
+    renderMaintenanceRuns();
+  }
+
+  async function previewMaintenance() {
+    const batchId = $('#maintenanceBatch').value;
+    const ownerId = $('#maintenanceOwner').value;
+    const itemIds = maintenanceList($('#maintenanceItemIds').value);
+    const allAssigned = $('#maintenanceAllAssigned').checked;
+    const filters = {
+      batchIds: batchId ? [batchId] : [], ownerIds: ownerId ? [ownerId] : [], intakeItemIds: itemIds, allAssigned,
+    };
+    const result = await api('/api/sales-crm/data-maintenance/preview', {
+      method: 'POST', body: JSON.stringify({ operation: 'reset_assignments', filters }),
+    });
+    state.maintenancePreview = result;
+    renderMaintenancePreview();
+    $('#maintenancePreviewPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function executeMaintenance() {
+    const preview = state.maintenancePreview;
+    if (!preview) throw new Error('请先预览影响范围');
+    const confirmationText = String($('#maintenanceConfirmation')?.value || '');
+    const button = $('#maintenanceExecuteBtn');
+    button.disabled = true;
+    button.textContent = '正在备份并重置…';
+    try {
+      const result = await api('/api/sales-crm/data-maintenance/execute', {
+        method: 'POST', body: JSON.stringify({ previewId: preview.previewId, confirmationText }), timeoutMs: 120000,
+      });
+      state.maintenancePreview = null;
+      await load();
+      switchView('maintenance');
+      await loadMaintenanceRuns();
+      toast(`已重置 ${result.counts.resetIntakeItems} 条分配，备份已生成`);
+    } finally {
+      if (button) { button.disabled = false; button.textContent = '备份并执行重置'; }
+    }
   }
 
   function renderPermissionGroups(canMutate = can('manage_users') && !state.data.impersonation) {
@@ -1652,6 +1758,15 @@
     const editGroup = event.target.closest('[data-edit-group]');
     if (editGroup) openPermissionGroupModal(editGroup.dataset.editGroup);
     if (event.target.closest('#newPermissionGroupBtn')) openPermissionGroupModal();
+    if (event.target.closest('#maintenancePreviewBtn')) {
+      try { await previewMaintenance(); } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#maintenanceExecuteBtn')) {
+      try { await executeMaintenance(); } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#maintenanceRefreshRuns')) {
+      try { await loadMaintenanceRuns(); } catch (error) { toast(error.message); }
+    }
     const startInspection = event.target.closest('[data-start-impersonation]');
     if (startInspection) {
       try { await startIdentityInspection(startInspection.dataset.startImpersonation); }
@@ -1692,6 +1807,7 @@
     document.body.classList.toggle('customer-profile-active', view === 'customerProfile');
     if (sectionView === 'intake') renderIntake();
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
+    if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
     document.body.classList.remove('sidebar-open');
     if (location.hash !== `#${view}`) history.replaceState(null, '', `#${view}`);
