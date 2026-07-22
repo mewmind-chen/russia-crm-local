@@ -69,3 +69,65 @@ Runtime authorization now consumes only hydrated `user.permissions`. Session res
 ### Full Suite Evidence
 
 `/opt/homebrew/bin/node --test` completed with 98 passing, 0 failing in 13.1 seconds.
+
+---
+
+# Task 2 Addendum: Atomic Deployment State Helper
+
+## Implementation
+
+- Added `scripts/deploy-state.js`, exporting `readState(file)` and `writeState(file, state)`.
+- The CLI resolves `DEPLOY_STATE_FILE`, or defaults to `~/Desktop/projects/russia-crm-deploy/state/state.json` via the current user's home directory.
+- `success` records its SHA, timestamp, and release paths while clearing every failure field. `failure` updates only failure fields and retains previous success/release state.
+- State writes create the parent directory, write a mode `0600` `${file}.tmp`, then atomically replace the state file with `renameSync`.
+- `get` emits the exact shell-safe `String(state[key] || '') + '\n'` contract, `status` emits formatted complete JSON, and unknown/invalid commands exit `2` before writing.
+
+## TDD Evidence
+
+### RED
+
+Command:
+
+```sh
+node --test test/deploy_state.test.js
+```
+
+Result before implementation: both tests failed as expected because `scripts/deploy-state.js` did not exist; each child Node process exited `1` instead of `0`.
+
+### GREEN
+
+Command:
+
+```sh
+node --check scripts/deploy-state.js && node --test test/deploy_state.test.js
+```
+
+Result: 2 passing, 0 failing.
+
+### Full Suite
+
+Command:
+
+```sh
+npm test
+```
+
+Result: 158 passing, 0 failing (15.83 seconds).
+
+## Files
+
+- `scripts/deploy-state.js`
+- `test/deploy_state.test.js`
+- `.superpowers/sdd/task-2-report.md`
+
+## Self-Review
+
+- `readState` supplies all seven state fields for an absent file while allowing malformed JSON and filesystem permission failures to surface instead of silently discarding deployment history.
+- SHA validation accepts only lower-case 40-character hexadecimal revisions as specified.
+- `get`, `status`, and invalid commands do not mutate the state file.
+- Direct module verification confirmed the full state schema, final file mode `0600`, and absence of a temporary file after a write.
+- `git diff --check` completed without whitespace errors.
+
+## Concerns
+
+None.
