@@ -17,7 +17,7 @@ const {
   answerAssistantQuestion, assistantRuntimeState, setAssistantRuntimeMode,
   recheckAssistantEngines, startAssistantRuntimeMonitor,
 } = require('./lib/assistant');
-const { createAssistantRuntimeHandlers } = require('./lib/assistant_runtime_api');
+const { createAssistantRuntimeHandlers, serializeAssistantEngineError } = require('./lib/assistant_runtime_api');
 const { runProspectTask } = require('./lib/prospect_agent');
 const { registerSalesCrm, requireUnifiedUser, hasPermission, safeUser } = require('./lib/sales_crm');
 const {
@@ -831,12 +831,9 @@ app.post('/api/assistant/chat', async (req, res) => {
         stack: truncateLogValue(e.stack, 3000),
       },
     });
-    res.status(e.statusCode || 500).json({
-      ok: false,
-      error: e.message || String(e),
-      code: e.code || undefined,
-      engines: e.engines || undefined,
-    });
+    res.status(e.statusCode || 500).json(
+      serializeAssistantEngineError(e, hasPermission(req.salesUser, 'manage_users')),
+    );
   }
 });
 

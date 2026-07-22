@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createAssistantRuntimeHandlers } = require('../lib/assistant_runtime_api');
+const { createAssistantRuntimeHandlers, serializeAssistantEngineError } = require('../lib/assistant_runtime_api');
 const { policyForLegacyRequest } = require('../lib/access_control');
 
 function response() {
@@ -126,4 +126,29 @@ test('runtime routes have explicit legacy permission policies', () => {
   assert.deepEqual(policyForLegacyRequest('GET', '/assistant/runtime'), { permissions: ['use_ai_assistant'] });
   assert.deepEqual(policyForLegacyRequest('PATCH', '/assistant/runtime'), { permissions: ['manage_users'] });
   assert.deepEqual(policyForLegacyRequest('POST', '/assistant/runtime/recheck'), { permissions: ['manage_users'] });
+});
+
+test('chat engine failures redact diagnostics unless the caller can manage users', () => {
+  const error = Object.assign(new Error('当前没有可用的 AI 引擎'), {
+    code: 'ASSISTANT_ENGINES_UNAVAILABLE',
+    engines: {
+      'kimi-cli': {
+        status: 'unhealthy',
+        errorCode: 'KIMI_CLI_TIMEOUT',
+        errorMessage: 'Kimi endpoint timed out',
+      },
+    },
+  });
+
+  const ordinary = serializeAssistantEngineError(error, false);
+  const manager = serializeAssistantEngineError(error, true);
+
+  assert.deepEqual(ordinary, {
+    ok: false,
+    error: '当前没有可用的 AI 引擎',
+    code: 'ASSISTANT_ENGINES_UNAVAILABLE',
+    engines: { 'kimi-cli': { status: 'unhealthy' } },
+  });
+  assert.equal(manager.engines['kimi-cli'].errorCode, 'KIMI_CLI_TIMEOUT');
+  assert.equal(manager.engines['kimi-cli'].errorMessage, 'Kimi endpoint timed out');
 });
