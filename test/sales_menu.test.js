@@ -113,11 +113,35 @@ test('issue 3 account administration and identity inspection remain intact', () 
 
 test('administrators can operate the AI engine runtime and workbench tracks its session engine', () => {
   assert.match(html, /id="assistantRuntimePanel"/);
-  assert.match(appJs, /\/api\/assistant\/runtime/);
-  assert.match(appJs, /manage_users/);
-  assert.match(workbenchHtml, /sessionEngine/);
   for (const label of ['Automatic', 'Kimi', 'Hermes', 'DeepSeek']) {
     assert.match(`${html}\n${appJs}`, new RegExp(label), `missing AI mode label: ${label}`);
   }
-  assert.match(`${html}\n${appJs}`, /recheck|重新检测/);
+  const loadRuntime = appJs.match(/async function loadAssistantRuntime\(\)[\s\S]*?\n  }\n\n  async function setAssistantRuntimeMode/)?.[0] || '';
+  const renderRuntime = appJs.match(/function renderAssistantRuntime\(\)[\s\S]*?\n  }\n\n  async function loadAssistantRuntime/)?.[0] || '';
+  const setMode = appJs.match(/async function setAssistantRuntimeMode\(mode\)[\s\S]*?\n  }\n\n  async function recheckAssistantRuntime/)?.[0] || '';
+  const recheck = appJs.match(/async function recheckAssistantRuntime\(\)[\s\S]*?\n  }\n\n  function auditOperator/)?.[0] || '';
+
+  assert.match(loadRuntime, /if \(!can\('manage_users'\) \|\| state\.data\?\.impersonation\) return;/);
+  assert.match(loadRuntime, /await api\('\/api\/assistant\/runtime'\)/);
+  assert.match(setMode, /await api\('\/api\/assistant\/runtime', \{ method: 'PATCH', body: JSON\.stringify\(\{ mode \}\) \}\)/);
+  assert.match(recheck, /await api\('\/api\/assistant\/runtime\/recheck', \{ method: 'POST', body: '\{\}' \}\)/);
+  for (const source of [setMode, recheck]) {
+    assert.match(source, /state\.assistantRuntimePending = true;/);
+    assert.match(source, /finally \{\s*state\.assistantRuntimePending = false;/);
+  }
+  assert.match(renderRuntime, /mode\.disabled = pending \|\| !runtime;/);
+  assert.match(renderRuntime, /recheck\.disabled = pending \|\| !runtime;/);
+  assert.match(renderRuntime, /class="assistant-runtime-state \$\{esc\(health\.status \|\| 'unknown'\)\}"/);
+  assert.match(renderRuntime, /title="\$\{esc\(error\)\}"/);
+  assert.match(renderRuntime, /\$\{esc\(error \|\| '—'\)\}/);
+
+  const sendAssistant = workbenchHtml.match(/async function sendAssistantMessage\(override,cursor\)[\s\S]*?\n    function buildAssistantContext/)?.[0] || '';
+  const restoreConversation = workbenchHtml.match(/function restoreAssistantConversation\(\)[\s\S]*?\n    function persistAssistantConversation/)?.[0] || '';
+  const persistConversation = workbenchHtml.match(/function persistAssistantConversation\(\)[\s\S]*?\n    function clearAssistantChat/)?.[0] || '';
+  assert.match(sendAssistant, /sessionEngine:assistantState\.sessionEngine\|\|''/);
+  assert.match(sendAssistant, /if\(responseEngine&&responseEngine!==assistantState\.sessionEngine\)\{assistantState\.sessionEngine=responseEngine;assistantState\.sessionId=responseSessionId\}/);
+  assert.match(sendAssistant, /sessionEngine:assistantState\.sessionEngine\|\|''/);
+  assert.match(restoreConversation, /assistantState\.sessionEngine=\['kimi-cli','hermes','deepseek'\]\.includes\(String\(saved\.sessionEngine\|\|''\)\)/);
+  assert.match(restoreConversation, /if\(!assistantState\.sessionEngine\)assistantState\.sessionId=''/);
+  assert.match(persistConversation, /JSON\.stringify\(\{sessionId:assistantState\.sessionId\|\|'',sessionEngine:assistantState\.sessionEngine\|\|''/);
 });
