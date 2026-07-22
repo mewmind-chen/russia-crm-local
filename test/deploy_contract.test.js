@@ -9,35 +9,81 @@ function readProjectFile(...parts) {
   return fs.readFileSync(path.join(root, ...parts), 'utf8');
 }
 
-function activeTestJobSteps(workflow) {
-  const lines = workflow.split(/\r?\n/);
-  const testJob = lines.findIndex(line => /^  test:\s*(?:#.*)?$/.test(line));
-  assert.notEqual(testJob, -1, 'workflow must define jobs.test');
+function activeLines(workflow) {
+  return workflow.split(/\r?\n/).filter(line => line.trim() && !/^\s*#/.test(line));
+}
 
-  const jobLines = [];
-  for (const line of lines.slice(testJob + 1)) {
-    if (/^  \S/.test(line)) break;
-    jobLines.push(line);
+function indentation(line) {
+  return line.match(/^ */)[0].length;
+}
+
+function childBlock(lines, parent, parentIndent) {
+  const children = [];
+  for (const line of lines.slice(parent + 1)) {
+    if (indentation(line) <= parentIndent) break;
+    children.push(line);
   }
-  const steps = jobLines.findIndex(line => /^    steps:\s*(?:#.*)?$/.test(line));
+  return children;
+}
+
+function activeOnBlock(workflow) {
+  const lines = activeLines(workflow);
+  const on = lines.findIndex(line => /^on:\s*(?:#.*)?$/.test(line));
+  assert.notEqual(on, -1, 'workflow must define active top-level on');
+  return childBlock(lines, on, 0);
+}
+
+function activeTestJobSteps(workflow) {
+  const lines = activeLines(workflow);
+  const jobs = lines.findIndex(line => /^jobs:\s*(?:#.*)?$/.test(line));
+  assert.notEqual(jobs, -1, 'workflow must define jobs');
+  const jobLines = childBlock(lines, jobs, 0);
+  const testJob = jobLines.findIndex(line => /^  test:\s*(?:#.*)?$/.test(line));
+  assert.notEqual(testJob, -1, 'workflow must define jobs.test');
+  const testLines = childBlock(jobLines, testJob, 2);
+  const steps = testLines.findIndex(line => /^    steps:\s*(?:#.*)?$/.test(line));
   assert.notEqual(steps, -1, 'workflow must define jobs.test.steps');
 
-  const activeLines = [];
-  for (const line of jobLines.slice(steps + 1)) {
-    if (/^    \S/.test(line)) break;
-    if (!/^\s*#/.test(line)) activeLines.push(line);
+  const stepLines = childBlock(testLines, steps, 4);
+  const entries = [];
+  let entry = null;
+  for (const line of stepLines) {
+    if (/^      - /.test(line)) {
+      if (entry) entries.push(entry.join('\n'));
+      entry = [line];
+    } else if (entry) {
+      entry.push(line);
+    }
   }
-  return activeLines.join('\n');
+  if (entry) entries.push(entry.join('\n'));
+  return entries;
+}
+
+function assertUnconditional(step, description) {
+  assert.doesNotMatch(step, /^\s*if:\s*/m, `${description} must not be conditional`);
+}
+
+function assertActiveWorkflowTriggers(workflow) {
+  const on = activeOnBlock(workflow);
+  assert.ok(on.some(line => /^  pull_request:\s*(?:#.*)?$/.test(line)),
+    'workflow requires active pull_request trigger');
+  const push = on.findIndex(line => /^  push:\s*(?:#.*)?$/.test(line));
+  assert.notEqual(push, -1, 'workflow requires active push trigger');
+  const pushLines = childBlock(on, push, 2);
+  assert.ok(pushLines.some(line => /^    branches:\s*\[main\]\s*(?:#.*)?$/.test(line)),
+    'workflow requires active push branch main');
 }
 
 function assertActiveTestJobSteps(workflow) {
   const steps = activeTestJobSteps(workflow);
-  assert.match(steps, /^\s*- uses: actions\/setup-node@v4\s*(?:#.*)?$/m,
-    'test job requires active actions/setup-node@v4');
-  assert.match(steps, /^\s+node-version:\s*22\s*(?:#.*)?$/m,
-    'test job requires active node-version: 22');
-  assert.match(steps, /^\s*- run: sudo apt-get update && sudo apt-get install -y zsh\s*(?:#.*)?$/m,
-    'test job requires active zsh installation');
+  const setupNode = steps.find(step => /^      - uses: actions\/setup-node@v4\s*(?:#.*)?$/m.test(step));
+  assert.ok(setupNode, 'test job requires active actions/setup-node@v4');
+  assertUnconditional(setupNode, 'actions/setup-node@v4');
+  assert.match(setupNode, /^          node-version:\s*22\s*(?:#.*)?$/m,
+    'actions/setup-node@v4 requires active node-version: 22');
+  const zshInstall = steps.find(step => /^      - run: sudo apt-get update && sudo apt-get install -y zsh\s*(?:#.*)?$/m.test(step));
+  assert.ok(zshInstall, 'test job requires active zsh installation');
+  assertUnconditional(zshInstall, 'zsh installation');
   for (const command of [
     'npm ci',
     'npm test',
@@ -49,8 +95,9 @@ function assertActiveTestJobSteps(workflow) {
     'python3 -m compileall -q scripts automation/hermes-skills/russia-recon/scripts',
   ]) {
     const escapedCommand = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    assert.match(steps, new RegExp(`^\\s*- run: ${escapedCommand}\\s*(?:#.*)?$`, 'm'),
-      `test job requires active ${command}`);
+    const runStep = steps.find(step => new RegExp(`^      - run: ${escapedCommand}\\s*(?:#.*)?$`, 'm').test(step));
+    assert.ok(runStep, `test job requires active ${command}`);
+    assertUnconditional(runStep, command);
   }
 }
 
@@ -64,6 +111,10 @@ test('CI contract ignores commented requirements outside active test steps', () 
     /^      - run: npm test$/m,
     '      # - run: npm test',
   );
+  const conditionalTestCommand = workflow.replace(
+    /^      - run: npm test$/m,
+    '      - run: npm test\n        if: ${{ false }}',
+  );
 
   assert.throws(
     () => assertActiveTestJobSteps(commentedNodeVersion),
@@ -71,6 +122,19 @@ test('CI contract ignores commented requirements outside active test steps', () 
   );
   assert.throws(
     () => assertActiveTestJobSteps(commentedTestCommand), /npm test/);
+  assert.throws(
+    () => assertActiveTestJobSteps(conditionalTestCommand), /must not be conditional/);
+});
+
+test('CI contract ignores commented or altered triggers', () => {
+  const workflow = readProjectFile('.github', 'workflows', 'ci.yml');
+  const commentedPullRequest = workflow.replace(/^  pull_request:$/m, '  # pull_request:');
+  const changedMainBranch = workflow.replace('branches: [main]', 'branches: [release]');
+  const commentedMainBranch = workflow.replace('branches: [main]', '# branches: [main]');
+
+  assert.throws(() => assertActiveWorkflowTriggers(commentedPullRequest), /pull_request/);
+  assert.throws(() => assertActiveWorkflowTriggers(changedMainBranch), /main/);
+  assert.throws(() => assertActiveWorkflowTriggers(commentedMainBranch), /main/);
 });
 
 test('CI and operator documentation preserve the automatic deployment contract', () => {
@@ -79,8 +143,7 @@ test('CI and operator documentation preserve the automatic deployment contract',
   const readme = readProjectFile('README.md');
   const tunnelDoc = readProjectFile('deploy', 'cloudflare-tunnel.md');
 
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /push:\s*\n\s*branches:\s*\[main\]/);
+  assertActiveWorkflowTriggers(workflow);
   assertActiveTestJobSteps(workflow);
 
   assert.equal(packageJson.scripts['deploy:mac:install'], 'node scripts/install-auto-deploy.js');
