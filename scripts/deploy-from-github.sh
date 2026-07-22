@@ -125,6 +125,24 @@ require_absolute_path() {
   fi
 }
 
+release_metadata_matches() {
+  local metadata="$release/.release-sha"
+  [[ -d "$release" && ! -L "$release" && -f "$metadata" && ! -L "$metadata" ]] || return 1
+  [[ "$(< "$metadata")" == "$target_sha" ]]
+}
+
+current_matches_release() {
+  local current_real
+  local release_real
+  [[ -L "$CURRENT_LINK" ]] || return 1
+  release_metadata_matches || return 1
+  current_real="$(cd "$CURRENT_LINK" 2>/dev/null && pwd -P)" || return 1
+  release_real="$(cd "$release" 2>/dev/null && pwd -P)" || return 1
+  [[ "$current_real" == "$release_real" ]] || return 1
+  [[ -f "$CURRENT_LINK/.release-sha" && ! -L "$CURRENT_LINK/.release-sha" ]] || return 1
+  [[ "$(< "$CURRENT_LINK/.release-sha")" == "$target_sha" ]]
+}
+
 run_restarts() {
   local label
   local -a labels=(
@@ -235,31 +253,61 @@ target_sha="$(git --git-dir="$GIT_DIR" rev-parse --verify "refs/remotes/origin/$
 short_sha="${target_sha[1,12]}"
 release="$RELEASES_DIR/$short_sha"
 candidate="$RELEASES_DIR/.candidate-$short_sha-$$"
+reuse_release=0
 last_successful_sha="$("$NODE_BIN" "$STATE_HELPER" get lastSuccessfulSha)"
 if [[ "$last_successful_sha" == "$target_sha" ]]; then
-  print -r -- "$target_sha is already deployed"
-  exit 0
+  if current_matches_release; then
+    print -r -- "$target_sha is already deployed"
+    exit 0
+  fi
+  if [[ -e "$release" || -L "$release" ]]; then
+    release_metadata_matches || {
+      print -u2 -- "existing release metadata does not match target SHA: $release"
+      exit 1
+    }
+    reuse_release=1
+    print -r -- "repairing current with validated release $target_sha"
+  fi
 fi
 last_failed_sha="$("$NODE_BIN" "$STATE_HELPER" get lastFailedSha)"
 if [[ "$last_failed_sha" == "$target_sha" ]] && (( force == 0 )); then
   print -r -- "$target_sha previously failed; use --force to retry"
   exit 0
 fi
-if [[ -e "$release" || -L "$release" ]]; then
+last_failed_stage="$("$NODE_BIN" "$STATE_HELPER" get lastFailedStage)"
+if [[ "$last_failed_sha" == "$target_sha" ]] && (( force == 1 )) && [[ -e "$release" || -L "$release" ]]; then
+  case "$last_failed_stage" in
+    switch|restart|health|record-success)
+      release_metadata_matches || {
+        print -u2 -- "existing release metadata does not match target SHA: $release"
+        exit 1
+      }
+      reuse_release=1
+      print -r -- "reusing validated release $target_sha"
+      ;;
+    *)
+      print -u2 -- "existing release was not recorded after the candidate phase: $release"
+      exit 1
+      ;;
+  esac
+fi
+if (( reuse_release == 0 )) && [[ -e "$release" || -L "$release" ]]; then
   print -u2 -- "release path already exists: $release"
   exit 1
 fi
 
-stage=export
-mkdir "$candidate"
-git --git-dir="$GIT_DIR" archive "$target_sha" | tar -x -C "$candidate"
-print -r -- "$target_sha" > "$candidate/.release-sha"
+if (( reuse_release == 0 )); then
+  stage=export
+  mkdir "$candidate"
+  git --git-dir="$GIT_DIR" archive "$target_sha" | tar -x -C "$candidate"
+  print -r -- "$target_sha" > "$candidate/.release-sha"
 
-stage=validate
-run_validation || exit $?
+  stage=validate
+  run_validation || exit $?
+fi
 
 stage=backup
-backup="$STATE_DIR/backups/crm-before-$short_sha.db"
+backup="$STATE_DIR/backups/crm-before-$short_sha-$(date -u +%Y%m%dT%H%M%SZ)-$$.db"
 mkdir -p "${backup:h}"
 if [[ -n "$BACKUP_BIN" ]]; then
   "$BACKUP_BIN" "$backup"
@@ -267,21 +315,23 @@ else
   sqlite3 "$SHARED_ROOT/data/crm.db" ".backup '$backup'"
 fi
 
-stage=link
-releases_real="$(cd "$RELEASES_DIR" && pwd -P)"
-candidate_parent_real="$(cd "${candidate:h}" && pwd -P)"
-[[ "$candidate" == "$RELEASES_DIR"/* && "$candidate_parent_real" == "$releases_real" ]] || {
-  print -u2 -- "refusing to modify unsafe candidate path: $candidate"
-  exit 1
-}
-for name in .env data logs reports recon-runs contact-recon-reports; do
-  rm -rf -- "$candidate/$name"
-  ln -s "$SHARED_ROOT/$name" "$candidate/$name"
-done
+if (( reuse_release == 0 )); then
+  stage=link
+  releases_real="$(cd "$RELEASES_DIR" && pwd -P)"
+  candidate_parent_real="$(cd "${candidate:h}" && pwd -P)"
+  [[ "$candidate" == "$RELEASES_DIR"/* && "$candidate_parent_real" == "$releases_real" ]] || {
+    print -u2 -- "refusing to modify unsafe candidate path: $candidate"
+    exit 1
+  }
+  for name in .env data logs reports recon-runs contact-recon-reports; do
+    rm -rf -- "$candidate/$name"
+    ln -s "$SHARED_ROOT/$name" "$candidate/$name"
+  done
 
-stage=promote
-mv "$candidate" "$release"
-candidate=""
+  stage=promote
+  mv "$candidate" "$release"
+  candidate=""
+fi
 
 stage=switch
 previous_release=""

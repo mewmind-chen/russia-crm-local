@@ -274,3 +274,75 @@ test('refuses to switch when current is not a symlink', () => {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test('force reuses a preserved release after post-switch health failure', () => {
+  const fixture = createFixture();
+  try {
+    installOldRelease(fixture);
+    fs.writeFileSync(fixture.healthFailShaFile, `${fixture.sha}\n`);
+    const failedDeploy = deploy(fixture);
+    assert.notEqual(failedDeploy.status, 0);
+    const release = path.join(fixture.releasesDir, fixture.sha.slice(0, 12));
+    const evidence = path.join(release, 'failed-release-evidence');
+    fs.writeFileSync(evidence, 'preserved\n');
+    fs.rmSync(fixture.healthFailShaFile);
+
+    const forceRetry = deploy(fixture, ['--force']);
+
+    assert.equal(forceRetry.status, 0, forceRetry.stderr);
+    assert.equal(fs.readFileSync(evidence, 'utf8'), 'preserved\n');
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(release));
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 12);
+    const backups = fs.readFileSync(fixture.backupLog, 'utf8').trim().split('\n');
+    assert.equal(backups.length, 2);
+    assert.equal(new Set(backups).size, 2);
+    assert.equal(JSON.parse(fs.readFileSync(fixture.stateFile, 'utf8')).lastSuccessfulSha, fixture.sha);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('force rejects a preserved release whose metadata does not match', () => {
+  const fixture = createFixture();
+  try {
+    const oldRelease = installOldRelease(fixture);
+    fs.writeFileSync(fixture.healthFailShaFile, `${fixture.sha}\n`);
+    const failedDeploy = deploy(fixture);
+    assert.notEqual(failedDeploy.status, 0);
+    const release = path.join(fixture.releasesDir, fixture.sha.slice(0, 12));
+    fs.writeFileSync(path.join(release, '.release-sha'), `${'d'.repeat(40)}\n`);
+    fs.rmSync(fixture.healthFailShaFile);
+    const restartLogBefore = fs.readFileSync(fixture.restartLog, 'utf8');
+
+    const forceRetry = deploy(fixture, ['--force']);
+
+    assert.notEqual(forceRetry.status, 0);
+    assert.match(forceRetry.stderr, /release metadata does not match/);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(oldRelease));
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8'), restartLogBefore);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('repairs current-link drift instead of falsely treating success state as a no-op', () => {
+  const fixture = createFixture();
+  try {
+    const firstDeploy = deploy(fixture);
+    assert.equal(firstDeploy.status, 0, firstDeploy.stderr);
+    const release = path.join(fixture.releasesDir, fixture.sha.slice(0, 12));
+    fs.unlinkSync(fixture.currentLink);
+    installOldRelease(fixture);
+
+    const repair = deploy(fixture);
+
+    assert.equal(repair.status, 0, repair.stderr);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(release));
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 8);
+    assert.equal(fs.readFileSync(fixture.backupLog, 'utf8').trim().split('\n').length, 2);
+    assert.equal(fs.readFileSync(fixture.healthLog, 'utf8').trim().split('\n').length, 2);
+    assert.equal(fs.readFileSync(fixture.validationLog, 'utf8').trim().split('\n').length, 1);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
