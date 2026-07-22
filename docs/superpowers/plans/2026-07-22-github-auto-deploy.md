@@ -538,6 +538,7 @@ git commit -m "feat: install stable macOS deployment services"
 
 **Files:**
 - Create: `.github/workflows/ci.yml`
+- Create: `test/deploy_contract.test.js`
 - Modify: `README.md:180-250`
 - Modify: `deploy/cloudflare-tunnel.md:9-30`
 
