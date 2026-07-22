@@ -87,8 +87,8 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260722-4/);
-  assert.match(html, /app\.js\?v=20260722-4/);
+  assert.match(html, /app\.css\?v=20260722-5/);
+  assert.match(html, /app\.js\?v=20260722-5/);
 });
 
 test('manual customer creation surfaces the generated code and opens the new CRM record', () => {
@@ -109,4 +109,15 @@ test('issue 3 account administration and identity inspection remain intact', () 
   for (const contract of ['data-edit-user', 'data-reset-password', 'data-start-impersonation', 'impersonationBanner', 'stopImpersonationBtn']) {
     assert.match(`${html}\n${appJs}`, new RegExp(contract), `missing Issue #3 contract: ${contract}`);
   }
+});
+
+test('administrators can operate the AI engine runtime and workbench tracks its session engine', () => {
+  assert.match(html, /id="assistantRuntimePanel"/);
+  assert.match(appJs, /\/api\/assistant\/runtime/);
+  assert.match(appJs, /manage_users/);
+  assert.match(workbenchHtml, /sessionEngine/);
+  for (const label of ['Automatic', 'Kimi', 'Hermes', 'DeepSeek']) {
+    assert.match(`${html}\n${appJs}`, new RegExp(label), `missing AI mode label: ${label}`);
+  }
+  assert.match(`${html}\n${appJs}`, /recheck|重新检测/);
 });
