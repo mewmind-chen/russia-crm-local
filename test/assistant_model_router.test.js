@@ -83,3 +83,68 @@ test('DeepSeek uses the per-call timeout when its request aborts', async () => {
     else process.env.DEEPSEEK_API_KEY = oldKey;
   }
 });
+
+test('DeepSeek tags HTTP failures before exposing them to the router', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: false,
+    status: 401,
+    text: async () => JSON.stringify({ error: { message: 'Incorrect API key: sk-secret' } }),
+  });
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }]),
+      error => error.code === 'DEEPSEEK_HTTP_ERROR'
+        && error.statusCode === 401
+        && /sk-secret/.test(error.message),
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});
+
+test('DeepSeek tags non-JSON upstream responses before exposing them to the router', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => 'upstream trace with secret detail',
+  });
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }]),
+      error => error.code === 'DEEPSEEK_INVALID_RESPONSE'
+        && error.statusCode === 502
+        && /secret detail/.test(error.message),
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});
+
+test('DeepSeek tags network failures before exposing them to the router', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.fetch = async () => { throw new Error('socket failed with provider detail'); };
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }]),
+      error => error.code === 'DEEPSEEK_REQUEST_FAILED'
+        && error.statusCode === 502
+        && /provider detail/.test(error.message),
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});

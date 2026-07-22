@@ -128,9 +128,28 @@ test('runtime routes have explicit legacy permission policies', () => {
   assert.deepEqual(policyForLegacyRequest('POST', '/assistant/runtime/recheck'), { permissions: ['manage_users'] });
 });
 
-test('chat engine failures redact diagnostics unless the caller can manage users', () => {
-  const error = Object.assign(new Error('当前没有可用的 AI 引擎'), {
+test('ordinary chat users receive a generic message for direct provider failures', () => {
+  const error = Object.assign(new Error('Kimi CLI failed: stderr=token rejected at /private/provider/config'), {
+    code: 'KIMI_CLI_FAILED',
+    statusCode: 502,
+  });
+
+  const ordinary = serializeAssistantEngineError(error, false);
+  const manager = serializeAssistantEngineError(error, true);
+
+  assert.deepEqual(ordinary, {
+    ok: false,
+    error: 'AI 引擎暂时不可用，请稍后重试或联系管理员。',
+    code: 'KIMI_CLI_FAILED',
+  });
+  assert.equal(manager.error, 'Kimi CLI failed: stderr=token rejected at /private/provider/config');
+  assert.equal(manager.code, 'KIMI_CLI_FAILED');
+});
+
+test('ordinary chat users receive generic and redacted exhausted-engine failures', () => {
+  const error = Object.assign(new Error('all providers failed: kimi stderr and hermes trace'), {
     code: 'ASSISTANT_ENGINES_UNAVAILABLE',
+    statusCode: 503,
     engines: {
       'kimi-cli': {
         status: 'unhealthy',
@@ -145,10 +164,33 @@ test('chat engine failures redact diagnostics unless the caller can manage users
 
   assert.deepEqual(ordinary, {
     ok: false,
-    error: '当前没有可用的 AI 引擎',
+    error: 'AI 引擎暂时不可用，请稍后重试或联系管理员。',
     code: 'ASSISTANT_ENGINES_UNAVAILABLE',
     engines: { 'kimi-cli': { status: 'unhealthy' } },
   });
+  assert.equal(manager.error, 'all providers failed: kimi stderr and hermes trace');
   assert.equal(manager.engines['kimi-cli'].errorCode, 'KIMI_CLI_TIMEOUT');
   assert.equal(manager.engines['kimi-cli'].errorMessage, 'Kimi endpoint timed out');
+});
+
+test('ordinary chat users retain non-provider validation and application messages', () => {
+  const validationError = Object.assign(new Error('请输入问题。'), {
+    code: 'ASSISTANT_INPUT_INVALID',
+    statusCode: 400,
+  });
+  const applicationError = Object.assign(new Error('CRM 数据服务暂时不可用'), {
+    code: 'CRM_DEPENDENCY_UNAVAILABLE',
+    statusCode: 503,
+  });
+
+  assert.deepEqual(serializeAssistantEngineError(validationError, false), {
+    ok: false,
+    error: '请输入问题。',
+    code: 'ASSISTANT_INPUT_INVALID',
+  });
+  assert.deepEqual(serializeAssistantEngineError(applicationError, false), {
+    ok: false,
+    error: 'CRM 数据服务暂时不可用',
+    code: 'CRM_DEPENDENCY_UNAVAILABLE',
+  });
 });
