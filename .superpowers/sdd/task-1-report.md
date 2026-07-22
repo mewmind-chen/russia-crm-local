@@ -45,3 +45,24 @@ Result: the focused health suite passed 3/3 tests. The full suite passed 155/155
 ## Concerns
 
 `registerSalesCrm(app)` invokes `installSalesCrm()` during app creation, which creates `CRM_DB_PATH` even when the fixture starts without a database. The unavailable-database fixture therefore removes that startup-created test file after the listener is ready, before issuing its health request. This is the minimal fixture correction needed to exercise the required unavailable-database behavior; production code remains exactly as specified.
+
+## Follow-up Fix: SQLite Probe Cleanup
+
+`readDatabaseStatus` now closes an opened SQLite handle in a `finally` block when the read-only probe query throws. The public interface and the `ok`/`unavailable` result behavior are unchanged.
+
+RED command:
+
+```sh
+node --test test/release_health.test.js
+```
+
+RED result: 3 tests passed and the new `database health closes an opened handle when its probe query fails` test failed with `false !== true`, proving the opened handle was not closed.
+
+GREEN commands:
+
+```sh
+node --test test/release_health.test.js
+npm test
+```
+
+GREEN results: focused health suite passed 4/4 tests; full suite passed 156/156 tests with 0 failures.

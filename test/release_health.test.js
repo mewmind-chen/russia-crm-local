@@ -58,3 +58,33 @@ test('health endpoint returns 503 when release metadata is absent or invalid', a
     assert.deepEqual(await response.json(), { ok: false, database: 'ok', releaseSha: 'unknown' });
   });
 });
+
+test('database health closes an opened handle when its probe query fails', () => {
+  const healthModulePath = require.resolve('../lib/release_health');
+  const databaseModulePath = require.resolve('better-sqlite3');
+  const cachedHealthModule = require.cache[healthModulePath];
+  const originalDatabase = require.cache[databaseModulePath].exports;
+  let closed = false;
+
+  class FailingDatabase {
+    prepare() {
+      return { get: () => { throw new Error('probe failed'); } };
+    }
+
+    close() {
+      closed = true;
+    }
+  }
+
+  delete require.cache[healthModulePath];
+  require.cache[databaseModulePath].exports = FailingDatabase;
+  try {
+    const { readDatabaseStatus } = require('../lib/release_health');
+    assert.equal(readDatabaseStatus('/tmp/crm-health-failing-probe.db'), 'unavailable');
+    assert.equal(closed, true);
+  } finally {
+    delete require.cache[healthModulePath];
+    require.cache[databaseModulePath].exports = originalDatabase;
+    if (cachedHealthModule) require.cache[healthModulePath] = cachedHealthModule;
+  }
+});
