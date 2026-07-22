@@ -85,6 +85,8 @@ function assertActiveWorkflowTriggers(workflow) {
 
 function assertActiveTestJobSteps(workflow) {
   const testJob = activeTestJobLines(workflow);
+  assert.doesNotMatch(testJob.join('\n'), /^    if:\s*/m,
+    'jobs.test must not be conditional');
   assert.doesNotMatch(testJob.join('\n'), /^    continue-on-error:\s*/m,
     'jobs.test must not set continue-on-error');
   const steps = activeTestJobSteps(workflow);
@@ -143,6 +145,10 @@ test('CI contract ignores commented requirements outside active test steps', () 
     '    runs-on: ubuntu-latest',
     '    continue-on-error: true\n    runs-on: ubuntu-latest',
   );
+  const conditionalJob = workflow.replace(
+    '    runs-on: ubuntu-latest',
+    '    if: ${{ false }}\n    runs-on: ubuntu-latest',
+  );
 
   assert.throws(
     () => assertActiveTestJobSteps(commentedNodeVersion),
@@ -158,6 +164,8 @@ test('CI contract ignores commented requirements outside active test steps', () 
     () => assertActiveTestJobSteps(toleratedTestFailure), /continue-on-error/);
   assert.throws(
     () => assertActiveTestJobSteps(toleratedJobFailure), /continue-on-error/);
+  assert.throws(
+    () => assertActiveTestJobSteps(conditionalJob), /jobs\.test.*conditional/);
 });
 
 test('CI contract ignores commented or altered triggers', () => {
