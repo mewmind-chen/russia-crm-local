@@ -33,7 +33,7 @@ function activeOnBlock(workflow) {
   return childBlock(lines, on, 0);
 }
 
-function activeTestJobSteps(workflow) {
+function activeTestJobLines(workflow) {
   const lines = activeLines(workflow);
   const jobs = lines.findIndex(line => /^jobs:\s*(?:#.*)?$/.test(line));
   assert.notEqual(jobs, -1, 'workflow must define jobs');
@@ -43,6 +43,13 @@ function activeTestJobSteps(workflow) {
   const testLines = childBlock(jobLines, testJob, 2);
   const steps = testLines.findIndex(line => /^    steps:\s*(?:#.*)?$/.test(line));
   assert.notEqual(steps, -1, 'workflow must define jobs.test.steps');
+
+  return testLines;
+}
+
+function activeTestJobSteps(workflow) {
+  const testLines = activeTestJobLines(workflow);
+  const steps = testLines.findIndex(line => /^    steps:\s*(?:#.*)?$/.test(line));
 
   const stepLines = childBlock(testLines, steps, 4);
   const entries = [];
@@ -59,8 +66,10 @@ function activeTestJobSteps(workflow) {
   return entries;
 }
 
-function assertUnconditional(step, description) {
+function assertRequiredStep(step, description) {
   assert.doesNotMatch(step, /^\s*if:\s*/m, `${description} must not be conditional`);
+  assert.doesNotMatch(step, /^\s*continue-on-error:\s*/m,
+    `${description} must not set continue-on-error`);
 }
 
 function assertActiveWorkflowTriggers(workflow) {
@@ -75,15 +84,22 @@ function assertActiveWorkflowTriggers(workflow) {
 }
 
 function assertActiveTestJobSteps(workflow) {
+  const testJob = activeTestJobLines(workflow);
+  assert.doesNotMatch(testJob.join('\n'), /^    continue-on-error:\s*/m,
+    'jobs.test must not set continue-on-error');
   const steps = activeTestJobSteps(workflow);
   const setupNode = steps.find(step => /^      - uses: actions\/setup-node@v4\s*(?:#.*)?$/m.test(step));
   assert.ok(setupNode, 'test job requires active actions/setup-node@v4');
-  assertUnconditional(setupNode, 'actions/setup-node@v4');
-  assert.match(setupNode, /^          node-version:\s*22\s*(?:#.*)?$/m,
-    'actions/setup-node@v4 requires active node-version: 22');
+  assertRequiredStep(setupNode, 'actions/setup-node@v4');
+  const setupLines = setupNode.split('\n');
+  const withIndex = setupLines.findIndex(line => /^        with:\s*(?:#.*)?$/.test(line));
+  assert.notEqual(withIndex, -1, 'actions/setup-node@v4 requires a with child containing node-version: 22');
+  const withLines = childBlock(setupLines, withIndex, 8);
+  assert.ok(withLines.some(line => /^          node-version:\s*22\s*(?:#.*)?$/.test(line)),
+    'actions/setup-node@v4 requires node-version: 22 inside with');
   const zshInstall = steps.find(step => /^      - run: sudo apt-get update && sudo apt-get install -y zsh\s*(?:#.*)?$/m.test(step));
   assert.ok(zshInstall, 'test job requires active zsh installation');
-  assertUnconditional(zshInstall, 'zsh installation');
+  assertRequiredStep(zshInstall, 'zsh installation');
   for (const command of [
     'npm ci',
     'npm test',
@@ -97,7 +113,7 @@ function assertActiveTestJobSteps(workflow) {
     const escapedCommand = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const runStep = steps.find(step => new RegExp(`^      - run: ${escapedCommand}\\s*(?:#.*)?$`, 'm').test(step));
     assert.ok(runStep, `test job requires active ${command}`);
-    assertUnconditional(runStep, command);
+    assertRequiredStep(runStep, command);
   }
 }
 
@@ -115,6 +131,18 @@ test('CI contract ignores commented requirements outside active test steps', () 
     /^      - run: npm test$/m,
     '      - run: npm test\n        if: ${{ false }}',
   );
+  const nodeVersionUnderEnv = workflow.replace(
+    '        with:\n          node-version: 22',
+    '        env:\n          node-version: 22',
+  );
+  const toleratedTestFailure = workflow.replace(
+    /^      - run: npm test$/m,
+    '      - run: npm test\n        continue-on-error: true',
+  );
+  const toleratedJobFailure = workflow.replace(
+    '    runs-on: ubuntu-latest',
+    '    continue-on-error: true\n    runs-on: ubuntu-latest',
+  );
 
   assert.throws(
     () => assertActiveTestJobSteps(commentedNodeVersion),
@@ -124,6 +152,12 @@ test('CI contract ignores commented requirements outside active test steps', () 
     () => assertActiveTestJobSteps(commentedTestCommand), /npm test/);
   assert.throws(
     () => assertActiveTestJobSteps(conditionalTestCommand), /must not be conditional/);
+  assert.throws(
+    () => assertActiveTestJobSteps(nodeVersionUnderEnv), /with.*node-version/i);
+  assert.throws(
+    () => assertActiveTestJobSteps(toleratedTestFailure), /continue-on-error/);
+  assert.throws(
+    () => assertActiveTestJobSteps(toleratedJobFailure), /continue-on-error/);
 });
 
 test('CI contract ignores commented or altered triggers', () => {
