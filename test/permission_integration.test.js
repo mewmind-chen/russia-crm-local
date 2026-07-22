@@ -108,6 +108,37 @@ test('workbench bootstraps from capabilities without embedded business contacts'
   }
 });
 
+test('CRM customer profile uses customer permission and returns only the scoped profile', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.setUserPermissions('U-WU', {
+    view_customers: true,
+    view_development: false,
+    view_pool: false,
+    view_recon: false,
+    view_all_customers: false,
+    edit_customer: true,
+  });
+  fx.db.prepare(`INSERT INTO crm_manager_evaluations
+    (id,customer_id,subject_type,evaluation_text,author_id,author_name,ai_status,ai_labels_json,created_at,updated_at)
+    VALUES ('EVAL-PROFILE','CRM-WU','company','Priority account','U-MGR','Manager','completed',?, '2026-07-21 08:00:00','2026-07-21 08:00:00')`)
+    .run(JSON.stringify([{ name: '重点推进' }, { name: '俄罗斯市场' }]));
+  const cookie = await fx.login('wu@example.com', 'Password123!');
+
+  assert.equal((await fx.request('/development-workbench', { cookie })).status, 403);
+  assert.equal((await fx.request('/development-workbench?profile=1&customer=RU-9001', { cookie })).status, 200);
+
+  const response = await fx.request('/api/sales-crm/profile/RU-9001', { cookie });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.deepEqual(body.customerPool.map(row => row.customerId), ['RU-9001']);
+  assert.equal(body.customerPool[0].tags.some(tag => tag.readOnly && tag.name === '重点推进'), true);
+  assert.deepEqual(body.reconResults, []);
+  assert.equal(JSON.stringify(body).includes('RU-9002'), false);
+  assert.equal(JSON.stringify(body).includes('RU-9003'), false);
+  assert.equal((await fx.request('/api/sales-crm/profile/RU-9003', { cookie })).status, 403);
+});
+
 test('complete legacy deny matrix returns 403 before business handlers run', async () => {
   const cases = [
     ['view_development', 'GET', '/api/initial'],
@@ -397,6 +428,41 @@ test('sales-role create_customer honors an explicitly selected sales owner', asy
   assert.equal(fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE id=?').get(body.customerId).owner_id, 'U-SALES2');
 });
 
+test('manual CRM customer creation generates a canonical customer code', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { create_customer: true });
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const response = await fx.request('/api/sales-crm/accounts', {
+    cookie,
+    method: 'POST',
+    body: { companyName: 'Automatic Code Fixture', country: '俄罗斯', ownerId: 'U-OTHER' },
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200, body.error);
+  assert.match(body.externalCustomerId, /^RU-\d{4}$/);
+  assert.deepEqual(
+    fx.db.prepare('SELECT external_customer_id FROM crm_accounts WHERE id=?').get(body.customerId),
+    { external_customer_id: body.externalCustomerId },
+  );
+  assert.equal(
+    fx.db.prepare('SELECT company_name FROM customer_pool WHERE customer_id=?').get(body.externalCustomerId).company_name,
+    'Automatic Code Fixture',
+  );
+
+  const secondResponse = await fx.request('/api/sales-crm/accounts', {
+    cookie,
+    method: 'POST',
+    body: { companyName: 'Automatic UK Code Fixture', country: '英国', ownerId: 'U-OTHER' },
+  });
+  const secondBody = await secondResponse.json();
+  assert.equal(secondResponse.status, 200, secondBody.error);
+  assert.equal(body.externalCustomerId, 'RU-9004');
+  assert.equal(secondBody.externalCustomerId, 'GB-9005');
+});
+
 test('sales-role edit_customer applies explicit owner and stage updates', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
@@ -662,7 +728,7 @@ test('contact-restricted Sales bootstrap strips company evaluation narratives', 
     .run(
       'evaluation-contact@secret.test',
       'summary-contact@secret.test',
-      '["labels-contact@secret.test"]',
+      '["重点推进","labels-contact@secret.test"]',
       '["keys-contact@secret.test"]',
       '["risks-contact@secret.test"]',
       'strategy-contact@secret.test',
@@ -673,6 +739,8 @@ test('contact-restricted Sales bootstrap strips company evaluation narratives', 
 
   const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
   assert.doesNotMatch(JSON.stringify(body.insights.evaluations), /(?:evaluation|summary|labels|keys|risks|strategy|error)-contact/);
+  assert.deepEqual(body.customerEvaluationTags, [{ customerId: 'CRM-WU', labels: ['重点推进'] }]);
+  assert.doesNotMatch(JSON.stringify(body.customerEvaluationTags), /secret\.test/);
 });
 
 test('scoped users can run isolated prospect tasks without global CRM access', async t => {

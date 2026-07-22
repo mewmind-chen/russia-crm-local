@@ -79,7 +79,9 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   });
 });
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
-  if (!hasPermission(req.salesUser, 'view_development')) return res.status(403).send('当前账号没有客户开发工作台权限');
+  const profileMode = String(req.query.profile || '') === '1';
+  const permission = profileMode ? 'view_customers' : 'view_development';
+  if (!hasPermission(req.salesUser, permission)) return res.status(403).send(profileMode ? '当前账号没有客户资料权限' : '当前账号没有客户开发工作台权限');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.sendFile(path.join(__dirname, 'Index.html'));
 });

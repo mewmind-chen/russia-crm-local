@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260721-2">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-3">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -46,25 +46,18 @@
       <nav id="nav" class="nav">
         <div class="nav-group"><div class="nav-group-label">今日工作</div>
           <button data-view="dashboard" data-permission="view_dashboard" class="active"><i>◫</i><span>经营驾驶舱</span></button>
-          <button data-view="intake" data-permission="view_intake"><i>⇣</i><span>未开发线索分配</span><b id="navIntakeCount">0</b></button>
-          <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>异常与介入</span><b id="navAlertCount" class="danger-count">0</b></button>
+          <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
         </div>
-        <div class="nav-group"><div class="nav-group-label">客户经营</div>
+        <div class="nav-group"><div class="nav-group-label">客户流转</div>
+          <button data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
+          <button data-view="claimed" data-permission="view_intake"><i>✓</i><span>已领取</span><b id="navClaimedCount">0</b></button>
           <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
-          <button data-view="insights" data-permission="view_insights"><i>✦</i><span>经理评价</span><b id="navInsightCount">0</b></button>
         </div>
-        <div class="nav-group"><div class="nav-group-label">客户开发</div>
-          <button data-view="development" data-permission="view_development"><i>✦</i><span>客户开发工作台</span></button>
-          <button data-view="pool" data-permission="view_pool"><i>◈</i><span>未开发线索池</span><b id="navPoolCount">0</b></button>
-          <button data-view="contacts" data-permission="view_contacts"><i>◉</i><span>联系人速览</span><b id="navPeopleCount">0</b></button>
-          <button data-view="recon" data-permission="view_recon"><i>◎</i><span>Recon 结果速览</span></button>
-        </div>
-        <div class="nav-group"><div class="nav-group-label">经营分析</div>
+        <div class="nav-group"><div class="nav-group-label">管理中心</div>
+          <button data-view="intake" data-permission="manage_intake"><i>⚙</i><span>线索分配</span><b id="navIntakeCount">0</b></button>
           <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
           <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
-        </div>
-        <div class="nav-group"><div class="nav-group-label">系统</div>
           <button data-view="users" data-permission="view_users"><i>⊕</i><span>用户与权限</span></button>
         </div>
       </nav>
@@ -169,9 +162,10 @@
       <section id="customersView" class="view">
         <article class="panel">
           <div class="toolbar">
-            <div class="search-box">⌕ <input id="customerSearch" placeholder="搜索公司、国家、行业或产品"></div>
+            <div class="search-box">⌕ <input id="customerSearch" placeholder="搜索公司、国家、行业、产品或评价标签"></div>
             <select id="stageFilter"><option value="">全部阶段</option></select>
             <select id="priorityFilter"><option value="">全部优先级</option><option>A</option><option>B</option><option>C</option></select>
+            <select id="evaluationTagFilter"><option value="">全部评价标签</option></select>
             <label class="check"><input id="onlyOverdue" type="checkbox"> 仅看超期</label>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
@@ -179,12 +173,13 @@
         </article>
       </section>
 
-      <section id="developmentView" class="view development-view development-workbench-host">
-        <div id="developmentWorkbenchLoading" class="workbench-loading">
-          <span class="workbench-loading-mark">✦</span>
-          <div><strong>正在载入完整客户开发工作台</strong><span>每日交付、跟进看板、未开发线索池、负责人、Recon、外贸智能体、话术模板和 AI 问答</span></div>
+      <section id="customerProfileView" class="view customer-profile-view">
+        <div class="customer-profile-toolbar">
+          <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
+          <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2></div>
+          <button id="customerProfileEdit" class="button secondary hidden" type="button">调整客户信息</button>
         </div>
-        <iframe id="developmentWorkbenchFrame" class="development-frame" title="客户开发工作台" loading="lazy" allow="clipboard-write"></iframe>
+        <iframe id="customerProfileFrame" class="customer-profile-frame" title="客户完整资料" loading="eager" allow="clipboard-write"></iframe>
       </section>
 
       <section id="poolView" class="view">
@@ -309,6 +304,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260721-2"></script>
+  <script src="/sales-assets/app.js?v=20260722-3"></script>
 </body>
 </html>

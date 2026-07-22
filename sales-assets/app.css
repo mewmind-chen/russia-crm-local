@@ -37,3 +37,25 @@
 .impersonation-banner .button.secondary{border-color:#36584a;background:transparent;color:#fff;white-space:nowrap}
 .impersonation-banner .button.secondary:hover{background:#214238}
 @media(max-width:780px){.impersonation-banner{flex-direction:column;align-items:stretch;text-align:center}.impersonation-banner>div{justify-content:center}.impersonation-banner .button{width:100%}}
+
+/* Unified customer profile entry points and contextual AI */
+.data-table tbody tr[data-customer],.data-table tbody tr[data-intake-profile]{cursor:pointer}
+.data-table tbody tr[data-customer]:hover td,.data-table tbody tr[data-intake-profile]:hover td{background:#f4f8f6}
+.customer-ai{border:1px solid #d8ccef;border-radius:12px;background:#fbf9fe;overflow:hidden}
+.customer-ai-body{padding:14px;display:grid;gap:12px}
+.customer-ai-answer{min-height:66px;border:1px solid #e2d9f1;border-radius:8px;background:#fff;padding:12px;color:#423b50;font-size:11px;line-height:1.7;white-space:pre-wrap}
+.customer-ai-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.customer-ai-form textarea{width:100%;min-height:64px;max-height:180px;resize:vertical;border:1px solid #d8ccef;border-radius:8px;background:#fff;color:var(--ink);padding:10px 12px;outline:none}
+.customer-ai-form textarea:focus{border-color:#765aab;box-shadow:0 0 0 3px rgba(97,71,152,.1)}
+.customer-ai-form .button{min-width:72px;height:40px}
+@media(max-width:780px){.customer-ai-form{grid-template-columns:1fr}.customer-ai-form .button{width:100%}}
+
+/* Original workbench customer detail in a dedicated CRM profile page */
+.customer-profile-view.active{height:calc(100dvh - 130px);min-height:620px;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:#fff}
+.customer-profile-toolbar{min-height:58px;display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.customer-profile-toolbar .button{flex:0 0 auto}
+.customer-profile-toolbar #customerProfileEdit{margin-left:auto}
+.customer-profile-toolbar h2{margin:2px 0 0;font-size:17px}
+.customer-profile-frame{display:block;width:100%;height:100%;min-height:0;border:0;background:#fff}
+body.customer-profile-active .top-actions{display:none}
+@media(max-width:780px){.customer-profile-view.active{height:calc(100dvh - 95px);min-height:500px}.customer-profile-toolbar{padding:8px 0}.customer-profile-toolbar h2{font-size:15px}}
