@@ -112,3 +112,18 @@ test('impersonation action blocked responses keep business state intact', () => 
   assert.ok(apiMatch, 'api helper found');
   assert.match(apiMatch[0], /error\.code\s*=\s*result\.code/);
 });
+
+test('data maintenance UI is permission gated and requires preview before execute', () => {
+  const html = readAsset('sales-crm.html');
+  const js = readAsset('sales-assets', 'app.js');
+  const css = readAsset('sales-assets', 'app.css');
+  assert.match(html, /data-view="maintenance" data-permission="manage_data_maintenance"/);
+  assert.match(html, /id="maintenancePreviewPanel"/);
+  assert.match(js, /id="maintenanceExecuteBtn"/);
+  assert.match(js, /\/api\/sales-crm\/data-maintenance\/preview/);
+  assert.match(js, /\/api\/sales-crm\/data-maintenance\/execute/);
+  assert.match(js, /state\.maintenancePreview/);
+  assert.match(js, /data-view="maintenance"/);
+  assert.match(css, /maintenance-warning/);
+  assert.match(css, /button\.danger/);
+});

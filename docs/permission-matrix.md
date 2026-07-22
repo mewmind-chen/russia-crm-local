@@ -36,13 +36,14 @@
 | `use_prospect_agent` | Legacy prospect create/rerun/promote | tasks are isolated by creator; public search can run without CRM read access; local pool/Recon retrieval additionally obeys module permission, row scope, and contact permission; promote needs `edit_customer`; any reused customer ID/domain match must already be in caller scope; `createRecon=true` also needs `run_recon+view_recon` | scoped users cannot read or rerun another creator's task; scoped promotion cannot target another owner |
 | `use_ai_assistant` | `POST /api/assistant/chat` | SQL, deterministic, report, source and matched-customer results are query-scoped; contact-bearing narrative columns, vector retrieval, web search, and direct URL fetch are disabled when `view_contacts=false` | assistant scope suite |
 | `manage_users` | create/patch users; migration review | also `view_users` | Sales user management requires both permissions |
+| `manage_data_maintenance` | data-maintenance capabilities/runs/preview/execute | real administrator only; blocked during identity inspection; execute requires a fresh preview, confirmation text and successful backup | data maintenance suite |
 
 ## Explicit route/action policies
 
 - Legacy read routes: `/api/session/capabilities`, `/api/initial`, `/api/customers`, `/api/customers/:customerId/people`, `/api/contact-recon/state`, `/api/recon/results/:jobId`, `/api/report`, `/api/recon-monitor`, `/api/quality/issues`, `/api/delivery/latest`, `/api/delivery/file`, `/api/assistant/chat`.
 - Legacy `/api/app` actions: `updateCustomer`, `createTag`, `setCustomerTags`, `createReconJob`, `retryReconJob`, `createContactReconJob`.
 - Legacy `/api/prospect-agent` actions: `createTask`, `rerunTask`, `promoteCandidate`.
-- Sales routes: bootstrap; research pool/people/recon; account create/patch; activities; quotes; orders; user create/patch; migration review; password; intake scan/action/settings; contacts; evaluation create/retry. The centralized Sales policy is enforced before handlers, unknown routes are default-denied, and denied writes are recorded with an anonymous route/permission audit event.
+- Sales routes: bootstrap; research pool/people/recon; account create/patch; activities; quotes; orders; user create/patch; migration review; password; intake scan/action/settings; contacts; evaluation create/retry; data-maintenance capabilities/runs/preview/execute. The centralized Sales policy is enforced before handlers, unknown routes are default-denied, and denied writes are recorded with an anonymous route/permission audit event.
 - `POST /api/recon` and `POST /api/contact-recon` are not browser-session routes: they require the independent `RECON_WORKER_TOKEN` boundary.
 - `/share/report/*` and `/share/contact-report/*` are not browser-session routes: they require constant-time comparison against the independent share token and only serve validated report paths.
 - Login/logout and password change are authentication/self-service boundaries. Unknown browser routes and actions are default-denied.
