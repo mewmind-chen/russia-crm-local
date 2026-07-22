@@ -194,12 +194,28 @@ CRM_FIXTURE_BASE_DB=/absolute/path/to/crm-production-copy.db \
 
 ## Deploy, health check, and rollback
 
+Automatic deployment accepts `origin/main` as its only source. Normal: merge PR -> Mac
+validates latest origin/main -> backup -> switch -> health check.
+
+```bash
+npm run deploy:mac:install
+npm run deploy:mac:status
+npm run deploy:mac:retry
+tail -f logs/com.russia-crm.auto-deploy.{out,err}.log
+curl -fsS http://127.0.0.1:3000/healthz
+```
+
+Also confirm the public `/healthz` endpoint after a deployment. Notifications: none in the first version.
+
+Rollback boundary: code symlink is automatic; SQLite restore is manual and requires
+stopped services. Automatic database restore is forbidden.
+
 合并并更新 `/opt/tradepulse` 后，Linux 生产环境使用：
 
 ```bash
 sudo systemctl restart tradepulse.service
 sudo systemctl status --no-pager tradepulse.service
-curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
+curl --fail --silent --show-error http://127.0.0.1:3000/healthz >/dev/null
 ```
 
 当前 Mac + Cloudflare Named Tunnel 环境使用：
@@ -208,12 +224,12 @@ curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
 launchctl kickstart -k gui/$(id -u)/com.russia-crm.server
 launchctl kickstart -k gui/$(id -u)/com.russia-crm.cloudflare-tunnel
 launchctl print gui/$(id -u)/com.russia-crm.server
-curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
+curl --fail --silent --show-error http://127.0.0.1:3000/healthz >/dev/null
 ```
 
 公网检查还应验证登录页返回 200，并用低权限测试账号确认禁止模块返回 403。若出现 502，先检查本地健康检查和服务日志；Cloudflare 显示 `Host Error` 通常表示源站服务未监听或隧道无法连接源站。
 
-回滚顺序：停止 CRM 与 Worker，切回上一稳定提交，恢复上线前 SQLite `.backup` 产物，再启动 CRM、Worker 和隧道并重复健康检查。不要用普通文件复制替换正在运行的 WAL 数据库。
+回滚顺序：停止 CRM 与 Worker，切回上一稳定提交，恢复上线前 SQLite `.backup` 产物，再启动 CRM、Worker 和隧道并重复健康检查。不要用普通文件复制替换正在运行的 WAL 数据库。数据库恢复必须由操作人员手动执行，部署器绝不自动恢复数据库。
 
 ## Backup and rollback
 
