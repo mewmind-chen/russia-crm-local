@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { callAssistantModel } = require('../lib/assistant');
+const { callAssistantModel, callDeepSeek } = require('../lib/assistant');
 
 test('callAssistantModel delegates to the supplied router and returns session engine metadata', async () => {
   const calls = [];
@@ -45,6 +45,37 @@ test('callAssistantModel delegates to the supplied router and returns session en
   } finally {
     if (oldEngine === undefined) delete process.env.ASSISTANT_ENGINE;
     else process.env.ASSISTANT_ENGINE = oldEngine;
+    if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = oldKey;
+  }
+});
+
+test('DeepSeek uses the per-call timeout when its request aborts', async () => {
+  const originalFetch = global.fetch;
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  const oldKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = 'test-key';
+  global.setTimeout = callback => {
+    callback();
+    return 1;
+  };
+  global.clearTimeout = () => {};
+  global.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error('aborted');
+    error.name = 'AbortError';
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      () => callDeepSeek([{ role: 'user', content: 'test' }], { timeoutMs: 12000 }),
+      error => error.code === 'DEEPSEEK_TIMEOUT' && error.statusCode === 504 && /12/.test(error.message),
+    );
+  } finally {
+    global.fetch = originalFetch;
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
     if (oldKey === undefined) delete process.env.DEEPSEEK_API_KEY;
     else process.env.DEEPSEEK_API_KEY = oldKey;
   }

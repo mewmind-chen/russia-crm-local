@@ -184,6 +184,47 @@ test('automatic mode never attempts more than two business engines', async () =>
   }
 });
 
+test('router caps auto routing at the global 75-second budget and two attempts', async () => {
+  const ctx = testRouter({ routerTimeoutMs: 90000, autoAttemptTimeoutMs: 90000, maxAttempts: 3 });
+  try {
+    await ctx.router.refreshHealth(healthyAdapters(), { force: true });
+    const timeouts = [];
+    const fail = engine => async (_messages, options) => {
+      timeouts.push([engine, options.timeoutMs]);
+      throw engineError(`${engine.toUpperCase()}_FAILED`);
+    };
+    await assert.rejects(() => ctx.router.route([], {}, {
+      'kimi-cli': fail('kimi-cli'),
+      hermes: fail('hermes'),
+      deepseek: fail('deepseek'),
+    }), error => error.code === 'ASSISTANT_ENGINES_UNAVAILABLE');
+    assert.deepEqual(timeouts.map(([engine]) => engine), ['kimi-cli', 'hermes']);
+    assert.ok(timeouts.every(([, timeout]) => timeout <= 75000));
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('fixed mode caps a requested timeout at the global router budget', async () => {
+  const ctx = testRouter({ mode: 'hermes', routerTimeoutMs: 90000 });
+  try {
+    const timeouts = [];
+    const adapters = {
+      'kimi-cli': async () => engineResult('kimi-cli'),
+      hermes: async (_messages, options) => {
+        timeouts.push(options.timeoutMs);
+        return engineResult('hermes');
+      },
+      deepseek: async () => engineResult('deepseek'),
+    };
+    await ctx.router.route([], { timeoutMs: 90000 }, adapters);
+    await ctx.router.route([], { timeoutMs: 12000 }, adapters);
+    assert.deepEqual(timeouts, [75000, 12000]);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
 test('does not fail over when an adapter reports a non-engine application error', async () => {
   const ctx = testRouter();
   try {
