@@ -791,6 +791,19 @@
     .modal-backdrop.show .modal { transform: translateX(0); }
     .modal-head { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb,var(--panel) 92%,transparent); backdrop-filter: blur(18px); }
     .modal-actions { position: sticky; bottom: 0; z-index: 5; background: color-mix(in srgb,var(--panel) 94%,transparent); backdrop-filter: blur(18px); }
+    body.profile-mode { overflow: hidden; background: var(--panel); }
+    body.profile-mode .app > .sidebar,
+    body.profile-mode .app > .sidebar-mask,
+    body.profile-mode .main-col > .topbar,
+    body.profile-mode .main-col > .layout { display: none !important; }
+    body.profile-mode .app { display: block; min-height: 0; }
+    body.profile-mode #modalBackdrop { padding: 0; background: var(--panel); backdrop-filter: none; place-items: stretch; }
+    body.profile-mode #modalBackdrop.show { display: grid; }
+    body.profile-mode #modalBackdrop .modal {
+      width: 100%; max-width: none; min-height: 100dvh; height: 100dvh; margin: 0;
+      border: 0; border-radius: 0; box-shadow: none; transform: none;
+    }
+    body.profile-mode #closeModalBtn { display: none; }
 
     @media (prefers-color-scheme: dark) {
       :root {
@@ -855,7 +868,7 @@
 </head>
 <body data-app="intelligence" class="permissions-pending">
   <script>
-    (()=>{const q=new URLSearchParams(location.search);if(q.get('embedded')==='1')document.body.classList.add('embedded-mode');if(q.get('assistant')==='0')document.body.classList.add('no-assistant');if(q.get('prospect')==='0')document.body.classList.add('no-prospect')})()
+    (()=>{const q=new URLSearchParams(location.search);if(q.get('embedded')==='1')document.body.classList.add('embedded-mode');if(q.get('profile')==='1')document.body.classList.add('profile-mode');if(q.get('assistant')==='0')document.body.classList.add('no-assistant');if(q.get('prospect')==='0')document.body.classList.add('no-prospect')})()
   </script>
   <div class="app">
     <aside class="sidebar" id="sidebar">
@@ -979,7 +992,8 @@
     function refreshFromServer(){loadData()}
     async function loadData(){setLoading(!0);try{await loadCapabilities();const d=await fetchJson(`${API_BASE}/initial`,void 0,!0);hydrate(d);await loadReconMonitor(!0);showToast(d&&d.ok===!1?'数据部分读取':'数据已刷新')}catch(e){console.error(e);if(isFilePreview()){hydrate({...fallbackData,stats:computeLocalStats(fallbackData.customers,fallbackData.customerPool),updatedAt:'本地预览模式'});showToast('已进入本地预览模式')}else{const d=$('#dashboardView');if(d)d.innerHTML=`<div class="empty" style="padding:40px;"><p style="font-size:16px;color:var(--danger);">数据读取失败</p><p>${escapeHtml(e.message||'未知错误')}</p><p style="margin-top:14px;"><button class="btn" onclick="location.reload()">重新加载</button></p><p class="muted" style="margin-top:12px;">请确认：<br>1. Express 已启动：node server.js<br>2. 数据已迁移：node scripts/migrate.js</p></div>`;showToast(e.message||'读取失败')}}finally{setLoading(!1)}}
     function hydrate(d){state.customers=d.customers||[];state.customerPool=d.customerPool||[];state.templates=d.templates||[];state.reconJobs=d.reconJobs||[];state.reconResults=d.reconResults||[];state.contactReconJobs=d.contactReconJobs||[];state.people=d.people||[];state.contactQualityStats=d.contactQualityStats||{};state.prospectTasks=d.prospectTasks||[];state.prospectCandidates=d.prospectCandidates||[];state.prospectSources=d.prospectSources||[];if(!state.prospectActiveTaskId&&state.prospectTasks[0])state.prospectActiveTaskId=state.prospectTasks[0].taskId;state.tags=d.tags||[];state.tagCategories=d.tagCategories||defaultTagCategories();state.stats=d.stats||computeLocalStats(state.customers,state.customerPool);state.user=d.user||{};state.statusOptions=d.statusOptions||fallbackData.statusOptions;state.statusGroups=d.statusGroups||fallbackData.statusGroups;state.diagnostics=d.diagnostics||[];state.lastReconHydrateAt=Date.now();$('#metaLine').textContent='外贸客户系统';$('#userPill').textContent='数据源：SQLite';if(state.diagnostics.length)showToast(`部分数据读取失败：${state.diagnostics[0]}`);buildSelectOptions();applyFilters();const requestedView=location.hash.replace(/^#/,'');if(moduleAllowed(requestedView)&&$(`#${requestedView}View`))switchView(requestedView);else switchView(moduleAllowed('dashboard')?'dashboard':Array.from(state.allowedModules)[0]);openRequestedCustomer();updateAssistantContext();if(state.capabilities.permissions.view_recon&&state.capabilities.permissions.view_all_customers)loadQualityIssues()}
-    function openRequestedCustomer(){if(state.requestedCustomerOpened)return;const id=new URLSearchParams(location.search).get('customer');if(!id)return;const pool=state.customerPool.find(item=>String(item.customerId)===String(id));const follow=state.customers.find(item=>String(item.customerId)===String(id)||String(item.followId)===String(id));state.requestedCustomerOpened=!0;if(pool){switchView('pool');window.setTimeout(()=>openPoolCustomer(pool.customerId),0)}else if(follow){switchView('customers');window.setTimeout(()=>openCustomer(follow.followId),0)}else showToast('未找到对应客户资料')}
+    function renderRequestedCustomerError(message){$('#modalTitle').textContent='客户资料';$('#modalTags').innerHTML='';$('#detailTabs').style.display='none';$('#riskBanner').classList.remove('show');$('#detailHero').innerHTML=`<div class="empty"><strong>${escapeHtml(message||'未找到对应客户资料')}</strong><p class="muted">请返回 CRM 客户列表重新选择。</p></div>`;$('#detailGrid').innerHTML='';$('.modal-actions').style.display='none';$('#modalBackdrop').classList.add('show')}
+    function openRequestedCustomer(){if(state.requestedCustomerOpened)return;const id=new URLSearchParams(location.search).get('customer');if(!id)return;const pool=state.customerPool.find(item=>String(item.customerId)===String(id));const follow=state.customers.find(item=>String(item.customerId)===String(id)||String(item.followId)===String(id));const profileMode=document.body.classList.contains('profile-mode');state.requestedCustomerOpened=!0;if(pool){if(!profileMode)switchView('pool');window.setTimeout(()=>openPoolCustomer(pool.customerId),0)}else if(follow){if(!profileMode)switchView('customers');window.setTimeout(()=>openCustomer(follow.followId),0)}else if(profileMode)renderRequestedCustomerError('未找到对应客户资料');else showToast('未找到对应客户资料')}
     async function loadQualityIssues(){const root=$('#qualityIssues');if(!root||isFilePreview())return;try{const d=await fetchJson(`${API_BASE}/quality/issues`),labels={invalid_email:'非法邮箱',missing_owner:'活跃客户无负责人',missing_next_action:'缺少下一步动作',missing_next_follow_date:'缺少下次跟进日期',evidence_count_mismatch:'证据计数不一致',missing_sanction_checked_at:'制裁检查日期缺失'};root.innerHTML=(d.issues||[]).map(i=>`<span class="tag ${i.count?(i.severity==='error'?'risk':'overdue'):'status'}">${escapeHtml(labels[i.code]||i.code)} ${Number(i.count||0)}</span>`).join('')||'<span class="tag status">未发现质量问题</span>'}catch(e){root.innerHTML=`<span class="tag risk">质量审计读取失败：${escapeHtml(e.message||'未知错误')}</span>`}}
     function buildSelectOptions(){const s=state.customers.map(i=>i.status).filter(Boolean);const p=state.customerPool.map(i=>i.currentPool).filter(Boolean);const a=[...state.customers,...state.customerPool];fillSelect('#statusFilter',['全部状态/池子',...unique([...s,...p])]);fillSelect('#typeFilter',['全部类型',...unique(a.map(i=>i.customerType).filter(Boolean))]);fillSelect('#industryFilter',['全部行业',...unique(a.map(i=>i.industry).filter(Boolean))]);fillSelect('#ownerFilter',['全部负责人',...unique(state.customers.map(i=>i.owner||'未分配'))]);fillTagSelect('#tagFilter');fillSelect('#editStatus',state.statusOptions)}
     function fillSelect(sel,opts){const s=$(sel),c=s.value;s.innerHTML=opts.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');if(opts.includes(c))s.value=c}

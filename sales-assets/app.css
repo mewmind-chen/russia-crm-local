@@ -49,3 +49,12 @@
 .customer-ai-form textarea:focus{border-color:#765aab;box-shadow:0 0 0 3px rgba(97,71,152,.1)}
 .customer-ai-form .button{min-width:72px;height:40px}
 @media(max-width:780px){.customer-ai-form{grid-template-columns:1fr}.customer-ai-form .button{width:100%}}
+
+/* Original workbench customer detail in a dedicated CRM profile page */
+.customer-profile-view.active{height:calc(100dvh - 130px);min-height:620px;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:#fff}
+.customer-profile-toolbar{min-height:58px;display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.customer-profile-toolbar .button{flex:0 0 auto}
+.customer-profile-toolbar h2{margin:2px 0 0;font-size:17px}
+.customer-profile-frame{display:block;width:100%;height:100%;min-height:0;border:0;background:#fff}
+body.customer-profile-active .top-actions{display:none}
+@media(max-width:780px){.customer-profile-view.active{height:calc(100dvh - 95px);min-height:500px}.customer-profile-toolbar{padding:8px 0}.customer-profile-toolbar h2{font-size:15px}}

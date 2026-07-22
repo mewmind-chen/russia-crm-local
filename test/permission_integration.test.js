@@ -397,6 +397,31 @@ test('sales-role create_customer honors an explicitly selected sales owner', asy
   assert.equal(fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE id=?').get(body.customerId).owner_id, 'U-SALES2');
 });
 
+test('manual CRM customer creation generates a canonical customer code', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { create_customer: true });
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const response = await fx.request('/api/sales-crm/accounts', {
+    cookie,
+    method: 'POST',
+    body: { companyName: 'Automatic Code Fixture', country: '俄罗斯', ownerId: 'U-OTHER' },
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200, body.error);
+  assert.match(body.externalCustomerId, /^RU-\d{4}$/);
+  assert.deepEqual(
+    fx.db.prepare('SELECT external_customer_id FROM crm_accounts WHERE id=?').get(body.customerId),
+    { external_customer_id: body.externalCustomerId },
+  );
+  assert.equal(
+    fx.db.prepare('SELECT company_name FROM customer_pool WHERE customer_id=?').get(body.externalCustomerId).company_name,
+    'Automatic Code Fixture',
+  );
+});
+
 test('sales-role edit_customer applies explicit owner and stage updates', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());

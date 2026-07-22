@@ -6,6 +6,8 @@ const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'sales-crm.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
 const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
+const workbenchHtml = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8');
+const appCss = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
 
 function sidebarMarkup() {
   return html.match(/<aside class="sidebar"[\s\S]*?<\/aside>/)?.[0] || '';
@@ -22,7 +24,7 @@ test('primary navigation follows the customer lifecycle and retains management',
 });
 
 test('pending and claimed routes reuse intake permissions and status filters', () => {
-  assert.match(appJs, /const viewPermissions = \{ pending: 'view_intake', claimed: 'view_intake' \}/);
+  assert.match(appJs, /const viewPermissions = \{[^}]*pending: 'view_intake'[^}]*claimed: 'view_intake'[^}]*\}/);
   assert.match(appJs, /const requestedPermission = viewPermissions\[requestedView\] \|\| `view_\$\{requestedView\}`/);
   assert.match(appJs, /state\.intakeStatus = view === 'pending'[\s\S]*?view === 'claimed'[\s\S]*?view === 'intake'[\s\S]*?''/);
   assert.match(appJs, /item\.dataset\.intakeStatus === state\.intakeStatus/);
@@ -52,6 +54,39 @@ test('customer profiles contain contextual AI Q&A', () => {
   assert.match(appJs, /function customerAiSection\(context\)/);
   assert.match(appJs, /id="drawerAiForm"/);
   assert.match(appJs, /\/api\/assistant\/chat/);
+});
+
+test('original workbench supports a profile-only customer page', () => {
+  assert.match(workbenchHtml, /q\.get\('profile'\)===['"]1['"][\s\S]*?profile-mode/);
+  assert.match(workbenchHtml, /body\.profile-mode/);
+  assert.match(workbenchHtml, /function openRequestedCustomer\(\)/);
+  assert.match(workbenchHtml, /function renderRequestedCustomerError\(/);
+});
+
+test('complete customer data opens a non-sidebar profile page and returns to CRM', () => {
+  const sidebar = sidebarMarkup();
+  const masterHandler = appJs.match(/const master = event\.target\.closest\('\[data-open-master\]'\);[\s\S]*?\n    const stageJump =/)?.[0] || '';
+  assert.match(html, /id="customerProfileView"/);
+  assert.match(html, /id="customerProfileBack"/);
+  assert.match(html, /id="customerProfileFrame"/);
+  assert.doesNotMatch(sidebar, /customerProfileView|客户资料/);
+  assert.match(masterHandler, /openCustomerProfile\(master\.dataset\.openMaster\)/);
+  assert.doesNotMatch(masterHandler, /switchView\('pool'\)/);
+  assert.match(appJs, /function openCustomerProfile\(externalCustomerId\)/);
+  assert.match(appJs, /profile=1[\s\S]*?customer=\$\{encodeURIComponent\(externalCustomerId\)\}/);
+  assert.match(appJs, /function returnFromCustomerProfile\(\)/);
+});
+
+test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
+  assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
+  assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
+});
+
+test('manual customer creation surfaces the generated code and opens the new CRM record', () => {
+  const handler = appJs.match(/else if \(form\.id === 'customerForm'\)[\s\S]*?else if \(form\.id === 'quoteForm'\)/)?.[0] || '';
+  assert.match(handler, /const result = await api\('\/api\/sales-crm\/accounts'/);
+  assert.match(handler, /result\.externalCustomerId/);
+  assert.match(handler, /openCustomer\(result\.customerId\)/);
 });
 
 test('unclaimed lead AI uses a scoped profile summary instead of an inaccessible CRM target', () => {

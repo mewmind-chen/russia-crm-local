@@ -12,6 +12,7 @@
     teamUserId: '',
     activityType: 'email',
     drawerAiContext: null,
+    customerProfileReturnView: 'customers',
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -28,7 +29,7 @@
     pending: ['CUSTOMER INTAKE', '待领取'],
     claimed: ['CUSTOMER INTAKE', '已领取'],
     customers: ['CRM CUSTOMER PORTFOLIO', 'CRM客户全景'],
-    development: ['CUSTOMER DEVELOPMENT', '客户开发工作台'],
+    customerProfile: ['CUSTOMER PROFILE', '客户资料'],
     pool: ['UNDEVELOPED LEAD POOL', '未开发线索池'],
     contacts: ['CONTACT EVIDENCE', '负责人线索'],
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
@@ -39,7 +40,7 @@
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
   };
-  const viewPermissions = { pending: 'view_intake', claimed: 'view_intake' };
+  const viewPermissions = { pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers' };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
     social: ['社媒联系', '社'], reply: ['客户回复', '回'], meeting: ['视频/电话会议', '会'],
@@ -594,16 +595,20 @@
     );
   }
 
-  function renderDevelopment() {
-    const frame = $('#developmentWorkbenchFrame');
-    if (!frame || frame.dataset.ready === '1') return;
+  function openCustomerProfile(externalCustomerId) {
+    if (!externalCustomerId) return toast('缺少客户编码，无法打开完整资料');
+    const account = state.data.accounts.find(item => item.external_customer_id === externalCustomerId);
+    if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
+    closeDrawer();
+    switchView('customerProfile');
+    $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
+    const frame = $('#customerProfileFrame');
     const assistant = can('use_ai_assistant') ? '1' : '0';
-    const prospect = can('use_prospect_agent') ? '1' : '0';
-    frame.src = `/development-workbench?embedded=1&assistant=${assistant}&prospect=${prospect}#dashboard`;
-    frame.addEventListener('load', () => {
-      frame.dataset.ready = '1';
-      $('#developmentWorkbenchLoading')?.classList.add('hidden');
-    }, { once: true });
+    frame.src = `/development-workbench?embedded=1&profile=1&assistant=${assistant}&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+  }
+
+  function returnFromCustomerProfile() {
+    switchView(state.customerProfileReturnView || 'customers');
   }
 
   function renderCustomers() {
@@ -1370,8 +1375,10 @@
       } else if (form.id === 'customerForm') {
         const payload = formPayload(form);
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh('客户已创建并分配');
+        const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
+        await refresh(`客户已创建并分配 · ${result.externalCustomerId}`);
+        switchView('customers');
+        openCustomer(result.customerId);
       } else if (form.id === 'quoteForm') {
         const payload = formPayload(form);
         payload.nextFollowAt = apiTime(payload.nextFollowAt);
@@ -1520,11 +1527,7 @@
     if (intakeProfile && (!event.target.closest('button,a,input,select,textarea') || intakeProfile.matches('button[data-intake-profile]'))) openIntakeProfile(intakeProfile.dataset.intakeProfile);
     const master = event.target.closest('[data-open-master]');
     if (master && (!event.target.closest('button,a,input,select,textarea') || master.matches('button[data-open-master]'))) {
-      const customerId = master.dataset.openMaster;
-      switchView('pool');
-      const search = $('#poolSearch');
-      if (search) search.value = customerId;
-      await loadResearch('pool', { reset: true });
+      openCustomerProfile(master.dataset.openMaster);
     }
     const stageJump = event.target.closest('[data-stage-jump]');
     if (stageJump) {
@@ -1534,6 +1537,7 @@
     }
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
     if (event.target.closest('[data-close-modal]')) closeModal();
+    if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     const activity = event.target.closest('[data-activity]');
     if (activity) {
       state.activityType = activity.dataset.activity;
@@ -1666,7 +1670,7 @@
     $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === view));
     $('#viewEyebrow').textContent = viewMeta[view][0];
     $('#viewTitle').textContent = viewMeta[view][1];
-    document.body.classList.toggle('development-active', view === 'development');
+    document.body.classList.toggle('customer-profile-active', view === 'customerProfile');
     if (sectionView === 'intake') renderIntake();
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
     closeDrawer();
