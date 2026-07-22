@@ -55,8 +55,10 @@ test('DeepSeek uses the per-call timeout when its request aborts', async () => {
   const originalSetTimeout = global.setTimeout;
   const originalClearTimeout = global.clearTimeout;
   const oldKey = process.env.DEEPSEEK_API_KEY;
+  let timeoutDelay;
   process.env.DEEPSEEK_API_KEY = 'test-key';
-  global.setTimeout = callback => {
+  global.setTimeout = (callback, delay) => {
+    timeoutDelay = delay;
     callback();
     return 1;
   };
@@ -72,6 +74,7 @@ test('DeepSeek uses the per-call timeout when its request aborts', async () => {
       () => callDeepSeek([{ role: 'user', content: 'test' }], { timeoutMs: 12000 }),
       error => error.code === 'DEEPSEEK_TIMEOUT' && error.statusCode === 504 && /12/.test(error.message),
     );
+    assert.equal(timeoutDelay, 12000);
   } finally {
     global.fetch = originalFetch;
     global.setTimeout = originalSetTimeout;
