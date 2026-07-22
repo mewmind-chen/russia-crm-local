@@ -24,13 +24,31 @@ function writeExecutable(file, contents) {
   fs.writeFileSync(file, contents, { mode: 0o755 });
 }
 
+function createFakeNode(fixture, major = 22, name = `node-${major}`) {
+  const nodeDir = path.join(fixture.homeDir, 'chosen node');
+  const nodeBin = path.join(nodeDir, name);
+  fs.mkdirSync(nodeDir, { recursive: true });
+  writeExecutable(nodeBin, `#!/bin/sh
+if test "${'$'}{1:-}" = -p; then
+  printf '${major}\\n'
+  exit 0
+fi
+exit 96
+`);
+  return nodeBin;
+}
+
 function createInstallerFixture() {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-launch-agent-home-'));
   const helpersDir = path.join(homeDir, 'fake-bin');
   const launchctlLog = path.join(homeDir, 'launchctl.log');
   fs.mkdirSync(helpersDir, { recursive: true });
   writeExecutable(path.join(helpersDir, 'launchctl'), `#!/bin/sh
-printf 'unexpected launchctl invocation\\n' >> "$CRM_TEST_LAUNCHCTL_LOG"
+printf '%s\\n' "$*" >> "$CRM_TEST_LAUNCHCTL_LOG"
+if test "${'$'}{1:-}" = print && test "${'$'}{2:-}" = "gui/${process.getuid()}/com.russia-crm.server"; then
+  printf 'gui/%s/com.russia-crm.server = {\\n\\tworking directory = %s\\n}\\n' "${process.getuid()}" "$CRM_TEST_SERVER_WORKING_DIRECTORY"
+  exit 0
+fi
 exit 97
 `);
   return {
@@ -50,7 +68,8 @@ exit 97
 
 function configureBootstrapFixture() {
   const fixture = createInstallerFixture();
-  const bootstrapRelease = path.join(fixture.homeDir, 'bootstrap release');
+  const releasesDir = path.join(fixture.homeDir, 'Desktop', 'projects', 'russia-crm-releases');
+  const bootstrapRelease = path.join(releasesDir, 'bootstrap release');
   const currentLink = path.join(
     fixture.homeDir,
     'Desktop',
@@ -61,7 +80,9 @@ function configureBootstrapFixture() {
   const deployDir = path.join(fixture.homeDir, 'helpers with spaces');
   const deployScript = path.join(deployDir, 'deploy fixture.sh');
   const deployLog = path.join(fixture.homeDir, 'deploy.log');
+  const deployNodeLog = path.join(fixture.homeDir, 'deploy-node.log');
   const deployFailFile = path.join(fixture.homeDir, 'deploy.fail');
+  const nodeBin = createFakeNode(fixture);
   fs.mkdirSync(bootstrapRelease, { recursive: true });
   fs.mkdirSync(launchAgentsDir, { recursive: true });
   fs.mkdirSync(deployDir, { recursive: true });
@@ -72,22 +93,32 @@ for label in ${codeLabels.join(' ')}; do
 done
 test ! -e "$CRM_TEST_LAUNCH_AGENTS_DIR/com.russia-crm.auto-deploy.plist"
 printf '%s\\n' "$@" >> "$CRM_TEST_DEPLOY_LOG"
+printf '%s\\n' "$DEPLOY_NODE_BIN" >> "$CRM_TEST_DEPLOY_NODE_LOG"
+test "$DEPLOY_NODE_BIN" = "$CRM_TEST_EXPECTED_NODE_BIN"
 test ! -e "$CRM_TEST_DEPLOY_FAIL_FILE"
 `);
   return {
     ...fixture,
     bootstrapRelease,
+    releasesDir,
     currentLink,
     launchAgentsDir,
     deployScript,
     deployLog,
+    deployNodeLog,
     deployFailFile,
+    nodeBin,
     env: {
       ...fixture.env,
       DEPLOY_BOOTSTRAP_RELEASE: bootstrapRelease,
+      DEPLOY_RELEASES_DIR: releasesDir,
+      DEPLOY_NODE_BIN: nodeBin,
       DEPLOY_SCRIPT: deployScript,
+      CRM_TEST_SERVER_WORKING_DIRECTORY: bootstrapRelease,
       CRM_TEST_LAUNCH_AGENTS_DIR: launchAgentsDir,
       CRM_TEST_DEPLOY_LOG: deployLog,
+      CRM_TEST_DEPLOY_NODE_LOG: deployNodeLog,
+      CRM_TEST_EXPECTED_NODE_BIN: nodeBin,
       CRM_TEST_DEPLOY_FAIL_FILE: deployFailFile,
     },
   };
@@ -154,7 +185,7 @@ test('escapes XML-sensitive service values', () => {
   assert.match(plist, /logs&lt;daily&gt;/);
 });
 
-test('dry-run legacy installation never spawns launchctl', () => {
+test('dry-run legacy installation never spawns a mutating launchctl command', () => {
   const fixture = createInstallerFixture();
   try {
     const result = spawnSync(process.execPath, [legacyInstaller], {
@@ -219,19 +250,40 @@ test('auto deploy installer bootstraps code services before enabling deployment 
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(fs.readlinkSync(fixture.currentLink), fixture.bootstrapRelease);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(fixture.bootstrapRelease));
     assert.equal(fs.readFileSync(fixture.deployLog, 'utf8'), '--force\n');
+    assert.equal(fs.readFileSync(fixture.deployNodeLog, 'utf8'), `${fixture.nodeBin}\n`);
     assert.equal(
       fs.existsSync(path.join(fixture.launchAgentsDir, 'com.russia-crm.auto-deploy.plist')),
       true,
     );
     assert.equal(fs.readFileSync(cloudflareFile, 'utf8'), cloudflareContents);
-    assert.equal(fs.existsSync(fixture.launchctlLog), false);
+    assert.equal(
+      fs.readFileSync(fixture.launchctlLog, 'utf8'),
+      `print gui/${process.getuid()}/com.russia-crm.server\n`,
+    );
     for (const label of codeLabels) {
       const plist = fs.readFileSync(path.join(fixture.launchAgentsDir, `${label}.plist`), 'utf8');
       assert.match(plist, new RegExp(fixture.currentLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       assert.doesNotMatch(plist, new RegExp(projectRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+    for (const label of [
+      'com.russia-crm.server',
+      'com.russia-crm.daily-enqueue',
+      'com.russia-crm.daily-report',
+      'com.russia-crm.completion-notifier',
+    ]) {
+      const plist = fs.readFileSync(path.join(fixture.launchAgentsDir, `${label}.plist`), 'utf8');
+      assert.match(plist, new RegExp(fixture.nodeBin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    const autoDeployPlist = fs.readFileSync(
+      path.join(fixture.launchAgentsDir, 'com.russia-crm.auto-deploy.plist'),
+      'utf8',
+    );
+    assert.match(
+      autoDeployPlist,
+      new RegExp(`<key>DEPLOY_NODE_BIN</key><string>${fixture.nodeBin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</string>`),
+    );
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });
   }
@@ -260,7 +312,10 @@ test('auto deploy installer leaves polling disabled when forced deployment fails
       false,
     );
     assert.deepEqual(fs.readFileSync(cloudflareFile), cloudflareContents);
-    assert.equal(fs.existsSync(fixture.launchctlLog), false);
+    assert.equal(
+      fs.readFileSync(fixture.launchctlLog, 'utf8'),
+      `print gui/${process.getuid()}/com.russia-crm.server\n`,
+    );
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });
   }
@@ -332,6 +387,117 @@ test('auto deploy installer rejects an existing poller before changing current o
     assert.equal(fs.existsSync(fixture.launchctlLog), false);
     assert.equal(fs.readFileSync(autoDeployFile, 'utf8'), existingContents);
     assert.deepEqual(fs.readdirSync(fixture.launchAgentsDir), ['com.russia-crm.auto-deploy.plist']);
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('auto deploy installer rejects an active dirty checkout outside managed releases', () => {
+  const fixture = configureBootstrapFixture();
+  const dirtyCheckout = path.join(fixture.homeDir, 'dirty-checkout');
+  fs.mkdirSync(dirtyCheckout);
+
+  try {
+    const result = spawnSync(process.execPath, [autoDeployInstaller], {
+      encoding: 'utf8',
+      env: {
+        ...fixture.env,
+        DEPLOY_BOOTSTRAP_RELEASE: dirtyCheckout,
+        CRM_TEST_SERVER_WORKING_DIRECTORY: dirtyCheckout,
+      },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /managed releases directory/);
+    assert.equal(fs.existsSync(fixture.currentLink), false);
+    assert.equal(fs.existsSync(fixture.deployLog), false);
+    assert.deepEqual(fs.readdirSync(fixture.launchAgentsDir), []);
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('auto deploy installer preserves a differing existing current target and plists', () => {
+  const fixture = configureBootstrapFixture();
+  const otherRelease = path.join(fixture.releasesDir, 'other-release');
+  const existingServerPlist = path.join(fixture.launchAgentsDir, 'com.russia-crm.server.plist');
+  const existingContents = 'existing-server-plist\n';
+  fs.mkdirSync(otherRelease);
+  fs.mkdirSync(path.dirname(fixture.currentLink), { recursive: true });
+  fs.symlinkSync(otherRelease, fixture.currentLink);
+  fs.writeFileSync(existingServerPlist, existingContents);
+
+  try {
+    const result = spawnSync(process.execPath, [autoDeployInstaller], {
+      encoding: 'utf8',
+      env: fixture.env,
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /current target does not match bootstrap release/);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(otherRelease));
+    assert.equal(fs.readFileSync(existingServerPlist, 'utf8'), existingContents);
+    assert.equal(fs.existsSync(fixture.deployLog), false);
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('auto deploy installer leaves a matching existing current symlink intact', () => {
+  const fixture = configureBootstrapFixture();
+  fs.mkdirSync(path.dirname(fixture.currentLink), { recursive: true });
+  fs.symlinkSync(fixture.bootstrapRelease, fixture.currentLink);
+  const inodeBefore = fs.lstatSync(fixture.currentLink).ino;
+
+  try {
+    const result = spawnSync(process.execPath, [autoDeployInstaller], {
+      encoding: 'utf8',
+      env: fixture.env,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.lstatSync(fixture.currentLink).ino, inodeBefore);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(fixture.bootstrapRelease));
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('auto deploy installer rejects Node 21 before changing current or plists', () => {
+  const fixture = configureBootstrapFixture();
+  const nodeBin = createFakeNode(fixture, 21);
+
+  try {
+    const result = spawnSync(process.execPath, [autoDeployInstaller], {
+      encoding: 'utf8',
+      env: { ...fixture.env, DEPLOY_NODE_BIN: nodeBin },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /requires Node 22/);
+    assert.equal(fs.existsSync(fixture.currentLink), false);
+    assert.deepEqual(fs.readdirSync(fixture.launchAgentsDir), []);
+    assert.equal(fs.existsSync(fixture.launchctlLog), false);
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('legacy installer rejects Node 23 before writing LaunchAgents', () => {
+  const fixture = createInstallerFixture();
+  const nodeBin = createFakeNode(fixture, 23);
+  const launchAgentsDir = path.join(fixture.homeDir, 'Library', 'LaunchAgents');
+
+  try {
+    const result = spawnSync(process.execPath, [legacyInstaller], {
+      encoding: 'utf8',
+      env: { ...fixture.env, DEPLOY_NODE_BIN: nodeBin },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /requires Node 22/);
+    assert.equal(fs.existsSync(launchAgentsDir), false);
+    assert.equal(fs.existsSync(fixture.launchctlLog), false);
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });
   }

@@ -10,6 +10,8 @@ const homeDir = os.homedir();
 const currentLink = path.resolve(process.env.DEPLOY_CURRENT_LINK
   || path.join(homeDir, 'Desktop', 'projects', 'russia-crm-current'));
 const bootstrapRelease = process.env.DEPLOY_BOOTSTRAP_RELEASE;
+const configuredReleasesDir = process.env.DEPLOY_RELEASES_DIR
+  || path.join(homeDir, 'Desktop', 'projects', 'russia-crm-releases');
 const launchAgentsDir = path.join(homeDir, 'Library', 'LaunchAgents');
 const autoDeployFile = path.join(launchAgentsDir, 'com.russia-crm.auto-deploy.plist');
 const logsDir = path.join(currentLink, 'logs');
@@ -24,46 +26,105 @@ function fail(message) {
   process.exit(1);
 }
 
-function isExistingDirectory(target) {
+function canonicalDirectory(target, message) {
+  if (!target || !path.isAbsolute(target)) fail(message);
   try {
-    return fs.statSync(target).isDirectory();
+    const resolved = fs.realpathSync(target);
+    if (!fs.statSync(resolved).isDirectory()) throw new Error('not a directory');
+    return resolved;
   } catch {
-    return false;
+    fail(message);
   }
 }
 
-if (!bootstrapRelease
-  || !path.isAbsolute(bootstrapRelease)
-  || !isExistingDirectory(bootstrapRelease)
-  || path.resolve(bootstrapRelease) === currentLink) {
+function resolveNodeBinary() {
+  const absolute = path.resolve(process.env.DEPLOY_NODE_BIN || process.execPath);
+  try {
+    fs.accessSync(absolute, fs.constants.X_OK);
+    if (!fs.statSync(absolute).isFile()) throw new Error('not a file');
+  } catch {
+    fail(`Node executable is unavailable: ${absolute}`);
+  }
+
+  const result = spawnSync(absolute, ['-p', 'process.versions.node.split(".")[0]'], {
+    encoding: 'utf8',
+    shell: false,
+  });
+  if (result.error || result.status !== 0 || result.stdout.trim() !== '22') {
+    fail('deployment requires Node 22');
+  }
+  return absolute;
+}
+
+function assertInsideManagedReleases(release, releasesDir) {
+  const relative = path.relative(releasesDir, release);
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    fail('bootstrap release must be inside the managed releases directory');
+  }
+}
+
+function activeServerWorkingDirectory() {
+  const result = spawnSync(launchctlBin, ['print', `gui/${uid}/com.russia-crm.server`], {
+    encoding: 'utf8',
+    shell: false,
+  });
+  if (result.error || result.status !== 0) {
+    fail('unable to inspect the active CRM server LaunchAgent');
+  }
+  const match = result.stdout.match(/^\s*working directory\s*=\s*(.+?)\s*$/mi);
+  if (!match) fail('active CRM server LaunchAgent has no WorkingDirectory');
+  return canonicalDirectory(match[1], 'active CRM server WorkingDirectory is invalid');
+}
+
+const nodeBin = resolveNodeBinary();
+if (!bootstrapRelease || path.resolve(bootstrapRelease) === currentLink) {
   fail('DEPLOY_BOOTSTRAP_RELEASE must be an absolute existing directory');
 }
+const releasesDir = canonicalDirectory(
+  configuredReleasesDir,
+  'DEPLOY_RELEASES_DIR must be an absolute existing directory',
+);
+const bootstrapTarget = canonicalDirectory(
+  bootstrapRelease,
+  'DEPLOY_BOOTSTRAP_RELEASE must be an absolute existing directory',
+);
+assertInsideManagedReleases(bootstrapTarget, releasesDir);
 if (fs.existsSync(autoDeployFile)) {
   fail(`auto deploy service already exists: ${autoDeployFile}`);
 }
+if (activeServerWorkingDirectory() !== bootstrapTarget) {
+  fail('active CRM server WorkingDirectory does not match bootstrap release');
+}
 
-fs.mkdirSync(path.dirname(currentLink), { recursive: true });
+let currentExists = false;
 try {
   const existing = fs.lstatSync(currentLink);
   if (!existing.isSymbolicLink()) {
     fail(`current path exists and is not a symlink: ${currentLink}`);
   }
+  if (canonicalDirectory(currentLink, 'current target is invalid') !== bootstrapTarget) {
+    fail('current target does not match bootstrap release');
+  }
+  currentExists = true;
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
 
-const temporaryLink = path.join(
-  path.dirname(currentLink),
-  `.${path.basename(currentLink)}.bootstrap.${process.pid}`,
-);
-try {
-  fs.symlinkSync(bootstrapRelease, temporaryLink, 'dir');
-  fs.renameSync(temporaryLink, currentLink);
-} finally {
+if (!currentExists) {
+  fs.mkdirSync(path.dirname(currentLink), { recursive: true });
+  const temporaryLink = path.join(
+    path.dirname(currentLink),
+    `.${path.basename(currentLink)}.bootstrap.${process.pid}`,
+  );
   try {
-    fs.unlinkSync(temporaryLink);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    fs.symlinkSync(bootstrapTarget, temporaryLink, 'dir');
+    fs.renameSync(temporaryLink, currentLink);
+  } finally {
+    try {
+      fs.unlinkSync(temporaryLink);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
   }
 }
 
@@ -75,7 +136,7 @@ const definitions = buildServiceDefinitions({
   sourceRoot,
   logsDir,
   homeDir,
-  nodeBin: process.execPath,
+  nodeBin,
   pythonBin: process.env.PYTHON_BIN
     || path.join(homeDir, '.hermes', 'hermes-agent', 'venv', 'bin', 'python3'),
   cloudflaredBin: process.env.CLOUDFLARED_BIN || '/opt/homebrew/bin/cloudflared',
@@ -112,7 +173,7 @@ for (const definition of definitions.filter(item => item.kind === 'code')) {
 const deployment = spawnSync('/bin/zsh', [deployScript, '--force'], {
   stdio: 'inherit',
   shell: false,
-  env: process.env,
+  env: { ...process.env, DEPLOY_NODE_BIN: nodeBin },
 });
 if (deployment.error) throw deployment.error;
 if (deployment.status !== 0) {
