@@ -662,7 +662,7 @@ test('contact-restricted Sales bootstrap strips company evaluation narratives', 
     .run(
       'evaluation-contact@secret.test',
       'summary-contact@secret.test',
-      '["labels-contact@secret.test"]',
+      '["重点推进","labels-contact@secret.test"]',
       '["keys-contact@secret.test"]',
       '["risks-contact@secret.test"]',
       'strategy-contact@secret.test',
@@ -673,6 +673,8 @@ test('contact-restricted Sales bootstrap strips company evaluation narratives', 
 
   const body = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
   assert.doesNotMatch(JSON.stringify(body.insights.evaluations), /(?:evaluation|summary|labels|keys|risks|strategy|error)-contact/);
+  assert.deepEqual(body.customerEvaluationTags, [{ customerId: 'CRM-WU', labels: ['重点推进'] }]);
+  assert.doesNotMatch(JSON.stringify(body.customerEvaluationTags), /secret\.test/);
 });
 
 test('scoped users can run isolated prospect tasks without global CRM access', async t => {
