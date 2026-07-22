@@ -9,6 +9,7 @@ function switchedEngineResult() {
     engine: 'kimi-cli',
     sessionEngine: 'kimi-cli',
     sessionId: '',
+    engineAttempts: [{ engine: 'kimi-cli', ok: true, durationMs: 1 }],
     usage: null,
     model: 'Kimi CLI · k3',
     guardrails: { readOnly: true },
@@ -28,6 +29,7 @@ async function assertSessionRouting(payload) {
   assert.equal(seen[0].sessionId, 'old_hermes_session');
   assert.equal(result.sessionEngine, 'kimi-cli');
   assert.equal(result.sessionId, '');
+  assert.deepEqual(result.engineAttempts, [{ engine: 'kimi-cli', ok: true, durationMs: 1 }]);
 }
 
 test('generic assistant answers forward session engine and drop a switched native session', async () => {
