@@ -13,6 +13,7 @@
     activityType: 'email',
     drawerAiContext: null,
     customerProfileReturnView: 'customers',
+    customerProfileExternalId: '',
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -228,9 +229,14 @@
       renderAll();
       renderImpersonationBanner();
       const requestedView = location.hash.replace(/^#/, '');
+      const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
       const firstAllowedView = Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
       switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : firstAllowedView, false);
+      if (requestedView === 'customerProfile') {
+        if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
+        else switchView('customers');
+      }
       if (state.data.user.mustChangePassword) setTimeout(openPasswordModal, 80);
       return true;
     } catch (error) {
@@ -598,16 +604,28 @@
   function openCustomerProfile(externalCustomerId) {
     if (!externalCustomerId) return toast('缺少客户编码，无法打开完整资料');
     const account = state.data.accounts.find(item => item.external_customer_id === externalCustomerId);
+    if (!account) return toast('未找到对应客户资料');
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
+    state.customerProfileExternalId = externalCustomerId;
+    state.selectedCustomerId = account.id;
     closeDrawer();
     switchView('customerProfile');
     $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
+    $('#customerProfileEdit').classList.toggle('hidden', !can('edit_customer'));
     const frame = $('#customerProfileFrame');
     const assistant = can('use_ai_assistant') ? '1' : '0';
     frame.src = `/development-workbench?embedded=1&profile=1&assistant=${assistant}&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+    const url = new URL(location.href);
+    url.searchParams.set('customer', externalCustomerId);
+    url.hash = 'customerProfile';
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
   function returnFromCustomerProfile() {
+    state.customerProfileExternalId = '';
+    const url = new URL(location.href);
+    url.searchParams.delete('customer');
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     switchView(state.customerProfileReturnView || 'customers');
   }
 
@@ -1538,6 +1556,7 @@
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
     if (event.target.closest('[data-close-modal]')) closeModal();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
+    if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
     const activity = event.target.closest('[data-activity]');
     if (activity) {
       state.activityType = activity.dataset.activity;

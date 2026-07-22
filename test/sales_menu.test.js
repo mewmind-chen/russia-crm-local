@@ -61,6 +61,8 @@ test('original workbench supports a profile-only customer page', () => {
   assert.match(workbenchHtml, /body\.profile-mode/);
   assert.match(workbenchHtml, /function openRequestedCustomer\(\)/);
   assert.match(workbenchHtml, /function renderRequestedCustomerError\(/);
+  assert.match(workbenchHtml, /\/api\/sales-crm\/profile\/\$\{encodeURIComponent\(profileCustomerId\)\}/);
+  assert.match(workbenchHtml, /readOnly/);
 });
 
 test('complete customer data opens a non-sidebar profile page and returns to CRM', () => {
@@ -68,18 +70,25 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
   const masterHandler = appJs.match(/const master = event\.target\.closest\('\[data-open-master\]'\);[\s\S]*?\n    const stageJump =/)?.[0] || '';
   assert.match(html, /id="customerProfileView"/);
   assert.match(html, /id="customerProfileBack"/);
+  assert.match(html, /id="customerProfileEdit"/);
   assert.match(html, /id="customerProfileFrame"/);
   assert.doesNotMatch(sidebar, /customerProfileView|客户资料/);
   assert.match(masterHandler, /openCustomerProfile\(master\.dataset\.openMaster\)/);
   assert.doesNotMatch(masterHandler, /switchView\('pool'\)/);
   assert.match(appJs, /function openCustomerProfile\(externalCustomerId\)/);
   assert.match(appJs, /profile=1[\s\S]*?customer=\$\{encodeURIComponent\(externalCustomerId\)\}/);
+  assert.match(appJs, /searchParams\.set\('customer', externalCustomerId\)/);
+  assert.match(appJs, /state\.selectedCustomerId = account\.id/);
+  assert.match(appJs, /#customerProfileEdit/);
   assert.match(appJs, /function returnFromCustomerProfile\(\)/);
+  assert.match(appJs, /requestedView === 'customerProfile'[\s\S]*?openCustomerProfile\(requestedCustomerId\)/);
 });
 
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
+  assert.match(html, /app\.css\?v=20260722-3/);
+  assert.match(html, /app\.js\?v=20260722-3/);
 });
 
 test('manual customer creation surfaces the generated code and opens the new CRM record', () => {
