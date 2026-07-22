@@ -1,110 +1,47 @@
-# Task 1 Report: Permission Group Schema and Legacy Migration
+# Task 1 Report: SHA-aware health endpoint
 
-## Implementation
+## Implementation summary
 
-- Added `lib/permission_groups.js` with the requested installation, hydration, effective-permission, and override-validation helpers.
-- `installPermissionGroups(db)` creates `permission_groups` and `user_permission_overrides`, adds `sales_users.permission_group_id` when needed, and converts each legacy role/permission record into a role default group plus only the required allow/deny overrides.
-- The migration runs in a SQLite transaction. It records each user's legacy effective permissions before changes and compares every known permission to the post-migration result before committing.
-- Default groups are derived from the current `ROLE_PERMISSIONS` values. Repeated installs preserve system groups and existing overrides.
-- `installSalesCrm()` installs permission groups after `permissions_json` is guaranteed to exist, and repeats installation after first-run user seeding so seeded users receive default group IDs.
-- Runtime authorization continues to use the legacy access-control path. The legacy `permissions_json` column is retained.
+- Added `lib/release_health.js` with `healthPaths`, `readReleaseSha`, `readDatabaseStatus`, and `registerReleaseHealth`.
+- Registered unauthenticated `GET /healthz` in `createApp()` after security middleware and before Sales CRM authenticated routes.
+- The endpoint performs a read-only `SELECT 1 AS ok` against SQLite and returns only `{ ok, database, releaseSha }`.
+- Added real temporary SQLite/database HTTP tests for healthy, unavailable-database, and absent-release-metadata states.
 
-## Files
-
-- Created: `lib/permission_groups.js`
-- Created: `test/permission_groups.test.js`
-- Modified: `lib/sales_crm.js`
-
-## RED
+## RED evidence
 
 Command:
 
 ```sh
-/opt/homebrew/bin/node --test test/permission_groups.test.js
+node --test test/release_health.test.js
 ```
 
-Result: failed as expected before implementation with `Error: Cannot find module '../lib/permission_groups'`. Test runner summary: 0 passed, 1 failed.
+Result before implementation: 3 failing tests. The healthy and missing-release-metadata cases received `404` instead of the expected status, and the unavailable-database case attempted to parse the route's `404` HTML as JSON. This confirms the failure was the missing `/healthz` route.
 
-## GREEN
+## GREEN evidence
 
 Command:
 
 ```sh
-/opt/homebrew/bin/node --test test/permission_groups.test.js
+node --test test/release_health.test.js && npm test
 ```
 
-Result: passed. Both tests succeeded:
+Result: the focused health suite passed 3/3 tests. The full suite passed 155/155 tests with 0 failures.
 
-- `legacy migration preserves every effective permission and is idempotent`
-- `hydrated permissions ignore later legacy permissions_json changes`
+## Files changed
 
-Test runner summary: 2 passed, 0 failed.
+- `lib/release_health.js`
+- `server.js`
+- `test/release_health.test.js`
+- `.superpowers/sdd/task-1-report.md`
 
-## Full Suite
+## Self-review
 
-Command:
-
-```sh
-/opt/homebrew/bin/node --test
-```
-
-Result: passed. Test runner summary: 94 passed, 0 failed, 0 skipped, duration 19128 ms.
-
-## Self-Review
-
-- The schema uses the exact role set and allow/deny effect checks required by the task.
-- Migration persists only legacy values that differ from the matching role default, preserving the legacy effective object without duplicating defaults.
-- Repeated installation does not duplicate default groups or override rows.
-- Hydration obtains permissions from the permission-group tables, so later changes to `permissions_json` do not affect hydrated permissions.
-- The `sales_crm` integration runs after `ensureUserPermissionColumns` and immediately after `seedUsers`, without changing existing runtime access-control reads.
+- SHA data is accepted only as a 40-character hexadecimal value, normalized to lowercase, and otherwise reported as `unknown`.
+- SQLite is opened with `readonly: true` and `fileMustExist: true`; only a read-only query is issued.
+- Error responses expose neither filesystem paths nor database error details.
+- The route is registered ahead of Sales CRM's route registration and requires no authentication.
 - `git diff --check` completed without whitespace errors.
 
 ## Concerns
 
-None identified for Task 1. Future tasks must switch runtime authorization and user-management writes from `permissions_json` to the new group/override model; that intentionally remains out of scope here.
-
-## Follow-up Fix: Completed Migration Semantics
-
-### Root Cause
-
-The initial migration snapshot and self-check evaluated every `sales_users` row on every `installPermissionGroups()` call. A user that had already been migrated to a valid group could later have `permissions_json` changed by the still-legacy runtime. On the next installation, that stale field was treated as migration input and could disagree with the authoritative group/override result, aborting startup.
-
-### Implementation
-
-- A user is now considered pending legacy migration only when its assigned permission group is missing or has a different `role_key` from the user role.
-- Only pending users are snapshotted, assigned a role-default group, converted to overrides, and included in the migration self-check.
-- Users already assigned to a valid same-role group ignore subsequent `permissions_json` mutations during repeated installation.
-
-### RED
-
-Command:
-
-```sh
-/opt/homebrew/bin/node --test test/permission_groups.test.js
-```
-
-Result: failed as expected. The new `reinstall ignores legacy changes after a user has a valid permission group` test raised `权限迁移校验失败：U1 view_contacts`. Test runner summary: 2 passed, 1 failed.
-
-### GREEN
-
-Command:
-
-```sh
-/opt/homebrew/bin/node --test test/permission_groups.test.js
-```
-
-Result: passed. Test runner summary: 3 passed, 0 failed.
-
-### Full Suite
-
-Command:
-
-```sh
-/opt/homebrew/bin/node --test
-```
-
-Result: passed. Test runner summary: 95 passed, 0 failed, 0 skipped, duration 12775 ms.
-
-### Scope
-
-The change is confined to migration completion semantics and its regression test. User creation and role-update API behavior remain intentionally deferred to Task 3.
+`registerSalesCrm(app)` invokes `installSalesCrm()` during app creation, which creates `CRM_DB_PATH` even when the fixture starts without a database. The unavailable-database fixture therefore removes that startup-created test file after the listener is ready, before issuing its health request. This is the minimal fixture correction needed to exercise the required unavailable-database behavior; production code remains exactly as specified.
