@@ -64,6 +64,12 @@ function assertInsideManagedReleases(release, releasesDir) {
 }
 
 function activeServerWorkingDirectory() {
+  if (dryRun) {
+    return canonicalDirectory(
+      process.env.CRM_ACTIVE_SERVER_WORKING_DIRECTORY,
+      'CRM_ACTIVE_SERVER_WORKING_DIRECTORY is required for dry-run',
+    );
+  }
   const result = spawnSync(launchctlBin, ['print', `gui/${uid}/com.russia-crm.server`], {
     encoding: 'utf8',
     shell: false,

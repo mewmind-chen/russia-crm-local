@@ -114,6 +114,7 @@ test ! -e "$CRM_TEST_DEPLOY_FAIL_FILE"
       DEPLOY_RELEASES_DIR: releasesDir,
       DEPLOY_NODE_BIN: nodeBin,
       DEPLOY_SCRIPT: deployScript,
+      CRM_ACTIVE_SERVER_WORKING_DIRECTORY: bootstrapRelease,
       CRM_TEST_SERVER_WORKING_DIRECTORY: bootstrapRelease,
       CRM_TEST_LAUNCH_AGENTS_DIR: launchAgentsDir,
       CRM_TEST_DEPLOY_LOG: deployLog,
@@ -258,10 +259,7 @@ test('auto deploy installer bootstraps code services before enabling deployment 
       true,
     );
     assert.equal(fs.readFileSync(cloudflareFile, 'utf8'), cloudflareContents);
-    assert.equal(
-      fs.readFileSync(fixture.launchctlLog, 'utf8'),
-      `print gui/${process.getuid()}/com.russia-crm.server\n`,
-    );
+    assert.equal(fs.existsSync(fixture.launchctlLog), false);
     for (const label of codeLabels) {
       const plist = fs.readFileSync(path.join(fixture.launchAgentsDir, `${label}.plist`), 'utf8');
       assert.match(plist, new RegExp(fixture.currentLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -283,6 +281,25 @@ test('auto deploy installer bootstraps code services before enabling deployment 
     assert.match(
       autoDeployPlist,
       new RegExp(`<key>DEPLOY_NODE_BIN</key><string>${fixture.nodeBin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</string>`),
+    );
+  } finally {
+    fs.rmSync(fixture.homeDir, { recursive: true, force: true });
+  }
+});
+
+test('complete successful auto deploy dry-run never invokes launchctl', () => {
+  const fixture = configureBootstrapFixture();
+  try {
+    const result = spawnSync(process.execPath, [autoDeployInstaller], {
+      encoding: 'utf8',
+      env: fixture.env,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(fixture.launchctlLog), false);
+    assert.equal(
+      fs.existsSync(path.join(fixture.launchAgentsDir, 'com.russia-crm.auto-deploy.plist')),
+      true,
     );
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });
@@ -312,10 +329,7 @@ test('auto deploy installer leaves polling disabled when forced deployment fails
       false,
     );
     assert.deepEqual(fs.readFileSync(cloudflareFile), cloudflareContents);
-    assert.equal(
-      fs.readFileSync(fixture.launchctlLog, 'utf8'),
-      `print gui/${process.getuid()}/com.russia-crm.server\n`,
-    );
+    assert.equal(fs.existsSync(fixture.launchctlLog), false);
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });
   }
