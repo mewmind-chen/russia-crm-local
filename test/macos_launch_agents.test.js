@@ -42,6 +42,16 @@ function createInstallerFixture() {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-launch-agent-home-'));
   const helpersDir = path.join(homeDir, 'fake-bin');
   const launchctlLog = path.join(homeDir, 'launchctl.log');
+  const inheritedEnv = { ...process.env };
+  for (const name of [
+    'DEPLOY_ROOT',
+    'CRM_RUNTIME_ROOT',
+    'DEPLOY_NODE_BIN',
+    'PYTHON_BIN',
+    'CLOUDFLARED_BIN',
+  ]) {
+    delete inheritedEnv[name];
+  }
   fs.mkdirSync(helpersDir, { recursive: true });
   writeExecutable(path.join(helpersDir, 'launchctl'), `#!/bin/sh
 printf '%s\\n' "$*" >> "$CRM_TEST_LAUNCHCTL_LOG"
@@ -56,7 +66,7 @@ exit 97
     helpersDir,
     launchctlLog,
     env: {
-      ...process.env,
+      ...inheritedEnv,
       HOME: homeDir,
       PATH: `${helpersDir}:${process.env.PATH}`,
       CRM_INSTALL_DRY_RUN: '1',
