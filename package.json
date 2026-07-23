@@ -54,6 +54,10 @@
     ,"contact-delivery:regrade": "node scripts/regrade-contact-delivery.js"
     ,"reports:share:setup": "node scripts/setup-report-sharing.js"
     ,"contact-reports:generate": "node scripts/generate-contact-recon-reports.js"
+    ,"deploy:mac:once": "zsh scripts/deploy-from-github.sh"
+    ,"deploy:mac:retry": "zsh scripts/deploy-from-github.sh --force"
+    ,"deploy:mac:install": "node scripts/install-auto-deploy.js"
+    ,"deploy:mac:status": "node scripts/deploy-state.js status"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

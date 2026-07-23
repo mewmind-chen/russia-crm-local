@@ -19,7 +19,7 @@ Both are macOS LaunchAgents with `RunAtLoad` and `KeepAlive` enabled.
 launchctl print gui/$(id -u)/com.russia-crm.server
 launchctl print gui/$(id -u)/com.russia-crm.cloudflare-tunnel
 cloudflared tunnel info tradepulse-crm
-curl -I https://crm.newmindchen.com/
+curl -fsS https://crm.newmindchen.com/healthz
 ```
 
 ## Restart
@@ -32,6 +32,9 @@ launchctl kickstart -k gui/$(id -u)/com.russia-crm.cloudflare-tunnel
 Tunnel configuration and credentials are stored under `~/.cloudflared/`.
 The credential JSON and `cert.pem` are secrets and must not be copied into
 the repository or shared.
+
+Deployment never rewrites the tunnel plist or credentials. Cloudflare Tunnel
+configuration remains owned by its existing LaunchAgent and `~/.cloudflared/`.
 
 The legacy random `trycloudflare.com` report tunnel and its URL watcher are
 disabled. Public report links now use the fixed CRM domain.

@@ -26,12 +26,11 @@ const {
 } = require('./lib/access_control');
 const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
-
-function databasePath() {
-  return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
-}
+const { registerReleaseHealth } = require('./lib/release_health');
+const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 
 function createApp() {
+const paths = runtimePaths();
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.disable('x-powered-by');
@@ -54,6 +53,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+registerReleaseHealth(app);
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
 if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
   app.get('/legacy', (_req, res) => res.sendFile(path.join(__dirname, 'Index.html')));
@@ -124,7 +124,7 @@ app.get('/share/report/:token/:jobId', (req, res) => {
   const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM recon_results WHERE job_id=?').get(jobId); db.close();
   if (!row?.report_path) return res.status(404).send('报告不存在');
-  const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
+  const reportRoot = paths.reconOutputDir;
   const report = readExistingFileWithinRoot(reportRoot, row.report_path, ['.html', '.htm']);
   if (!report) return res.status(404).send('报告不可用');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -139,7 +139,7 @@ app.get('/share/contact-report/:token/:jobId', (req, res) => {
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
   const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM contact_recon_jobs WHERE job_id=? AND status=\'done\'').get(String(req.params.jobId || '')); db.close();
-  const root = path.resolve(path.join(__dirname, 'contact-recon-reports'));
+  const root = paths.contactReconReportDir;
   const report = readExistingFileWithinRoot(root, row?.report_path, ['.html', '.htm']);
   if (!report) return res.status(404).send('报告不存在');
   res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive'); res.setHeader('Referrer-Policy', 'no-referrer');
@@ -147,7 +147,7 @@ app.get('/share/contact-report/:token/:jobId', (req, res) => {
 });
 
 app.get('/api/delivery/latest', (_req, res) => {
-  const root = path.join(__dirname, 'reports', 'daily');
+  const root = path.join(paths.reportsDir, 'daily');
   try {
     const dates = fs.readdirSync(root, { withFileTypes: true }).filter(x => x.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(x.name)).map(x => x.name).sort().reverse();
     const date = dates[0] || '';
@@ -162,14 +162,14 @@ app.get('/api/delivery/latest', (_req, res) => {
 app.get('/api/delivery/file', (req, res) => {
   const date = String(req.query.date || ''), name = String(req.query.name || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^[\w.-]+\.(csv|md|json)$/i.test(name)) return res.status(400).send('invalid file');
-  const file = path.join(__dirname, 'reports', 'daily', date, name);
+  const file = path.join(paths.reportsDir, 'daily', date, name);
   if (!fs.existsSync(file)) return res.status(404).send('not found');
   res.download(file, name);
 });
 
 const DB_PATH = databasePath();
-const RECON_LOG_PATH = path.join(__dirname, 'logs', 'recon_worker.log');
-const ASSISTANT_LOG_PATH = path.join(__dirname, 'logs', 'assistant.log');
+const RECON_LOG_PATH = path.join(paths.logsDir, 'recon_worker.log');
+const ASSISTANT_LOG_PATH = path.join(paths.logsDir, 'assistant.log');
 
 function truncateLogValue(value, limit = 4000) {
   const text = String(value ?? '');
@@ -873,7 +873,7 @@ app.get('/api/report', (req, res) => {
     if (!req.accessContext.canViewAllCustomers) assertRequestCustomer(req, row.customer_id);
     if (!row.report_path) return res.status(404).send('未找到报告');
 
-    const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
+    const reportRoot = paths.reconOutputDir;
     const reportFile = readExistingFileWithinRoot(
       reportRoot,
       row.report_path,
