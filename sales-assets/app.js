@@ -14,6 +14,11 @@
     drawerAiContext: null,
     customerProfileReturnView: 'customers',
     customerProfileExternalId: '',
+    customerAi: null,
+    customerAiError: '',
+    customerAiLoading: false,
+    customerAiPending: false,
+    customerAiTimer: null,
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -630,14 +635,149 @@
     url.searchParams.set('customer', externalCustomerId);
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    void loadCustomerAI(externalCustomerId);
   }
 
   function returnFromCustomerProfile() {
+    clearTimeout(state.customerAiTimer);
+    state.customerAiTimer = null;
+    state.customerAi = null;
+    state.customerAiError = '';
     state.customerProfileExternalId = '';
     const url = new URL(location.href);
     url.searchParams.delete('customer');
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     switchView(state.customerProfileReturnView || 'customers');
+  }
+
+  const aiReasonLabels = {
+    PRODUCT_MATCH: '产品匹配', INDUSTRY_MATCH: '行业匹配', REGION_MATCH: '区域匹配',
+    BUYER_SIGNAL: '采购信号', RECON_STRENGTH: '情报充分', CONTACT_READY: '联系人完备',
+    RISK_SIGNAL: '风险信号', DATA_GAP: '数据不足', OTHER: '其他',
+  };
+
+  const aiJobLabels = {
+    queued: ['排队中', 'amber'], running: ['分析中', 'amber'], retry_wait: ['等待重试', 'amber'],
+    needs_review: ['需要复核', 'amber'], succeeded: ['已完成', ''], dead_letter: ['生成失败', 'red'],
+  };
+
+  function aiReasonLabel(code) {
+    return aiReasonLabels[code] || String(code || '').toLowerCase().replaceAll('_', ' ');
+  }
+
+  function renderCustomerAI() {
+    const body = $('#customerAiStationBody');
+    const actions = $('#customerAiStationActions');
+    if (!body || !actions) return;
+    actions.innerHTML = '';
+    if (state.customerAiLoading) {
+      body.innerHTML = '<span class="subtle">正在读取评分状态…</span>';
+      return;
+    }
+    const payload = state.customerAi;
+    const job = payload?.job;
+    const result = payload?.result;
+    const canRun = can('use_ai_assistant') && !state.data?.impersonation;
+    const retryable = ['retry_wait', 'dead_letter'].includes(job?.state);
+    if (canRun && (retryable || !result || payload?.stale)) {
+      const label = state.customerAiPending
+        ? '处理中…'
+        : retryable
+          ? '重试'
+          : result
+            ? '重新评分'
+            : '生成评分';
+      actions.innerHTML = `<button class="button ${retryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${retryable ? `data-retry-ai-job="${esc(job.id)}"` : 'data-run-customer-fit'}>${label}</button>`;
+    }
+    if (state.customerAiError) {
+      body.innerHTML = `<div class="customer-ai-error"><strong>AI 暂不可用</strong><span>${esc(state.customerAiError)}</span></div>`;
+      return;
+    }
+    if (!job && !result) {
+      body.innerHTML = '<div class="customer-ai-empty"><span class="pill gray">未生成</span><span>暂无客户匹配评分</span></div>';
+      return;
+    }
+    const status = payload?.stale ? ['资料已变化', 'amber'] : (aiJobLabels[job?.state] || ['状态未知', 'gray']);
+    if (!result) {
+      body.innerHTML = `<div class="customer-ai-empty"><span class="pill ${status[1]}">${status[0]}</span><span>${job?.errorSummary ? esc(job.errorSummary) : '等待评分结果'}</span></div>`;
+      return;
+    }
+    const value = result.value || {};
+    const confidence = `${Math.round(Number(result.confidence || value.confidence || 0) * 100)}%`;
+    const reasons = (value.reasonCodes || []).map(code => `<span>${esc(aiReasonLabel(code))}</span>`).join('');
+    const evidence = (payload.evidence || []).map(item => `<li>
+      <div><strong>${esc(item.sourceTitle || item.field || item.sourceTable)}</strong><small>${esc(item.sourceTable)}${item.checkedAt ? ` · ${esc(shortDate(item.checkedAt, true))}` : ''}</small></div>
+      <p>${esc(item.value)}</p>${item.sourceUrl ? `<a href="${esc(item.sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a>` : ''}
+    </li>`).join('');
+    body.innerHTML = `<div class="customer-ai-result">
+      <div class="customer-ai-score"><strong>${Number(value.fitScore ?? 0)}</strong><span>匹配分</span></div>
+      <div class="customer-ai-grade"><strong>${esc(value.grade || '—')}</strong><span>等级</span></div>
+      <div class="customer-ai-confidence"><strong>${confidence}</strong><span>置信度</span></div>
+      <div class="customer-ai-summary"><div><span class="pill ${status[1]}">${status[0]}</span><div class="customer-ai-reasons">${reasons}</div></div>
+        <small>${esc(result.engine)} / ${esc(result.model)} · Prompt ${esc(result.promptVersion)} · Schema ${esc(result.schemaVersion)} · ${esc(shortDate(result.generatedAt, true))}</small></div>
+    </div>${evidence ? `<details class="customer-ai-evidence"><summary>评分证据 · ${payload.evidence.length}</summary><ul>${evidence}</ul></details>` : ''}`;
+  }
+
+  function scheduleCustomerAIPoll() {
+    clearTimeout(state.customerAiTimer);
+    state.customerAiTimer = null;
+    if (!['queued', 'running'].includes(state.customerAi?.job?.state) || !state.customerProfileExternalId) return;
+    state.customerAiTimer = setTimeout(() => void loadCustomerAI(state.customerProfileExternalId, { quiet: true }), 2500);
+  }
+
+  async function loadCustomerAI(customerId, { quiet = false } = {}) {
+    clearTimeout(state.customerAiTimer);
+    state.customerAiTimer = null;
+    if (!quiet) state.customerAiLoading = true;
+    state.customerAiError = '';
+    renderCustomerAI();
+    try {
+      const payload = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/results`);
+      if (state.customerProfileExternalId !== customerId) return;
+      state.customerAi = payload;
+    } catch (error) {
+      if (state.customerProfileExternalId !== customerId) return;
+      state.customerAiError = error.message;
+    } finally {
+      if (state.customerProfileExternalId === customerId) {
+        state.customerAiLoading = false;
+        renderCustomerAI();
+        scheduleCustomerAIPoll();
+      }
+    }
+  }
+
+  async function runCustomerFit() {
+    const customerId = state.customerProfileExternalId;
+    if (!customerId || state.customerAiPending) return;
+    state.customerAiPending = true;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/stations/customer_fit/run`, { method: 'POST', body: '{}' });
+      await loadCustomerAI(customerId, { quiet: true });
+    } catch (error) {
+      state.customerAiError = error.message;
+      renderCustomerAI();
+    } finally {
+      state.customerAiPending = false;
+      renderCustomerAI();
+    }
+  }
+
+  async function retryCustomerFit(jobId) {
+    if (!jobId || state.customerAiPending) return;
+    state.customerAiPending = true;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', body: '{}' });
+      await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
+    } catch (error) {
+      state.customerAiError = error.message;
+      renderCustomerAI();
+    } finally {
+      state.customerAiPending = false;
+      renderCustomerAI();
+    }
   }
 
   function renderCustomers() {
@@ -1759,6 +1899,9 @@
     if (event.target.closest('[data-close-modal]')) closeModal();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
+    if (event.target.closest('[data-run-customer-fit]')) void runCustomerFit();
+    const retryAIJob = event.target.closest('[data-retry-ai-job]');
+    if (retryAIJob) void retryCustomerFit(retryAIJob.dataset.retryAiJob);
     const activity = event.target.closest('[data-activity]');
     if (activity) {
       state.activityType = activity.dataset.activity;
