@@ -4,6 +4,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
 const { buildCustomerContext } = require('../lib/ai_stations/context');
+const { createAIJobStore } = require('../lib/ai_stations/jobs');
+const { createAIResultStore } = require('../lib/ai_stations/results');
+const { executeCustomerFitJob } = require('../lib/ai_stations/executor');
 
 function fixture() {
   const db = new Database(':memory:');
@@ -156,5 +159,65 @@ test('context falls back to an authorized CRM account when the customer pool is 
   assert.equal(result.context.customerPool.companyName, 'Acme Components');
   assert.equal(result.context.customerPool.currentPool, 'crm');
   assert.equal(result.context.crmAccountId, 'ACC-1');
+  db.close();
+});
+
+test('customer_fit execution uses the existing router contract and persists the validated result', async () => {
+  const db = fixture();
+  const accessContext = access();
+  const actor = { id: 'U1', role: 'manager' };
+  const context = buildCustomerContext(db, accessContext, 'CUST-1');
+  const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-EXEC' });
+  const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-EXEC` });
+  const job = jobs.enqueue({
+    customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit', contextHash: context.contextHash,
+    payload: { contextVersion: 'crm-v1' },
+  }, 'fit:CUST-1:v1');
+  const claimed = jobs.claimNext('worker-exec');
+  assert.equal(claimed.id, job.id);
+  const calls = [];
+  const output = {
+    version: 'v1', confidence: 0.88, evidenceIds: context.evidenceIds.slice(0, 2),
+    reasonCodes: ['PRODUCT_MATCH'], fitScore: 86, grade: 'A', reviewRequired: false,
+  };
+  const router = {
+    route: async (messages, options, adapters) => {
+      calls.push({ messages, options, adapterNames: Object.keys(adapters) });
+      return { answer: JSON.stringify(output), engine: 'hermes', model: 'test-model', usage: { input: 10, output: 5 } };
+    },
+  };
+  const execution = await executeCustomerFitJob({
+    db, jobs, results, jobId: job.id, workerId: 'worker-exec', accessContext, actor,
+    router,
+    adapters: { 'kimi-cli': async () => ({}), hermes: async () => ({}), deepseek: async () => ({}) },
+  });
+  assert.equal(execution.result.value.fitScore, 86);
+  assert.equal(execution.modelRun.status, 'succeeded');
+  assert.equal(jobs.getJob(job.id).state, 'succeeded');
+  assert.equal(calls[0].options.externalAllowed, false);
+  assert.equal(calls[0].options.scope, 'ai_station:customer_fit');
+  assert.deepEqual(calls[0].adapterNames, ['kimi-cli', 'hermes', 'deepseek']);
+  assert.equal(calls[0].messages[0].role, 'system');
+  assert.match(calls[0].messages[1].content, /trustedCrmContext/);
+  db.close();
+});
+
+test('customer_fit execution rejects invented evidence and leaves a retryable job', async () => {
+  const db = fixture();
+  const accessContext = access();
+  const context = buildCustomerContext(db, accessContext, 'CUST-1');
+  const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-INVALID', retryBaseMs: 1 });
+  const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-INVALID` });
+  const job = jobs.enqueue({ customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit', contextHash: context.contextHash }, 'fit:CUST-1:invalid');
+  jobs.claimNext('worker-invalid');
+  await assert.rejects(() => executeCustomerFitJob({
+    db, jobs, results, jobId: job.id, workerId: 'worker-invalid', accessContext, actor: { id: 'U1', role: 'manager' },
+    modelCall: async () => ({
+      answer: JSON.stringify({ version: 'v1', confidence: 0.4, evidenceIds: ['EV-INVENTED'], reasonCodes: ['OTHER'], fitScore: 20, grade: 'D', reviewRequired: true }),
+      engine: 'deepseek', model: 'test-model',
+    }),
+  }), error => error.code === 'AI_STATION_INVALID_OUTPUT');
+  assert.equal(jobs.getJob(job.id).state, 'retry_wait');
+  assert.equal(db.prepare('SELECT status FROM crm_ai_model_runs WHERE job_id=?').get(job.id).status, 'invalid_output');
   db.close();
 });
