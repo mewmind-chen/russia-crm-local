@@ -68,7 +68,10 @@ atomic_switch() {
     return 1
   }
   ln -s "$target" "$temporary_link" || return $?
-  if ! mv -h "$temporary_link" "$CURRENT_LINK"; then
+  if ! "$NODE_BIN" -e '
+    const fs = require("node:fs");
+    fs.renameSync(process.argv[1], process.argv[2]);
+  ' "$temporary_link" "$CURRENT_LINK"; then
     [[ "${temporary_link:h}" == "$current_parent" ]] && rm -f -- "$temporary_link"
     return 1
   fi

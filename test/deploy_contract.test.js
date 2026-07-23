@@ -222,3 +222,10 @@ test('deployment validation uses an isolated test runtime', () => {
   assert.match(deployScript, /export RECON_OUTPUT_DIR="\$validation_runtime\/recon-runs"/);
   assert.doesNotMatch(deployScript, /source .*shared\/\.env/);
 });
+
+test('atomic current switching is portable across macOS and Linux', () => {
+  const deployScript = readProjectFile('scripts', 'deploy-from-github.sh');
+
+  assert.match(deployScript, /fs\.renameSync\(process\.argv\[1\], process\.argv\[2\]\)/);
+  assert.doesNotMatch(deployScript, /\bmv -h\b/);
+});
