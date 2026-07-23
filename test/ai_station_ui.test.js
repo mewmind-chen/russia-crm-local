@@ -28,7 +28,10 @@ test('customer fit UI exposes result metadata, evidence and every job state', ()
   for (const field of ['fitScore', 'grade', 'confidence', 'reasonCodes', 'promptVersion', 'schemaVersion', 'generatedAt', 'evidence']) {
     assert.match(app, new RegExp(field), `missing field: ${field}`);
   }
-  for (const state of ['queued', 'running', 'retry_wait', 'needs_review', 'succeeded', 'dead_letter', 'stale']) {
+  for (const state of [
+    'queued', 'running', 'retry_wait', 'needs_review', 'succeeded', 'dead_letter',
+    'blocked', 'cancel_requested', 'cancelled', 'stale',
+  ]) {
     assert.match(app, new RegExp(state), `missing state: ${state}`);
   }
 });

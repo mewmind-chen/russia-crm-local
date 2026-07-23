@@ -664,6 +664,7 @@
   const aiJobLabels = {
     queued: ['排队中', 'amber'], running: ['分析中', 'amber'], retry_wait: ['等待重试', 'amber'],
     needs_review: ['需要复核', 'amber'], succeeded: ['已完成', ''], dead_letter: ['生成失败', 'red'],
+    blocked: ['等待处理', 'amber'], cancel_requested: ['正在取消', 'amber'], cancelled: ['已取消', 'gray'],
   };
 
   function aiReasonLabel(code) {
@@ -684,7 +685,7 @@
     const job = payload?.job;
     const result = payload?.result;
     const canRun = can('use_ai_assistant') && !state.data?.impersonation;
-    const retryable = ['retry_wait', 'dead_letter'].includes(job?.state);
+    const retryable = ['retry_wait', 'dead_letter', 'blocked', 'cancelled'].includes(job?.state);
     if (canRun && (retryable || !result || payload?.stale)) {
       const label = state.customerAiPending
         ? '处理中…'
@@ -727,7 +728,8 @@
   function scheduleCustomerAIPoll() {
     clearTimeout(state.customerAiTimer);
     state.customerAiTimer = null;
-    if (!['queued', 'running'].includes(state.customerAi?.job?.state) || !state.customerProfileExternalId) return;
+    if (!['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state)
+        || !state.customerProfileExternalId) return;
     state.customerAiTimer = setTimeout(() => void loadCustomerAI(state.customerProfileExternalId, { quiet: true }), 2500);
   }
 

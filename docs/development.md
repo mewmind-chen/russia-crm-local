@@ -87,6 +87,17 @@ Development uses port 3100. Additional worktrees use 3201 or higher. Bind only t
 
 Set `CRM_AI_STATIONS_ENABLED=true` only in the isolated development runtime when testing AI stations. Production defaults to disabled when the variable is absent; a production rollout must opt in explicitly after the release gate.
 
+AI Station requests only enqueue durable jobs. Run the independent development Worker in a second terminal with the same development runtime loaded:
+
+```bash
+set -a
+source /Users/ylf/Desktop/projects/tradepulse-development/runtime/<worktree>/.env
+set +a
+npm run crm:ai-worker
+```
+
+Use `npm run crm:ai-worker -- --once` for one claim attempt. `CRM_AI_JOB_LEASE_MS`, `CRM_AI_WORKER_IDLE_MS`, and `CRM_AI_WORKER_ID` may be set in the development runtime. Queue warnings use `CRM_AI_QUEUE_BACKLOG_WARNING` and `CRM_AI_QUEUE_WAIT_WARNING_MS`; only due, dependency-ready jobs contribute to the wait warning. Do not start this Worker against production until the Control Plane release gate explicitly enables AI Stations.
+
 ## Production Customer Snapshot
 
 Development must never point at the live production database. To refresh realistic customer data, use the one-way snapshot importer. It preserves development users, permission groups, sessions and AI router settings, maps production ownership to development accounts by role, and excludes production credentials, sessions, permission overrides, webhooks and bot bindings.
