@@ -857,9 +857,12 @@ app.get('/api/report', (req, res) => {
     const Database = require('better-sqlite3');
     const db = new Database(databasePath());
     const allowedIds = [...req.accessContext.externalCustomerIds];
-    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
-    const row = db.prepare(`SELECT job_id, customer_id, company_name, report_path FROM recon_results
-      WHERE job_id = ? AND customer_id IN (${placeholders})`).get(jobId, ...allowedIds);
+    const row = req.accessContext.canViewAllCustomers
+      ? db.prepare(`SELECT job_id, customer_id, company_name, report_path FROM recon_results
+          WHERE job_id = ?`).get(jobId)
+      : db.prepare(`SELECT job_id, customer_id, company_name, report_path FROM recon_results
+          WHERE job_id = ? AND customer_id IN (${allowedIds.length ? allowedIds.map(() => '?').join(',') : "''"})`)
+        .get(jobId, ...allowedIds);
     db.close();
 
     if (!row) {
@@ -867,7 +870,7 @@ app.get('/api/report', (req, res) => {
         .send(req.accessContext.canViewAllCustomers ? '报告不存在' : '无权访问该报告');
       return;
     }
-    assertRequestCustomer(req, row.customer_id);
+    if (!req.accessContext.canViewAllCustomers) assertRequestCustomer(req, row.customer_id);
     if (!row.report_path) return res.status(404).send('未找到报告');
 
     const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));

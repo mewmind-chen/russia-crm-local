@@ -297,6 +297,30 @@ test('report route rejects a report symlink that escapes the allowed root', asyn
   assert.equal(response.status, 404);
 });
 
+test('full-scope users can open historical reports without a CRM account row', async t => {
+  const previousReportRoot = process.env.RECON_OUTPUT_DIR;
+  const reportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-report-history-'));
+  const reportPath = path.join(reportRoot, 'historical.html');
+  fs.writeFileSync(reportPath, '<!doctype html><title>Historical Recon Report</title>');
+  process.env.RECON_OUTPUT_DIR = reportRoot;
+  t.after(() => {
+    if (previousReportRoot === undefined) delete process.env.RECON_OUTPUT_DIR;
+    else process.env.RECON_OUTPUT_DIR = previousReportRoot;
+    fs.rmSync(reportRoot, { recursive: true, force: true });
+  });
+
+  const fx = await fixtures.adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO recon_results
+    (job_id, customer_id, company_name, report_path, updated_at)
+    VALUES ('JOB-HISTORICAL', 'RU-9999', 'Historical Fixture', ?, '2026-07-21 08:00:00')`).run(reportPath);
+
+  const response = await fx.request('/api/report?job_id=JOB-HISTORICAL', { cookie: fx.adminCookie });
+  const body = await response.text();
+  assert.equal(response.status, 200, body);
+  assert.match(body, /Historical Recon Report/);
+});
+
 test('scoped resource misses are non-enumerable while full-scope misses are 404', async t => {
   const scoped = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
   t.after(() => scoped.close());
