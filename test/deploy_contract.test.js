@@ -220,6 +220,7 @@ test('deployment validation uses an isolated test runtime', () => {
   assert.match(deployScript, /export CRM_RUNTIME_ROOT="\$validation_runtime"/);
   assert.match(deployScript, /export CRM_DB_PATH="\$validation_runtime\/data\/crm\.db"/);
   assert.match(deployScript, /export RECON_OUTPUT_DIR="\$validation_runtime\/recon-runs"/);
+  assert.match(deployScript, /unset DEPLOY_STATE_FILE/);
   assert.doesNotMatch(deployScript, /source .*shared\/\.env/);
 });
 

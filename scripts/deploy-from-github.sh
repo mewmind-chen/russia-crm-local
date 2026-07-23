@@ -178,6 +178,7 @@ run_validation() {
   }
   (
     trap 'rm -rf -- "$validation_runtime"' EXIT
+    unset DEPLOY_STATE_FILE
     mkdir -p \
       "$validation_runtime/data" \
       "$validation_runtime/recon-runs" \
