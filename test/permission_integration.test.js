@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const fixtures = require('./helpers/permission_fixture');
 
@@ -221,6 +222,79 @@ test('scoped manager cannot list, read, report, or mutate another owner', async 
   assert.equal(write.status, 403);
   const after = fx.db.prepare('SELECT status FROM customers WHERE follow_id=?').get('FOLLOW-OTHER').status;
   assert.equal(after, before);
+});
+
+test('report route accepts an owned report through a symlinked report root', async t => {
+  const previousReportRoot = process.env.RECON_OUTPUT_DIR;
+  const reportFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-report-route-'));
+  const storageRoot = path.join(reportFixtureRoot, 'storage');
+  const releaseReportRoot = path.join(reportFixtureRoot, 'release-reports');
+  const reportPath = path.join(storageRoot, 'report.html');
+  fs.mkdirSync(storageRoot);
+  fs.writeFileSync(reportPath, '<!doctype html><title>Owned Recon Report</title>');
+  fs.symlinkSync(storageRoot, releaseReportRoot, 'dir');
+  process.env.RECON_OUTPUT_DIR = releaseReportRoot;
+  t.after(() => {
+    if (previousReportRoot === undefined) delete process.env.RECON_OUTPUT_DIR;
+    else process.env.RECON_OUTPUT_DIR = previousReportRoot;
+    fs.rmSync(reportFixtureRoot, { recursive: true, force: true });
+  });
+
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE recon_results SET report_path=? WHERE job_id='JOB-OWN'").run(reportPath);
+
+  const response = await fx.request('/api/report?job_id=JOB-OWN', { cookie: fx.cookie });
+  const body = await response.text();
+  assert.equal(response.status, 200, body);
+  assert.match(response.headers.get('content-type') || '', /^text\/html/);
+  assert.match(body, /Owned Recon Report/);
+});
+
+test('report route preserves plain-text report compatibility', async t => {
+  const previousReportRoot = process.env.RECON_OUTPUT_DIR;
+  const reportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-report-route-'));
+  const reportPath = path.join(reportRoot, 'report.txt');
+  fs.writeFileSync(reportPath, 'Owned plain-text report');
+  process.env.RECON_OUTPUT_DIR = reportRoot;
+  t.after(() => {
+    if (previousReportRoot === undefined) delete process.env.RECON_OUTPUT_DIR;
+    else process.env.RECON_OUTPUT_DIR = previousReportRoot;
+    fs.rmSync(reportRoot, { recursive: true, force: true });
+  });
+
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE recon_results SET report_path=? WHERE job_id='JOB-OWN'").run(reportPath);
+
+  const response = await fx.request('/api/report?job_id=JOB-OWN', { cookie: fx.cookie });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /^text\/plain/);
+  assert.equal(await response.text(), 'Owned plain-text report');
+});
+
+test('report route rejects a report symlink that escapes the allowed root', async t => {
+  const previousReportRoot = process.env.RECON_OUTPUT_DIR;
+  const reportFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-report-route-'));
+  const reportRoot = path.join(reportFixtureRoot, 'reports');
+  const outsideReport = path.join(reportFixtureRoot, 'outside.html');
+  const linkedReport = path.join(reportRoot, 'report.html');
+  fs.mkdirSync(reportRoot);
+  fs.writeFileSync(outsideReport, '<!doctype html><title>Outside Report</title>');
+  fs.symlinkSync(outsideReport, linkedReport);
+  process.env.RECON_OUTPUT_DIR = reportRoot;
+  t.after(() => {
+    if (previousReportRoot === undefined) delete process.env.RECON_OUTPUT_DIR;
+    else process.env.RECON_OUTPUT_DIR = previousReportRoot;
+    fs.rmSync(reportFixtureRoot, { recursive: true, force: true });
+  });
+
+  const fx = await fixtures.seededFixture({ managerViewAll: false, permissions: { view_contacts: true } });
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE recon_results SET report_path=? WHERE job_id='JOB-OWN'").run(linkedReport);
+
+  const response = await fx.request('/api/report?job_id=JOB-OWN', { cookie: fx.cookie });
+  assert.equal(response.status, 404);
 });
 
 test('scoped resource misses are non-enumerable while full-scope misses are 404', async t => {
