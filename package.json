@@ -60,6 +60,7 @@
     ,"deploy:mac:status": "node scripts/deploy-state.js status"
   },
   "dependencies": {
+    "ajv": "8.20.0",
     "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0"
