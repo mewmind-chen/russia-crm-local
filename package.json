@@ -12,6 +12,7 @@
     "crm:migrate:unified": "node scripts/migrate-unified-crm.js --apply",
     "crm:reset-to-leads": "node scripts/reset-crm-to-undeveloped-leads.js",
     "crm:notify": "node scripts/dispatch-crm-notifications.js",
+    "crm:sync-production-customers": "node scripts/sync-production-customer-data.js",
     "migrate": "node scripts/migrate.js",
     "assistant:index": "node scripts/assistant_index.js",
     "daily:import": "node scripts/import-daily-normalized.js",
@@ -60,6 +61,7 @@
     ,"deploy:mac:status": "node scripts/deploy-state.js status"
   },
   "dependencies": {
+    "ajv": "8.20.0",
     "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0"

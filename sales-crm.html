@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260722-5">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260723-7">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -180,6 +180,13 @@
           <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2></div>
           <button id="customerProfileEdit" class="button secondary hidden" type="button">调整客户信息</button>
         </div>
+        <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
+          <div class="customer-ai-station-head">
+            <div><p class="eyebrow">AI CUSTOMER FIT</p><h3>AI 客户匹配</h3></div>
+            <div id="customerAiStationActions" class="customer-ai-station-actions"></div>
+          </div>
+          <div id="customerAiStationBody" class="customer-ai-station-body"><span class="subtle">正在读取评分状态…</span></div>
+        </section>
         <iframe id="customerProfileFrame" class="customer-profile-frame" title="客户完整资料" loading="eager" allow="clipboard-write"></iframe>
       </section>
 
@@ -339,6 +346,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260722-5"></script>
+  <script src="/sales-assets/app.js?v=20260723-7"></script>
 </body>
 </html>

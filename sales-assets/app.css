@@ -51,7 +51,7 @@
 @media(max-width:780px){.customer-ai-form{grid-template-columns:1fr}.customer-ai-form .button{width:100%}}
 
 /* Original workbench customer detail in a dedicated CRM profile page */
-.customer-profile-view.active{height:calc(100dvh - 130px);min-height:620px;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:#fff}
+.customer-profile-view.active{height:calc(100dvh - 130px);min-height:620px;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#fff}
 .customer-profile-toolbar{min-height:58px;display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid var(--line)}
 .customer-profile-toolbar .button{flex:0 0 auto}
 .customer-profile-toolbar #customerProfileEdit{margin-left:auto}
@@ -59,6 +59,22 @@
 .customer-profile-frame{display:block;width:100%;height:100%;min-height:0;border:0;background:#fff}
 body.customer-profile-active .top-actions{display:none}
 @media(max-width:780px){.customer-profile-view.active{height:calc(100dvh - 95px);min-height:500px}.customer-profile-toolbar{padding:8px 0}.customer-profile-toolbar h2{font-size:15px}}
+
+/* Permission-scoped customer fit station */
+.customer-ai-station{border-bottom:1px solid var(--line);background:#f8fbf9;padding:11px 14px;max-height:270px;overflow:auto}
+.customer-ai-station-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.customer-ai-station-head h3{font-size:13px;margin:0}.customer-ai-station-head .eyebrow{font-size:8px;margin-bottom:2px}
+.customer-ai-station-actions{flex:0 0 auto;min-width:72px;text-align:right}
+.customer-ai-station-body{min-height:42px;display:grid;align-items:center}
+.customer-ai-result{display:grid;grid-template-columns:64px 52px 72px minmax(240px,1fr);gap:13px;align-items:center}
+.customer-ai-score,.customer-ai-grade,.customer-ai-confidence{display:grid;gap:2px;border-right:1px solid var(--line)}
+.customer-ai-score strong,.customer-ai-grade strong{font-size:22px;line-height:1}.customer-ai-confidence strong{font-size:14px}
+.customer-ai-score span,.customer-ai-grade span,.customer-ai-confidence span{font-size:9px;color:var(--muted)}
+.customer-ai-summary{display:grid;gap:6px;min-width:0}.customer-ai-summary>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.customer-ai-summary>small{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
+.customer-ai-reasons{display:flex;gap:5px;flex-wrap:wrap}.customer-ai-reasons span{font-size:9px;color:#355f50;background:#e8f2ed;padding:3px 6px;border-radius:4px}
+.customer-ai-empty,.customer-ai-error{display:flex;align-items:center;gap:9px;font-size:11px}.customer-ai-error{color:var(--red)}.customer-ai-error span{color:var(--muted)}
+.customer-ai-evidence{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}.customer-ai-evidence summary{cursor:pointer;color:var(--green);font-size:10px;font-weight:800}.customer-ai-evidence ul{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:7px}.customer-ai-evidence li{display:grid;grid-template-columns:150px minmax(180px,1fr) auto;gap:10px;align-items:start;border-top:1px solid #e7ece9;padding-top:7px;font-size:10px}.customer-ai-evidence li:first-child{border-top:0}.customer-ai-evidence li div{display:grid;gap:2px}.customer-ai-evidence li small{color:var(--muted)}.customer-ai-evidence li p{margin:0;line-height:1.5;overflow-wrap:anywhere}.customer-ai-evidence li a{color:var(--green);white-space:nowrap}
+@media(max-width:780px){.customer-ai-station{padding:10px 4px;max-height:330px}.customer-ai-result{grid-template-columns:54px 46px 62px;gap:8px}.customer-ai-summary{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px}.customer-ai-evidence li{grid-template-columns:1fr}.customer-ai-evidence li a{justify-self:start}}
 
 /* Administrator data maintenance */
 .assistant-runtime-panel{margin:0 0 18px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
