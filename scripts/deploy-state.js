@@ -2,14 +2,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const DEFAULT_STATE_FILE = path.join(
-  os.homedir(),
-  'Desktop',
-  'projects',
-  'russia-crm-deploy',
-  'state',
-  'state.json',
-);
+const DEFAULT_DEPLOY_ROOT = process.env.DEPLOY_ROOT
+  || path.join(os.homedir(), 'Desktop', 'projects', 'tradepulse-production');
+const DEFAULT_STATE_FILE = path.join(DEFAULT_DEPLOY_ROOT, 'state', 'state.json');
 
 const EMPTY_STATE = {
   lastSuccessfulSha: '',

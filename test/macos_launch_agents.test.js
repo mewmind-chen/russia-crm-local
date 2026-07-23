@@ -68,14 +68,15 @@ exit 97
 
 function configureBootstrapFixture() {
   const fixture = createInstallerFixture();
-  const releasesDir = path.join(fixture.homeDir, 'Desktop', 'projects', 'russia-crm-releases');
-  const bootstrapRelease = path.join(releasesDir, 'bootstrap release');
-  const currentLink = path.join(
+  const productionRoot = path.join(
     fixture.homeDir,
     'Desktop',
     'projects',
-    'russia-crm-current',
+    'tradepulse-production',
   );
+  const releasesDir = path.join(productionRoot, 'releases');
+  const bootstrapRelease = path.join(releasesDir, 'bootstrap release');
+  const currentLink = path.join(productionRoot, 'current');
   const launchAgentsDir = path.join(fixture.homeDir, 'Library', 'LaunchAgents');
   const deployDir = path.join(fixture.homeDir, 'helpers with spaces');
   const deployScript = path.join(deployDir, 'deploy fixture.sh');
@@ -99,6 +100,7 @@ test ! -e "$CRM_TEST_DEPLOY_FAIL_FILE"
 `);
   return {
     ...fixture,
+    productionRoot,
     bootstrapRelease,
     releasesDir,
     currentLink,
@@ -110,8 +112,8 @@ test ! -e "$CRM_TEST_DEPLOY_FAIL_FILE"
     nodeBin,
     env: {
       ...fixture.env,
+      DEPLOY_ROOT: productionRoot,
       DEPLOY_BOOTSTRAP_RELEASE: bootstrapRelease,
-      DEPLOY_RELEASES_DIR: releasesDir,
       DEPLOY_NODE_BIN: nodeBin,
       DEPLOY_SCRIPT: deployScript,
       CRM_ACTIVE_SERVER_WORKING_DIRECTORY: bootstrapRelease,
@@ -128,6 +130,7 @@ test ! -e "$CRM_TEST_DEPLOY_FAIL_FILE"
 function fixtureOptions(overrides = {}) {
   return {
     runtimeRoot: '/fixture/russia-crm-current',
+    deployRoot: '/fixture/tradepulse-production',
     sourceRoot: '/fixture/russia-crm-local',
     logsDir: '/fixture/logs',
     homeDir: '/fixture/home',
@@ -163,6 +166,10 @@ test('renders the optional auto deploy service every 60 seconds', () => {
   assert.ok(deploy);
   assert.match(renderPlist(deploy), /<key>StartInterval<\/key><integer>60<\/integer>/);
   assert.match(renderPlist(deploy), /deploy-from-github\.sh/);
+  assert.match(
+    renderPlist(deploy),
+    /<key>DEPLOY_ROOT<\/key><string>\/fixture\/tradepulse-production<\/string>/,
+  );
 });
 
 test('auto deploy installation definitions exclude the Cloudflare tunnel', () => {
@@ -188,6 +195,14 @@ test('escapes XML-sensitive service values', () => {
 
 test('dry-run legacy installation never spawns a mutating launchctl command', () => {
   const fixture = createInstallerFixture();
+  const current = path.join(
+    fixture.homeDir,
+    'Desktop',
+    'projects',
+    'tradepulse-production',
+    'current',
+  );
+  fs.mkdirSync(current, { recursive: true });
   try {
     const result = spawnSync(process.execPath, [legacyInstaller], {
       encoding: 'utf8',
@@ -205,7 +220,13 @@ test('legacy installer renders code services against an existing current symlink
   const fixture = createInstallerFixture();
   const { homeDir } = fixture;
   const release = path.join(homeDir, 'bootstrap-release');
-  const current = path.join(homeDir, 'Desktop', 'projects', 'russia-crm-current');
+  const current = path.join(
+    homeDir,
+    'Desktop',
+    'projects',
+    'tradepulse-production',
+    'current',
+  );
   const launchAgents = path.join(homeDir, 'Library', 'LaunchAgents');
   fs.mkdirSync(release, { recursive: true });
   fs.mkdirSync(path.dirname(current), { recursive: true });
@@ -281,6 +302,10 @@ test('auto deploy installer bootstraps code services before enabling deployment 
     assert.match(
       autoDeployPlist,
       new RegExp(`<key>DEPLOY_NODE_BIN</key><string>${fixture.nodeBin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</string>`),
+    );
+    assert.match(
+      autoDeployPlist,
+      new RegExp(`<key>DEPLOY_ROOT</key><string>${fixture.productionRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</string>`),
     );
   } finally {
     fs.rmSync(fixture.homeDir, { recursive: true, force: true });

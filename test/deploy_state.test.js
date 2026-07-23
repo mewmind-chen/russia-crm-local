@@ -40,3 +40,20 @@ test('deployment state get returns an empty string for missing files and keys', 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('deployment state defaults beneath DEPLOY_ROOT', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-deploy-root-state-'));
+  const productionRoot = path.join(dir, 'tradepulse-production');
+  const file = path.join(productionRoot, 'state', 'state.json');
+  try {
+    const result = spawnSync(process.execPath, [script, 'failure', 'a'.repeat(40), 'validate'], {
+      encoding: 'utf8',
+      env: { ...process.env, HOME: path.join(dir, 'home'), DEPLOY_ROOT: productionRoot },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).lastFailedStage, 'validate');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

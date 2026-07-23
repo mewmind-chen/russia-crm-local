@@ -7,9 +7,10 @@ const { buildServiceDefinitions, renderPlist } = require('../lib/macos_launch_ag
 
 const sourceRoot = path.resolve(__dirname, '..');
 const homeDir = os.homedir();
-const defaultCurrent = path.join(homeDir, 'Desktop', 'projects', 'russia-crm-current');
-const runtimeRoot = path.resolve(process.env.CRM_RUNTIME_ROOT
-  || (fs.existsSync(defaultCurrent) ? defaultCurrent : sourceRoot));
+const deployRoot = path.resolve(process.env.DEPLOY_ROOT
+  || path.join(homeDir, 'Desktop', 'projects', 'tradepulse-production'));
+const defaultCurrent = path.join(deployRoot, 'current');
+const runtimeRoot = path.resolve(process.env.CRM_RUNTIME_ROOT || defaultCurrent);
 const launchAgentsDir = path.join(homeDir, 'Library', 'LaunchAgents');
 const logsDir = path.join(runtimeRoot, 'logs');
 const dryRun = process.env.CRM_INSTALL_DRY_RUN === '1';
@@ -40,11 +41,15 @@ function resolveNodeBinary() {
 }
 
 const nodeBin = resolveNodeBinary();
+if (!fs.existsSync(runtimeRoot)) {
+  fail(`production runtime is unavailable: ${runtimeRoot}`);
+}
 fs.mkdirSync(launchAgentsDir, { recursive: true });
 fs.mkdirSync(logsDir, { recursive: true });
 
 const definitions = buildServiceDefinitions({
   runtimeRoot,
+  deployRoot,
   sourceRoot,
   logsDir,
   homeDir,

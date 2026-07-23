@@ -7,11 +7,13 @@ const { buildServiceDefinitions, renderPlist } = require('../lib/macos_launch_ag
 
 const sourceRoot = path.resolve(__dirname, '..');
 const homeDir = os.homedir();
+const deployRoot = path.resolve(process.env.DEPLOY_ROOT
+  || path.join(homeDir, 'Desktop', 'projects', 'tradepulse-production'));
 const currentLink = path.resolve(process.env.DEPLOY_CURRENT_LINK
-  || path.join(homeDir, 'Desktop', 'projects', 'russia-crm-current'));
+  || path.join(deployRoot, 'current'));
 const bootstrapRelease = process.env.DEPLOY_BOOTSTRAP_RELEASE;
 const configuredReleasesDir = process.env.DEPLOY_RELEASES_DIR
-  || path.join(homeDir, 'Desktop', 'projects', 'russia-crm-releases');
+  || path.join(deployRoot, 'releases');
 const launchAgentsDir = path.join(homeDir, 'Library', 'LaunchAgents');
 const autoDeployFile = path.join(launchAgentsDir, 'com.russia-crm.auto-deploy.plist');
 const logsDir = path.join(currentLink, 'logs');
@@ -139,6 +141,7 @@ fs.mkdirSync(logsDir, { recursive: true });
 
 const definitions = buildServiceDefinitions({
   runtimeRoot: currentLink,
+  deployRoot,
   sourceRoot,
   logsDir,
   homeDir,
@@ -179,7 +182,7 @@ for (const definition of definitions.filter(item => item.kind === 'code')) {
 const deployment = spawnSync('/bin/zsh', [deployScript, '--force'], {
   stdio: 'inherit',
   shell: false,
-  env: { ...process.env, DEPLOY_NODE_BIN: nodeBin },
+  env: { ...process.env, DEPLOY_NODE_BIN: nodeBin, DEPLOY_ROOT: deployRoot },
 });
 if (deployment.error) throw deployment.error;
 if (deployment.status !== 0) {

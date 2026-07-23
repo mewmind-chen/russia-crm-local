@@ -197,11 +197,28 @@ CRM_FIXTURE_BASE_DB=/absolute/path/to/crm-production-copy.db \
 Automatic deployment accepts `origin/main` as its only source. Normal: merge PR -> Mac
 validates latest origin/main -> backup -> switch -> health check.
 
+Mac production files have one root, separate from every development checkout:
+
+```text
+$HOME/Desktop/projects/tradepulse-production/
+├── current -> releases/<12-char-sha>
+├── releases/
+├── shared/
+└── state/
+```
+
+`DEPLOY_ROOT` overrides this root when required. The deployer derives all managed
+paths from it; explicit fine-grained path variables are reserved for tests and
+migrations. The installer requires the currently active release as a provenance
+check:
+
 ```bash
-npm run deploy:mac:install
+export DEPLOY_ROOT="$HOME/Desktop/projects/tradepulse-production"
+DEPLOY_BOOTSTRAP_RELEASE="$(cd "$DEPLOY_ROOT/current" && pwd -P)" \
+  npm run deploy:mac:install
 npm run deploy:mac:status
 npm run deploy:mac:retry
-tail -f logs/com.russia-crm.auto-deploy.{out,err}.log
+tail -f "$DEPLOY_ROOT/shared/logs/com.russia-crm.auto-deploy."{out,err}".log"
 curl -fsS http://127.0.0.1:3000/healthz
 ```
 

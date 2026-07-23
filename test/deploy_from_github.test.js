@@ -19,13 +19,15 @@ function writeExecutable(file, contents) {
 
 function createFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-github-deploy-'));
+  const homeDir = path.join(root, 'home');
+  const productionRoot = path.join(root, 'tradepulse-production');
   const source = path.join(root, 'source');
   const remote = path.join(root, 'remote.git');
-  const gitDir = path.join(root, 'deploy', 'repo.git');
-  const stateDir = path.join(root, 'deploy', 'state');
-  const releasesDir = path.join(root, 'releases');
-  const currentLink = path.join(root, 'current');
-  const sharedRoot = path.join(root, 'shared');
+  const gitDir = path.join(productionRoot, 'state', 'repo.git');
+  const stateDir = path.join(productionRoot, 'state');
+  const releasesDir = path.join(productionRoot, 'releases');
+  const currentLink = path.join(productionRoot, 'current');
+  const sharedRoot = path.join(productionRoot, 'shared');
   const helpersDir = path.join(root, 'helpers');
   const validationLog = path.join(root, 'validation.log');
   const validationFailFile = path.join(root, 'validation.fail');
@@ -35,8 +37,20 @@ function createFixture() {
   const healthFailShaFile = path.join(root, 'health-fail-sha');
 
   fs.mkdirSync(source, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
   fs.mkdirSync(helpersDir, { recursive: true });
-  for (const name of ['data', 'logs', 'reports', 'recon-runs', 'contact-recon-reports']) {
+  for (const name of [
+    'backups',
+    'contact-recon-reports',
+    'contact-recon-runs',
+    'data',
+    'logs',
+    'memory',
+    'output',
+    'recon-runs',
+    'reports',
+    'tmp',
+  ]) {
     fs.mkdirSync(path.join(source, name), { recursive: true });
     fs.writeFileSync(path.join(source, name, '.gitkeep'), '');
     fs.mkdirSync(path.join(sharedRoot, name), { recursive: true });
@@ -69,6 +83,11 @@ test ! -L "$candidate/data"
 test ! -e "$candidate/.env"
 test ! -L "$candidate/reports"
 test ! -L "$candidate/contact-recon-reports"
+test ! -L "$candidate/contact-recon-runs"
+test ! -L "$candidate/backups"
+test ! -L "$candidate/memory"
+test ! -L "$candidate/output"
+test ! -L "$candidate/tmp"
 printf '%s\\n' "$candidate" >> "$DEPLOY_TEST_VALIDATION_LOG"
 test ! -e "$DEPLOY_TEST_VALIDATION_FAIL_FILE"
 `);
@@ -85,7 +104,8 @@ printf '%s\\n' "$1" >> "$DEPLOY_TEST_RESTART_LOG"
   writeExecutable(healthcheckBin, `#!/bin/sh
 set -eu
 printf '%s %s\\n' "$1" "$2" >> "$DEPLOY_TEST_HEALTH_LOG"
-test "$(cat "$DEPLOY_CURRENT_LINK/.release-sha")" = "$1"
+current_link="${'$'}{DEPLOY_CURRENT_LINK:-${'$'}DEPLOY_ROOT/current}"
+test "$(cat "$current_link/.release-sha")" = "$1"
 if test "$2" = deploy && test -e "$DEPLOY_TEST_HEALTH_FAIL_SHA_FILE"; then
   test "$(cat "$DEPLOY_TEST_HEALTH_FAIL_SHA_FILE")" != "$1"
 fi
@@ -93,6 +113,8 @@ fi
 
   return {
     root,
+    homeDir,
+    productionRoot,
     sha,
     releasesDir,
     currentLink,
@@ -106,6 +128,7 @@ fi
     healthFailShaFile,
     env: {
       ...process.env,
+      HOME: homeDir,
       DEPLOY_REMOTE_URL: remote,
       DEPLOY_BRANCH: 'main',
       DEPLOY_GIT_DIR: gitDir,
@@ -127,6 +150,37 @@ fi
     },
   };
 }
+
+test('derives every managed deployment path from DEPLOY_ROOT', () => {
+  const fixture = createFixture();
+  const env = { ...fixture.env, DEPLOY_ROOT: fixture.productionRoot };
+  for (const name of [
+    'DEPLOY_GIT_DIR',
+    'DEPLOY_RELEASES_DIR',
+    'DEPLOY_CURRENT_LINK',
+    'DEPLOY_SHARED_ROOT',
+    'DEPLOY_STATE_DIR',
+  ]) {
+    delete env[name];
+  }
+
+  try {
+    const result = spawnSync('zsh', [deployScript], { encoding: 'utf8', env });
+
+    assert.equal(result.status, 0, result.stderr);
+    const productionReal = fs.realpathSync(fixture.productionRoot);
+    const currentRelative = path.relative(productionReal, fs.realpathSync(fixture.currentLink));
+    assert.equal(currentRelative.startsWith(`..${path.sep}`), false);
+    assert.equal(fs.existsSync(path.join(fixture.productionRoot, 'state', 'repo.git')), true);
+    assert.equal(fs.existsSync(fixture.stateFile), true);
+    assert.equal(
+      fs.readlinkSync(path.join(fixture.currentLink, 'data')),
+      path.join(fixture.productionRoot, 'shared', 'data'),
+    );
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
 
 function installOldRelease(fixture) {
   const oldRelease = path.join(fixture.root, 'old-release');
@@ -161,7 +215,19 @@ test('deploys newest remote main as an immutable release', () => {
     assert.equal(backup.startsWith(path.dirname(fixture.stateFile)), true);
     assert.equal(fs.existsSync(backup), true);
     assert.equal(fs.readFileSync(fixture.healthLog, 'utf8').trim(), `${fixture.sha} deploy`);
-    for (const name of ['.env', 'data', 'logs', 'reports', 'recon-runs', 'contact-recon-reports']) {
+    for (const name of [
+      '.env',
+      'backups',
+      'contact-recon-reports',
+      'contact-recon-runs',
+      'data',
+      'logs',
+      'memory',
+      'output',
+      'recon-runs',
+      'reports',
+      'tmp',
+    ]) {
       assert.equal(fs.readlinkSync(path.join(release, name)), path.join(fixture.sharedRoot, name));
     }
   } finally {

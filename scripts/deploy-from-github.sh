@@ -4,12 +4,12 @@ umask 077
 
 REMOTE_URL="${DEPLOY_REMOTE_URL:-https://github.com/mewmind-chen/russia-crm-local.git}"
 BRANCH="${DEPLOY_BRANCH:-main}"
-DEPLOY_BASE="${DEPLOY_BASE:-$HOME/Desktop/projects/russia-crm-deploy}"
-GIT_DIR="${DEPLOY_GIT_DIR:-$DEPLOY_BASE/repo.git}"
-STATE_DIR="${DEPLOY_STATE_DIR:-$DEPLOY_BASE/state}"
-RELEASES_DIR="${DEPLOY_RELEASES_DIR:-$HOME/Desktop/projects/russia-crm-releases}"
-CURRENT_LINK="${DEPLOY_CURRENT_LINK:-$HOME/Desktop/projects/russia-crm-current}"
-SHARED_ROOT="${DEPLOY_SHARED_ROOT:-$HOME/Desktop/projects/russia-crm-local}"
+DEPLOY_ROOT="${DEPLOY_ROOT:-$HOME/Desktop/projects/tradepulse-production}"
+GIT_DIR="${DEPLOY_GIT_DIR:-$DEPLOY_ROOT/state/repo.git}"
+STATE_DIR="${DEPLOY_STATE_DIR:-$DEPLOY_ROOT/state}"
+RELEASES_DIR="${DEPLOY_RELEASES_DIR:-$DEPLOY_ROOT/releases}"
+CURRENT_LINK="${DEPLOY_CURRENT_LINK:-$DEPLOY_ROOT/current}"
+SHARED_ROOT="${DEPLOY_SHARED_ROOT:-$DEPLOY_ROOT/shared}"
 LOCAL_HEALTH_URL="${DEPLOY_LOCAL_HEALTH_URL:-http://127.0.0.1:3000/healthz}"
 PUBLIC_HEALTH_URL="${DEPLOY_PUBLIC_HEALTH_URL:-https://crm.newmindchen.com/healthz}"
 NODE_BIN="${DEPLOY_NODE_BIN:-$(command -v node)}"
@@ -20,6 +20,7 @@ HEALTHCHECK_BIN="${DEPLOY_HEALTHCHECK_BIN:-}"
 SCRIPT_DIR="${0:A:h}"
 STATE_HELPER="$SCRIPT_DIR/deploy-state.js"
 export DEPLOY_STATE_FILE="$STATE_DIR/state.json"
+export DEPLOY_ROOT
 
 stage=preflight
 lock_dir=""
@@ -207,6 +208,7 @@ run_healthcheck() {
   '
 }
 
+require_absolute_path DEPLOY_ROOT "$DEPLOY_ROOT"
 require_absolute_path DEPLOY_GIT_DIR "$GIT_DIR"
 require_absolute_path DEPLOY_STATE_DIR "$STATE_DIR"
 require_absolute_path DEPLOY_RELEASES_DIR "$RELEASES_DIR"
@@ -323,7 +325,19 @@ if (( reuse_release == 0 )); then
     print -u2 -- "refusing to modify unsafe candidate path: $candidate"
     exit 1
   }
-  for name in .env data logs reports recon-runs contact-recon-reports; do
+  for name in \
+    .env \
+    backups \
+    contact-recon-reports \
+    contact-recon-runs \
+    data \
+    logs \
+    memory \
+    output \
+    recon-runs \
+    reports \
+    tmp
+  do
     rm -rf -- "$candidate/$name"
     ln -s "$SHARED_ROOT/$name" "$candidate/$name"
   done

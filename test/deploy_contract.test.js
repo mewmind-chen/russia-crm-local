@@ -198,7 +198,9 @@ test('CI and operator documentation preserve the automatic deployment contract',
   assert.match(readme, /npm run deploy:mac:install/);
   assert.match(readme, /npm run deploy:mac:status/);
   assert.match(readme, /npm run deploy:mac:retry/);
-  assert.match(readme, /logs\/com\.russia-crm\.auto-deploy\.\{out,err\}\.log/);
+  assert.match(readme, /tradepulse-production/);
+  assert.match(readme, /DEPLOY_ROOT/);
+  assert.match(readme, /shared\/logs\/com\.russia-crm\.auto-deploy/);
   assert.match(readme, /http:\/\/127\.0\.0\.1:3000\/healthz/);
   assert.match(readme, /public.*\/healthz/i);
   assert.match(readme, /code symlink is automatic/i);
