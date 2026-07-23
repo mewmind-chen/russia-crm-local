@@ -26,6 +26,7 @@ const {
 } = require('./lib/access_control');
 const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
+const { registerReleaseHealth } = require('./lib/release_health');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -54,6 +55,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+registerReleaseHealth(app);
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
 if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
   app.get('/legacy', (_req, res) => res.sendFile(path.join(__dirname, 'Index.html')));

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y zsh
+      - run: npm ci
+      - run: npm test
+      - run: node --check server.js
+      - run: node --check scripts/deploy-state.js
+      - run: node --check scripts/install-auto-deploy.js
+      - run: zsh -n scripts/deploy-from-github.sh
+      - run: bash -n deploy/backup.sh
+      - run: python3 -m compileall -q scripts automation/hermes-skills/russia-recon/scripts
