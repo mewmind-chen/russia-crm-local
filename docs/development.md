@@ -84,3 +84,21 @@ npm start
 ```
 
 Development uses port 3100. Additional worktrees use 3201 or higher. Bind only to `127.0.0.1`.
+
+## Production Customer Snapshot
+
+Development must never point at the live production database. To refresh realistic customer data, use the one-way snapshot importer. It preserves development users, permission groups, sessions and AI router settings, maps production ownership to development accounts by role, and excludes production credentials, sessions, permission overrides, webhooks and bot bindings.
+
+Preview only:
+
+```bash
+npm run crm:sync-production-customers
+```
+
+After stopping the development server, apply the snapshot:
+
+```bash
+npm run crm:sync-production-customers -- --apply
+```
+
+The importer creates a consistent read-only production snapshot, backs up the development database under `runtime/<worktree>/backups/customer-sync`, replaces only the customer-data whitelist in one transaction, and fails if the final foreign-key check is not clean.
