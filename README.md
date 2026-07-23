@@ -28,6 +28,9 @@ cp .env.example .env
 npm start
 ```
 
+开发环境必须使用独立 runtime 和数据库，完整目录、环境变量与 worktree 规则见
+[`docs/development.md`](docs/development.md)。
+
 默认只监听 `127.0.0.1`。如设置 `HOST=0.0.0.0`，应同时设置 `CRM_ACCESS_TOKEN`；浏览器首次使用：
 
 ```text

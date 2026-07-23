@@ -48,3 +48,30 @@ test('permission fixture starts an isolated temporary server', async () => {
     await fixture.close();
   }
 });
+
+test('application startup rejects a development database inside production', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-server-path-guard-'));
+  const productionRoot = path.join(tempDir, 'tradepulse-production');
+  const developmentRoot = path.join(tempDir, 'development-runtime');
+  fs.mkdirSync(path.join(productionRoot, 'shared', 'data'), { recursive: true });
+  fs.mkdirSync(developmentRoot, { recursive: true });
+  const keys = ['NODE_ENV', 'CRM_PRODUCTION_ROOT', 'CRM_RUNTIME_ROOT', 'CRM_DB_PATH'];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, {
+    NODE_ENV: 'development',
+    CRM_PRODUCTION_ROOT: productionRoot,
+    CRM_RUNTIME_ROOT: developmentRoot,
+    CRM_DB_PATH: path.join(productionRoot, 'shared', 'data', 'crm.db'),
+  });
+
+  try {
+    const { createApp } = require('../server');
+    assert.throws(() => createApp(), /development runtime cannot use the production root/);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

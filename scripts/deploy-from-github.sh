@@ -167,7 +167,36 @@ run_validation() {
     return
   fi
 
+  local validation_runtime
+  validation_runtime="$(mktemp -d "${TMPDIR:-/tmp}/tradepulse-validation.XXXXXX")" || return $?
+  [[ -d "$validation_runtime" && "${validation_runtime:t}" == tradepulse-validation.* ]] || {
+    print -u2 -- "failed to create a safe validation runtime"
+    return 1
+  }
   (
+    trap 'rm -rf -- "$validation_runtime"' EXIT
+    mkdir -p \
+      "$validation_runtime/data" \
+      "$validation_runtime/recon-runs" \
+      "$validation_runtime/contact-recon-runs" \
+      "$validation_runtime/contact-recon-reports" \
+      "$validation_runtime/reports" \
+      "$validation_runtime/backups/data-maintenance" \
+      "$validation_runtime/logs" \
+      "$validation_runtime/output" \
+      "$validation_runtime/tmp"
+    export NODE_ENV=test
+    export CRM_PRODUCTION_ROOT="$DEPLOY_ROOT"
+    export CRM_RUNTIME_ROOT="$validation_runtime"
+    export CRM_DB_PATH="$validation_runtime/data/crm.db"
+    export RECON_OUTPUT_DIR="$validation_runtime/recon-runs"
+    export CONTACT_RECON_OUTPUT_DIR="$validation_runtime/contact-recon-runs"
+    export CONTACT_RECON_REPORT_DIR="$validation_runtime/contact-recon-reports"
+    export CRM_REPORTS_DIR="$validation_runtime/reports"
+    export CRM_BACKUP_DIR="$validation_runtime/backups/data-maintenance"
+    export CRM_LOGS_DIR="$validation_runtime/logs"
+    export CRM_OUTPUT_DIR="$validation_runtime/output"
+    export CRM_TMP_DIR="$validation_runtime/tmp"
     cd "$candidate" &&
     npm ci &&
     npm test &&

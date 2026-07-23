@@ -210,3 +210,15 @@ test('CI and operator documentation preserve the automatic deployment contract',
   assert.match(tunnelDoc, /\/healthz/);
   assert.match(tunnelDoc, /deployment never rewrites the tunnel plist or credentials/i);
 });
+
+test('deployment validation uses an isolated test runtime', () => {
+  const deployScript = readProjectFile('scripts', 'deploy-from-github.sh');
+
+  assert.match(deployScript, /mktemp -d .*tradepulse-validation/);
+  assert.match(deployScript, /export NODE_ENV=test/);
+  assert.match(deployScript, /export CRM_PRODUCTION_ROOT="\$DEPLOY_ROOT"/);
+  assert.match(deployScript, /export CRM_RUNTIME_ROOT="\$validation_runtime"/);
+  assert.match(deployScript, /export CRM_DB_PATH="\$validation_runtime\/data\/crm\.db"/);
+  assert.match(deployScript, /export RECON_OUTPUT_DIR="\$validation_runtime\/recon-runs"/);
+  assert.doesNotMatch(deployScript, /source .*shared\/\.env/);
+});
