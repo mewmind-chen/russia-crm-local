@@ -10,11 +10,11 @@ const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js')
 const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
 
 test('customer profile contains the real customer fit station surface', () => {
-  assert.match(html, /id="customerAiStation"/);
+  assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260723-6/);
-  assert.match(html, /app\.js\?v=20260723-6/);
+  assert.match(html, /app\.css\?v=20260723-7/);
+  assert.match(html, /app\.js\?v=20260723-7/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
@@ -34,6 +34,8 @@ test('customer fit UI exposes result metadata, evidence and every job state', ()
 });
 
 test('customer fit actions respect AI permission and identity inspection', () => {
+  assert.match(app, /state\.data\?\.features\?\.aiStations/);
+  assert.match(app, /station\?\.classList\.toggle\('hidden', !customerAIEnabled\(\)\)/);
   assert.match(app, /const canRun = can\('use_ai_assistant'\) && !state\.data\?\.impersonation/);
   assert.match(app, /data-run-customer-fit/);
   assert.match(app, /data-retry-ai-job/);

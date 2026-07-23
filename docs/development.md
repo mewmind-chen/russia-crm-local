@@ -85,6 +85,8 @@ npm start
 
 Development uses port 3100. Additional worktrees use 3201 or higher. Bind only to `127.0.0.1`.
 
+Set `CRM_AI_STATIONS_ENABLED=true` only in the isolated development runtime when testing AI stations. Production defaults to disabled when the variable is absent; a production rollout must opt in explicitly after the release gate.
+
 ## Production Customer Snapshot
 
 Development must never point at the live production database. To refresh realistic customer data, use the one-way snapshot importer. It preserves development users, permission groups, sessions and AI router settings, maps production ownership to development accounts by role, and excludes production credentials, sessions, permission overrides, webhooks and bot bindings.

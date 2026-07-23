@@ -103,6 +103,9 @@
   function can(permission) {
     return Boolean(state.data?.user?.permissions?.[permission]);
   }
+  function customerAIEnabled() {
+    return Boolean(state.data?.features?.aiStations);
+  }
   function roleLabel(role) {
     return ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[role] || role || '—';
   }
@@ -635,7 +638,9 @@
     url.searchParams.set('customer', externalCustomerId);
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-    void loadCustomerAI(externalCustomerId);
+    const station = $('#customerAiStation');
+    station?.classList.toggle('hidden', !customerAIEnabled());
+    if (customerAIEnabled()) void loadCustomerAI(externalCustomerId);
   }
 
   function returnFromCustomerProfile() {
@@ -666,6 +671,7 @@
   }
 
   function renderCustomerAI() {
+    if (!customerAIEnabled()) return;
     const body = $('#customerAiStationBody');
     const actions = $('#customerAiStationActions');
     if (!body || !actions) return;
@@ -726,6 +732,7 @@
   }
 
   async function loadCustomerAI(customerId, { quiet = false } = {}) {
+    if (!customerAIEnabled()) return;
     clearTimeout(state.customerAiTimer);
     state.customerAiTimer = null;
     if (!quiet) state.customerAiLoading = true;
@@ -749,7 +756,7 @@
 
   async function runCustomerFit() {
     const customerId = state.customerProfileExternalId;
-    if (!customerId || state.customerAiPending) return;
+    if (!customerAIEnabled() || !customerId || state.customerAiPending) return;
     state.customerAiPending = true;
     renderCustomerAI();
     try {
@@ -765,7 +772,7 @@
   }
 
   async function retryCustomerFit(jobId) {
-    if (!jobId || state.customerAiPending) return;
+    if (!customerAIEnabled() || !jobId || state.customerAiPending) return;
     state.customerAiPending = true;
     renderCustomerAI();
     try {
