@@ -29,7 +29,7 @@ const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 
-function createApp() {
+function createApp(options = {}) {
 const paths = runtimePaths();
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -62,7 +62,7 @@ if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
   app.get('/tradelead-v2.html', (_req, res) => res.sendFile(path.join(__dirname, 'tradelead-v2.html')));
 }
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
-registerSalesCrm(app);
+registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   const permissions = req.accessContext.permissions;
   const modules = [

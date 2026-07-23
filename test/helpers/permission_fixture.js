@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 
-async function createPermissionFixture() {
+async function createPermissionFixture(appOptions = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-permissions-'));
   const dbPath = path.join(dir, 'crm.db');
   if (process.env.CRM_FIXTURE_BASE_DB) {
@@ -22,7 +22,7 @@ async function createPermissionFixture() {
   ensureTables();
 
   const db = new Database(dbPath);
-  const server = createApp().listen(0, '127.0.0.1');
+  const server = createApp(appOptions).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
@@ -75,7 +75,7 @@ async function createPermissionFixture() {
 }
 
 async function seededFixture(options = {}) {
-  const fx = await createPermissionFixture();
+  const fx = await createPermissionFixture(options.appOptions);
   const { hashPassword } = require('../../lib/sales_crm');
   const password = hashPassword('Password123!', '0123456789abcdef0123456789abcdef');
   const now = '2026-07-21 08:00:00';
@@ -147,7 +147,7 @@ async function fixtureWithPermission(permission, value) {
 }
 
 async function adminFixture(options = {}) {
-  const fx = await seededFixture();
+  const fx = await seededFixture(options);
   const { hashPassword } = require('../../lib/sales_crm');
   const password = hashPassword('Admin123!', 'abcdef0123456789abcdef0123456789');
   fx.db.prepare(`UPDATE sales_users SET email='admin@example.com',password_hash=?,password_salt=?,

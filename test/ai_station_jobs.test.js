@@ -80,3 +80,32 @@ test('expired running leases are recoverable and eventually dead-lettered', () =
   assert.equal(jobs.getJob('AIJ-2').state, 'dead_letter');
   db.close();
 });
+
+test('a requested job is claimed without consuming another customer job', () => {
+  const db = fixture();
+  db.prepare("INSERT INTO customer_pool(customer_id) VALUES ('CUST-2')").run();
+  let serial = 0;
+  const jobs = createAIJobStore(db, { idFactory: () => `AIJ-EXACT-${++serial}` });
+  const first = jobs.enqueue({ customerId: 'CUST-1', station: 'customer_fit', contextHash: hash }, 'job:first');
+  const second = jobs.enqueue({ customerId: 'CUST-2', station: 'customer_fit', contextHash: hash }, 'job:second');
+  const claimed = jobs.claimById(second.id, 'worker-exact');
+  assert.equal(claimed.id, second.id);
+  assert.equal(jobs.getJob(first.id).state, 'queued');
+  db.close();
+});
+
+test('manual retry accepts only retryable states and revives dead letters', () => {
+  const db = fixture();
+  const jobs = createAIJobStore(db, { maxAttempts: 1, idFactory: () => 'AIJ-RETRY' });
+  const job = jobs.enqueue({ customerId: 'CUST-1', station: 'customer_fit', contextHash: hash }, 'job:retry');
+  const claimed = jobs.claimById(job.id, 'worker-retry');
+  jobs.fail(claimed.id, 'worker-retry', new Error('failed'));
+  assert.equal(jobs.getJob(job.id).state, 'dead_letter');
+  const retried = jobs.retry(job.id);
+  assert.equal(retried.state, 'queued');
+  assert.equal(retried.attempts, 1);
+  assert.equal(retried.maxAttempts, 2);
+  assert.equal(jobs.claimById(job.id, 'worker-retry-2').attempts, 2);
+  assert.throws(() => jobs.retry(job.id), error => error.statusCode === 409 && error.code === 'AI_JOB_NOT_RETRYABLE');
+  db.close();
+});
