@@ -174,6 +174,13 @@ test('renders the optional auto deploy service every 60 seconds', () => {
   const deploy = definitions.find(item => item.label === 'com.russia-crm.auto-deploy');
 
   assert.ok(deploy);
+  assert.equal(deploy.programArguments[0], '/fixture/bin/node');
+  assert.equal(deploy.programArguments[1], '-e');
+  assert.match(deploy.programArguments[2], /spawnSync\("\/bin\/zsh"/);
+  assert.equal(
+    deploy.programArguments[3],
+    '/fixture/russia-crm-current/scripts/deploy-from-github.sh',
+  );
   assert.match(renderPlist(deploy), /<key>StartInterval<\/key><integer>60<\/integer>/);
   assert.match(renderPlist(deploy), /deploy-from-github\.sh/);
   assert.match(
