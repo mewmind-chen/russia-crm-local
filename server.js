@@ -25,6 +25,7 @@ const {
   contactSafePoolRecord, contactSafeReconRecord, assertPolicyAllowed,
 } = require('./lib/access_control');
 const { auditIdentity } = require('./lib/impersonation');
+const { readExistingFileWithinRoot } = require('./lib/report_files');
 
 function databasePath() {
   return path.resolve(process.env.CRM_DB_PATH || path.join(__dirname, 'data', 'crm.db'));
@@ -124,13 +125,13 @@ app.get('/share/report/:token/:jobId', (req, res) => {
   const row = db.prepare('SELECT report_path FROM recon_results WHERE job_id=?').get(jobId); db.close();
   if (!row?.report_path) return res.status(404).send('报告不存在');
   const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
-  const reportPath = path.resolve(row.report_path);
-  if (!reportPath.startsWith(`${reportRoot}${path.sep}`) || !fs.existsSync(reportPath) || !/\.html?$/i.test(reportPath)) return res.status(404).send('报告不可用');
+  const report = readExistingFileWithinRoot(reportRoot, row.report_path, ['.html', '.htm']);
+  if (!report) return res.status(404).send('报告不可用');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cache-Control', 'private, max-age=300');
-  res.sendFile(reportPath);
+  res.send(report.content);
 });
 
 app.get('/share/contact-report/:token/:jobId', (req, res) => {
@@ -138,10 +139,11 @@ app.get('/share/contact-report/:token/:jobId', (req, res) => {
   if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return res.status(404).send('Not found');
   const db = new Database(databasePath(), { readonly: true });
   const row = db.prepare('SELECT report_path FROM contact_recon_jobs WHERE job_id=? AND status=\'done\'').get(String(req.params.jobId || '')); db.close();
-  const root = path.resolve(path.join(__dirname, 'contact-recon-reports')), reportPath = path.resolve(row?.report_path || '');
-  if (!row?.report_path || !reportPath.startsWith(`${root}${path.sep}`) || !fs.existsSync(reportPath)) return res.status(404).send('报告不存在');
+  const root = path.resolve(path.join(__dirname, 'contact-recon-reports'));
+  const report = readExistingFileWithinRoot(root, row?.report_path, ['.html', '.htm']);
+  if (!report) return res.status(404).send('报告不存在');
   res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive'); res.setHeader('Referrer-Policy', 'no-referrer');
-  res.sendFile(reportPath);
+  res.send(report.content);
 });
 
 app.get('/api/delivery/latest', (_req, res) => {
@@ -869,18 +871,17 @@ app.get('/api/report', (req, res) => {
     if (!row.report_path) return res.status(404).send('未找到报告');
 
     const reportRoot = path.resolve(process.env.RECON_OUTPUT_DIR || path.join(__dirname, 'recon-runs'));
-    const reportPath = path.resolve(row.report_path);
-    if (reportPath !== reportRoot && !reportPath.startsWith(`${reportRoot}${path.sep}`)) {
-      res.status(403).send('报告路径不在允许目录');
+    const reportFile = readExistingFileWithinRoot(
+      reportRoot,
+      row.report_path,
+      ['.html', '.htm', '.md', '.markdown', '.txt'],
+    );
+    if (!reportFile) {
+      res.status(404).send('报告不可用');
       return;
     }
-    let report = '';
-    if (fs.existsSync(reportPath)) {
-      report = fs.readFileSync(reportPath, 'utf8');
-    } else {
-      res.status(404).send('报告文件不存在: ' + reportPath);
-      return;
-    }
+    const reportPath = reportFile.path;
+    const report = reportFile.content.toString('utf8');
 
     const lowerPath = String(reportPath).toLowerCase();
     if (lowerPath.endsWith('.html') || lowerPath.endsWith('.htm')) {
