@@ -27,6 +27,7 @@ function createFixture() {
   const stateDir = path.join(productionRoot, 'state');
   const releasesDir = path.join(productionRoot, 'releases');
   const currentLink = path.join(productionRoot, 'current');
+  const previousLink = path.join(productionRoot, 'previous');
   const sharedRoot = path.join(productionRoot, 'shared');
   const helpersDir = path.join(root, 'helpers');
   const validationLog = path.join(root, 'validation.log');
@@ -118,6 +119,7 @@ fi
     sha,
     releasesDir,
     currentLink,
+    previousLink,
     sharedRoot,
     stateFile: path.join(stateDir, 'state.json'),
     validationLog,
@@ -134,6 +136,7 @@ fi
       DEPLOY_GIT_DIR: gitDir,
       DEPLOY_RELEASES_DIR: releasesDir,
       DEPLOY_CURRENT_LINK: currentLink,
+      DEPLOY_PREVIOUS_LINK: previousLink,
       DEPLOY_SHARED_ROOT: sharedRoot,
       DEPLOY_STATE_DIR: stateDir,
       DEPLOY_NODE_BIN: process.execPath,
@@ -252,6 +255,21 @@ test('does not restart services when the remote SHA is already deployed', () => 
   }
 });
 
+test('updates previous to the release that was active before the switch', () => {
+  const fixture = createFixture();
+  try {
+    const oldRelease = installOldRelease(fixture);
+    const result = deploy(fixture);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(path.basename(fs.realpathSync(fixture.previousLink)), path.basename(oldRelease));
+    const state = JSON.parse(fs.readFileSync(fixture.stateFile, 'utf8'));
+    assert.equal(fs.realpathSync(state.previousRelease), fs.realpathSync(fixture.previousLink));
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('records validation failure without changing the current release', () => {
   const fixture = createFixture();
   try {
@@ -262,6 +280,7 @@ test('records validation failure without changing the current release', () => {
 
     assert.notEqual(failedValidation.status, 0);
     assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(oldRelease));
+    assert.equal(fs.existsSync(fixture.previousLink), false);
     assert.equal(fs.existsSync(fixture.stateFile), true, failedValidation.stderr);
     assert.equal(JSON.parse(fs.readFileSync(fixture.stateFile, 'utf8')).lastFailedStage, 'validate');
     assert.deepEqual(
@@ -269,6 +288,26 @@ test('records validation failure without changing the current release', () => {
       [],
     );
     assert.equal(fs.existsSync(fixture.restartLog), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('restores the prior previous pointer when health fails after switching', () => {
+  const fixture = createFixture();
+  try {
+    const oldRelease = installOldRelease(fixture);
+    const priorPrevious = path.join(fixture.root, 'prior-previous');
+    fs.mkdirSync(priorPrevious);
+    fs.writeFileSync(path.join(priorPrevious, '.release-sha'), `${'b'.repeat(40)}\n`);
+    fs.symlinkSync(priorPrevious, fixture.previousLink);
+    fs.writeFileSync(fixture.healthFailShaFile, `${fixture.sha}\n`);
+
+    const result = deploy(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(oldRelease));
+    assert.equal(fs.realpathSync(fixture.previousLink), fs.realpathSync(priorPrevious));
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

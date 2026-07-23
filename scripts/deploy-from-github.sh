@@ -9,6 +9,7 @@ GIT_DIR="${DEPLOY_GIT_DIR:-$DEPLOY_ROOT/state/repo.git}"
 STATE_DIR="${DEPLOY_STATE_DIR:-$DEPLOY_ROOT/state}"
 RELEASES_DIR="${DEPLOY_RELEASES_DIR:-$DEPLOY_ROOT/releases}"
 CURRENT_LINK="${DEPLOY_CURRENT_LINK:-$DEPLOY_ROOT/current}"
+PREVIOUS_LINK="${DEPLOY_PREVIOUS_LINK:-$DEPLOY_ROOT/previous}"
 SHARED_ROOT="${DEPLOY_SHARED_ROOT:-$DEPLOY_ROOT/shared}"
 LOCAL_HEALTH_URL="${DEPLOY_LOCAL_HEALTH_URL:-http://127.0.0.1:3000/healthz}"
 PUBLIC_HEALTH_URL="${DEPLOY_PUBLIC_HEALTH_URL:-https://crm.newmindchen.com/healthz}"
@@ -28,6 +29,8 @@ lock_acquired=0
 candidate=""
 target_sha=""
 switched=0
+previous_link_changed=0
+previous_link_backup=""
 
 force=0
 if (( $# == 1 )) && [[ "$1" == --force ]]; then
@@ -50,17 +53,18 @@ safe_remove_candidate() {
   rm -rf -- "$candidate"
 }
 
-atomic_switch() {
-  local target="$1"
-  local suffix="$2"
-  local current_parent="${CURRENT_LINK:h}"
-  local temporary_link="$current_parent/.${CURRENT_LINK:t}.$suffix.$$"
+atomic_switch_link() {
+  local link="$1"
+  local target="$2"
+  local suffix="$3"
+  local link_parent="${link:h}"
+  local temporary_link="$link_parent/.${link:t}.$suffix.$$"
   [[ "$target" == /* && -d "$target" ]] || {
     print -u2 -- "refusing to switch to invalid release target: $target"
     return 1
   }
-  [[ ! -e "$CURRENT_LINK" || -L "$CURRENT_LINK" ]] || {
-    print -u2 -- "current path exists and is not a symlink: $CURRENT_LINK"
+  [[ ! -e "$link" || -L "$link" ]] || {
+    print -u2 -- "link path exists and is not a symlink: $link"
     return 1
   }
   [[ ! -e "$temporary_link" && ! -L "$temporary_link" ]] || {
@@ -71,9 +75,21 @@ atomic_switch() {
   if ! "$NODE_BIN" -e '
     const fs = require("node:fs");
     fs.renameSync(process.argv[1], process.argv[2]);
-  ' "$temporary_link" "$CURRENT_LINK"; then
-    [[ "${temporary_link:h}" == "$current_parent" ]] && rm -f -- "$temporary_link"
+  ' "$temporary_link" "$link"; then
+    [[ "${temporary_link:h}" == "$link_parent" ]] && rm -f -- "$temporary_link"
     return 1
+  fi
+}
+
+atomic_switch() {
+  atomic_switch_link "$CURRENT_LINK" "$1" "$2"
+}
+
+restore_previous_link() {
+  if [[ -n "$previous_link_backup" ]]; then
+    atomic_switch_link "$PREVIOUS_LINK" "$previous_link_backup" rollback-previous
+  elif [[ -L "$PREVIOUS_LINK" ]]; then
+    rm -f -- "$PREVIOUS_LINK"
   fi
 }
 
@@ -111,6 +127,10 @@ TRAPEXIT() {
       else
         print -u2 -- "failed to restore previous release: $previous_release"
       fi
+    fi
+    if (( previous_link_changed == 1 )); then
+      restore_previous_link || print -u2 -- "failed to restore previous link: $PREVIOUS_LINK"
+      previous_link_changed=0
     fi
     if (( ${#target_sha} == 40 )) && [[ "$target_sha" != *[^0-9a-f]* ]]; then
       "$NODE_BIN" "$STATE_HELPER" failure "$target_sha" "$failed_stage"
@@ -246,6 +266,7 @@ require_absolute_path DEPLOY_GIT_DIR "$GIT_DIR"
 require_absolute_path DEPLOY_STATE_DIR "$STATE_DIR"
 require_absolute_path DEPLOY_RELEASES_DIR "$RELEASES_DIR"
 require_absolute_path DEPLOY_CURRENT_LINK "$CURRENT_LINK"
+require_absolute_path DEPLOY_PREVIOUS_LINK "$PREVIOUS_LINK"
 require_absolute_path DEPLOY_SHARED_ROOT "$SHARED_ROOT"
 [[ -x "$NODE_BIN" ]] || { print -u2 -- "Node executable is unavailable: $NODE_BIN"; exit 1; }
 [[ "$($NODE_BIN -p 'process.versions.node.split(".")[0]')" == 22 ]] || {
@@ -259,6 +280,10 @@ for hook in "$VALIDATION_BIN" "$BACKUP_BIN" "$RESTART_BIN" "$HEALTHCHECK_BIN"; d
 done
 [[ ! -e "$CURRENT_LINK" || -L "$CURRENT_LINK" ]] || {
   print -u2 -- "current path exists and is not a symlink: $CURRENT_LINK"
+  exit 1
+}
+[[ ! -e "$PREVIOUS_LINK" || -L "$PREVIOUS_LINK" ]] || {
+  print -u2 -- "previous path exists and is not a symlink: $PREVIOUS_LINK"
   exit 1
 }
 
@@ -384,6 +409,13 @@ stage=switch
 previous_release=""
 if [[ -L "$CURRENT_LINK" ]]; then
   previous_release="$(cd "$CURRENT_LINK" && pwd -P)"
+fi
+if [[ -L "$PREVIOUS_LINK" ]]; then
+  previous_link_backup="$(cd "$PREVIOUS_LINK" && pwd -P)"
+fi
+if [[ -n "$previous_release" ]]; then
+  atomic_switch_link "$PREVIOUS_LINK" "$previous_release" deploy-previous || exit $?
+  previous_link_changed=1
 fi
 atomic_switch "$release" deploy || exit $?
 switched=1
