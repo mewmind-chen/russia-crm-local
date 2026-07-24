@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续产品边界、阶段状态和验收结论必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**文档状态：** 18/38 个任务已完成；A1-09.1 已完成；下一步执行 A1-09.2 去重、主体验证和证据模型
+**文档状态：** 18/38 个任务已完成；A1-09.1/.2 已完成；下一步执行 A1-09.3 Recon/Contact adapter 与持久完成唤醒
 **版本：** v1.4
 **日期：** 2026-07-24
 **产品依据：** `/Users/ylf/Desktop/ai-crm-complete-flow.html`
@@ -761,10 +761,10 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 | 主计划确认 | 已确认 | 本文档 v1.0 | 用户于 2026-07-23 确认开始执行 | 不适用 | 实施受本文档约束 |
 | 执行计划确认 | 已确认 | `docs/planning/tradepulse-execution-plan.md` v1.0 | 用户确认执行 E0-01 至 E0-05 | 不适用 | 不越过生产切换门 |
 | 阶段 0：环境统一 | 已完成 | 生产 `2b55ed0fb7fc2c455199dd11e269cf93115ac325`；回滚 `f7bb248e91f2bfe7003dfe443e1d04f0ed1887de`；开发分支 `codex/ai-integration` | PR #15 已合并并自动部署；current、previous、state.json 一致；本地/公网健康返回目标 SHA，首页 200，数据库 WAL/quick_check=ok，候选验证 242/242，账号/权限/会话/AI router 摘要未变化；3100 独立开发实例登录、bootstrap、路径隔离和 242/242 测试通过 | `releases/f7bb248e91f2` + E0-08/E0-09 备份 | E0-01 至 E0-10 全部完成；下一步阶段 1 A1-01 `customer_fit`，尚未开始 AI 业务集成 |
-| 阶段 1：评分、Control Plane 与客户补全 | 进行中 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `03089063` | A1-01 至 A1-07 已部署；A1-08.1 至 A1-08.5 已完成，A1-08 专项 88/88、完整回归 335/335、GitHub CI 通过。A1-09.1 由 PR [#28](https://github.com/mewmind-chen/russia-crm-local/pull/28) 合并：公司名或官网即可事务化创建最小客户与持久 trigger，权限/客户范围在创建和 dispatch 两次校验，AI schema v5 保存 run/link/event，A1-08 Worker `beforeClaim` 竞争安全地创建稳定 workflow，当前仅 `intake_precheck` 可领取；聚焦 86/86、完整回归 350/350、GitHub CI 通过，既有 6 Worker/20 跨客户、租约恢复、429/超时和每客户串行回归继续通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09.1 已完成；下一步 A1-09.2 去重、官网/主体验证和字段级证据 |
+| 阶段 1：评分、Control Plane 与客户补全 | 进行中 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `59242c45` | A1-01 至 A1-08 已完成既有门禁。A1-09.1 PR #28 完成最小客户事务、权限/flag 门、持久 trigger/link/event 和 `intake_precheck`；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 新增 schema v6 evidence/provenance、exact/fuzzy dedupe、注入式 `identity_verify`、风险/主体不确定复核与节点前权限复核，聚焦 107/107、完整回归 361/361、GitHub CI 通过，既有 6 Worker/20 跨客户、租约恢复、429/超时和每客户串行回归继续通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09.1/.2 已完成；下一步 A1-09.3 Recon/Contact adapter 与持久完成唤醒 |
 | 阶段 2：判断分发 | 未开始 | 待填写 | 待填写 | 工作站 feature flag | 规则最终裁决 |
 | 阶段 3：销售执行 | 未开始 | 待填写 | 待填写 | 工作站 feature flag | 外发人工确认 |
 | 阶段 4：经理与反馈 | 未开始 | 待填写 | 待填写 | 模型/提示词旧版本 | 禁止在线自我修改 |
 | 阶段 5：生产试运行 | 未开始 | 待填写 | 待填写 | previous release + flags | 分批开放 |
 
-当前总进度：38 个计划任务中已完成 18 个，剩余 20 个。A1-09.1 已完成并合并到 `codex/ai-integration` @ `03089063`；生产 AI Station、Worker 和 enrichment flags 保持关闭且未部署。下一步为 A1-09.2 去重、官网/主体验证和字段级证据模型。任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。
+当前总进度：38 个计划任务中已完成 18 个，剩余 20 个。A1-09.1/.2 已完成并合并到 `codex/ai-integration` @ `59242c45`；生产 AI Station、Worker 和 enrichment flags 保持关闭且未部署。下一步为 A1-09.3 Recon/Contact adapter、事务完成事件与崩溃恢复唤醒。任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。
