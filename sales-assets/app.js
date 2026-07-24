@@ -566,6 +566,49 @@
     return ({ pending: '待审核', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '重复客户' })[status] || status;
   }
 
+  function intakeSignals(item) {
+    const signals = item.signals || {};
+    const fit = signals.fit || {};
+    const readiness = signals.readiness || {};
+    return {
+      fitScore: fit.fitScore ?? item.match_score ?? '—',
+      fitGrade: fit.grade || item.match_group || '—',
+      fitConfidence: fit.confidence == null ? null : Number(fit.confidence),
+      readiness: readiness.readiness || '未评估',
+      priority: signals.priority || item.match_group || '—',
+      riskStatus: signals.riskStatus || '',
+    };
+  }
+
+  function intakeDecisionLayers(item) {
+    const arbitration = item.arbitration || {};
+    const ai = arbitration.aiRecommendation || {};
+    const rule = arbitration.ruleDecision || {};
+    const manual = arbitration.manualDecision || null;
+    const ranked = Array.isArray(ai.rankedCandidates) ? ai.rankedCandidates : [];
+    const ranking = ranked.length
+      ? ranked.slice(0, 3).map((candidate, index) =>
+        `<span class="ranked-candidate"><b>${index + 1}</b>${esc(candidate.name || candidate.userId)}<small>${Number(candidate.score || 0)}分</small></span>`).join('')
+      : `<span class="subtle">${esc(ai.available === false ? `AI未提供排名${ai.reasonCode ? ` · ${ai.reasonCode}` : ''}` : '暂无候选排名')}</span>`;
+    return {
+      ai: `<div class="decision-layer"><span>AI 推荐</span><strong>${ranking}</strong><small>${ai.confidence == null ? '—' : `置信度 ${(Number(ai.confidence) * 100).toFixed(0)}%`}${ai.reviewRequired ? ' · 建议复核' : ''}</small></div>`,
+      rule: `<div class="decision-layer"><span>规则裁决</span><strong>${esc(rule.disposition === 'manager_review' ? '经理审批' : rule.disposition === 'blocked' ? '规则阻止' : rule.disposition === 'assign' ? '可分配' : '待裁决')}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`,
+      manual: `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待经理处理'))}</small></div>`,
+    };
+  }
+
+  function intakeAuditMarkup(item) {
+    const history = Array.isArray(item.assignmentAudit) ? item.assignmentAudit : [];
+    if (!history.length) return '<span class="subtle">暂无裁决审计记录</span>';
+    return history.slice(0, 8).map(entry => {
+      const label = entry.type === 'arbitration' ? '规则裁决' : entry.type === 'manual' ? '人工操作' : entry.type;
+      const detail = entry.type === 'manual'
+        ? entry.manualDecision?.reason || entry.manualDecision?.action || ''
+        : entry.ruleDecision?.reason || '';
+      return `<div class="audit-line"><strong>${esc(label)}</strong><span>${esc(detail)} · ${esc(entry.actorName || entry.actorId || '系统')}</span><time>${esc(shortDate(entry.createdAt, true))}</time></div>`;
+    }).join('');
+  }
+
   function renderIntake() {
     const intake = state.data.intake;
     if (!intake) return;
@@ -597,7 +640,7 @@
     $('#intakeSummary').innerHTML = summary.map(([label, value, note]) => `<article class="metric ${label.includes('超期') && value ? 'alert' : ''}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     const items = intake.items.filter(item => !state.intakeStatus || item.status === state.intakeStatus);
     $('#intakeTable').innerHTML = table(
-      ['未开发线索', '匹配', '联系质量 / 联系人', '建议负责人', '状态 / 时限', '操作'],
+      ['未开发线索', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'],
       items.map(item => {
         let actions = '';
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
@@ -606,6 +649,8 @@
         else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
         else actions = '—';
         const statusClass = item.status === 'returned' || item.status === 'rejected' ? 'red' : item.status === 'assigned' ? 'amber' : item.status === 'claimed' ? '' : 'gray';
+        const signals = intakeSignals(item);
+        const layers = intakeDecisionLayers(item);
         const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
         const sources = [
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
@@ -613,9 +658,10 @@
         ].filter(Boolean).join(' · ');
         const row = [
           `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc(item.country || '—')} · ${esc(item.customer_type || item.industry || '—')}</span><span>${sources}</span></div>`,
-          `<div style="display:flex;gap:8px;align-items:center"><span class="score-badge">${item.match_score}</span><div class="company-cell"><strong>${esc(item.match_group || '—')}组</strong><span>${esc(item.product_focus || '未标注需求')}</span></div></div>`,
+          `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
+          `<div class="ranked-candidates">${layers.ai}</div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span></div>`,
-          `<div class="assignment-cell"><strong>${esc(item.assigned_owner_name || item.suggested_owner_name || '暂无可用配额')}</strong><span class="subtle">${esc(item.decision_reason || '')}</span></div>`,
+          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || item.suggested_owner_name || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || signals.riskStatus || '')}</span></div>`,
           `<div class="assignment-cell"><span class="pill ${statusClass}">${intakeStatusLabel(item.status)}</span><span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
           actions,
         ];
@@ -1619,6 +1665,8 @@
   function openIntakeProfile(itemId) {
     const item = state.data.intake?.items?.find(row => row.id === itemId);
     if (!item) return;
+    const signals = intakeSignals(item);
+    const layers = intakeDecisionLayers(item);
     state.selectedCustomerId = '';
     state.drawerAiContext = {
       companyName: item.company_name || '',
@@ -1628,7 +1676,7 @@
         `地区：${item.country || '未标注'}`,
         `行业/类型：${[item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注'}`,
         `产品重点：${item.product_focus || '未标注'}`,
-        `匹配评分：${item.match_score || '—'}；客户分组：${item.match_group || '未分组'}`,
+        `Fit：${signals.fitScore} / ${signals.fitGrade}；readiness：${signals.readiness}；优先级：${signals.priority}`,
         `联系人等级：${item.contact_level || 'L0'}；分配状态：${intakeStatusLabel(item.status)}`,
         `分配依据：${item.decision_reason || '暂无'}`,
       ].join('\n'),
@@ -1642,15 +1690,20 @@
     $('#drawerContent').innerHTML = `
       <div class="next-step"><div><span class="eyebrow">ASSIGNMENT STATUS</span><p>${esc(item.status === 'assigned' ? '公司已分配，领取后进入 CRM 并开始跟进。' : '查看客户资料与匹配依据。')}</p></div><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span></div>
       <div class="account-facts">
-        ${[['建议负责人', item.assigned_owner_name || item.suggested_owner_name], ['匹配评分', item.match_score], ['客户分组', item.match_group], ['产品重点', item.product_focus], ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${[['建议负责人', item.assigned_owner_name || item.suggested_owner_name], ['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority], ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
+      <section class="decision-review">
+        <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>分配三层裁决</h3></div><span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span></div>
+        <div class="decision-review-grid">${layers.ai}${layers.rule}${layers.manual}</div>
+        <div class="decision-audit"><span class="eyebrow">AUDIT TRAIL</span>${intakeAuditMarkup(item)}</div>
+      </section>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER PROFILE</p><h3>客户资料</h3></div>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div>
         <div class="master-profile-grid">
           <div><span>企业与地区</span><p>${esc([item.company_name, item.country].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>联系人</span><p>${esc([item.contact_name, item.contact_title, item.contact_methods].filter(Boolean).join(' · ') || '暂无具名联系人')}</p></div>
-          <div><span>分配依据</span><p>${esc(item.decision_reason || '暂无')}</p></div>
+          <div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>
           <div><span>筛选证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : '暂无关联证据'}</p></div>
         </div>
       </section>
