@@ -123,15 +123,11 @@ test('bulk assignment validates the whole batch before an atomic update', async 
     [{ owner_id: 'U-OTHER' }],
   );
 
-  const unassigned = await fx.requestJson('/api/sales-crm/accounts/bulk-assign', {
+  const unassigned = await fx.request('/api/sales-crm/accounts/bulk-assign', {
     cookie: fx.adminCookie, method: 'POST',
     body: { customerIds: ['CRM-WU', 'CRM-OWN'], ownerId: '' },
   });
-  assert.equal(unassigned.updated, 2);
-  assert.deepEqual(
-    fx.db.prepare("SELECT DISTINCT owner_id FROM crm_accounts WHERE id IN ('CRM-WU','CRM-OWN')").all(),
-    [{ owner_id: null }],
-  );
+  assert.equal(unassigned.status, 400);
 
   const tooMany = await fx.request('/api/sales-crm/accounts/bulk-assign', {
     cookie: fx.adminCookie, method: 'POST',

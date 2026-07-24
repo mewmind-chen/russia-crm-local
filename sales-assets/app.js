@@ -21,6 +21,8 @@
     customerAiTimer: null,
     customerAiPollCount: 0,
     selectedCustomerIds: new Set(),
+    recycleKind: 'sales_return',
+    recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -50,6 +52,7 @@
     pending: ['CUSTOMER INTAKE', '待领取'],
     claimed: ['CUSTOMER INTAKE', '已领取'],
     customers: ['CRM CUSTOMER PORTFOLIO', 'CRM客户全景'],
+    recycleBin: ['CUSTOMER RECYCLE BIN', '客户回收站'],
     customerProfile: ['CUSTOMER PROFILE', '客户资料'],
     pool: ['UNDEVELOPED LEAD POOL', '未开发线索池'],
     contacts: ['CONTACT EVIDENCE', '负责人线索'],
@@ -65,6 +68,7 @@
   };
   const viewPermissions = {
     pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
+    recycleBin: 'manage_customer_recycle',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -299,6 +303,7 @@
       group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
     });
     $('#ownerFilter').classList.toggle('hidden', !can('view_all_customers'));
+    $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle') || Boolean(state.data.impersonation));
   }
 
   function populateFilters() {
@@ -313,7 +318,7 @@
     const bulkOwner = $('#bulkCustomerOwner');
     if (bulkOwner) {
       const selected = bulkOwner.value;
-      bulkOwner.innerHTML = '<option value="">不分配</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+      bulkOwner.innerHTML = '<option value="">请选择销售</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
       bulkOwner.value = [...bulkOwner.options].some(option => option.value === selected) ? selected : '';
     }
     $('#stageFilter').innerHTML = '<option value="">全部阶段</option>' + state.data.stages.map(stage => `<option value="${stage.key}">${esc(stage.label)}</option>`).join('');
@@ -347,10 +352,12 @@
     if ($('#navInsightCount')) $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
     if ($('#navPoolCount')) $('#navPoolCount').textContent = state.data.researchTotals?.pool || 0;
     if ($('#navPeopleCount')) $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
+    if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
     $('#lastRefresh').textContent = `更新于 ${shortDate(state.data.generatedAt, true)}`;
     renderDashboard();
     renderIntake();
     renderCustomers();
+    if (state.view === 'recycleBin') void loadRecycleBin();
     renderUnifiedPool();
     renderUnifiedPeople();
     renderUnifiedRecon();
@@ -1138,11 +1145,22 @@
     $('#customerBulkBar')?.classList.toggle('hidden', !canBulkAssign);
     if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${state.selectedCustomerIds.size} 个客户`;
     if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
+    if ($('#bulkReturnCustomers')) $('#bulkReturnCustomers').disabled = !state.selectedCustomerIds.size;
     $('#customerResultCount').textContent = `${accounts.length} 个客户`;
     $('#customerTable').innerHTML = table(
       [canBulkAssign ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
       accounts.map(account => {
         const alert = alertFor(account.id);
+        const canReturn = !state.data.impersonation && (
+          (state.data.user.role === 'sales' && account.owner_id === state.data.user.id)
+          || can('manage_customer_recycle')
+        );
+        const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
+          && !account.intake_item_id && account.source_file === 'CRM手工新增';
+        const lifecycleActions = [
+          canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
+          canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
+        ].filter(Boolean).join('');
         return [
           canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(account.company_name)}">` : '',
           `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
@@ -1152,13 +1170,53 @@
           `<span>${relative(account.last_activity_at)}</span>`,
           `<div class="company-cell"><strong class="${alert?.code === 'OVERDUE' ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${shortDate(account.next_action_at, true)}</span></div>`,
           `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span> · ${money(account.potential_value)}`,
-          alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>',
+          `${alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>'}${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
         ];
       }).map((row, index) => {
         row._id = accounts[index].id;
         row._attrs = `data-customer="${esc(accounts[index].id)}"`;
         return row;
       }),
+    );
+  }
+
+  async function loadRecycleBin() {
+    if (!can('manage_customer_recycle') || state.recycleBin.loading) return;
+    state.recycleBin.loading = true;
+    try {
+      const search = ($('#recycleSearch')?.value || '').trim();
+      const payload = await api(`/api/sales-crm/accounts/recycle-bin?kind=${encodeURIComponent(state.recycleKind)}&page=1&pageSize=100&search=${encodeURIComponent(search)}`);
+      state.recycleBin = { ...state.recycleBin, ...payload, loading: false };
+      renderRecycleBin();
+    } catch (error) {
+      state.recycleBin.loading = false;
+      toast(error.message);
+    }
+  }
+
+  function renderRecycleBin() {
+    const root = $('#recycleTable');
+    if (!root) return;
+    const rows = state.recycleBin.rows || [];
+    $$('#recycleTabs button').forEach(button => button.classList.toggle('active', button.dataset.recycleKind === state.recycleKind));
+    if (!rows.length) {
+      root.innerHTML = '<div class="empty">回收站暂无客户</div>';
+      return;
+    }
+    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    root.innerHTML = table(
+      ['客户', '原负责人', '原因', '回收时间', '操作'],
+      rows.map(row => [
+        `<div class="company-cell"><strong>${esc(row.companyName)}</strong><span>${esc(row.externalCustomerId)} · ${esc(row.country || '—')}</span></div>`,
+        esc(row.previousOwnerName || '未分配'),
+        esc(row.reason || '—'),
+        shortDate(row.recycledAt, true),
+        row.recycleKind === 'sales_return'
+          ? `<select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button>`
+          : can('manage_manual_customer_deletion') && !state.data.impersonation
+            ? `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`
+            : '<span class="subtle">仅真实管理员可恢复</span>',
+      ]),
     );
   }
 
@@ -1763,6 +1821,10 @@
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
         ${quotes.length && can('record_order') ? '<button class="button secondary" data-add-order>＋ 记录订单</button>' : ''}
         ${can('edit_customer') ? '<button class="button secondary" data-edit-account>调整客户信息</button>' : ''}
+        ${!state.data.impersonation && ((state.data.user.role === 'sales' && account.owner_id === state.data.user.id) || can('manage_customer_recycle'))
+          ? '<button class="button danger" data-return-customer="' + esc(account.id) + '">退回线索池</button>' : ''}
+        ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
+          ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
       </div>
       <section class="insight-section">
         <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>企业经营评价</h3></div>${canEvaluate ? '<button class="button secondary tiny" data-evaluate-company>＋ 写企业评价</button>' : ''}</div>
@@ -2017,6 +2079,22 @@
     </form>`);
   }
 
+  function openRecycleReasonModal(customerId, action) {
+    const labels = {
+      return: ['退回客户到线索池', '说明退回原因，客户历史记录会保留。'],
+      trash: ['删除客户到回收站', '仅手工创建客户可执行，操作不会删除客户主档或经营历史。'],
+      bulk: ['批量退回客户', '选中的客户会一次性退回，任一客户校验失败则全部不变。'],
+    };
+    const [title, note] = labels[action] || labels.return;
+    openModal(title, 'CUSTOMER RECYCLE BIN', `<form id="recycleReasonForm" class="form-grid">
+      <input type="hidden" name="customerId" value="${esc(customerId || '')}">
+      <input type="hidden" name="action" value="${esc(action)}">
+      <div class="recommendation">${esc(note)}</div>
+      <label>原因<textarea name="reason" minlength="2" maxlength="500" required placeholder="请输入2至500个字符的原因"></textarea></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button danger">确认操作</button></div>
+    </form>`);
+  }
+
   function openEvaluationModal(subjectType, contactId = '') {
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
     const contact = contactId ? state.data.insights.contacts.find(item => item.id === contactId) : null;
@@ -2200,6 +2278,21 @@
         const payload = formPayload(form);
         await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
         await refresh(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
+      } else if (form.id === 'recycleReasonForm') {
+        const payload = formPayload(form);
+        const action = payload.action;
+        const route = action === 'trash'
+          ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/trash`
+          : action === 'bulk'
+            ? '/api/sales-crm/accounts/bulk-return'
+            : `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/return`;
+        const body = action === 'bulk'
+          ? { customerIds: [...state.selectedCustomerIds], reason: payload.reason }
+          : { reason: payload.reason };
+        await api(route, { method: 'POST', body: JSON.stringify(body) });
+        state.selectedCustomerIds.clear();
+        await refresh(action === 'trash' ? '客户已移入回收站' : '客户已退回线索池');
+        if (action === 'bulk') switchView('recycleBin');
       } else if (form.id === 'contactForm') {
         await api('/api/sales-crm/contacts', { method: 'POST', body: JSON.stringify(formPayload(form)) });
         await refresh('对接人已保存，可以分别添加经理评价');
@@ -2347,12 +2440,49 @@
     if (event.target.closest('#bulkAssignCustomers')) {
       try {
         const ownerId = $('#bulkCustomerOwner')?.value || '';
+        if (!ownerId) throw new Error('请选择有效的销售负责人；退回客户请使用批量退回');
         const result = await api('/api/sales-crm/accounts/bulk-assign', {
           method: 'POST',
           body: JSON.stringify({ customerIds: [...state.selectedCustomerIds], ownerId }),
         });
         state.selectedCustomerIds.clear();
-        await refresh(ownerId ? `已批量分配 ${result.updated} 个客户` : `已将 ${result.updated} 个客户设为不分配`);
+        await refresh(`已批量分配 ${result.updated} 个客户`);
+      } catch (error) { toast(error.message); }
+    }
+    const returnCustomer = event.target.closest('[data-return-customer]');
+    if (returnCustomer) openRecycleReasonModal(returnCustomer.dataset.returnCustomer, 'return');
+    const trashCustomer = event.target.closest('[data-trash-customer]');
+    if (trashCustomer) openRecycleReasonModal(trashCustomer.dataset.trashCustomer, 'trash');
+    if (event.target.closest('#bulkReturnCustomers')) {
+      if (!state.selectedCustomerIds.size) return toast('请先选择客户');
+      openRecycleReasonModal('', 'bulk');
+    }
+    const recycleTab = event.target.closest('[data-recycle-kind]');
+    if (recycleTab) {
+      state.recycleKind = recycleTab.dataset.recycleKind;
+      void loadRecycleBin();
+    }
+    if (event.target.closest('#recycleRefresh')) void loadRecycleBin();
+    const restoreCustomer = event.target.closest('[data-restore-customer]');
+    if (restoreCustomer) {
+      try {
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(restoreCustomer.dataset.restoreCustomer)}/restore`, { method: 'POST', body: '{}' });
+        await loadRecycleBin();
+        await refresh('手工客户已恢复');
+      } catch (error) { toast(error.message); }
+    }
+    const reassignCustomer = event.target.closest('[data-reassign-customer]');
+    if (reassignCustomer) {
+      const ownerId = document.querySelector(`[data-recycle-owner="${CSS.escape(reassignCustomer.dataset.reassignCustomer)}"]`)?.value || '';
+      if (!ownerId) return toast('请选择目标销售');
+      const reason = window.prompt('请输入重新分配原因', '按区域和语言能力重新分配') || '';
+      if (!reason.trim()) return;
+      try {
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(reassignCustomer.dataset.reassignCustomer)}/reassign`, {
+          method: 'POST', body: JSON.stringify({ ownerId, reason }),
+        });
+        await loadRecycleBin();
+        await refresh('客户已重新分配');
       } catch (error) { toast(error.message); }
     }
     const loadMore = event.target.closest('[data-load-research]');
@@ -2486,6 +2616,13 @@
     }
   });
 
+  document.addEventListener('input', event => {
+    if (event.target.id === 'recycleSearch') {
+      clearTimeout(loadRecycleBin.timer);
+      loadRecycleBin.timer = setTimeout(() => void loadRecycleBin(), 250);
+    }
+  });
+
   function switchView(view) {
     if (!viewMeta[view]) return;
     if (view === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
@@ -2508,6 +2645,7 @@
     if (sectionView === 'intake') renderIntake();
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
     if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
+    if (view === 'recycleBin') void loadRecycleBin();
     if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
     document.body.classList.remove('sidebar-open');
