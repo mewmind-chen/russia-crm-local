@@ -57,7 +57,9 @@ For every milestone:
 
 - Modify: `lib/ai_stations/schema.js`
 - Create: `lib/ai_stations/enrichment/store.js`
+- Modify: `scripts/sync-production-customer-data.js`
 - Create: `test/ai_customer_enrichment_store.test.js`
+- Modify: `test/development_customer_sync.test.js`
 
 **Interfaces:**
 
@@ -84,6 +86,7 @@ Cover:
 - One AI job links to at most one legacy task identity.
 - Duplicate completion events return the original row.
 - Expired event leases can be reclaimed.
+- Development customer sync clears enrichment events, links, and runs in foreign-key-safe order.
 
 Example:
 
@@ -121,6 +124,8 @@ Use:
 - Foreign keys to `customer_pool`, `crm_accounts`, and `crm_ai_jobs`.
 - `INSERT ... ON CONFLICT` or immediate transactions for every claim/idempotency path.
 
+Add all three derived tables to `CLEAR_ONLY_TABLES` before their referenced A1-08 tables, and extend the development-sync regression so a stale enrichment run cannot survive a customer-data refresh.
+
 Do not add evidence or proposal tables yet.
 
 - [ ] **Step 4: Verify GREEN**
@@ -128,7 +133,7 @@ Do not add evidence or proposal tables yet.
 Run:
 
 ```bash
-node --test test/ai_customer_enrichment_store.test.js test/ai_station_jobs.test.js
+node --test test/ai_customer_enrichment_store.test.js test/ai_station_jobs.test.js test/development_customer_sync.test.js
 ```
 
 Expected: all tests pass, including legacy AI schema migration tests.
@@ -136,7 +141,7 @@ Expected: all tests pass, including legacy AI schema migration tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/ai_stations/schema.js lib/ai_stations/enrichment/store.js test/ai_customer_enrichment_store.test.js
+git add lib/ai_stations/schema.js lib/ai_stations/enrichment/store.js scripts/sync-production-customer-data.js test/ai_customer_enrichment_store.test.js test/development_customer_sync.test.js
 git commit -m "feat(ai): add durable customer enrichment runs"
 ```
 
