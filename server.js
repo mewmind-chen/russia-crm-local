@@ -28,6 +28,8 @@ const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
+const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
+const { createAITaskCenterStore } = require('./lib/ai_stations/task_center');
 
 function createApp(options = {}) {
 const paths = runtimePaths();
@@ -223,6 +225,38 @@ function logAssistantChat(entry) {
 
 function getDb() {
   return new Database(DB_PATH);
+}
+
+function recordAssistantTask(req, startedAt, result, error) {
+  if (!resolveAIStationsEnabled({ enabled: options.salesCrm?.aiStationsEnabled })) return;
+  const value = getDb();
+  try {
+    const selectedCustomer = String(req.body?.context?.customerId || '').trim();
+    const account = selectedCustomer
+      ? value.prepare(`SELECT id,external_customer_id FROM crm_accounts
+          WHERE id=? OR external_customer_id=? LIMIT 1`).get(selectedCustomer, selectedCustomer)
+      : null;
+    createAITaskCenterStore(value).recordInteraction({
+      kind: 'assistant_chat',
+      scope: account ? 'customer' : String(result?.retrievalMode || 'workspace'),
+      customerId: account?.external_customer_id || '',
+      crmAccountId: account?.id || null,
+      actorId: req.salesUser?.id || '',
+      engine: result?.engine || error?.sessionEngine || '',
+      model: result?.model || '',
+      durationMs: Date.now() - startedAt,
+      usage: result?.usage || {},
+      fallbackReason: result?.fallbackReason || error?.fallbackReason || '',
+      attempts: result?.engineAttempts || error?.engineAttempts || [],
+      error,
+      createdAt: new Date(startedAt),
+      finishedAt: new Date(),
+    });
+  } catch (recordError) {
+    console.error(`assistant task recording failed: ${recordError.message}`);
+  } finally {
+    value.close();
+  }
 }
 
 function externalCustomerForFollowId(followId) {
@@ -813,6 +847,7 @@ app.post('/api/assistant/chat', async (req, res) => {
       input,
       output: { ...compactAssistantResult(result), runtimeMode },
     });
+    recordAssistantTask(req, startedAt, result, null);
     res.json(result);
   } catch (e) {
     const runtimeMode = assistantRuntimeMode();
@@ -833,6 +868,7 @@ app.post('/api/assistant/chat', async (req, res) => {
         stack: truncateLogValue(e.stack, 3000),
       },
     });
+    recordAssistantTask(req, startedAt, null, e);
     res.status(e.statusCode || 500).json(
       serializeAssistantEngineError(e, hasPermission(req.salesUser, 'manage_users')),
     );

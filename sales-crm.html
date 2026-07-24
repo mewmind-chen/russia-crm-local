@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260723-7">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-8">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -47,6 +47,7 @@
         <div class="nav-group"><div class="nav-group-label">今日工作</div>
           <button data-view="dashboard" data-permission="view_dashboard" class="active"><i>◫</i><span>经营驾驶舱</span></button>
           <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
+          <button data-view="aiTasks" data-permission="view_customers"><i>✦</i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
           <button data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
@@ -128,6 +129,31 @@
             <div id="activityFeed" class="activity-feed"></div>
           </article>
         </div>
+      </section>
+
+      <section id="aiTasksView" class="view">
+        <div id="aiTaskOverview" class="metric-grid hidden"></div>
+        <article class="panel">
+          <div class="section-intro ai-task-intro">
+            <div><p class="eyebrow">AI CONTROL PLANE</p><h2>统一 AI 任务中心</h2><p>查看任务排队、模型尝试、成本、失败降级与人工复核，不展示完整提示词、密钥或 Worker 标识。</p></div>
+            <button id="aiTaskRefresh" class="button secondary" type="button">刷新</button>
+          </div>
+          <div class="toolbar ai-task-filters">
+            <select id="aiTaskStateFilter"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">执行中</option><option value="retry_wait">等待重试</option><option value="needs_review">待复核</option><option value="succeeded">已完成</option><option value="failed,dead_letter">失败</option><option value="cancelled">已取消</option></select>
+            <select id="aiTaskTypeFilter"><option value="">全部类型</option><option value="customer_fit">客户匹配</option><option value="company_recon">公司 Recon</option><option value="contact_recon">联系人 Recon</option><option value="prospect_discovery">Prospect</option><option value="manager_evaluation">经理评价</option><option value="assistant_chat">对话 AI</option></select>
+            <input id="aiTaskCustomerFilter" placeholder="客户编码">
+            <input id="aiTaskOwnerFilter" placeholder="发起人 ID">
+            <input id="aiTaskModelFilter" placeholder="模型">
+            <input id="aiTaskFromFilter" type="date" aria-label="开始日期">
+            <input id="aiTaskToFilter" type="date" aria-label="结束日期">
+          </div>
+          <div id="aiTaskTable" class="data-table"><div class="empty">尚未加载任务</div></div>
+          <div class="ai-task-pagination">
+            <button id="aiTaskPrev" class="button secondary tiny" type="button">上一页</button>
+            <span id="aiTaskPageInfo" class="subtle">第 1 页</span>
+            <button id="aiTaskNext" class="button secondary tiny" type="button">下一页</button>
+          </div>
+        </article>
       </section>
 
       <section id="intakeView" class="view">
@@ -346,6 +372,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260723-7"></script>
+  <script src="/sales-assets/app.js?v=20260724-8"></script>
 </body>
 </html>

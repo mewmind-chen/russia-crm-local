@@ -114,6 +114,7 @@ test('AI execution requires use_ai_assistant and reading requires view_customers
   });
   t.after(() => fx.close());
   assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9001/results', { cookie: fx.cookie })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9001/stations/customer_fit/run', {
     cookie: fx.cookie, method: 'POST',
   })).status, 403);
@@ -199,6 +200,9 @@ test('identity inspection blocks AI execution and retry before creating model wo
   })).status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/jobs/AIJ-NONE/cancel', {
     cookie: fx.adminCookie, method: 'POST',
+  })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/jobs/AIJ-NONE/review', {
+    cookie: fx.adminCookie, method: 'POST', body: { decision: 'approved' },
   })).status, 403);
   assert.equal(calls.length, 0);
   assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name='crm_ai_jobs'").get().count, 0);
