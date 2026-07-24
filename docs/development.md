@@ -9,7 +9,7 @@ TradePulse development must run from an external Git worktree with its own runti
   repo/                         # clean main clone
   worktrees/
     environment-unification/    # codex/environment-unification
-    ai-integration/             # future codex/ai-integration
+    ai-integration/             # short-lived codex/ai-* branches from codex/ai-integration
   runtime/
     <worktree>/
       .env
@@ -27,6 +27,14 @@ TradePulse development must run from an external Git worktree with its own runti
 ```
 
 The clean clone is only for fetching `origin/main` and managing worktrees. Make code changes in a named worktree, never in `repo/main`.
+
+The authoritative roadmap and execution ledger live in
+`docs/planning/tradepulse-unified-master-plan.md` and
+`docs/planning/tradepulse-execution-plan.md`. Each AI task starts from the
+latest `origin/codex/ai-integration`, merges back through a CI-passing PR, and
+is followed by a documentation PR recording the feature commit, PR, merge
+SHA, verification evidence, remaining scope, and next task. Do not begin the
+next feature until that ledger update is merged.
 
 ## Runtime Configuration
 
