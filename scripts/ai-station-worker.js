@@ -4,6 +4,9 @@
 require('dotenv').config();
 const Database = require('better-sqlite3');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
+const {
+  scheduleContactReadinessForCompletedFits,
+} = require('../lib/ai_stations/contact_readiness');
 const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
 const {
   resolveExplicitWebsiteIdentity,
@@ -123,14 +126,16 @@ async function main(options = {}) {
     },
     budgetPolicies: budgetConfiguration.policies,
     executors: createEnrichmentExecutors(),
-    beforeClaim: enrichmentConfiguration.enabled
-      ? async ({ db, workerId }) => {
+    beforeClaim: async ({ db, workerId }) => {
+      scheduleContactReadinessForCompletedFits(db);
+      if (enrichmentConfiguration.enabled) {
         await dispatchPendingEnrichment(db, undefined, {
           dispatcherId: `${workerId}:customer-enrichment`,
         });
         return consumePendingEnrichmentEvent(db, `${workerId}:customer-enrichment-events`);
       }
-      : undefined,
+      return null;
+    },
     executorOptions: {
       identityResolver: resolveExplicitWebsiteIdentity,
       timeoutMs: integerArgument('--timeout-ms', Number(env.CRM_AI_EXECUTION_TIMEOUT_MS) || 75_000, argv),

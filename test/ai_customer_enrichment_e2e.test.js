@@ -15,6 +15,8 @@ function assertCompleted(snapshot) {
   assert.equal(snapshot.fit.value.grade, 'A');
   assert.equal(snapshot.fit.engine, 'fixture-engine');
   assert.ok(snapshot.fit.cost > 0);
+  assert.equal(snapshot.readiness.value.readiness, 'ready');
+  assert.equal(snapshot.readiness.value.contactIds.length, 1);
   assert.equal(snapshot.run.state, 'needs_review');
   assert.equal(snapshot.run.routeState, 'needs_review');
   assert.equal(snapshot.run.completeness, 100);
@@ -23,13 +25,16 @@ function assertCompleted(snapshot) {
   assert.ok(snapshot.evidence.length >= 4);
   assert.ok(snapshot.proposals.length >= 5);
   assert.ok(snapshot.tasks.some(task => task.station === 'customer_fit' && task.state === 'succeeded'));
+  assert.ok(snapshot.tasks.some(task => task.station === 'contact_readiness' && task.state === 'succeeded'));
   assert.ok(snapshot.tasks.some(task => task.station === 'enrichment_finalize' && task.state === 'needs_review'));
   assert.ok(snapshot.taskCenter.some(task => task.taskType === 'customer_fit'));
+  assert.ok(snapshot.taskCenter.some(task => task.taskType === 'contact_readiness'));
   assert.ok(snapshot.taskCenter.some(task => task.taskType === 'enrichment_finalize'));
   assert.deepEqual(new Set(snapshot.legacyTasks.map(task => task.type)), new Set(['recon', 'contact_recon']));
   assert.ok(snapshot.usage.some(item => item.station === 'recon_dispatch'));
   assert.ok(snapshot.usage.some(item => item.station === 'contact_dispatch'));
   assert.ok(snapshot.usage.some(item => item.station === 'customer_fit' && item.costMicros > 0));
+  assert.ok(snapshot.usage.some(item => item.station === 'contact_readiness' && item.costMicros > 0));
   assert.equal(snapshot.ownerAfter, snapshot.ownerBefore);
 }
 

@@ -68,7 +68,7 @@ test('AI schema migration is serialized across concurrent processes', async t =>
   });
   await Promise.all([install(), install()]);
   const verified = new Database(dbPath, { readonly: true });
-  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 7);
+  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 8);
   assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 22);
   verified.close();
 });

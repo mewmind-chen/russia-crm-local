@@ -94,7 +94,8 @@ test('six Worker processes complete 20 cross-customer enrichment runs without du
   const childCode = String.raw`
     const Database = require('better-sqlite3');
     const { createAIStationWorker } = require('./lib/ai_stations/worker');
-    const { executeCustomerFitJob } = require('./lib/ai_stations/executor');
+    const { executeContactReadinessJob, executeCustomerFitJob } = require('./lib/ai_stations/executor');
+    const { scheduleContactReadinessForCompletedFits } = require('./lib/ai_stations/contact_readiness');
     const { createEnrichmentExecutors } = require('./lib/ai_stations/enrichment/executors');
     const { dispatchPendingEnrichment } = require('./lib/ai_stations/enrichment/workflow');
     const { consumePendingEnrichmentEvent } = require('./lib/ai_stations/enrichment/events');
@@ -234,6 +235,26 @@ test('six Worker processes complete 20 cross-customer enrichment runs without du
         if (claim.releaseRequired) input.jobs.releaseResource('fixture-engine', input.jobId, input.workerId);
       }
     };
+    const contactReadiness = input => executeContactReadinessJob({
+      ...input,
+      modelCall: messages => {
+        const prompt = JSON.parse(messages[1].content);
+        return Promise.resolve({
+          answer: JSON.stringify({
+            version: 'v1',
+            confidence: 0.92,
+            evidenceIds: prompt.evidence.slice(0, 3).map(item => item.id),
+            reasonCodes: ['VERIFIED_BUYER_CONTACT'],
+            readiness: 'ready',
+            contactIds: prompt.trustedCrmContext.allowedContactIds.slice(0, 1),
+          }),
+          engine: 'fixture-engine',
+          model: 'fixture-model',
+          usage: { input_tokens: 80, output_tokens: 25 },
+          cost: 0.001,
+        });
+      },
+    });
     const wrapped = {};
     for (const [station, executor] of Object.entries(base)) {
       const selected = station === 'recon_dispatch' ? recon
@@ -243,11 +264,15 @@ test('six Worker processes complete 20 cross-customer enrichment runs without du
       wrapped[station] = input => metric(input, () => selected(input));
     }
     wrapped.customer_fit = input => metric(input, () => customerFit(input));
+    wrapped.contact_readiness = input => metric(input, () => contactReadiness(input));
     const worker = createAIStationWorker({
       workerId: process.env.AI_WORKER_ID,
       openDb,
       jobStoreOptions: { executionResources: resources },
       beforeClaim: async ({ db, workerId }) => {
+        scheduleContactReadinessForCompletedFits(db, {
+          jobStoreOptions: { executionResources: resources },
+        });
         await dispatchPendingEnrichment(db, undefined, {
           dispatcherId: workerId + ':dispatch',
           jobStoreOptions: { executionResources: resources },
@@ -300,6 +325,8 @@ test('six Worker processes complete 20 cross-customer enrichment runs without du
     WHERE run_id IN (SELECT id FROM crm_ai_enrichment_runs WHERE customer_id LIKE 'CN-%')`).get().count, 40);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_station_results
     WHERE customer_id LIKE 'CN-%' AND station='customer_fit'`).get().count, 20);
+  assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_station_results
+    WHERE customer_id LIKE 'CN-%' AND station='contact_readiness'`).get().count, 20);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM (
     SELECT run_id,field_name,proposed_value_hash,COUNT(*) copies
     FROM crm_ai_field_proposals

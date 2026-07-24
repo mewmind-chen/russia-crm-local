@@ -6,6 +6,8 @@ const fixtures = require('./helpers/permission_fixture');
 const { createCustomerEnrichmentStore } = require('../lib/ai_stations/enrichment/store');
 const { createEnrichmentEvidenceStore } = require('../lib/ai_stations/enrichment/evidence');
 const { createEnrichmentProposalStore } = require('../lib/ai_stations/enrichment/proposals');
+const { createAIJobStore } = require('../lib/ai_stations/jobs');
+const { createAIResultStore } = require('../lib/ai_stations/results');
 
 function setup(db, suffix = 'P') {
   let sequence = 0;
@@ -196,4 +198,67 @@ test('finalization persists completeness, tags, missing items, and only allowed 
   assert.ok(Array.isArray(ready.tags));
   assert.equal(fx.db.prepare('SELECT route_state,completeness FROM crm_ai_enrichment_runs WHERE id=?')
     .get(run.id).route_state, 'pending_assignment');
+});
+
+test('partial contact readiness keeps missing_info ahead of pending field reviews', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const { run, evidence, proposals } = setup(fx.db, 'READINESS');
+  fx.db.prepare(`UPDATE customer_pool SET website='https://owned.example',country='RU',
+    industry='工业电子',customer_type='终端制造商',products='MCU',description='Factory',
+    best_contact_level='L3' WHERE customer_id='RU-9002'`).run();
+  fx.db.prepare("UPDATE customer_pool SET industry='existing' WHERE customer_id='RU-9002'").run();
+  proposals.propose({
+    runId: run.id,
+    fieldName: 'industry',
+    proposedValue: '待审核行业',
+    evidenceIds: [evidence.id],
+    confidence: 0.8,
+  });
+
+  const jobs = createAIJobStore(fx.db);
+  const readiness = jobs.enqueue({
+    customerId: 'RU-9002',
+    crmAccountId: 'CRM-OWN',
+    station: 'contact_readiness',
+    contextHash: 'c'.repeat(64),
+    createdBy: 'U-MGR',
+  }, 'proposal:test:contact-readiness');
+  jobs.claimById(readiness.id, 'proposal-worker');
+  createAIResultStore(fx.db).saveResult({
+    jobId: readiness.id,
+    workerId: 'proposal-worker',
+    contextHash: readiness.contextHash,
+    value: {
+      version: 'v1',
+      confidence: 0.7,
+      evidenceIds: ['EV-1'],
+      reasonCodes: ['CONTACT_VERIFICATION_INCOMPLETE'],
+      readiness: 'partial',
+      contactIds: ['PERSON-1'],
+    },
+    evidenceIds: ['EV-1'],
+    contactIds: ['PERSON-1'],
+    metadata: {
+      engine: 'fixture',
+      model: 'fixture-readiness-v1',
+      promptVersion: 'v1',
+      schemaVersion: 'v1',
+    },
+  }, 'proposal:test:contact-readiness-result');
+  createCustomerEnrichmentStore(fx.db).linkNode({
+    runId: run.id,
+    nodeKey: 'contact_readiness',
+    aiJobId: readiness.id,
+  });
+
+  const finalized = proposals.finalize(run.id);
+  const saved = fx.db.prepare(`SELECT route_state routeState,reason_code reasonCode
+    FROM crm_ai_enrichment_runs WHERE id=?`).get(run.id);
+  assert.equal(finalized.routeState, 'missing_info');
+  assert.ok(finalized.missingItems.includes('contact_readiness'));
+  assert.deepEqual(saved, {
+    routeState: 'missing_info',
+    reasonCode: 'contact_readiness_partial',
+  });
 });
