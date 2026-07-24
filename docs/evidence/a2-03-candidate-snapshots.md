@@ -36,7 +36,8 @@ PR：[#46](https://github.com/mewmind-chen/russia-crm-local/pull/46)
 - 未修改 `chooseIntakeOwner` 的最终裁决逻辑。
 - 未写入 owner、`crm_intake_items` 或 `crm_accounts` 的业务分配状态。
 - 未接入页面、自动分配、外发、生产数据库或生产 feature flags。
-- 生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`；AI Station、Worker 和
-  enrichment flags 保持关闭，未执行部署。
+- 本任务未执行部署。完成后只读核验生产 current/health 为
+  `f8f0b165c5c80a18adc4616ef08f1da1fd884644`，与 `origin/main` 一致；previous 为
+  `releases/73f2e7b3aa47`，`CRM_AI_STATIONS_ENABLED=false`。
 
 下一项：A2-04 规则最终裁决。
