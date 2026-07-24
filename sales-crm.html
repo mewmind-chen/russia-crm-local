@@ -53,6 +53,7 @@
           <button data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
           <button data-view="claimed" data-permission="view_intake"><i>✓</i><span>已领取</span><b id="navClaimedCount">0</b></button>
           <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
+          <button data-view="recycleBin" data-permission="manage_customer_recycle"><i>↺</i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
@@ -202,10 +203,28 @@
             <span id="customerSelectionCount">已选择 0 个客户</span>
             <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前结果</button>
             <button id="clearCustomerSelection" class="button secondary tiny" type="button">清除选择</button>
-            <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">不分配</option></select>
+            <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">请选择销售</option></select>
             <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量设置负责人</button>
+            <button id="bulkReturnCustomers" class="button danger tiny" type="button">批量退回线索池</button>
           </div>
           <div id="customerTable" class="data-table"></div>
+        </article>
+      </section>
+
+      <section id="recycleBinView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>退回和手工删除均为软回收，客户主档与经营历史完整保留。</p></div>
+        </div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="segmented" id="recycleTabs">
+              <button class="active" data-recycle-kind="sales_return">待重新分配</button>
+              <button data-recycle-kind="manual_delete">手工删除</button>
+            </div>
+            <input id="recycleSearch" placeholder="搜索客户">
+            <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
+          </div>
+          <div id="recycleTable" class="data-table"></div>
         </article>
       </section>
 

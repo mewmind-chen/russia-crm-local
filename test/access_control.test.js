@@ -102,7 +102,11 @@ test('every browser API has an explicit permission policy or separate token boun
   const prospectActions = ['createTask', 'rerunTask', 'promoteCandidate'];
   const salesRoutes = [
     'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
-    'GET /research/recon', 'GET /export', 'POST /accounts', 'POST /accounts/bulk-assign', 'PATCH /accounts/:customerId',
+    'GET /research/recon', 'GET /export', 'POST /accounts', 'POST /accounts/bulk-assign',
+    'GET /accounts/recycle-bin', 'POST /accounts/bulk-return',
+    'POST /accounts/:customerId/return', 'POST /accounts/:customerId/trash',
+    'POST /accounts/:customerId/restore', 'POST /accounts/:customerId/reassign',
+    'PATCH /accounts/:customerId',
     'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
     'POST /users/:userId/password-reset', 'POST /users/:userId/archive', 'POST /users/:userId/restore',
     'DELETE /users/:userId', 'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
@@ -149,6 +153,9 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'GET /data-maintenance/runs',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
+    'POST /accounts/:customerId/reassign',
+    'POST /accounts/:customerId/restore',
+    'POST /accounts/:customerId/trash',
     'POST /ai/bulk/cancel',
     'POST /ai/bulk/retry',
     'POST /ai/customers/:customerId/enrichment/run',
