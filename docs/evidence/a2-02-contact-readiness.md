@@ -60,8 +60,7 @@ duration_ms 29402.9005
 
 ## 集成状态
 
-- PR #44 已创建，GitHub CI 和合并状态待确认。
-- 尚未合并到 `codex/ai-integration`。
+- PR #44 已合并到 `codex/ai-integration` @ `c6b21500b69008920948bdd238530b3eb4fbe0a8`，GitHub CI `test` 已通过。
 - 尚未部署；生产 current/health 和全部 AI feature flags 未变化。
 
 ## 下一项
