@@ -38,14 +38,15 @@ function input(overrides = {}) {
   };
 }
 
-test('schema v5 installs enrichment run, node link, and event tables idempotently', () => {
+test('schema v6 retains enrichment run, node link, and event tables idempotently', () => {
   const db = fixture();
   installAIStationSchema(db);
-  assert.equal(AI_SCHEMA_VERSION, 5);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 5);
+  assert.equal(AI_SCHEMA_VERSION, 6);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 6);
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_enrichment_%'").all()
     .map(row => row.name));
   assert.deepEqual(tables, new Set([
+    'crm_ai_enrichment_evidence',
     'crm_ai_enrichment_runs',
     'crm_ai_enrichment_node_links',
     'crm_ai_enrichment_events',

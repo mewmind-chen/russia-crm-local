@@ -58,6 +58,11 @@ test('website-only account creation returns immediately with an eligible durable
     country: '',
     website: 'https://new-example.test/',
   });
+  assert.deepEqual(fx.db.prepare(`SELECT field_name,source_state FROM crm_ai_field_provenance
+    WHERE target_type='crm_account' AND target_id=? ORDER BY field_name`).all(body.customerId), [{
+    field_name: 'website',
+    source_state: 'employee_confirmed',
+  }]);
 });
 
 test('missing enrichment permission creates the customer with a skipped run', async t => {
@@ -121,4 +126,55 @@ test('disabled auto trigger creates the customer with feature_disabled and empty
   });
   assert.equal(rejected.status, 400);
   assert.match((await rejected.json()).error, /公司名称或官网/);
+});
+
+test('exact website and normalized-name duplicates return stable 409 identities', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { create_customer: true },
+  });
+  t.after(() => fx.close());
+  const first = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      companyName: 'Duplicate Fixture LLC',
+      website: 'https://www.duplicate-fixture.test/about',
+      ownerId: 'U-OTHER',
+    },
+  });
+  const created = await first.json();
+  assert.equal(first.status, 200, created.error);
+
+  const domainDuplicate = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      companyName: 'Another label',
+      website: 'HTTP://duplicate-fixture.test:80/contact?utm_source=x',
+      ownerId: 'U-OTHER',
+    },
+  });
+  assert.equal(domainDuplicate.status, 409);
+  assert.deepEqual(await domainDuplicate.json(), {
+    ok: false,
+    error: '客户主档已存在',
+    code: 'CUSTOMER_DUPLICATE',
+    duplicate: {
+      customerId: created.externalCustomerId,
+      crmAccountId: created.customerId,
+      companyName: 'Duplicate Fixture LLC',
+      matchedBy: 'domain',
+    },
+  });
+
+  const nameDuplicate = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      companyName: ' duplicate—fixture llc ',
+      ownerId: 'U-OTHER',
+    },
+  });
+  assert.equal(nameDuplicate.status, 409);
+  assert.equal((await nameDuplicate.json()).duplicate.matchedBy, 'name');
 });
