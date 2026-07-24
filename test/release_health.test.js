@@ -20,7 +20,7 @@ async function withHealthFixture({ createDb = true, releaseSha = 'a'.repeat(40) 
   await new Promise(resolve => server.once('listening', resolve));
   if (!createDb) fs.rmSync(dbPath, { force: true });
   try {
-    await run(`http://127.0.0.1:${server.address().port}`);
+    await run(`http://127.0.0.1:${server.address().port}`, dbPath);
   } finally {
     await new Promise(resolve => server.close(resolve));
     delete require.cache[require.resolve('../server')];
@@ -34,29 +34,64 @@ async function withHealthFixture({ createDb = true, releaseSha = 'a'.repeat(40) 
 
 test('health endpoint returns the exact release SHA after a read-only database query', async () => {
   const sha = '0123456789abcdef0123456789abcdef01234567';
-  await withHealthFixture({ releaseSha: sha }, async baseUrl => {
+  await withHealthFixture({ releaseSha: sha }, async (baseUrl, dbPath) => {
     const response = await fetch(`${baseUrl}/healthz`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, database: 'ok', releaseSha: sha });
+    const { databaseIdentity } = require('../lib/release_health');
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      database: 'ok',
+      releaseSha: sha,
+      developmentDatabaseIdentity: databaseIdentity(dbPath),
+    });
   });
 });
 
 test('health endpoint returns 503 without leaking paths when the database is unavailable', async () => {
-  await withHealthFixture({ createDb: false }, async baseUrl => {
+  await withHealthFixture({ createDb: false }, async (baseUrl, dbPath) => {
     const response = await fetch(`${baseUrl}/healthz`);
     const body = await response.json();
     assert.equal(response.status, 503);
-    assert.deepEqual(body, { ok: false, database: 'unavailable', releaseSha: 'a'.repeat(40) });
+    const { databaseIdentity } = require('../lib/release_health');
+    assert.deepEqual(body, {
+      ok: false,
+      database: 'unavailable',
+      releaseSha: 'a'.repeat(40),
+      developmentDatabaseIdentity: databaseIdentity(dbPath),
+    });
     assert.doesNotMatch(JSON.stringify(body), /crm-health-|ENOENT|SQLite/i);
   });
 });
 
 test('health endpoint returns 503 when release metadata is absent or invalid', async () => {
-  await withHealthFixture({ releaseSha: null }, async baseUrl => {
+  await withHealthFixture({ releaseSha: null }, async (baseUrl, dbPath) => {
     const response = await fetch(`${baseUrl}/healthz`);
     assert.equal(response.status, 503);
-    assert.deepEqual(await response.json(), { ok: false, database: 'ok', releaseSha: 'unknown' });
+    const { databaseIdentity } = require('../lib/release_health');
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      database: 'ok',
+      releaseSha: 'unknown',
+      developmentDatabaseIdentity: databaseIdentity(dbPath),
+    });
   });
+});
+
+test('production health never exposes its database identity', () => {
+  const routes = [];
+  const app = { get(route, handler) { routes.push({ route, handler }); } };
+  const { registerReleaseHealth } = require('../lib/release_health');
+  registerReleaseHealth(app, {
+    environment: 'production',
+    dbPath: '/definitely/missing/production.db',
+    releaseShaFile: '/definitely/missing/.release-sha',
+  });
+  let body;
+  routes[0].handler({}, {
+    status() { return this; },
+    json(value) { body = value; },
+  });
+  assert.equal(Object.hasOwn(body, 'developmentDatabaseIdentity'), false);
 });
 
 test('database health closes an opened handle when its probe query fails', () => {

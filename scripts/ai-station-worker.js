@@ -5,6 +5,9 @@ require('dotenv').config();
 const Database = require('better-sqlite3');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
 const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
+const {
+  resolveExplicitWebsiteIdentity,
+} = require('../lib/ai_stations/enrichment/identity_resolver');
 const { resolveCustomerEnrichmentFlags } = require('../lib/ai_stations/enrichment/flags');
 const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
 const { consumePendingEnrichmentEvent } = require('../lib/ai_stations/enrichment/events');
@@ -129,6 +132,7 @@ async function main(options = {}) {
       }
       : undefined,
     executorOptions: {
+      identityResolver: resolveExplicitWebsiteIdentity,
       timeoutMs: integerArgument('--timeout-ms', Number(env.CRM_AI_EXECUTION_TIMEOUT_MS) || 75_000, argv),
       maxEngineAttempts: Number(env.ASSISTANT_ROUTER_MAX_ATTEMPTS) || 2,
     },
