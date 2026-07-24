@@ -775,8 +775,8 @@ schema v9 新增快照元数据和一次性 token 映射；服务端按生效权
 完整回归 430/430、语法检查和 `git diff --check` 通过。证据见
 `docs/evidence/a2-03-candidate-snapshots.md`。实现提交 `8051847`，PR
 [#46](https://github.com/mewmind-chen/russia-crm-local/pull/46) 已合并到
-`codex/ai-integration` @ `51aecaa`，CI `test` 通过；尚未部署；
-生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、
-Worker 和 enrichment flags 保持关闭，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步为阶段 2
+`codex/ai-integration` @ `51aecaa`，CI `test` 通过；本任务未执行部署。完成后只读核验生产
+current/health 为 `f8f0b165c5c80a18adc4616ef08f1da1fd884644`，与 `origin/main` 一致；
+previous 为 `releases/73f2e7b3aa47`，`CRM_AI_STATIONS_ENABLED=false`。下一步为阶段 2
 A2-04 规则最终裁决，本任务完成后停止。
 任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。

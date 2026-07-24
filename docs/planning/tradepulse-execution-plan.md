@@ -915,6 +915,7 @@ schema v9 新增快照元数据和一次性 token 映射；服务端按生效权
 未接入 `chooseIntakeOwner`、最终裁决、owner/intake 写入、页面、外发或生产开关。聚焦验收 3/3、
 完整回归 430/430、语法检查和 `git diff --check` 通过。实现提交 `8051847`，PR
 [#46](https://github.com/mewmind-chen/russia-crm-local/pull/46) 已合并到
-`codex/ai-integration` @ `51aecaa`，CI `test` 通过；尚未部署。生产 current/health 仍为
-`92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭，
-生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A2-04：规则最终裁决；本任务完成后停止。
+`codex/ai-integration` @ `51aecaa`，CI `test` 通过；本任务未执行部署。完成后只读核验生产
+current/health 为 `f8f0b165c5c80a18adc4616ef08f1da1fd884644`，与 `origin/main` 一致；
+previous 为 `releases/73f2e7b3aa47`，`CRM_AI_STATIONS_ENABLED=false`。下一步 A2-04：
+规则最终裁决；本任务完成后停止。
