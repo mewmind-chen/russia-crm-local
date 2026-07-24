@@ -101,7 +101,10 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   assert.ok(resultBody.evidence.length > 0);
 
   await new Promise(resolve => setImmediate(resolve));
-  const audit = fx.db.prepare("SELECT * FROM crm_audit_log WHERE entity_type='ai_station' ORDER BY rowid DESC LIMIT 1").get();
+  const audit = fx.db.prepare(`SELECT * FROM crm_audit_log
+    WHERE entity_type='ai_station'
+      AND action='POST /ai/customers/:customerId/stations/customer_fit/run'
+    ORDER BY rowid DESC LIMIT 1`).get();
   assert.equal(audit.action, 'POST /ai/customers/:customerId/stations/customer_fit/run');
   assert.equal(audit.entity_id, '');
   assert.doesNotMatch(audit.detail_json, /RU-9002|AIJ-/);

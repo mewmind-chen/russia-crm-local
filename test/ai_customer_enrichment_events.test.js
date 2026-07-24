@@ -151,6 +151,14 @@ test('Contact Recon completion records its linked event in the same transaction'
     .get(contactJobId).status, 'done');
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_enrichment_events
     WHERE legacy_task_type='contact_recon' AND legacy_task_id=?`).get(contactJobId).count, 1);
+  const consumed = consumePendingEnrichmentEvent(fx.db, 'contact-consumer');
+  assert.deepEqual(consumed.jobs.map(job => job.station), [
+    'contact_collect',
+    'customer_fit',
+    'enrichment_finalize',
+  ]);
+  assert.deepEqual(consumed.jobs[1].dependencyIds, [consumed.jobs[0].id]);
+  assert.deepEqual(consumed.jobs[2].dependencyIds, [consumed.jobs[1].id]);
 });
 
 test('expired event lease recovers and idempotently creates collect plus contact dispatch jobs', async t => {

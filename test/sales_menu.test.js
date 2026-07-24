@@ -87,15 +87,16 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260724-9/);
-  assert.match(html, /app\.js\?v=20260724-9/);
+  assert.match(html, /app\.css\?v=20260724-10/);
+  assert.match(html, /app\.js\?v=20260724-10/);
 });
 
-test('manual customer creation surfaces the generated code and opens the new CRM record', () => {
+test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {
   const handler = appJs.match(/else if \(form\.id === 'customerForm'\)[\s\S]*?else if \(form\.id === 'quoteForm'\)/)?.[0] || '';
   assert.match(handler, /const result = await api\('\/api\/sales-crm\/accounts'/);
   assert.match(handler, /result\.externalCustomerId/);
-  assert.match(handler, /openCustomer\(result\.customerId\)/);
+  assert.match(handler, /result\.enrichment/);
+  assert.match(handler, /openCustomerProfile\(result\.externalCustomerId\)/);
 });
 
 test('unclaimed lead AI uses a scoped profile summary instead of an inaccessible CRM target', () => {

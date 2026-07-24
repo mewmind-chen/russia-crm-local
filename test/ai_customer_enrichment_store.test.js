@@ -38,11 +38,11 @@ function input(overrides = {}) {
   };
 }
 
-test('schema v6 retains enrichment run, node link, and event tables idempotently', () => {
+test('schema v7 retains enrichment runtime and proposal tables idempotently', () => {
   const db = fixture();
   installAIStationSchema(db);
-  assert.equal(AI_SCHEMA_VERSION, 6);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 6);
+  assert.equal(AI_SCHEMA_VERSION, 7);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 7);
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_enrichment_%'").all()
     .map(row => row.name));
   assert.deepEqual(tables, new Set([
@@ -51,6 +51,13 @@ test('schema v6 retains enrichment run, node link, and event tables idempotently
     'crm_ai_enrichment_node_links',
     'crm_ai_enrichment_events',
   ]));
+  assert.equal(db.prepare(`SELECT COUNT(*) count FROM sqlite_master
+    WHERE type='table' AND name='crm_ai_field_proposals'`).get().count, 1);
+  const runColumns = new Set(db.prepare('PRAGMA table_info(crm_ai_enrichment_runs)').all()
+    .map(row => row.name));
+  for (const column of ['completeness', 'missing_items_json', 'tags_json']) {
+    assert.equal(runColumns.has(column), true);
+  }
   db.close();
 });
 

@@ -122,11 +122,9 @@ async function main(options = {}) {
     executors: createEnrichmentExecutors(),
     beforeClaim: enrichmentConfiguration.enabled
       ? async ({ db, workerId }) => {
-        if (enrichmentConfiguration.autoTriggerEnabled) {
-          await dispatchPendingEnrichment(db, undefined, {
-            dispatcherId: `${workerId}:customer-enrichment`,
-          });
-        }
+        await dispatchPendingEnrichment(db, undefined, {
+          dispatcherId: `${workerId}:customer-enrichment`,
+        });
         return consumePendingEnrichmentEvent(db, `${workerId}:customer-enrichment-events`);
       }
       : undefined,
