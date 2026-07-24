@@ -81,7 +81,12 @@ A1-09 的目标是在不迁移上述专用 Worker 的前提下，让销售只提
 
 ### 4.2 启动门
 
-触发记录由调度器读取，并重新验证：
+创建服务先根据当前 actor 计算一次启动门：
+
+- 条件满足时，触发记录写为待调度。
+- 条件不满足时，触发记录直接写为 `skipped` 和稳定原因码，创建响应可立即显示未启动原因。
+
+调度器读取待调度记录后，再按当前状态重新验证：
 
 - `CRM_AI_CUSTOMER_ENRICHMENT_ENABLED`
 - `CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED`
@@ -92,7 +97,7 @@ A1-09 的目标是在不迁移上述专用 Worker 的前提下，让销售只提
 - `view_recon`
 - `view_contacts`
 
-任一条件不满足时不创建 DAG，触发记录进入 `skipped`，并保存稳定原因码。客户创建不回滚。
+任一条件不满足时不创建 DAG，触发记录进入 `skipped`，并保存稳定原因码。客户创建不回滚。两次检查之间权限被撤销时，以调度时复验结果为准。
 
 ### 4.3 DAG
 
@@ -137,7 +142,7 @@ A1-09 的目标是在不迁移上述专用 Worker 的前提下，让销售只提
 - 当前适配状态
 - 完成/取消版本
 
-`submitReconResult` 和 `submitContactReconResult` 在旧事务成功后发布幂等完成通知。通知处理器唤醒对应 collect 节点。重复通知不重复创建结果或推进 DAG。
+`submitReconResult` 和 `submitContactReconResult` 在提交旧任务结果的同一个数据库事务内写入持久完成事件。事务提交后尝试立即通知 DAG；独立事件消费器也会恢复处理尚未消费的完成事件，避免进程在提交结果和通知之间崩溃时丢失唤醒。通知处理器幂等唤醒对应 collect 节点，重复通知不重复创建结果或推进 DAG。
 
 取消采用协作式传播：
 
@@ -199,7 +204,23 @@ A1-09 的目标是在不迁移上述专用 Worker 的前提下，让销售只提
 
 原始敏感内容不写入审计摘要。联系人证据按 `view_contacts` 脱敏。
 
-### 5.4 Field proposal
+### 5.4 Durable completion event
+
+`crm_ai_enrichment_events` 至少保存：
+
+- `event_key`
+- `run_id`
+- `node_key`
+- `legacy_task_type`
+- `legacy_task_id`
+- `event_type`
+- `payload_hash`
+- `created_at`
+- `consumed_at`
+
+`event_key` 唯一。旧任务结果和完成事件必须在同一数据库事务内提交。事件消费使用租约和幂等更新，崩溃后可以重新领取。
+
+### 5.5 Field proposal
 
 `crm_ai_field_proposals` 至少保存：
 
