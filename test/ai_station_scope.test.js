@@ -221,3 +221,129 @@ test('customer_fit execution rejects invented evidence and leaves a retryable jo
   assert.equal(db.prepare('SELECT status FROM crm_ai_model_runs WHERE job_id=?').get(job.id).status, 'invalid_output');
   db.close();
 });
+
+test('customer_fit execution charges failed fallback and successful engine attempts in one ledger', async () => {
+  const db = fixture();
+  const accessContext = access();
+  const context = buildCustomerContext(db, accessContext, 'CUST-1');
+  const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-FALLBACK-COST' });
+  const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-FALLBACK-COST` });
+  const job = jobs.enqueue({
+    customerId: 'CUST-1',
+    crmAccountId: 'ACC-1',
+    station: 'customer_fit',
+    contextHash: context.contextHash,
+  }, 'fit:CUST-1:fallback-cost');
+  jobs.claimNext('worker-fallback-cost');
+  const output = {
+    version: 'v1',
+    confidence: 0.88,
+    evidenceIds: context.evidenceIds.slice(0, 1),
+    reasonCodes: ['PRODUCT_MATCH'],
+    fitScore: 86,
+    grade: 'A',
+    reviewRequired: false,
+  };
+
+  const execution = await executeCustomerFitJob({
+    db,
+    jobs,
+    results,
+    jobId: job.id,
+    workerId: 'worker-fallback-cost',
+    accessContext,
+    actor: { id: 'U1', role: 'manager', teamId: 'TEAM-1' },
+    modelCall: async () => ({
+      answer: JSON.stringify(output),
+      engine: 'hermes',
+      model: 'hermes-test',
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+      cost: 0.02,
+      engineAttempts: [
+        { engine: 'kimi-cli', ok: false, durationMs: 20, code: 'KIMI_TIMEOUT' },
+        { engine: 'hermes', ok: true, durationMs: 10 },
+      ],
+    }),
+  });
+
+  assert.equal(execution.budget.chargedCost, 0.07);
+  assert.equal(execution.result.cost, 0.07);
+  assert.equal(execution.modelRun.cost, 0.07);
+  const ledger = db.prepare(`SELECT engine,status,usage_source,cost_source,fallback_from
+    FROM crm_ai_usage_ledger WHERE job_id=? ORDER BY sequence`).all(job.id);
+  assert.deepEqual(ledger, [
+    {
+      engine: 'kimi-cli',
+      status: 'failed',
+      usage_source: 'estimated_missing',
+      cost_source: 'estimated_missing',
+      fallback_from: '',
+    },
+    {
+      engine: 'hermes',
+      status: 'succeeded',
+      usage_source: 'provider',
+      cost_source: 'provider',
+      fallback_from: 'kimi-cli',
+    },
+  ]);
+  db.close();
+});
+
+for (const failure of [
+  { code: 'DEEPSEEK_HTTP_ERROR', statusCode: 429 },
+  { code: 'DEEPSEEK_TIMEOUT', statusCode: 504 },
+]) {
+  test(`customer_fit execution settles conservative usage after ${failure.statusCode}`, async () => {
+    const db = fixture();
+    const accessContext = access();
+    const context = buildCustomerContext(db, accessContext, 'CUST-1');
+    const jobs = createAIJobStore(db, { idFactory: () => `AIJ-COST-${failure.statusCode}`, retryBaseMs: 1 });
+    const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-COST-${failure.statusCode}` });
+    const job = jobs.enqueue({
+      customerId: 'CUST-1',
+      crmAccountId: 'ACC-1',
+      station: 'customer_fit',
+      contextHash: context.contextHash,
+    }, `fit:CUST-1:cost-${failure.statusCode}`);
+    jobs.claimNext(`worker-cost-${failure.statusCode}`);
+    const error = Object.assign(new Error(`engine ${failure.statusCode}`), {
+      code: 'ASSISTANT_ENGINES_UNAVAILABLE',
+      statusCode: 503,
+      engineAttempts: [{
+        engine: 'deepseek',
+        ok: false,
+        durationMs: 50,
+        code: failure.code,
+        error: `engine ${failure.statusCode}`,
+      }],
+    });
+
+    await assert.rejects(() => executeCustomerFitJob({
+      db,
+      jobs,
+      results,
+      jobId: job.id,
+      workerId: `worker-cost-${failure.statusCode}`,
+      accessContext,
+      actor: { id: 'U1', role: 'manager' },
+      modelCall: async () => { throw error; },
+    }), thrown => thrown === error);
+
+    const reservation = db.prepare(`SELECT state,charged_micros,released_micros
+      FROM crm_ai_budget_reservations WHERE job_id=?`).get(job.id);
+    assert.equal(reservation.state, 'settled');
+    assert.equal(reservation.charged_micros, 50_000);
+    assert.equal(reservation.released_micros, 50_000);
+    const ledger = db.prepare(`SELECT status,usage_source,cost_source,error_code
+      FROM crm_ai_usage_ledger WHERE job_id=?`).get(job.id);
+    assert.deepEqual(ledger, {
+      status: 'failed',
+      usage_source: 'estimated_missing',
+      cost_source: 'estimated_missing',
+      error_code: failure.code,
+    });
+    assert.equal(jobs.getJob(job.id).state, 'retry_wait');
+    db.close();
+  });
+}

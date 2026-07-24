@@ -231,6 +231,43 @@ test('worker records executor failures as retryable job failures', async t => {
   assert.equal(fx.jobs.getJob(queued.id).state, 'retry_wait');
 });
 
+test('worker turns a 100 percent budget rejection into a durable policy block without calling a model', async t => {
+  const fx = fixture();
+  t.after(() => fx.close());
+  const queued = fx.enqueue();
+  let modelCalled = false;
+  const worker = createAIStationWorker({
+    workerId: 'worker-budget-block',
+    openDb: fx.openDb,
+    budgetPolicies: [{
+      scopeType: 'user',
+      scopeId: 'U-ACTOR',
+      dailyLimit: 0.05,
+    }],
+    executeCustomerFitJob: async ({ budgets, jobId, actor }) => {
+      budgets.reserve({
+        jobId,
+        attempt: 1,
+        actorId: actor.id,
+        station: 'customer_fit',
+        estimatedCost: 0.05,
+      });
+      modelCalled = true;
+    },
+  });
+
+  const outcome = await worker.runOnce();
+
+  assert.equal(modelCalled, false);
+  assert.equal(outcome.status, 'blocked');
+  assert.equal(outcome.error.code, 'AI_BUDGET_EXHAUSTED');
+  assert.equal(outcome.job.id, queued.id);
+  assert.equal(outcome.job.state, 'blocked');
+  assert.equal(outcome.job.blockedKind, 'policy');
+  assert.match(outcome.job.blockedReason, /AI budget exhausted/);
+  assert.equal(outcome.job.leaseOwner, '');
+});
+
 test('worker completes a cancellation requested while the executor is running', async t => {
   const fx = fixture();
   t.after(() => fx.close());

@@ -114,6 +114,16 @@ CRM_AI_EXECUTION_RESOURCES_JSON='{"global":{"maxConcurrency":8,"rateLimit":60,"r
 
 `CRM_AI_STATION_RESOURCES_JSON` optionally maps a station to an additional task-level resource. The Worker holds the global task slot and customer lock for the full job lease, while each real Router engine attempt holds its own engine slot. Heartbeats renew all claims; success, retry, cancellation, policy block, timeout, 429, and expired-lease recovery release them transactionally. Do not start this Worker against production until the Control Plane release gate explicitly enables AI Stations.
 
+AI usage and budget governance is also coordinated through the shared database. Each Router attempt is normalized into the cost ledger; provider usage is preferred, while missing usage is explicitly marked and charged with the configured conservative estimate. The Worker reserves the maximum Router-attempt estimate before a model call, settles the actual attempts afterwards, and releases unused or orphaned reservations. Configure a versioned pricing snapshot and persistent policies with:
+
+```bash
+CRM_AI_COMPANY_ID=default
+CRM_AI_PRICING_JSON='{"version":"internal-pricing-v1","default":{"defaultAttemptCost":0.05,"inputPerMillion":1,"outputPerMillion":4,"reserveInputTokens":3000,"reserveOutputTokens":1500},"engines":{},"models":{}}'
+CRM_AI_BUDGET_POLICIES_JSON='[{"scopeType":"company","scopeId":"default","dailyLimit":20,"monthlyLimit":400,"perTaskLimit":0.5,"warningRatio":0.8}]'
+```
+
+Policy scopes are `company`, `team`, `user`, and `station`; limit amounts are USD and zero means no limit for that period. A projected 80% threshold writes an `ai_budget_alert`; reaching 100% blocks new nonessential model calls as durable policy blocks. CRM reads, history, and manual non-AI workflows remain available. Keep `CRM_AI_STATIONS_ENABLED=false` until the production release gate is approved.
+
 ## Production Customer Snapshot
 
 Development must never point at the live production database. To refresh realistic customer data, use the one-way snapshot importer. It preserves development users, permission groups, sessions and AI router settings, maps production ownership to development accounts by role, and excludes production credentials, sessions, permission overrides, webhooks and bot bindings.
