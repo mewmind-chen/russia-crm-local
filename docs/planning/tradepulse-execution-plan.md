@@ -2,9 +2,9 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 24/38 个任务已完成；阶段 2 进行中；A2-05 已完成；下一步 A2-06 验收门
-**版本：** v1.6
-**日期：** 2026-07-24
+**状态：** 25/38 个任务已完成；阶段 2 已完成；A2-06 与 Issue #62 已完成；下一步 A3-01 `sales_pack`
+**版本：** v1.7
+**日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
 **生产根目录：** `/Users/ylf/Desktop/projects/tradepulse-production`
@@ -726,6 +726,17 @@ PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到
 - AI 故障时现有自动/人工分配可继续。
 - 管理员、经理、销售权限测试全部通过。
 
+状态（2026-07-25）：已完成。并发扫描、owner scope/分页、AI 越权阻断、规则最终裁决、
+AI 故障确定性回退和管理员/经理/销售权限均通过专项验收；Issue #62 同步完成销售 CRM
+体验对齐，包括漏斗累计口径与说明、入库中心服务端搜索/分页/国家及负责人筛选、批量负责人
+确认、按筛选导出带 UTF-8 BOM 的 CSV、经理评价入口、客户资料跟进入口、hash 导航/浏览器
+后退、销售待领取落地和移动端横向滚动/弹窗操作区。专项 7/7、受影响回归 18/18、
+完整回归 466/466，语法检查和 `git diff --check` 通过；本地 `PORT=3101` 管理员登录、
+`#intake` 导航/后退及 390px smoke 通过。证据见
+`docs/evidence/issue-62-a2-06-acceptance.md`。尚未合并到 `main`、执行生产迁移或部署，
+生产 `CRM_AI_STATIONS_ENABLED=false` 及其他 AI 开关继续关闭。下一步 A3-01 `sales_pack`：
+销售认领后异步生成只读销售包，展示摘要、切入点、风险和草稿，但不自动外发消息。
+
 ## 7. 阶段 3：销售执行闭环
 
 **目标：** 完成原始步骤 09-14。
@@ -931,13 +942,13 @@ E0-01 生产基线
 | A2-03 | 已完成 | schema v9 新增销售候选快照元数据与 token 映射；服务端按有效销售、权限、国家/语言、渠道、负荷和配额生成候选，AI 只接收一次性正整数 token；过期或销售状态变化 fail-closed 并要求重算；未接入最终裁决或业务写入；PR [#46](https://github.com/mewmind-chen/russia-crm-local/pull/46) 已合并到 `codex/ai-integration` @ `51aecaa`，CI `test` 通过；聚焦 3/3、全量 430/430、语法/diff 检查通过；证据见 `docs/evidence/a2-03-candidate-snapshots.md`；尚未部署；下一步 A2-04 |
 | A2-04 | 已完成 | 新增 `assignment_arbitration` 规则最终裁决：AI 仅作建议，事务内重读有效销售、权限、负荷和配额；一致且高置信可自动分配，AI 不可用确定性回退，冲突、低置信、高价值、风险、重复和跨团队进入经理审批或规则阻止；A2-03 快照 token 服务端 fail-closed 解析；PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到 `codex/ai-integration` @ `4e4619e`，CI `test` 通过；聚焦 5/5、全量 435/435、语法/diff 检查通过；证据见 `docs/evidence/a2-04-assignment-arbitration.md`；尚未部署；下一步 A2-05 页面与审计 |
 | A2-05 | 已完成 | 新增 `crm_intake_decisions` 决策历史，保存候选快照、AI 推荐、规则结果、人工最终决定、操作者和时间；bootstrap/入库队列/详情抽屉展示 Fit、readiness、priority、候选排名、阻断原因和三层裁决；销售端按 owner 范围脱敏；PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51) 已合并到 `codex/ai-integration` @ `92e64cc`，CI `test` 通过；专项 7/7、全量 437/437、语法/diff 检查通过；证据见 `docs/evidence/a2-05-intake-review-audit.md`；尚未部署；下一步 A2-06 验收门 |
+| A2-06 | 已完成 | 并发扫描幂等、owner scope/分页、AI 越权阻断、规则阻断、AI 故障回退和三角色权限验收通过；Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、全量 466/466、语法/diff 检查通过；本地 3101 管理员登录、`#intake`/后退和 390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并到 `main`、迁移或部署，生产 AI 开关保持关闭；下一步 A3-01 `sales_pack` |
 
-当前停点：38 个计划任务中已完成 24 个，剩余 14 个。A2-05 在
-`codex/ai-assignment-a2-05` 基于集成分支完成页面与审计：新增 `crm_intake_decisions`
-保存候选快照、AI 推荐、规则结果、人工最终决定和操作者；bootstrap、入库队列和详情抽屉
-展示 Fit/readiness/priority、候选排名、三层裁决、阻断原因和审计轨迹，销售端按 owner
-范围脱敏候选排名。专项验收 7/7、完整回归 437/437、语法检查、`git diff --check` 和 CI
-通过。实现提交 `2d04abc`，PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51)
-已合并到 `codex/ai-integration` @ `92e64cc`，证据见
-`docs/evidence/a2-05-intake-review-audit.md`。本任务未执行生产迁移或部署，生产 current/health、
-previous 和 `CRM_AI_STATIONS_ENABLED=false` 未变化。下一步 A2-06：验收门；本任务完成后停止。
+当前进度：38 个计划任务中已完成 25 个，剩余 13 个。A2-06 与 Issue #62 已在
+`codex/issue-62-ux-alignment` 完成：并发扫描幂等与 owner scope 验收、AI/规则裁决边界、
+故障回退、三角色权限，以及销售 CRM 页面与导航体验对齐。专项 7/7、受影响回归 18/18、
+完整回归 466/466、语法检查、`git diff --check` 和本地管理员/移动 smoke 通过。证据见
+`docs/evidence/issue-62-a2-06-acceptance.md`。尚未合并到 `main`、执行生产迁移或部署，
+生产 current/health、previous 和 `CRM_AI_STATIONS_ENABLED=false` 未变化。完成本任务后的下一步
+是阶段 3 A3-01 `sales_pack`，随后依次执行 A3-02 `action_proposal` 与 A3-03 `next_action`；
+本轮按用户要求在当前功能分支停留，不继续实现下一项。

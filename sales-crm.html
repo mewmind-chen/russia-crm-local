@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-10">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-11&ux62=1">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -39,7 +39,7 @@
 
   <div id="app" class="app-shell hidden">
     <aside class="sidebar" id="salesSidebar">
-      <a class="brand-block unified-brand" href="/#dashboard">
+      <a class="brand-block unified-brand" href="#dashboard">
         <div class="brand-mark">TP</div>
         <div><strong>TradePulse</strong><span>外贸客户系统</span></div>
       </a>
@@ -50,14 +50,16 @@
           <button data-view="aiTasks" data-permission="view_customers"><i>✦</i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
-          <button data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
-          <button data-view="claimed" data-permission="view_intake"><i>✓</i><span>已领取</span><b id="navClaimedCount">0</b></button>
+          <button class="nav-shortcut hidden" aria-hidden="true" data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
+          <button class="nav-shortcut hidden" aria-hidden="true" data-view="claimed" data-permission="view_intake"><i>✓</i><span>已领取</span><b id="navClaimedCount">0</b></button>
           <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
+          <button data-view="recycleBin" data-permission="manage_customer_recycle"><i>↺</i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
-          <button data-view="intake" data-permission="manage_intake"><i>⚙</i><span>线索分配</span><b id="navIntakeCount">0</b></button>
+          <button data-view="intake" data-permission="view_intake"><i>⚙</i><span id="navIntakeLabel">线索分配</span><b id="navIntakeCount">0</b></button>
           <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
+          <button data-view="insights" data-permission="view_insights"><i>✎</i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
           <button data-view="users" data-permission="view_users"><i>⊕</i><span>用户与权限</span></button>
           <button data-view="maintenance" data-permission="manage_data_maintenance"><i>⌫</i><span>数据维护</span></button>
@@ -177,9 +179,11 @@
               <button data-intake-status="claimed">已领取</button>
               <button data-intake-status="returned">已退回</button>
             </div>
+            <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索公司、客户编码、行业或产品"></div>
             <span id="intakeModeLabel" class="toolbar-count"></span>
           </div>
           <div id="intakeTable" class="data-table"></div>
+          <div id="intakePagination" class="load-more-row hidden"></div>
         </article>
         <article id="intakeBatchPanel" class="panel intake-batches">
           <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div></div>
@@ -195,9 +199,35 @@
             <select id="priorityFilter"><option value="">全部优先级</option><option>A</option><option>B</option><option>C</option></select>
             <select id="evaluationTagFilter"><option value="">全部评价标签</option></select>
             <label class="check"><input id="onlyOverdue" type="checkbox"> 仅看超期</label>
+            <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出数据</button>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
+          <div id="customerBulkBar" class="customer-bulk-bar hidden">
+            <span id="customerSelectionCount">已选择 0 个客户</span>
+            <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前结果</button>
+            <button id="clearCustomerSelection" class="button secondary tiny" type="button">清除选择</button>
+            <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">请选择销售</option></select>
+            <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量设置负责人</button>
+            <button id="bulkReturnCustomers" class="button danger tiny" type="button">批量退回线索池</button>
+          </div>
           <div id="customerTable" class="data-table"></div>
+        </article>
+      </section>
+
+      <section id="recycleBinView" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>退回和手工删除均为软回收，客户主档与经营历史完整保留。</p></div>
+        </div>
+        <article class="panel">
+          <div class="toolbar">
+            <div class="segmented" id="recycleTabs">
+              <button class="active" data-recycle-kind="sales_return">待重新分配</button>
+              <button data-recycle-kind="manual_delete">手工删除</button>
+            </div>
+            <input id="recycleSearch" placeholder="搜索客户">
+            <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
+          </div>
+          <div id="recycleTable" class="data-table"></div>
         </article>
       </section>
 
@@ -205,6 +235,7 @@
         <div class="customer-profile-toolbar">
           <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
           <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2></div>
+          <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
           <button id="customerProfileEdit" class="button secondary hidden" type="button">调整客户信息</button>
         </div>
         <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
@@ -321,6 +352,10 @@
             </section>
             <article class="panel"><div id="userTable" class="data-table"></div></article>
         <article class="panel access-panel">
+          <div class="panel-head"><div><p class="eyebrow">ARCHIVED USERS</p><h2>归档用户</h2></div><span class="panel-note">历史业务记录继续保留</span></div>
+          <div id="archivedUserTable" class="data-table"></div>
+        </article>
+        <article class="panel access-panel">
           <div class="panel-head">
             <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2></div>
             <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
@@ -373,6 +408,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260724-10"></script>
+  <script src="/sales-assets/app.js?v=20260724-11&ux62=1"></script>
 </body>
 </html>

@@ -15,10 +15,10 @@ function sidebarMarkup() {
 
 test('primary navigation follows the customer lifecycle and retains management', () => {
   const sidebar = sidebarMarkup();
-  for (const label of ['经营驾驶舱', '今日待办', '待领取', '已领取', 'CRM客户全景', '推进管道', '线索分配', '销售能力', '市场策略', '用户与权限']) {
+  for (const label of ['经营驾驶舱', '今日待办', '待领取', '已领取', 'CRM客户全景', '推进管道', '线索分配', '经理评价', '销售能力', '市场策略', '用户与权限']) {
     assert.match(sidebar, new RegExp(`>${label}<`), `missing navigation entry: ${label}`);
   }
-  for (const label of ['客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览', '经理评价']) {
+  for (const label of ['客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览']) {
     assert.doesNotMatch(sidebar, new RegExp(`>${label}<`), `obsolete primary entry remains: ${label}`);
   }
 });
@@ -87,8 +87,8 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260724-10/);
-  assert.match(html, /app\.js\?v=20260724-10/);
+  assert.match(html, /app\.css\?v=20260724-11/);
+  assert.match(html, /app\.js\?v=20260724-11/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {
