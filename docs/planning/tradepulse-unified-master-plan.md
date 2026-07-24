@@ -2,8 +2,8 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续产品边界、阶段状态和验收结论必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**文档状态：** 19/38 个任务已完成；A1-09 已完成；下一步执行 A2-01 扩展合同
-**版本：** v1.4
+**文档状态：** 20/38 个任务已完成；阶段 2 进行中；A2-01 已完成；下一步执行 A2-02 联系就绪触发
+**版本：** v1.5
 **日期：** 2026-07-24
 **产品依据：** `/Users/ylf/Desktop/ai-crm-complete-flow.html`
 **当前生产根目录：** `/Users/ylf/Desktop/projects/tradepulse-production`
@@ -762,9 +762,9 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 | 执行计划确认 | 已确认 | `docs/planning/tradepulse-execution-plan.md` v1.0 | 用户确认执行 E0-01 至 E0-05 | 不适用 | 不越过生产切换门 |
 | 阶段 0：环境统一 | 已完成 | 生产 `2b55ed0fb7fc2c455199dd11e269cf93115ac325`；回滚 `f7bb248e91f2bfe7003dfe443e1d04f0ed1887de`；开发分支 `codex/ai-integration` | PR #15 已合并并自动部署；current、previous、state.json 一致；本地/公网健康返回目标 SHA，首页 200，数据库 WAL/quick_check=ok，候选验证 242/242，账号/权限/会话/AI router 摘要未变化；3100 独立开发实例登录、bootstrap、路径隔离和 242/242 测试通过 | `releases/f7bb248e91f2` + E0-08/E0-09 备份 | E0-01 至 E0-10 全部完成；下一步阶段 1 A1-01 `customer_fit`，尚未开始 AI 业务集成 |
 | 阶段 1：评分、Control Plane 与客户补全 | 已完成 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `35341e8` | A1-01 至 A1-08 已完成既有门禁。A1-09.1 PR #28 完成最小客户事务和 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 evidence/provenance、去重和 identity；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、预算归因、事务 completion event、租约恢复与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案保护、finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵和隔离开发真实模型 smoke，最终聚焦 62/62、smoke/identity 14/14、完整回归 408/408、Python 检查、GitHub CI 与独立复审通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09 已完成；下一步阶段 2 A2-01 扩展合同 |
-| 阶段 2：判断分发 | 未开始 | 待填写 | 待填写 | 工作站 feature flag | 规则最终裁决 |
+| 阶段 2：判断分发 | 进行中 | 开发集成 `codex/ai-integration` @ `1ef5e17` | A2-01 PR [#38](https://github.com/mewmind-chen/russia-crm-local/pull/38) 已合并；三类严格 v1 合同、证据/候选白名单和 fail-closed 校验通过，聚焦 19/19、完整回归 421/421、语法/Schema/diff 检查、GitHub CI 与独立复审通过；生产 current/health、AI Station、Worker 和 flags 未变化 | 工作站 feature flag | A2-01 已完成；下一步 A2-02 联系就绪触发；规则最终裁决 |
 | 阶段 3：销售执行 | 未开始 | 待填写 | 待填写 | 工作站 feature flag | 外发人工确认 |
 | 阶段 4：经理与反馈 | 未开始 | 待填写 | 待填写 | 模型/提示词旧版本 | 禁止在线自我修改 |
 | 阶段 5：生产试运行 | 未开始 | 待填写 | 待填写 | previous release + flags | 分批开放 |
 
-当前总进度：38 个计划任务中已完成 19 个，剩余 19 个。A1-09 已由 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成并合并到 `codex/ai-integration` @ `35341e8`；三类结构化 E2E、6 Worker/20 跨客户竞争、同客户串行、租约恢复和 429/超时/fallback/永久失败/预算/取消矩阵通过，最终聚焦 62/62、smoke/identity 14/14、完整回归 408/408、Python 检查、GitHub CI 与独立复审通过。隔离开发真实模型 smoke 经持久受保护重试完成，未使用生产凭据。生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭且未部署。下一步为阶段 2 A2-01 扩展合同。任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。
+当前总进度：38 个计划任务中已完成 20 个，剩余 18 个。A2-01 已由 PR [#38](https://github.com/mewmind-chen/russia-crm-local/pull/38) 完成并合并到 `codex/ai-integration` @ `1ef5e17`；三类严格 v1 工作站合同、Prompt Registry、证据白名单和服务端候选快照白名单已落地，未知/重复/稀疏候选与非法证据均 fail closed，验证输出保持不可变。聚焦合同测试 19/19、完整回归 421/421、JavaScript 语法检查、JSON Schema 解析、`git diff --check`、GitHub CI 和独立复审通过；首次 CI 的既有多进程 enrichment 并发测试时序抖动已通过隔离复跑与 CI 重跑确认非本任务回归。未接入触发、持久化、UI、router/provider、生产部署、feature flag 或业务状态写入。生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭且未部署。下一步为阶段 2 A2-02 联系就绪触发。任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。

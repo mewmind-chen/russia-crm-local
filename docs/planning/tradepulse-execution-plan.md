@@ -2,8 +2,8 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 19/38 个任务已完成；A1-09 已完成；下一步 A2-01 扩展合同
-**版本：** v1.4
+**状态：** 20/38 个任务已完成；阶段 2 进行中；A2-01 已完成；下一步 A2-02 联系就绪触发
+**版本：** v1.5
 **日期：** 2026-07-24
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
@@ -642,6 +642,8 @@ git diff --check
 - `distribution_priority`
 - `sales_match`
 
+状态（2026-07-24）：已完成。迁入三个严格 v1 合同、Prompt Registry 和 fail-closed AJV 校验；证据只接受允许来源，销售候选只接受服务端生成的正整数快照 ID，并拒绝未知、重复或稀疏快照；验证后的输出保持不可变。代码由 PR [#38](https://github.com/mewmind-chen/russia-crm-local/pull/38) 合并，合并提交 `1ef5e17`；聚焦合同测试 19/19，完整 Node 回归 421/421，JavaScript 语法检查、三个 JSON Schema 解析和 `git diff --check` 通过，独立复审为 0 critical、important、minor。首次 GitHub CI 的既有多进程 enrichment 并发测试出现一次时序抖动，未改动文件对照与隔离复跑通过，重跑 CI 成功。未接入触发、持久化、UI、router/provider、生产部署、feature flag 或业务状态写入；生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭。下一步 A2-02：联系就绪触发。
+
 ### A2-02 联系就绪触发
 
 - customer_fit 成功后触发 contact_readiness。
@@ -877,4 +879,4 @@ E0-01 生产基线
 | A1-08 | 已完成 | A1-08.1 持久入队、DAG、取消、恢复和独立 Worker 已由 PR [#17](https://github.com/mewmind-chen/russia-crm-local/pull/17) 合并为 `56d63ed2`；A1-08.2 新增数据库全局/资源槽位、速率窗口、公平调度、每客户串行和 Router 引擎调用期占位，6 个 Worker 进程完成 20 个跨客户任务且全局峰值 4，全量 307/307，PR [#18](https://github.com/mewmind-chen/russia-crm-local/pull/18) 合并；A1-08.3 新增四级预算、原子预占/结算、80% 告警、100% policy block、attempt 级 usage/cost/fallback 台账、缺失 usage 保守估算、缓存/去重零费用事件和孤儿预占恢复，全量 323/323，PR [#20](https://github.com/mewmind-chen/russia-crm-local/pull/20) 合并；A1-08.4 新增统一任务中心、运行指标、对话元数据和人工复核，PR [#22](https://github.com/mewmind-chen/russia-crm-local/pull/22) 与 [#23](https://github.com/mewmind-chen/russia-crm-local/pull/23) 合并；A1-08.5 新增三角色范围验证、联系人/Recon 独立脱敏、取消/批量/预算/复核独立授权、原子批量 API、匿名化审计和不可用降级，A1-08 专项 88/88、全量 335/335、GitHub CI 通过，PR [#25](https://github.com/mewmind-chen/russia-crm-local/pull/25) 合并为 `a226dd2c`。生产 AI Station 和 Worker 仍关闭且未部署。证据见 `tradepulse-development/artifacts/a1-08-1-persistent-queue-20260723T165726Z.md`、`tradepulse-development/artifacts/a1-08-2-global-concurrency-20260724T012512Z.md`、`tradepulse-development/artifacts/a1-08-3-usage-budget-20260724T023103Z.md`、`tradepulse-development/artifacts/a1-08-4-unified-task-center-20260724T030316Z.md` 和 `tradepulse-development/artifacts/a1-08-5-permissions-audit-degradation-20260724T033129Z.md` |
 | A1-09 | 已完成 | A1-09.1 PR [#28](https://github.com/mewmind-chen/russia-crm-local/pull/28) 完成最小创建与 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 identity/evidence；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、事务完成事件与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案/复核/finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵及隔离开发真实模型 smoke，集成 @ `35341e8`，聚焦 62/62、smoke/identity 14/14、全量 408/408、Python 检查、CI 与独立复审通过。生产 flags 关闭且未部署；下一步 A2-01 |
 
-当前停点：38 个计划任务中已完成 19 个，剩余 19 个。A1-09 已由 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成并合并到 `codex/ai-integration` @ `35341e8`；三类结构化 E2E、6 Worker/20 跨客户竞争、同客户串行、租约恢复、429/超时/fallback/永久失败/预算与取消矩阵均通过，最终聚焦 62/62、smoke/identity 14/14、全量 408/408、Python 检查、GitHub CI 和独立复审通过。隔离开发真实模型 smoke 经持久受保护重试完成，未使用生产凭据。生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭且未部署，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A2-01：扩展合同。
+当前停点：38 个计划任务中已完成 20 个，剩余 18 个。A2-01 已由 PR [#38](https://github.com/mewmind-chen/russia-crm-local/pull/38) 完成并合并到 `codex/ai-integration` @ `1ef5e17`；三类严格 v1 工作站合同、Prompt Registry、证据白名单和服务端候选快照白名单已落地，未知/重复/稀疏候选与非法证据均 fail closed，验证输出保持不可变。聚焦合同测试 19/19、完整回归 421/421、JavaScript 语法检查、JSON Schema 解析、`git diff --check`、GitHub CI 和独立复审通过；首次 CI 的既有多进程 enrichment 并发测试时序抖动已通过隔离复跑与 CI 重跑确认非本任务回归。未接入触发、持久化、UI、router/provider、生产部署、feature flag 或业务状态写入。生产 current/health 仍为 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags 保持关闭且未部署，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A2-02：联系就绪触发。
