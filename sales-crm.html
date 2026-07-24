@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-10">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-11">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -195,7 +195,15 @@
             <select id="priorityFilter"><option value="">全部优先级</option><option>A</option><option>B</option><option>C</option></select>
             <select id="evaluationTagFilter"><option value="">全部评价标签</option></select>
             <label class="check"><input id="onlyOverdue" type="checkbox"> 仅看超期</label>
+            <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出数据</button>
             <span id="customerResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="customerBulkBar" class="customer-bulk-bar hidden">
+            <span id="customerSelectionCount">已选择 0 个客户</span>
+            <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前结果</button>
+            <button id="clearCustomerSelection" class="button secondary tiny" type="button">清除选择</button>
+            <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">不分配</option></select>
+            <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量设置负责人</button>
           </div>
           <div id="customerTable" class="data-table"></div>
         </article>
@@ -321,6 +329,10 @@
             </section>
             <article class="panel"><div id="userTable" class="data-table"></div></article>
         <article class="panel access-panel">
+          <div class="panel-head"><div><p class="eyebrow">ARCHIVED USERS</p><h2>归档用户</h2></div><span class="panel-note">历史业务记录继续保留</span></div>
+          <div id="archivedUserTable" class="data-table"></div>
+        </article>
+        <article class="panel access-panel">
           <div class="panel-head">
             <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2></div>
             <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
@@ -373,6 +385,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260724-10"></script>
+  <script src="/sales-assets/app.js?v=20260724-11"></script>
 </body>
 </html>
