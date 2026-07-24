@@ -132,6 +132,16 @@ test('sales_match requires the server candidate whitelist and rejects unknown or
   assert.match(duplicate.errors.join('\n'), /candidate employee IDs must be unique/);
 });
 
+test('sales_match rejects sparse server candidate snapshots', () => {
+  const result = validateStationOutput('sales_match', 'v1', validOutputs.sales_match, {
+    evidenceIds: ['EV-2'],
+    candidateEmployeeIds: [7, , 9],
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /positive integers/);
+});
+
 test('migrated contracts reject required-field omissions and boundary violations', () => {
   const cases = [
     {
