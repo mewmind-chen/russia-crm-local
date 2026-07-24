@@ -822,7 +822,7 @@
         ['排队任务', Number(queue.queued || 0) + Number(queue.retry_wait || 0), '等待调度'],
         ['执行任务', Number(queue.running || 0), '跨进程槽位保护'],
         ['24h 失败率', `${Math.round(Number(tasks.overview.failureRate24h || 0) * 100)}%`, '模型尝试'],
-        ['24h 成本', `$${Number(tasks.overview.dailyCost || 0).toFixed(4)}`, '已入账'],
+        ['预算 / 成本', `$${Number(tasks.overview.dailyCost || 0).toFixed(4)}`, `${tasks.overview.budget?.policies?.length || 0} 条策略 · ${tasks.overview.budget?.alertCount || 0} 条告警`],
       ].map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     } else overview.classList.add('hidden');
     if (tasks.loading) {
