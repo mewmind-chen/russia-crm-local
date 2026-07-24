@@ -86,6 +86,17 @@ body.customer-profile-active .top-actions{display:none}
 @media(max-width:780px){.customer-ai-station{padding:10px 4px;max-height:330px}.customer-ai-result{grid-template-columns:54px 46px 62px;gap:8px}.customer-ai-summary{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px}.customer-ai-evidence li{grid-template-columns:1fr}.customer-ai-evidence li a{justify-self:start}}
 @media(max-width:780px){.enrichment-nodes,.enrichment-proposals{grid-template-columns:1fr}.enrichment-before-after{grid-template-columns:1fr}}
 
+/* Issue #62: keep dense tables and modal actions discoverable on narrow screens. */
+.data-table{position:relative;overscroll-behavior-x:contain}
+.data-table:after{content:"左右滑动查看更多";position:absolute;right:10px;bottom:8px;padding:3px 6px;border-radius:4px;background:rgba(16,43,34,.84);color:#fff;font-size:9px;opacity:0;pointer-events:none}
+.data-table:hover:after{opacity:.72}
+#intakeTable table{min-width:1180px}
+#unifiedReconTable th:last-child,#unifiedReconTable td:last-child{min-width:92px;white-space:nowrap}
+.funnel-row[title]{cursor:help}
+.modal{display:flex;flex-direction:column}
+.modal-body,.modal>form{min-height:0;overflow:auto}
+.modal .form-actions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:12px 0 0;z-index:2}
+
 /* Customer ownership selection and user lifecycle */
 .customer-bulk-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#f7faf8}
 .customer-bulk-bar>span{margin-right:auto;color:var(--muted);font-size:11px;font-weight:750}
