@@ -4,6 +4,9 @@
 require('dotenv').config();
 const Database = require('better-sqlite3');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
+const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
+const { resolveCustomerEnrichmentFlags } = require('../lib/ai_stations/enrichment/flags');
+const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
 const { resolveAIStationsEnabled } = require('../lib/ai_stations/routes');
 const { databasePath } = require('../lib/runtime_paths');
 
@@ -75,6 +78,14 @@ function budgetConfigurationFromEnvironment(env = process.env) {
   };
 }
 
+function enrichmentConfigurationFromEnvironment(env = process.env) {
+  return resolveCustomerEnrichmentFlags({
+    environment: env.NODE_ENV,
+    enabled: env.CRM_AI_CUSTOMER_ENRICHMENT_ENABLED ?? '',
+    autoTriggerEnabled: env.CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED ?? '',
+  });
+}
+
 function openDb() {
   const db = new Database(databasePath());
   db.pragma('journal_mode = WAL');
@@ -92,6 +103,7 @@ async function main(options = {}) {
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const budgetConfiguration = budgetConfigurationFromEnvironment(env);
+  const enrichmentConfiguration = enrichmentConfigurationFromEnvironment(env);
   const worker = createAIStationWorker({
     openDb,
     workerId: env.CRM_AI_WORKER_ID,
@@ -106,6 +118,12 @@ async function main(options = {}) {
       onAlert: alert => process.stderr.write(`${JSON.stringify({ event: 'ai_budget_alert', ...alert })}\n`),
     },
     budgetPolicies: budgetConfiguration.policies,
+    executors: createEnrichmentExecutors(),
+    beforeClaim: enrichmentConfiguration.enabled && enrichmentConfiguration.autoTriggerEnabled
+      ? ({ db, workerId }) => dispatchPendingEnrichment(db, undefined, {
+        dispatcherId: `${workerId}:customer-enrichment`,
+      })
+      : undefined,
     executorOptions: {
       timeoutMs: integerArgument('--timeout-ms', Number(env.CRM_AI_EXECUTION_TIMEOUT_MS) || 75_000, argv),
       maxEngineAttempts: Number(env.ASSISTANT_ROUTER_MAX_ATTEMPTS) || 2,
@@ -135,6 +153,7 @@ if (require.main === module) {
 module.exports = {
   budgetConfigurationFromEnvironment,
   defaultExecutionResources,
+  enrichmentConfigurationFromEnvironment,
   executionResourcesFromEnvironment,
   stationResourcesFromEnvironment,
   integerArgument,
