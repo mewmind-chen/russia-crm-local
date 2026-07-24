@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
+const Database = require('better-sqlite3');
 const fixtures = require('./helpers/permission_fixture');
 const {
   heartbeatContactReconJob,
@@ -189,6 +190,67 @@ test('late Contact Recon callback keeps raw evidence but does not publish people
   const pool = fx.db.prepare(`SELECT best_contact_level,best_person_id
     FROM customer_pool WHERE customer_id='RU-9002'`).get();
   assert.deepEqual(pool, { best_contact_level: 'L0', best_person_id: '' });
+});
+
+test('Contact Recon submit rechecks cancellation after a competing connection commits', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const legacyJobId = 'CONTACT-CANCEL-RACE';
+  fx.db.prepare(`INSERT INTO contact_recon_jobs
+    (job_id,customer_id,company_name,status,created_at,updated_at)
+    VALUES (?,'RU-9002','Owned Fixture','running',
+      '2026-07-24 04:00:00','2026-07-24 04:00:00')`).run(legacyJobId);
+  linkedDispatch(fx.db, 'CONTACT-RACE', 'contact_recon', legacyJobId);
+  const competing = new Database(fx.dbPath);
+  t.after(() => competing.close());
+  competing.pragma('journal_mode = WAL');
+  competing.pragma('busy_timeout = 5000');
+  const result = {
+    schema_version: 'contact-recon-v1',
+    job_id: legacyJobId,
+    customer_id: 'RU-9002',
+    people: [{
+      person_id: 'P1',
+      full_name: 'Race Winner',
+      role_category: 'procurement',
+      decision_role: 'decision_maker',
+      employment: { status: 'verified_current', confidence: 95 },
+      methods: [],
+    }],
+    evidence: [{
+      evidence_id: 'E-RACE',
+      person_id: 'P1',
+      evidence_type: 'official_page',
+      field_name: 'employment',
+      value: 'Procurement Director',
+      source_url: 'https://owned.example/race',
+      checked_at: '2026-07-24T04:02:00.000Z',
+      supports_current_employment: true,
+      supports_decision_role: true,
+    }],
+  };
+
+  const response = submitContactReconResult(
+    { job_id: legacyJobId, result },
+    {
+      db: fx.db,
+      beforeCommit() {
+        competing.prepare(`UPDATE contact_recon_jobs
+          SET cancel_requested_at='2026-07-24 04:01:00',updated_at='2026-07-24 04:01:00'
+          WHERE job_id=?`).run(legacyJobId);
+      },
+    },
+  );
+
+  assert.equal(response.late_result, true);
+  assert.equal(fx.db.prepare('SELECT status FROM contact_recon_jobs WHERE job_id=?')
+    .get(legacyJobId).status, 'cancelled');
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM person_candidates WHERE contact_recon_job_id=?')
+    .get(legacyJobId).count, 0);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM person_evidence WHERE contact_recon_job_id=?')
+    .get(legacyJobId).count, 1);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_enrichment_events WHERE legacy_task_id=?')
+    .get(legacyJobId).count, 0);
 });
 
 test('both Python legacy workers compile with cancellation safe points', () => {

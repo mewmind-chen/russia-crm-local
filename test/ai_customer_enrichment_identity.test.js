@@ -16,7 +16,24 @@ const {
 } = require('../lib/ai_stations/enrichment/dedupe');
 const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
 const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
+const {
+  resolveExplicitWebsiteIdentity,
+} = require('../lib/ai_stations/enrichment/identity_resolver');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
+
+test('default runtime resolver accepts only an explicit employee-confirmed website', () => {
+  assert.equal(resolveExplicitWebsiteIdentity({ companyName: 'Name only' }), null);
+  const resolved = resolveExplicitWebsiteIdentity({
+    companyName: 'Website fixture',
+    website: 'example.org/about?utm_source=smoke',
+    country: 'DE',
+  }, { now: () => new Date('2026-07-24T06:30:00.000Z') });
+  assert.equal(resolved.officialWebsite, 'https://example.org/about');
+  assert.equal(resolved.country, 'DE');
+  assert.equal(resolved.confidence, 1);
+  assert.equal(resolved.sources[0].collectedAt, '2026-07-24T06:30:00.000Z');
+  assert.equal(resolved.sources[0].type, 'employee_confirmed_website');
+});
 
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-enrichment-identity-'));

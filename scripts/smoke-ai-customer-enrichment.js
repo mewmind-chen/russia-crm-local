@@ -3,10 +3,14 @@
 
 require('dotenv').config();
 const crypto = require('node:crypto');
+const { databaseIdentity } = require('../lib/release_health');
 const { resolveRuntimePaths } = require('../lib/runtime_paths');
 
-const TERMINAL_RUN_STATES = new Set(['succeeded', 'needs_review', 'skipped', 'cancelled']);
+const TERMINAL_RUN_STATES = new Set([
+  'succeeded', 'needs_review', 'failed', 'skipped', 'cancelled',
+]);
 const ALLOWED_OPERATIONS = Object.freeze([
+  'verify_development_runtime',
   'login',
   'read_bootstrap',
   'create_customer',
@@ -107,6 +111,9 @@ function buildConfiguration(options = {}) {
   if (parsedUrl.port === '3000') {
     throw new Error('Customer enrichment smoke refuses the reserved production port 3000');
   }
+  if (parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash) {
+    throw new Error('Smoke base URL cannot contain credentials, query parameters, or a fragment');
+  }
   const email = String(env.CRM_AI_ENRICHMENT_SMOKE_EMAIL || '').trim();
   const password = String(env.CRM_AI_ENRICHMENT_SMOKE_PASSWORD || '');
   if (!args.dryRun && (!email || !password)) {
@@ -172,38 +179,51 @@ function cookieFrom(response) {
   return String(response.headers.get('set-cookie') || '').split(';')[0];
 }
 
-function makeClient(baseUrl, fetchImpl) {
+function makeClient(baseUrl, fetchImpl, deadline = Number.POSITIVE_INFINITY) {
   let cookie = '';
-  async function request(route, init = {}) {
-    const response = await fetchImpl(`${baseUrl}${route}`, {
-      ...init,
-      headers: {
-        accept: 'application/json',
-        ...(init.body ? { 'content-type': 'application/json' } : {}),
-        ...(cookie ? { cookie } : {}),
-      },
-    });
-    return response;
+  async function request(route, init = {}, operation = 'HTTP request') {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new Error(`Smoke deadline exceeded before ${operation}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), remainingMs);
+    try {
+      return await fetchImpl(`${baseUrl}${route}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          accept: 'application/json',
+          ...(init.body ? { 'content-type': 'application/json' } : {}),
+          ...(cookie ? { cookie } : {}),
+        },
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`Smoke deadline exceeded during ${operation}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   return Object.freeze({
     async login(email, password) {
       const response = await request('/api/sales-auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
-      });
+      }, 'login');
       const body = await responseJson(response, 'login');
       cookie = cookieFrom(response);
       if (!cookie) throw new Error('login succeeded without a session cookie');
       return body;
     },
     async get(route, operation) {
-      return responseJson(await request(route), operation);
+      return responseJson(await request(route, {}, operation), operation);
     },
     async post(route, payload, operation) {
       return responseJson(await request(route, {
         method: 'POST',
         body: JSON.stringify(payload),
-      }), operation);
+      }, operation), operation);
     },
   });
 }
@@ -253,6 +273,7 @@ async function collectAttempts(client, detail, customerId) {
 async function runSmoke(options = {}) {
   const startedAt = Date.now();
   const configuration = buildConfiguration(options);
+  const deadline = startedAt + configuration.timeoutMs;
   const companyName = createDisposableCompanyName(
     configuration.companyNamePrefix,
     options.nonce,
@@ -267,7 +288,12 @@ async function runSmoke(options = {}) {
   };
   if (configuration.dryRun) return selectedReportFields(baseReport);
 
-  const client = makeClient(configuration.baseUrl, options.fetchImpl || fetch);
+  const client = makeClient(configuration.baseUrl, options.fetchImpl || fetch, deadline);
+  const health = await client.get('/healthz', 'verify development runtime');
+  const expectedDatabaseIdentity = databaseIdentity(configuration.databasePath);
+  if (health.developmentDatabaseIdentity !== expectedDatabaseIdentity) {
+    throw new Error('development server database identity does not match the selected smoke database');
+  }
   await client.login(configuration.email, configuration.password);
   const bootstrap = await client.get('/api/sales-crm/bootstrap', 'read bootstrap');
   const ownerId = findOwner(configuration, bootstrap);
@@ -283,7 +309,6 @@ async function runSmoke(options = {}) {
   }
 
   let detail;
-  const deadline = startedAt + configuration.timeoutMs;
   do {
     detail = await client.get(
       `/api/sales-crm/ai/customers/${encodeURIComponent(created.externalCustomerId)}/enrichment`,
@@ -295,10 +320,16 @@ async function runSmoke(options = {}) {
         `enrichment ${created.enrichment.runId} did not finish within ${configuration.timeoutMs}ms`,
       );
     }
-    await (options.sleep || sleep)(configuration.pollMs);
+    await (options.sleep || sleep)(Math.min(configuration.pollMs, deadline - Date.now()));
   } while (true);
+  if (!['succeeded', 'needs_review'].includes(detail.run?.state)) {
+    throw new Error(`enrichment ended in non-success state: ${detail.run?.state || 'unknown'}`);
+  }
 
   const attempts = await collectAttempts(client, detail, created.externalCustomerId);
+  if (!attempts.length) {
+    throw new Error('enrichment reached a terminal route without a recorded real-model attempt');
+  }
   const after = await client.get('/api/sales-crm/bootstrap', 'verify customer owner');
   const account = (after.accounts || []).find(item => item.id === created.customerId);
   if (!account) throw new Error('created disposable customer is not visible after enrichment');
@@ -343,6 +374,7 @@ module.exports = {
   buildConfiguration,
   createDisposableCompanyName,
   formatReport,
+  makeClient,
   parseArguments,
   runSmoke,
 };

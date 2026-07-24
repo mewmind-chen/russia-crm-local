@@ -16,8 +16,11 @@
 - `CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED=true`
 - Explicit isolated `CRM_AI_ENRICHMENT_SMOKE_DB_PATH`
 - Explicit loopback development base URL (production port 3000 is refused)
+- Development `/healthz` database identity must match the selected database before login or mutation
+- One absolute deadline bounds every HTTP request, poll, and result collection step
 - Development-only login and provider credentials
 - No production secret substitution
+- No credentials, query parameters, or fragments in the smoke base URL
 - No external sales message endpoint
 - No owner mutation endpoint
 

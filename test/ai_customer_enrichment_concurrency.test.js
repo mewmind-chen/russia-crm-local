@@ -286,6 +286,16 @@ test('six Worker processes complete 20 cross-customer enrichment runs without du
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_enrichment_node_links
     WHERE run_id IN (SELECT id FROM crm_ai_enrichment_runs WHERE customer_id LIKE 'CN-%')
       AND legacy_task_id!=''`).get().count, 40);
+  assert.deepEqual(fx.db.prepare(`SELECT COUNT(*) count,COUNT(DISTINCT job_id) distinctCount
+    FROM recon_jobs WHERE customer_id LIKE 'CN-%'`).get(), {
+    count: 20,
+    distinctCount: 20,
+  });
+  assert.deepEqual(fx.db.prepare(`SELECT COUNT(*) count,COUNT(DISTINCT job_id) distinctCount
+    FROM contact_recon_jobs WHERE customer_id LIKE 'CN-%'`).get(), {
+    count: 20,
+    distinctCount: 20,
+  });
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_enrichment_events
     WHERE run_id IN (SELECT id FROM crm_ai_enrichment_runs WHERE customer_id LIKE 'CN-%')`).get().count, 40);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_ai_station_results
