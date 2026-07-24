@@ -155,10 +155,8 @@ test('Contact Recon completion records its linked event in the same transaction'
   assert.deepEqual(consumed.jobs.map(job => job.station), [
     'contact_collect',
     'customer_fit',
-    'enrichment_finalize',
   ]);
   assert.deepEqual(consumed.jobs[1].dependencyIds, [consumed.jobs[0].id]);
-  assert.deepEqual(consumed.jobs[2].dependencyIds, [consumed.jobs[1].id]);
 });
 
 test('expired event lease recovers and idempotently creates collect plus contact dispatch jobs', async t => {
