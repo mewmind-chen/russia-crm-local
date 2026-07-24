@@ -13,8 +13,10 @@ async function withHealthFixture({ createDb = true, releaseSha = 'a'.repeat(40) 
   if (releaseSha !== null) fs.writeFileSync(shaPath, `${releaseSha}\n`);
   const previousDb = process.env.CRM_DB_PATH;
   const previousSha = process.env.CRM_RELEASE_SHA_FILE;
+  const previousNodeEnv = process.env.NODE_ENV;
   process.env.CRM_DB_PATH = dbPath;
   process.env.CRM_RELEASE_SHA_FILE = shaPath;
+  process.env.NODE_ENV = 'development';
   delete require.cache[require.resolve('../server')];
   const server = require('../server').createApp().listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
@@ -28,6 +30,8 @@ async function withHealthFixture({ createDb = true, releaseSha = 'a'.repeat(40) 
     else process.env.CRM_DB_PATH = previousDb;
     if (previousSha === undefined) delete process.env.CRM_RELEASE_SHA_FILE;
     else process.env.CRM_RELEASE_SHA_FILE = previousSha;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }

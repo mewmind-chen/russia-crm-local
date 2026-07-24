@@ -223,7 +223,7 @@ run_validation() {
     export CRM_TMP_DIR="$validation_runtime/tmp"
     cd "$candidate" &&
     npm ci &&
-    npm test &&
+    npm test -- --test-concurrency=1 &&
     "$NODE_BIN" --check server.js &&
     zsh -n scripts/deploy-from-github.sh &&
     python3 -m compileall -q scripts automation/hermes-skills/russia-recon/scripts
