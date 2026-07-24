@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   budgetConfigurationFromEnvironment,
   defaultExecutionResources,
+  enrichmentConfigurationFromEnvironment,
   executionResourcesFromEnvironment,
   stationResourcesFromEnvironment,
 } = require('../scripts/ai-station-worker');
@@ -59,4 +60,19 @@ test('Worker resource and station maps are overridden by validated JSON environm
     () => stationResourcesFromEnvironment({ CRM_AI_STATION_RESOURCES_JSON: '[]' }),
     /CRM_AI_STATION_RESOURCES_JSON must be a JSON object/,
   );
+});
+
+test('Worker customer enrichment dispatcher is explicit and defaults safely off', () => {
+  assert.deepEqual(enrichmentConfigurationFromEnvironment({ NODE_ENV: 'production' }), {
+    enabled: false,
+    autoTriggerEnabled: false,
+  });
+  assert.deepEqual(enrichmentConfigurationFromEnvironment({
+    NODE_ENV: 'test',
+    CRM_AI_CUSTOMER_ENRICHMENT_ENABLED: 'true',
+    CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED: '1',
+  }), {
+    enabled: true,
+    autoTriggerEnabled: true,
+  });
 });
