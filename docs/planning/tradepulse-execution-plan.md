@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 23/38 个任务已完成；阶段 2 进行中；A2-04 已完成；下一步 A2-05 页面与审计
+**状态：** 24/38 个任务已完成；阶段 2 进行中；A2-05 已完成；下一步 A2-06 验收门
 **版本：** v1.6
 **日期：** 2026-07-24
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -708,6 +708,16 @@ PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到
 - 审批显示 AI 推荐、规则裁决和人工最终决定三层信息。
 - 每次分配保留候选快照、规则结果、人工操作和审计。
 
+状态（2026-07-24）：已完成。新增 `crm_intake_decisions` 决策历史表，记录自动/批量裁决、
+候选快照 ID、AI 推荐、规则结果、人工最终决定和操作者；bootstrap 返回 Fit/readiness/priority、
+候选排名、三层裁决和 `assignmentAudit`。入库队列及详情抽屉已展示 Fit/readiness/优先级、
+候选销售排名、规则裁决、阻断原因、人工决定和审计轨迹；销售端按 owner 范围脱敏候选排名。
+专项验收 7/7，完整 Node 回归 437/437，语法检查、`git diff --check` 和 GitHub CI `test`
+通过。实现提交 `2d04abc`，PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51)
+已合并到 `codex/ai-integration` @ `92e64cc`；证据见
+`docs/evidence/a2-05-intake-review-audit.md`。尚未执行生产迁移、部署或打开 AI 开关。
+下一步 A2-06 验收门。
+
 ### A2-06 验收门
 
 - 同一客户并发扫描不重复创建 intake/account。
@@ -920,13 +930,14 @@ E0-01 生产基线
 | A2-02 | 已完成 | `codex/ai-contact-readiness-a2-02` 基于 `0add7f6` 完成 fit 后继触发、schema v8 stale 结果、联系人变化失效、enrichment DAG 和 partial/not_ready 补研阻断；实现提交 `d96a48c`，PR [#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已合并到 `codex/ai-integration` @ `c6b2150`，CI `test` 通过；聚焦 9/9、全量 427/427、语法/Schema/diff 检查通过；证据见 `docs/evidence/a2-02-contact-readiness.md`；尚未部署；下一步 A2-03 |
 | A2-03 | 已完成 | schema v9 新增销售候选快照元数据与 token 映射；服务端按有效销售、权限、国家/语言、渠道、负荷和配额生成候选，AI 只接收一次性正整数 token；过期或销售状态变化 fail-closed 并要求重算；未接入最终裁决或业务写入；PR [#46](https://github.com/mewmind-chen/russia-crm-local/pull/46) 已合并到 `codex/ai-integration` @ `51aecaa`，CI `test` 通过；聚焦 3/3、全量 430/430、语法/diff 检查通过；证据见 `docs/evidence/a2-03-candidate-snapshots.md`；尚未部署；下一步 A2-04 |
 | A2-04 | 已完成 | 新增 `assignment_arbitration` 规则最终裁决：AI 仅作建议，事务内重读有效销售、权限、负荷和配额；一致且高置信可自动分配，AI 不可用确定性回退，冲突、低置信、高价值、风险、重复和跨团队进入经理审批或规则阻止；A2-03 快照 token 服务端 fail-closed 解析；PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到 `codex/ai-integration` @ `4e4619e`，CI `test` 通过；聚焦 5/5、全量 435/435、语法/diff 检查通过；证据见 `docs/evidence/a2-04-assignment-arbitration.md`；尚未部署；下一步 A2-05 页面与审计 |
+| A2-05 | 已完成 | 新增 `crm_intake_decisions` 决策历史，保存候选快照、AI 推荐、规则结果、人工最终决定、操作者和时间；bootstrap/入库队列/详情抽屉展示 Fit、readiness、priority、候选排名、阻断原因和三层裁决；销售端按 owner 范围脱敏；PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51) 已合并到 `codex/ai-integration` @ `92e64cc`，CI `test` 通过；专项 7/7、全量 437/437、语法/diff 检查通过；证据见 `docs/evidence/a2-05-intake-review-audit.md`；尚未部署；下一步 A2-06 验收门 |
 
-当前停点：38 个计划任务中已完成 23 个，剩余 15 个。A2-04 在
-`codex/ai-rule-arbitration-a2-04` 基于集成分支完成规则最终裁决：AI 只作为
-`chooseIntakeOwner` 建议，服务端事务内重读授权销售、负荷和配额；一致且高置信自动分配，
-AI 不可用确定性回退，冲突、低置信、高价值、风险、重复和跨团队进入经理审批或规则阻止。
-聚焦验收 5/5、完整回归 435/435、语法检查、`git diff --check` 和 CI 通过。实现提交
-`ea8fb8b`，PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到
-`codex/ai-integration` @ `4e4619e`，证据见 `docs/evidence/a2-04-assignment-arbitration.md`。
-本任务未执行部署；生产 current/health、previous 和 `CRM_AI_STATIONS_ENABLED=false` 未变化。
-下一步 A2-05：页面与审计；本任务完成后停止。
+当前停点：38 个计划任务中已完成 24 个，剩余 14 个。A2-05 在
+`codex/ai-assignment-a2-05` 基于集成分支完成页面与审计：新增 `crm_intake_decisions`
+保存候选快照、AI 推荐、规则结果、人工最终决定和操作者；bootstrap、入库队列和详情抽屉
+展示 Fit/readiness/priority、候选排名、三层裁决、阻断原因和审计轨迹，销售端按 owner
+范围脱敏候选排名。专项验收 7/7、完整回归 437/437、语法检查、`git diff --check` 和 CI
+通过。实现提交 `2d04abc`，PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51)
+已合并到 `codex/ai-integration` @ `92e64cc`，证据见
+`docs/evidence/a2-05-intake-review-audit.md`。本任务未执行生产迁移或部署，生产 current/health、
+previous 和 `CRM_AI_STATIONS_ENABLED=false` 未变化。下一步 A2-06：验收门；本任务完成后停止。
