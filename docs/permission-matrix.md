@@ -1,6 +1,6 @@
 # CRM permission matrix
 
-后端策略是最终授权边界。页面隐藏入口只用于减少误操作；每个登录请求都会重新读取用户和权限，未知 Legacy route/action 默认返回 403。`view_all_customers=false` 时，不论角色，只能访问本人名下且未退回的 `crm_accounts` 及其 external customer ID。对 ID 资源，受限范围内的“不存在”和“越权”统一返回 403；拥有全范围权限的已认证用户查询真实不存在资源时返回 404。
+后端策略是最终授权边界。页面隐藏入口只用于减少误操作；每个登录请求都会重新读取用户和权限，未知 Legacy route/action 默认返回 403。`view_all_customers=false` 时，不论角色，只能访问本人名下且未退回的 `crm_accounts` 及其 external customer ID。未分配客户仅对同时具备 `view_all_customers + manage_intake` 的账号可见。对 ID 资源，受限范围内的“不存在”和“越权”统一返回 403；拥有完整管理范围的已认证用户查询真实不存在资源时返回 404。
 
 ## Read permissions
 
@@ -37,13 +37,18 @@
 | `use_ai_assistant` | `POST /api/assistant/chat` | SQL, deterministic, report, source and matched-customer results are query-scoped; contact-bearing narrative columns, vector retrieval, web search, and direct URL fetch are disabled when `view_contacts=false` | assistant scope suite |
 | `manage_users` | create/patch users; migration review | also `view_users` | Sales user management requires both permissions |
 | `manage_data_maintenance` | data-maintenance capabilities/runs/preview/execute | real administrator only; blocked during identity inspection; execute requires a fresh preview, confirmation text and successful backup | data maintenance suite |
+| `export_data` | `GET /api/sales-crm/export` | also `view_customers`; JSON only contains visible customer rows; contact collections require `view_contacts`; no authentication fields | access governance export suite |
+
+`POST /api/sales-crm/accounts/bulk-assign` requires `view_customers + edit_customer + view_all_customers + manage_intake`, accepts at most 500 explicitly selected visible customer IDs, validates the complete batch and active target salesperson before one atomic update, and writes the normal sanitized route audit. Empty `ownerId` moves the batch to unassigned status.
+
+User offboarding uses archive/restore routes. Archive sets the account inactive, revokes all sessions, removes it from assignment choices, and preserves historical references. Permanent deletion is allowed only after archive and only when no customer, activity, RFQ, quote, order, contact, evaluation, or intake reference remains.
 
 ## Explicit route/action policies
 
 - Legacy read routes: `/api/session/capabilities`, `/api/initial`, `/api/customers`, `/api/customers/:customerId/people`, `/api/contact-recon/state`, `/api/recon/results/:jobId`, `/api/report`, `/api/recon-monitor`, `/api/quality/issues`, `/api/delivery/latest`, `/api/delivery/file`, `/api/assistant/chat`.
 - Legacy `/api/app` actions: `updateCustomer`, `createTag`, `setCustomerTags`, `createReconJob`, `retryReconJob`, `createContactReconJob`.
 - Legacy `/api/prospect-agent` actions: `createTask`, `rerunTask`, `promoteCandidate`.
-- Sales routes: bootstrap; research pool/people/recon; account create/patch; activities; quotes; orders; user create/patch; migration review; password; intake scan/action/settings; contacts; evaluation create/retry; data-maintenance capabilities/runs/preview/execute. The centralized Sales policy is enforced before handlers, unknown routes are default-denied, and denied writes are recorded with an anonymous route/permission audit event.
+- Sales routes: bootstrap; research pool/people/recon; account create/patch/bulk assignment; scoped export; activities; quotes; orders; user create/patch/archive/restore/delete; migration review; password; intake scan/action/settings; contacts; evaluation create/retry; data-maintenance capabilities/runs/preview/execute. The centralized Sales policy is enforced before handlers, unknown routes are default-denied, and denied writes are recorded with an anonymous route/permission audit event.
 - `POST /api/recon` and `POST /api/contact-recon` are not browser-session routes: they require the independent `RECON_WORKER_TOKEN` boundary.
 - `/share/report/*` and `/share/contact-report/*` are not browser-session routes: they require constant-time comparison against the independent share token and only serve validated report paths.
 - Login/logout and password change are authentication/self-service boundaries. Unknown browser routes and actions are default-denied.

@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260724-10/);
-  assert.match(html, /app\.js\?v=20260724-10/);
+  assert.match(html, /app\.css\?v=20260724-11/);
+  assert.match(html, /app\.js\?v=20260724-11/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {

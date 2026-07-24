@@ -102,9 +102,10 @@ test('every browser API has an explicit permission policy or separate token boun
   const prospectActions = ['createTask', 'rerunTask', 'promoteCandidate'];
   const salesRoutes = [
     'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
-    'GET /research/recon', 'POST /accounts', 'PATCH /accounts/:customerId',
+    'GET /research/recon', 'GET /export', 'POST /accounts', 'POST /accounts/bulk-assign', 'PATCH /accounts/:customerId',
     'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
-    'POST /users/:userId/password-reset', 'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
+    'POST /users/:userId/password-reset', 'POST /users/:userId/archive', 'POST /users/:userId/restore',
+    'DELETE /users/:userId', 'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
     'PATCH /permission-groups/:groupId', 'PUT /users/:userId/permission-overrides',
     'POST /migration-review/:reviewId', 'POST /impersonation/start', 'POST /impersonation/stop', 'POST /password',
     'POST /intake/scan', 'POST /intake/action', 'PATCH /intake/settings',
@@ -142,6 +143,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
   const blockedSales = Object.entries(SALES_ROUTE_POLICIES)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([key]) => key).sort();
   assert.deepEqual(blockedSales, [
+    'DELETE /users/:userId',
     'GET /ai/budgets',
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
@@ -163,7 +165,9 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /password',
     'POST /permission-groups',
     'POST /users',
+    'POST /users/:userId/archive',
     'POST /users/:userId/password-reset',
+    'POST /users/:userId/restore',
     'PUT /ai/budgets/:scopeType/:scopeId',
     'PUT /users/:userId/permission-overrides',
   ]);

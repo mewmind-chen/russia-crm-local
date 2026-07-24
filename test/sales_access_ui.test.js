@@ -127,3 +127,33 @@ test('data maintenance UI is permission gated and requires preview before execut
   assert.match(css, /maintenance-warning/);
   assert.match(css, /button\.danger/);
 });
+
+test('access governance UI exposes archive restore safe delete export and atomic bulk assignment', () => {
+  const html = readAsset('sales-crm.html');
+  const js = readAsset('sales-assets', 'app.js');
+  assert.match(html, /id="archivedUserTable"/);
+  assert.match(html, /id="customerBulkBar"/);
+  assert.match(html, /id="bulkCustomerOwner"/);
+  assert.match(html, /data-permission="export_data"/);
+  assert.match(js, /data-archive-user/);
+  assert.match(js, /data-restore-user/);
+  assert.match(js, /data-delete-user/);
+  assert.match(js, /\/api\/sales-crm\/accounts\/bulk-assign/);
+  assert.match(js, /\/api\/sales-crm\/export/);
+  assert.match(js, /__unassigned__/);
+});
+
+test('customer profile frame remains in the third grid row with AI disabled', () => {
+  const css = readAsset('sales-assets', 'app.css');
+  assert.match(css, /\.customer-profile-frame\{grid-row:3;/);
+});
+
+test('modal width stays inside narrow mobile viewports', () => {
+  const css = readAsset('sales-assets', 'app.css');
+  assert.match(css, /\.modal\{box-sizing:border-box;width:min\(620px,calc\(100vw - 40px\)\)/);
+});
+
+test('suggested assignment requires both a real owner id and name', () => {
+  const js = readAsset('sales-assets', 'app.js');
+  assert.match(js, /item\.suggested_owner_id && item\.suggested_owner_name/);
+});

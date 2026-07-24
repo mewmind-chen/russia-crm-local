@@ -20,6 +20,7 @@
     customerAiPending: false,
     customerAiTimer: null,
     customerAiPollCount: 0,
+    selectedCustomerIds: new Set(),
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -213,6 +214,7 @@
         const error = new Error(result.error || '请求失败');
         error.status = response.status;
         error.code = result.code || '';
+        error.details = result;
         if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
         else if (error.status === 403 && error.code !== 'IMPERSONATION_ACTION_BLOCKED') clearForbiddenState();
         throw error;
@@ -268,7 +270,6 @@
         if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
         else switchView('customers');
       }
-      if (state.data.user.mustChangePassword) setTimeout(openPasswordModal, 80);
       return true;
     } catch (error) {
       if (error.status === 401) {
@@ -306,8 +307,15 @@
     const countries = [...new Set(state.data.accounts.map(item => item.country).filter(Boolean))].sort();
     $('#countryFilter').innerHTML = '<option value="">全部国家</option>' + countries.map(item => `<option>${esc(item)}</option>`).join('');
     $('#countryFilter').value = country;
-    $('#ownerFilter').innerHTML = '<option value="">全部销售</option>' + state.data.users.filter(user => user.role === 'sales').map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
-    $('#ownerFilter').value = owner;
+    const activeSales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    $('#ownerFilter').innerHTML = '<option value="">全部负责人</option><option value="__unassigned__">不分配</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+    $('#ownerFilter').value = [...$('#ownerFilter').options].some(option => option.value === owner) ? owner : '';
+    const bulkOwner = $('#bulkCustomerOwner');
+    if (bulkOwner) {
+      const selected = bulkOwner.value;
+      bulkOwner.innerHTML = '<option value="">不分配</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+      bulkOwner.value = [...bulkOwner.options].some(option => option.value === selected) ? selected : '';
+    }
     $('#stageFilter').innerHTML = '<option value="">全部阶段</option>' + state.data.stages.map(stage => `<option value="${stage.key}">${esc(stage.label)}</option>`).join('');
     const tags = [...new Set((state.data.customerEvaluationTags || []).flatMap(item => item.labels || []))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'));
     $('#evaluationTagFilter').innerHTML = '<option value="">全部评价标签</option>' + tags.map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
@@ -316,7 +324,9 @@
   function scopedAccounts() {
     const country = $('#countryFilter')?.value || '';
     const owner = $('#ownerFilter')?.value || '';
-    return state.data.accounts.filter(account => (!country || account.country === country) && (!owner || account.owner_id === owner));
+    return state.data.accounts.filter(account =>
+      (!country || account.country === country)
+      && (!owner || (owner === '__unassigned__' ? !account.owner_id : account.owner_id === owner)));
   }
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
@@ -602,7 +612,12 @@
         let actions = '';
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
-        else if (!salesView && ['pending', 'approved', 'returned'].includes(item.status)) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="assign" data-item-id="${item.id}" data-owner-id="${item.suggested_owner_id}">按建议分配</button><button class="button secondary tiny" data-intake-assign="${item.id}">指定销售</button></div>`;
+        else if (!salesView && ['pending', 'approved', 'returned'].includes(item.status)) {
+          const suggested = item.suggested_owner_id && item.suggested_owner_name
+            ? `<button class="button primary tiny" data-intake-action="assign" data-item-id="${item.id}" data-owner-id="${item.suggested_owner_id}">按建议分配</button>`
+            : '';
+          actions = `<div class="assignment-actions">${suggested}<button class="button secondary tiny" data-intake-assign="${item.id}">指定销售</button></div>`;
+        }
         else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
         else actions = '—';
         const statusClass = item.status === 'returned' || item.status === 'rejected' ? 'red' : item.status === 'assigned' ? 'amber' : item.status === 'claimed' ? '' : 'gray';
@@ -1102,24 +1117,35 @@
     } catch (error) { toast(error.message); }
   }
 
-  function renderCustomers() {
+  function filteredCustomerAccounts() {
     const search = ($('#customerSearch')?.value || '').trim().toLowerCase();
     const stage = $('#stageFilter')?.value || '';
     const priority = $('#priorityFilter')?.value || '';
     const evaluationTag = $('#evaluationTagFilter')?.value || '';
     const onlyOverdue = $('#onlyOverdue')?.checked;
-    let accounts = scopedAccounts().filter(account => {
+    return scopedAccounts().filter(account => {
       const labels = labelsForAccount(account.id);
       const text = [account.company_name, account.country, account.industry, account.product_focus, account.customer_type, ...labels].join(' ').toLowerCase();
       return (!search || text.includes(search)) && (!stage || account.stage === stage) && (!priority || account.priority === priority) && (!evaluationTag || labels.includes(evaluationTag)) && (!onlyOverdue || state.data.alerts.some(alert => alert.customerId === account.id && alert.code === 'OVERDUE'));
     });
+  }
+
+  function renderCustomers() {
+    const accounts = filteredCustomerAccounts();
+    const visibleIds = new Set(accounts.map(account => account.id));
+    state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(customerId => visibleIds.has(customerId)));
+    const canBulkAssign = can('view_all_customers') && can('manage_intake') && can('edit_customer') && !state.data.impersonation;
+    $('#customerBulkBar')?.classList.toggle('hidden', !canBulkAssign);
+    if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${state.selectedCustomerIds.size} 个客户`;
+    if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
     $('#customerResultCount').textContent = `${accounts.length} 个客户`;
     $('#customerTable').innerHTML = table(
-      ['客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
+      [canBulkAssign ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
       accounts.map(account => {
         const alert = alertFor(account.id);
         return [
-          `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')}</span>${labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
+          canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(account.company_name)}">` : '',
+          `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
           esc(account.owner_name || '未分配'),
@@ -1350,7 +1376,18 @@
         user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项覆盖</span>` : '<span class="subtle">继承组默认</span>',
         `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
         canMutate
-          ? `<div class="assignment-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button>${user.id === state.data.user.id ? '<span class="subtle">当前账号</span>' : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}<button class="text-button" data-toggle-user="${user.id}" data-active="${user.active ? '1' : '0'}">${user.active ? '停用' : '启用'}</button>`}</div>`
+          ? `<div class="assignment-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button>${user.id === state.data.user.id ? '<span class="subtle">当前账号</span>' : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}<button class="text-button danger-text" data-archive-user="${user.id}">归档</button>`}</div>`
+          : '<span class="subtle">无变更权限</span>',
+      ]),
+    );
+    $('#archivedUserTable').innerHTML = table(
+      ['用户', '角色', '归档时间', '操作'],
+      (state.data.archivedUsers || []).map(user => [
+        `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
+        `<span class="pill gray">${roleLabel(user.role)}</span>`,
+        shortDate(user.archivedAt, true),
+        canMutate
+          ? `<div class="assignment-actions"><button class="text-button" data-restore-user="${user.id}">恢复</button><button class="text-button danger-text" data-delete-user="${user.id}">永久删除</button></div>`
           : '<span class="subtle">无变更权限</span>',
       ]),
     );
@@ -1705,7 +1742,7 @@
       ${alert ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div><time>${shortDate(account.next_action_at, true)}</time></div>
       <div class="account-facts">
-        ${[['负责人', account.owner_name], ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source], ['产品重点', account.product_focus], ['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签'], ['最近动作', relative(account.last_activity_at)], ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')], ['官网', account.website], ['客户编号', account.external_customer_id], ['客户分组', account.current_pool], ['联系人质量', account.best_contact_level]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${[['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'], ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source], ['产品重点', account.product_focus], ['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签'], ['最近动作', relative(account.last_activity_at)], ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')], ['官网', account.website], ['客户编号', account.external_customer_id], ['客户分组', account.current_pool], ['联系人质量', account.best_contact_level]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
@@ -1788,14 +1825,15 @@
   }
 
   function openNewCustomerModal() {
-    const sales = state.data.users.filter(user => user.role === 'sales');
+    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    const canLeaveUnassigned = can('view_all_customers') && can('manage_intake');
     openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two">
       <label>公司名称<input name="companyName" placeholder="公司名称或官网至少填写一项"></label>
       <label>官网<input name="website" type="url" placeholder="https://example.com"></label>
       <label>国家（可选）<input name="country"></label><label>城市<input name="city"></label>
       <label>行业<input name="industry" placeholder="工业控制、汽车电子等"></label><label>客户类型<select name="customerType"><option>终端制造商</option><option>EMS/代工厂</option><option>贸易商</option><option>维修企业</option><option>方案公司</option></select></label>
       <label>客户来源<select name="source"><option>公司指派</option><option>销售自行搜索</option><option>展会</option><option>LinkedIn</option><option>海关数据</option><option>老客户介绍</option></select></label>
-      <label>负责人<select name="ownerId" required>${sales.map(user => `<option value="${user.id}">${esc(user.name)}</option>`).join('')}</select></label>
+      <label>负责人<select name="ownerId">${canLeaveUnassigned ? '<option value="">不分配</option>' : ''}${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
       <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>潜在金额（USD）<input name="potentialValue" type="number" min="0"></label>
       <label>优先级<select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label><label>首次行动时间<input name="nextActionAt" type="datetime-local" value="${dateInput(1)}"></label>
       <label class="span-2">下一步<input name="nextAction" value="完成首次触达"></label>
@@ -1920,11 +1958,12 @@
   }
   function openEditAccountModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
-    const sales = state.data.users.filter(user => user.role === 'sales');
+    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    const canAssign = can('edit_customer') && can('view_all_customers') && can('manage_intake');
     openModal('调整客户信息', 'ACCOUNT CONTROL', `<form id="editAccountForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
-      <label>负责人<select name="ownerId" ${can('edit_customer') ? '' : 'disabled'}>${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
+      <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}><option value="" ${account.owner_id ? '' : 'selected'}>不分配</option>${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
@@ -2289,6 +2328,33 @@
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#newUserBtn')) openUserModal();
+    if (event.target.closest('#customerExportBtn')) {
+      const link = document.createElement('a');
+      link.href = '/api/sales-crm/export';
+      link.download = '';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    if (event.target.closest('#selectFilteredCustomers')) {
+      state.selectedCustomerIds = new Set(filteredCustomerAccounts().map(account => account.id));
+      renderCustomers();
+    }
+    if (event.target.closest('#clearCustomerSelection')) {
+      state.selectedCustomerIds.clear();
+      renderCustomers();
+    }
+    if (event.target.closest('#bulkAssignCustomers')) {
+      try {
+        const ownerId = $('#bulkCustomerOwner')?.value || '';
+        const result = await api('/api/sales-crm/accounts/bulk-assign', {
+          method: 'POST',
+          body: JSON.stringify({ customerIds: [...state.selectedCustomerIds], ownerId }),
+        });
+        state.selectedCustomerIds.clear();
+        await refresh(ownerId ? `已批量分配 ${result.updated} 个客户` : `已将 ${result.updated} 个客户设为不分配`);
+      } catch (error) { toast(error.message); }
+    }
     const loadMore = event.target.closest('[data-load-research]');
     if (loadMore) await loadResearch(loadMore.dataset.loadResearch);
     if (event.target.closest('#changePasswordBtn')) openPasswordModal();
@@ -2344,6 +2410,30 @@
         await refresh('用户状态已更新');
       } catch (error) { toast(error.message); }
     }
+    const archiveUserButton = event.target.closest('[data-archive-user]');
+    if (archiveUserButton && window.confirm('归档后该用户将立即退出且不能再登录，历史业务记录会保留。确认归档？')) {
+      try {
+        await api(`/api/sales-crm/users/${encodeURIComponent(archiveUserButton.dataset.archiveUser)}/archive`, { method: 'POST', body: '{}' });
+        await refresh('用户已归档');
+      } catch (error) { toast(error.message); }
+    }
+    const restoreUserButton = event.target.closest('[data-restore-user]');
+    if (restoreUserButton) {
+      try {
+        await api(`/api/sales-crm/users/${encodeURIComponent(restoreUserButton.dataset.restoreUser)}/restore`, { method: 'POST', body: '{}' });
+        await refresh('用户已恢复为在职状态');
+      } catch (error) { toast(error.message); }
+    }
+    const deleteUserButton = event.target.closest('[data-delete-user]');
+    if (deleteUserButton && window.confirm('永久删除仅适用于没有任何业务引用的归档用户，删除后不可恢复。确认继续？')) {
+      try {
+        await api(`/api/sales-crm/users/${encodeURIComponent(deleteUserButton.dataset.deleteUser)}`, { method: 'DELETE' });
+        await refresh('归档用户已永久删除');
+      } catch (error) {
+        const references = (error.details?.references || []).map(item => `${item.label} ${item.count} 条`).join('、');
+        toast(references ? `${error.message}：${references}` : error.message);
+      }
+    }
     const editUser = event.target.closest('[data-edit-user]');
     if (editUser) openEditUserModal(editUser.dataset.editUser);
     const editOverrides = event.target.closest('[data-edit-overrides]');
@@ -2388,6 +2478,12 @@
   document.addEventListener('change', event => {
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
+    if (event.target.matches('[data-select-customer]')) {
+      const customerId = event.target.dataset.selectCustomer;
+      if (event.target.checked) state.selectedCustomerIds.add(customerId);
+      else state.selectedCustomerIds.delete(customerId);
+      renderCustomers();
+    }
   });
 
   function switchView(view) {
