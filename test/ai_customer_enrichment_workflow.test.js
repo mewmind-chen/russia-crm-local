@@ -90,15 +90,16 @@ function fixture() {
   return { db, dbPath, store, trigger, openDb, close };
 }
 
-test('eligible trigger creates one stable workflow and only the runnable precheck job', async t => {
+test('eligible trigger creates one stable workflow with precheck and dependent identity jobs', async t => {
   const fx = fixture();
   t.after(() => fx.close());
   const run = fx.trigger();
 
+  let jobSequence = 0;
   const dispatched = await dispatchPendingEnrichment(fx.db, undefined, {
     dispatcherId: 'dispatcher-a',
     workflowIdFactory: claimed => `AEW-${claimed.id}`,
-    jobIdFactory: () => 'AIJ-PRECHECK-1',
+    jobIdFactory: () => ['AIJ-PRECHECK-1', 'AIJ-IDENTITY-1'][jobSequence++],
   });
   const replay = createEnrichmentWorkflow(fx.db, run, {
     workflowIdFactory: claimed => `AEW-${claimed.id}`,
@@ -109,19 +110,32 @@ test('eligible trigger creates one stable workflow and only the runnable prechec
   assert.equal(dispatched.run.workflowId, `AEW-${run.id}`);
   assert.equal(replay.workflowId, dispatched.run.workflowId);
   const jobs = fx.db.prepare(`SELECT id,station,workflow_id,parent_job_id,idempotency_key
-    FROM crm_ai_jobs ORDER BY created_at,id`).all();
-  assert.deepEqual(jobs, [{
-    id: 'AIJ-PRECHECK-1',
-    station: 'intake_precheck',
-    workflow_id: `AEW-${run.id}`,
-    parent_job_id: null,
-    idempotency_key: `enrichment:${run.id}:intake_precheck:v1`,
-  }]);
+    FROM crm_ai_jobs ORDER BY CASE station WHEN 'intake_precheck' THEN 0 ELSE 1 END,id`).all();
+  assert.deepEqual(jobs, [
+    {
+      id: 'AIJ-PRECHECK-1',
+      station: 'intake_precheck',
+      workflow_id: `AEW-${run.id}`,
+      parent_job_id: null,
+      idempotency_key: `enrichment:${run.id}:intake_precheck:v1`,
+    },
+    {
+      id: 'AIJ-IDENTITY-1',
+      station: 'identity_verify',
+      workflow_id: `AEW-${run.id}`,
+      parent_job_id: 'AIJ-PRECHECK-1',
+      idempotency_key: `enrichment:${run.id}:identity_verify:v1`,
+    },
+  ]);
+  assert.deepEqual(fx.db.prepare(`SELECT depends_on_job_id FROM crm_ai_job_dependencies
+    WHERE job_id='AIJ-IDENTITY-1'`).all(), [{ depends_on_job_id: 'AIJ-PRECHECK-1' }]);
   const links = fx.db.prepare(`SELECT node_key,ai_job_id FROM crm_ai_enrichment_node_links
     WHERE run_id=? ORDER BY created_at,id`).all(run.id);
   assert.deepEqual(new Set(links.map(row => row.node_key)), new Set(ENRICHMENT_NODE_KEYS));
   assert.equal(links.find(row => row.node_key === 'intake_precheck').ai_job_id, 'AIJ-PRECHECK-1');
-  assert.equal(links.filter(row => row.node_key !== 'intake_precheck').every(row => row.ai_job_id === null), true);
+  assert.equal(links.find(row => row.node_key === 'identity_verify').ai_job_id, 'AIJ-IDENTITY-1');
+  assert.equal(links.filter(row => !['intake_precheck', 'identity_verify'].includes(row.node_key))
+    .every(row => row.ai_job_id === null), true);
 });
 
 test('competing dispatchers cannot duplicate a workflow or its jobs', async t => {
@@ -129,9 +143,10 @@ test('competing dispatchers cannot duplicate a workflow or its jobs', async t =>
   t.after(() => fx.close());
   fx.trigger();
 
+  let jobSequence = 0;
   const first = await dispatchPendingEnrichment(fx.db, undefined, {
     dispatcherId: 'dispatcher-a',
-    jobIdFactory: () => 'AIJ-PRECHECK-1',
+    jobIdFactory: () => `AIJ-${++jobSequence}`,
   });
   const second = await dispatchPendingEnrichment(fx.db, undefined, {
     dispatcherId: 'dispatcher-b',
@@ -140,7 +155,7 @@ test('competing dispatchers cannot duplicate a workflow or its jobs', async t =>
 
   assert.equal(first.status, 'queued');
   assert.equal(second.status, 'idle');
-  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_jobs').get().count, 1);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_jobs').get().count, 2);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_enrichment_node_links').get().count,
     ENRICHMENT_NODE_KEYS.length);
 });
@@ -179,7 +194,10 @@ test('Worker beforeClaim dispatches one trigger and completes deterministic inta
       hookCalls += 1;
       return dispatchPendingEnrichment(db, undefined, {
         dispatcherId: `${workerId}:dispatcher`,
-        jobIdFactory: () => 'AIJ-PRECHECK-1',
+        jobIdFactory: (() => {
+          let sequence = 0;
+          return () => `AIJ-ENRICHMENT-${++sequence}`;
+        })(),
       });
     },
     executors: createEnrichmentExecutors(),
@@ -192,7 +210,7 @@ test('Worker beforeClaim dispatches one trigger and completes deterministic inta
   assert.equal(outcome.job.station, 'intake_precheck');
   assert.equal(outcome.job.state, 'succeeded');
   assert.equal(fx.store.getRun(run.id).state, 'queued');
-  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_jobs').get().count, 1);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_jobs').get().count, 2);
 });
 
 test('deterministic job completion still requires the owning worker lease', t => {
@@ -200,8 +218,9 @@ test('deterministic job completion still requires the owning worker lease', t =>
   t.after(() => fx.close());
   const run = fx.trigger();
   const claimedRun = fx.store.claimTrigger('dispatcher-a');
+  let jobSequence = 0;
   const workflow = createEnrichmentWorkflow(fx.db, claimedRun, {
-    jobIdFactory: () => 'AIJ-PRECHECK-1',
+    jobIdFactory: () => `AIJ-${++jobSequence}`,
   });
   fx.store.attachWorkflow(run.id, workflow.workflowId);
   const jobs = createAIJobStore(fx.db);
