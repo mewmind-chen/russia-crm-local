@@ -38,11 +38,11 @@ function input(overrides = {}) {
   };
 }
 
-test('schema v7 retains enrichment runtime and proposal tables idempotently', () => {
+test('schema v9 retains enrichment runtime and proposal tables idempotently', () => {
   const db = fixture();
   installAIStationSchema(db);
-  assert.equal(AI_SCHEMA_VERSION, 8);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 8);
+  assert.equal(AI_SCHEMA_VERSION, 9);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 9);
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_enrichment_%'").all()
     .map(row => row.name));
   assert.deepEqual(tables, new Set([
