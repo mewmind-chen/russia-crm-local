@@ -15,6 +15,7 @@
 - `CRM_AI_CUSTOMER_ENRICHMENT_ENABLED=true`
 - `CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED=true`
 - Explicit isolated `CRM_AI_ENRICHMENT_SMOKE_DB_PATH`
+- Explicit loopback development base URL (production port 3000 is refused)
 - Development-only login and provider credentials
 - No production secret substitution
 - No external sales message endpoint

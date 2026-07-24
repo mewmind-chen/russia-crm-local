@@ -21,6 +21,7 @@ function safeEnvironment(root, overrides = {}) {
     CRM_PRODUCTION_ROOT: path.join(root, 'tradepulse-production'),
     CRM_RUNTIME_ROOT: path.join(root, 'tradepulse-development'),
     CRM_AI_ENRICHMENT_SMOKE_DB_PATH: path.join(root, 'tradepulse-development', 'data', 'smoke.db'),
+    CRM_AI_ENRICHMENT_SMOKE_BASE_URL: 'http://127.0.0.1:3100',
     CRM_AI_STATIONS_ENABLED: 'true',
     CRM_AI_CUSTOMER_ENRICHMENT_ENABLED: 'true',
     CRM_AI_CUSTOMER_ENRICHMENT_AUTO_TRIGGER_ENABLED: 'true',
@@ -80,6 +81,14 @@ test('smoke configuration refuses production and requires both explicit flags', 
     argv: ['node', 'smoke.js', '--dry-run'],
     env: safeEnvironment(root, { CRM_AI_STATIONS_ENABLED: 'false' }),
   }), /CRM_AI_STATIONS_ENABLED=true/);
+  assert.throws(() => buildConfiguration({
+    argv: ['node', 'smoke.js', '--dry-run'],
+    env: safeEnvironment(root, { CRM_AI_ENRICHMENT_SMOKE_BASE_URL: 'http://127.0.0.1:3000' }),
+  }), /production port 3000/);
+  assert.throws(() => buildConfiguration({
+    argv: ['node', 'smoke.js', '--dry-run'],
+    env: safeEnvironment(root, { CRM_AI_ENRICHMENT_SMOKE_BASE_URL: 'https://crm.example.test' }),
+  }), /loopback development server/);
 });
 
 test('dry run makes no HTTP request, preserves owner intent, and never renders secrets', async t => {

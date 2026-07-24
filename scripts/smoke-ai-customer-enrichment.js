@@ -91,12 +91,21 @@ function buildConfiguration(options = {}) {
     NODE_ENV: 'development',
     CRM_DB_PATH: selectedDb,
   });
-  const baseUrl = (args.baseUrl
-    || env.CRM_AI_ENRICHMENT_SMOKE_BASE_URL
-    || 'http://127.0.0.1:3000').replace(/\/+$/, '');
+  const selectedBaseUrl = args.baseUrl
+    || String(env.CRM_AI_ENRICHMENT_SMOKE_BASE_URL || '').trim();
+  if (!selectedBaseUrl) {
+    throw new Error('Set CRM_AI_ENRICHMENT_SMOKE_BASE_URL to the isolated development server');
+  }
+  const baseUrl = selectedBaseUrl.replace(/\/+$/, '');
   const parsedUrl = new URL(baseUrl);
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
     throw new Error('Smoke base URL must use HTTP(S)');
+  }
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(parsedUrl.hostname)) {
+    throw new Error('Smoke base URL must be a loopback development server');
+  }
+  if (parsedUrl.port === '3000') {
+    throw new Error('Customer enrichment smoke refuses the reserved production port 3000');
   }
   const email = String(env.CRM_AI_ENRICHMENT_SMOKE_EMAIL || '').trim();
   const password = String(env.CRM_AI_ENRICHMENT_SMOKE_PASSWORD || '');
