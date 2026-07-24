@@ -660,8 +660,9 @@ enrichment_finalize`。输出只接受服务器联系人 ID 白名单；联系�
 `distribution_priority/sales_match`。聚焦验收 9/9、完整 Node 回归 427/427、全部改动 JavaScript
 语法检查、JSON Schema 解析和 `git diff --check` 通过。证据见
 `docs/evidence/a2-02-contact-readiness.md`。实现提交为 `d96a48c`，PR
-[#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已创建并等待 CI/合并；尚未部署，
-生产 current/health 与 AI Station、Worker、enrichment flags 均未变化。下一步 A2-03：销售候选快照。
+[#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已合并到
+`codex/ai-integration` @ `c6b2150`，CI `test` 通过；尚未部署，生产 current/health 与 AI
+Station、Worker、enrichment flags 均未变化。下一步 A2-03：销售候选快照。
 
 ### A2-03 销售候选快照
 
@@ -892,7 +893,7 @@ E0-01 生产基线
 | A1-08 | 已完成 | A1-08.1 持久入队、DAG、取消、恢复和独立 Worker 已由 PR [#17](https://github.com/mewmind-chen/russia-crm-local/pull/17) 合并为 `56d63ed2`；A1-08.2 新增数据库全局/资源槽位、速率窗口、公平调度、每客户串行和 Router 引擎调用期占位，6 个 Worker 进程完成 20 个跨客户任务且全局峰值 4，全量 307/307，PR [#18](https://github.com/mewmind-chen/russia-crm-local/pull/18) 合并；A1-08.3 新增四级预算、原子预占/结算、80% 告警、100% policy block、attempt 级 usage/cost/fallback 台账、缺失 usage 保守估算、缓存/去重零费用事件和孤儿预占恢复，全量 323/323，PR [#20](https://github.com/mewmind-chen/russia-crm-local/pull/20) 合并；A1-08.4 新增统一任务中心、运行指标、对话元数据和人工复核，PR [#22](https://github.com/mewmind-chen/russia-crm-local/pull/22) 与 [#23](https://github.com/mewmind-chen/russia-crm-local/pull/23) 合并；A1-08.5 新增三角色范围验证、联系人/Recon 独立脱敏、取消/批量/预算/复核独立授权、原子批量 API、匿名化审计和不可用降级，A1-08 专项 88/88、全量 335/335、GitHub CI 通过，PR [#25](https://github.com/mewmind-chen/russia-crm-local/pull/25) 合并为 `a226dd2c`。生产 AI Station 和 Worker 仍关闭且未部署。证据见 `tradepulse-development/artifacts/a1-08-1-persistent-queue-20260723T165726Z.md`、`tradepulse-development/artifacts/a1-08-2-global-concurrency-20260724T012512Z.md`、`tradepulse-development/artifacts/a1-08-3-usage-budget-20260724T023103Z.md`、`tradepulse-development/artifacts/a1-08-4-unified-task-center-20260724T030316Z.md` 和 `tradepulse-development/artifacts/a1-08-5-permissions-audit-degradation-20260724T033129Z.md` |
 | A1-09 | 已完成 | A1-09.1 PR [#28](https://github.com/mewmind-chen/russia-crm-local/pull/28) 完成最小创建与 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 identity/evidence；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、事务完成事件与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案/复核/finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵及隔离开发真实模型 smoke，集成 @ `35341e8`，聚焦 62/62、smoke/identity 14/14、全量 408/408、Python 检查、CI 与独立复审通过。生产 flags 关闭且未部署；下一步 A2-01 |
 | A2-01 | 已完成 | PR [#38](https://github.com/mewmind-chen/russia-crm-local/pull/38) 已合并为 `1ef5e17`，文档 PR #39 后集成基线为 `0add7f6`；三类严格 v1 合同、证据/联系人/销售候选白名单和 fail-closed 校验落地；聚焦 19/19、全量 421/421、CI 与独立复审通过；生产 flags 关闭且未部署 |
-| A2-02 | 已完成 | `codex/ai-contact-readiness-a2-02` 基于 `0add7f6` 完成 fit 后继触发、schema v8 stale 结果、联系人变化失效、enrichment DAG 和 partial/not_ready 补研阻断；实现提交 `d96a48c`，PR [#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已创建并等待 CI/合并；聚焦 9/9、全量 427/427、语法/Schema/diff 检查通过；证据见 `docs/evidence/a2-02-contact-readiness.md`；尚未部署；下一步 A2-03 |
+| A2-02 | 已完成 | `codex/ai-contact-readiness-a2-02` 基于 `0add7f6` 完成 fit 后继触发、schema v8 stale 结果、联系人变化失效、enrichment DAG 和 partial/not_ready 补研阻断；实现提交 `d96a48c`，PR [#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已合并到 `codex/ai-integration` @ `c6b2150`，CI `test` 通过；聚焦 9/9、全量 427/427、语法/Schema/diff 检查通过；证据见 `docs/evidence/a2-02-contact-readiness.md`；尚未部署；下一步 A2-03 |
 
 当前停点：38 个计划任务中已完成 21 个，剩余 17 个。A2-02 已在
 `codex/ai-contact-readiness-a2-02` 基于 `codex/ai-integration` @ `0add7f6` 完成本地实现：
@@ -901,6 +902,7 @@ E0-01 生产基线
 `partial/not_ready` 生成补研建议并保持 `missing_info`，不改变 owner、不创建 intake、不进入自动分配。
 聚焦验收 9/9、完整回归 427/427、全部改动 JavaScript 语法检查、JSON Schema 解析和
 `git diff --check` 通过。实现提交为 `d96a48c`，PR
-[#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已创建并等待 CI/合并；尚未部署。生产 current/health 仍为
+[#44](https://github.com/mewmind-chen/russia-crm-local/pull/44) 已合并到
+`codex/ai-integration` @ `c6b2150`，CI `test` 通过；尚未部署。生产 current/health 仍为
 `92e9f609026eaf67c03ac7651cbaa7a6b616e929`，AI Station、Worker 和 enrichment flags
 保持关闭，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A2-03：销售候选快照；本任务完成后停止。
