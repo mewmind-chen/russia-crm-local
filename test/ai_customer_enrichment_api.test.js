@@ -156,6 +156,10 @@ test('proposal review requires edit_customer and run cancellation requires cance
     runId: run.id, fieldName: 'industry', proposedValue: '工业电子',
     evidenceIds: [evidence.id], confidence: 0.9,
   });
+  const detail = await fx.request('/api/sales-crm/ai/customers/RU-9002/enrichment', {
+    cookie: fx.cookie,
+  });
+  assert.equal((await detail.json()).proposals[0].currentValue, 'existing');
 
   assert.equal((await fx.request(`/api/sales-crm/ai/proposals/${proposal.id}/review`, {
     cookie: fx.cookie, method: 'POST', body: { decision: 'accepted' },

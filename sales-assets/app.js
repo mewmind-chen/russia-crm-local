@@ -19,6 +19,11 @@
     customerAiLoading: false,
     customerAiPending: false,
     customerAiTimer: null,
+    customerAiPollCount: 0,
+    customerEnrichment: null,
+    customerEnrichmentLastSuccess: null,
+    customerEnrichmentError: '',
+    customerEnrichmentPending: false,
     aiTasks: {
       items: [], page: 1, pageSize: 20, total: 0, overview: null,
       loaded: false, loading: false, error: '',
@@ -636,6 +641,10 @@
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
     state.customerProfileExternalId = externalCustomerId;
     state.selectedCustomerId = account.id;
+    state.customerAiPollCount = 0;
+    state.customerEnrichment = null;
+    state.customerEnrichmentLastSuccess = null;
+    state.customerEnrichmentError = '';
     closeDrawer();
     switchView('customerProfile');
     $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
@@ -657,6 +666,10 @@
     state.customerAiTimer = null;
     state.customerAi = null;
     state.customerAiError = '';
+    state.customerAiPollCount = 0;
+    state.customerEnrichment = null;
+    state.customerEnrichmentLastSuccess = null;
+    state.customerEnrichmentError = '';
     state.customerProfileExternalId = '';
     const url = new URL(location.href);
     url.searchParams.delete('customer');
@@ -671,13 +684,129 @@
   };
 
   const aiJobLabels = {
+    pending_dispatch: ['等待调度', 'amber'], dispatching: ['调度中', 'amber'],
     queued: ['排队中', 'amber'], running: ['分析中', 'amber'], retry_wait: ['等待重试', 'amber'],
     needs_review: ['需要复核', 'amber'], succeeded: ['已完成', ''], failed: ['执行失败', 'red'], dead_letter: ['生成失败', 'red'],
     blocked: ['等待处理', 'amber'], cancel_requested: ['正在取消', 'amber'], cancelled: ['已取消', 'gray'],
+    skipped: ['已跳过', 'gray'],
+  };
+  const CUSTOMER_AI_MAX_POLLS = 48;
+  const ENRICHMENT_TERMINAL_STATES = new Set([
+    'succeeded', 'needs_review', 'cancelled', 'skipped', 'failed', 'dead_letter',
+  ]);
+  const enrichmentNodeLabels = {
+    recon_dispatch: '企业背调',
+    recon_collect: '企业资料归集',
+    contact_dispatch: '联系人搜索',
+    contact_collect: '联系人归集',
+    customer_fit: '客户匹配评分',
+    enrichment_finalize: '补全与路由',
+  };
+  const enrichmentRouteLabels = {
+    missing_info: '资料仍不完整',
+    needs_review: '等待人工复核',
+    pending_assignment: '可进入分配',
+  };
+  const enrichmentFieldLabels = {
+    website: '官网', country: '国家', industry: '行业', customer_type: '客户类型',
+    products: '产品与需求', description: '企业简介', rating: '优先级', current_pool: '客户分组',
   };
 
   function aiReasonLabel(code) {
     return aiReasonLabels[code] || String(code || '').toLowerCase().replaceAll('_', ' ');
+  }
+
+  function proposalValue(value) {
+    return typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  }
+
+  function renderCustomerEnrichment() {
+    const payload = state.customerEnrichment || state.customerEnrichmentLastSuccess;
+    if (!payload?.run) {
+      return `<section class="customer-enrichment"><div class="customer-enrichment-empty">
+        <span class="pill gray">未启动</span><span>暂无客户资料补全任务</span>
+      </div></section>`;
+    }
+    const run = payload.run;
+    const status = aiJobLabels[run.state] || [run.state || '状态未知', 'gray'];
+    const nodes = (payload.nodes || []).map(node => {
+      const nodeStatus = aiJobLabels[node.state] || [node.state || '等待中', 'gray'];
+      return `<li><span>${esc(enrichmentNodeLabels[node.nodeKey] || node.nodeKey)}</span>
+        <span class="pill ${nodeStatus[1]}">${esc(nodeStatus[0])}</span>
+        ${node.legacyTask?.taskId ? `<button class="text-button" data-open-ai-task="${esc(node.aiJobId || node.legacyTask.taskId)}" type="button">关联任务</button>` : ''}
+      </li>`;
+    }).join('');
+    const visibleEvidence = (payload.evidence || [])
+      .filter(item => !(payload.restricted?.contacts && item.contactSensitive));
+    const evidence = visibleEvidence.map(item => {
+      const sourceUrl = /^https?:\/\//i.test(String(item.sourceUrl || '')) ? item.sourceUrl : '';
+      return `<li><div><strong>${esc(item.sourceType || item.nodeKey)}</strong>
+        <small>${esc(item.collector || '')} · ${esc(shortDate(item.collectedAt, true))}</small></div>
+        <p>${esc(item.summary || '')}</p>
+        ${sourceUrl ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a>` : ''}</li>`;
+    }).join('');
+    const canReview = can('edit_customer') && !state.data?.impersonation;
+    const proposals = (payload.proposals || []).map(proposal => {
+      const review = proposal.state === 'needs_review';
+      const provisional = proposal.state === 'auto_applied';
+      return `<article class="enrichment-proposal ${review ? 'enrichment-conflict' : ''}">
+        <header><strong>${esc(enrichmentFieldLabels[proposal.fieldName] || proposal.fieldName)}</strong>
+          ${provisional ? '<span class="pill ai-provisional">AI 暂定</span>' : `<span class="pill ${review ? 'amber' : ''}">${esc(proposal.state)}</span>`}</header>
+        <div class="enrichment-before-after"><div><span>当前值</span><p>${esc(proposalValue(proposal.currentValue) || '—')}</p></div>
+          <div><span>建议值</span><p>${esc(proposalValue(proposal.proposedValue) || '—')}</p></div></div>
+        <small>置信度 ${esc(`${Math.round(Number(proposal.confidence || 0) * 100)}%`)} · ${esc(proposal.reasonCode || 'evidence_backed')}</small>
+        ${review && canReview ? `<footer>
+          <button class="button primary tiny" type="button" data-review-enrichment-proposal="accepted" data-proposal-id="${esc(proposal.id)}">接受</button>
+          <button class="button secondary tiny" type="button" data-review-enrichment-proposal="rejected" data-proposal-id="${esc(proposal.id)}">拒绝</button>
+        </footer>` : ''}
+      </article>`;
+    }).join('');
+    const tags = (run.tags || []).map(tag => `<span>${esc(tag)}</span>`).join('');
+    const missing = (run.missingItems || []).map(item => esc(enrichmentFieldLabels[item] || item)).join('、');
+    return `<section class="customer-enrichment">
+      ${state.customerEnrichmentError ? `<div class="ai-task-degraded">补全服务暂不可用，保留上次成功加载的补全结果。${esc(state.customerEnrichmentError)}</div>` : ''}
+      <div class="customer-enrichment-summary"><div><span class="pill ${status[1]}">${esc(status[0])}</span>
+        <strong>${esc(enrichmentRouteLabels[run.routeState] || run.routeState || '处理中')}</strong></div>
+        <div class="enrichment-progress"><span style="width:${Math.max(0, Math.min(100, Number(run.completeness || 0)))}%"></span></div>
+        <small>资料完整度 ${esc(run.completeness)}%${missing ? ` · 缺少：${missing}` : ''}</small>
+        ${tags ? `<div class="customer-ai-reasons">${tags}</div>` : ''}
+      </div>
+      ${nodes ? `<ol class="enrichment-nodes">${nodes}</ol>` : ''}
+      ${proposals ? `<div class="enrichment-proposals">${proposals}</div>` : ''}
+      ${payload.restricted?.contacts ? '<p class="subtle">联系人证据因当前权限已隐藏。</p>' : ''}
+      ${evidence ? `<details class="customer-ai-evidence"><summary>补全证据 · ${visibleEvidence.length}</summary><ul>${evidence}</ul></details>` : ''}
+    </section>`;
+  }
+
+  function renderCustomerFit(payload) {
+    const job = payload?.job;
+    const result = payload?.result;
+    if (state.customerAiError) {
+      return `<div class="customer-ai-error"><strong>AI 评分暂不可用</strong><span>${esc(state.customerAiError)}</span></div>`;
+    }
+    if (!job && !result) {
+      return '<div class="customer-ai-empty"><span class="pill gray">未生成</span><span>暂无客户匹配评分</span></div>';
+    }
+    const status = payload?.stale ? ['资料已变化', 'amber'] : (aiJobLabels[job?.state] || ['状态未知', 'gray']);
+    if (!result) {
+      return `<div class="customer-ai-empty"><span class="pill ${status[1]}">${status[0]}</span><span>${job?.errorSummary ? esc(job.errorSummary) : '等待评分结果'}</span></div>`;
+    }
+    const value = result.value || {};
+    const confidence = `${Math.round(Number(result.confidence || value.confidence || 0) * 100)}%`;
+    const reasons = (value.reasonCodes || []).map(code => `<span>${esc(aiReasonLabel(code))}</span>`).join('');
+    const evidence = (payload.evidence || []).map(item => {
+      const sourceUrl = /^https?:\/\//i.test(String(item.sourceUrl || '')) ? item.sourceUrl : '';
+      return `<li><div><strong>${esc(item.sourceTitle || item.field || item.sourceTable)}</strong>
+        <small>${esc(item.sourceTable)}${item.checkedAt ? ` · ${esc(shortDate(item.checkedAt, true))}` : ''}</small></div>
+        <p>${esc(item.value)}</p>${sourceUrl ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a>` : ''}</li>`;
+    }).join('');
+    return `<div class="customer-ai-result">
+      <div class="customer-ai-score"><strong>${Number(value.fitScore ?? 0)}</strong><span>匹配分</span></div>
+      <div class="customer-ai-grade"><strong>${esc(value.grade || '—')}</strong><span>等级</span></div>
+      <div class="customer-ai-confidence"><strong>${confidence}</strong><span>置信度</span></div>
+      <div class="customer-ai-summary"><div><span class="pill ${status[1]}">${status[0]}</span><div class="customer-ai-reasons">${reasons}</div></div>
+        <small>${esc(result.engine)} / ${esc(result.model)} · Prompt ${esc(result.promptVersion)} · Schema ${esc(result.schemaVersion)} · ${esc(shortDate(result.generatedAt, true))}</small></div>
+    </div>${evidence ? `<details class="customer-ai-evidence"><summary>评分证据 · ${payload.evidence.length}</summary><ul>${evidence}</ul></details>` : ''}`;
   }
 
   function renderCustomerAI() {
@@ -685,15 +814,24 @@
     const body = $('#customerAiStationBody');
     const actions = $('#customerAiStationActions');
     if (!body || !actions) return;
-    actions.innerHTML = job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">任务详情</button>` : '';
-    if (state.customerAiLoading) {
-      body.innerHTML = '<span class="subtle">正在读取评分状态…</span>';
-      return;
-    }
     const payload = state.customerAi;
     const job = payload?.job;
+    const enrichment = state.customerEnrichment || state.customerEnrichmentLastSuccess;
+    actions.innerHTML = job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">任务详情</button>` : '';
+    if (state.customerAiLoading && !payload && !enrichment) {
+      body.innerHTML = '<span class="subtle">正在读取评分与资料补全状态…</span>';
+      return;
+    }
     const result = payload?.result;
     const canRun = can('use_ai_assistant') && !state.data?.impersonation;
+    const canStartEnrichment = canRun && ['run_recon', 'view_recon', 'view_contacts'].every(can);
+    const run = enrichment?.run;
+    if (canStartEnrichment && (!run || ENRICHMENT_TERMINAL_STATES.has(run.state))) {
+      actions.insertAdjacentHTML('afterbegin', `<button class="button secondary tiny" type="button" data-retry-enrichment ${state.customerEnrichmentPending ? 'disabled' : ''}>${run ? '重新补全' : '开始补全'}</button>`);
+    }
+    if (run && !ENRICHMENT_TERMINAL_STATES.has(run.state) && can('cancel_ai_tasks') && !state.data?.impersonation) {
+      actions.insertAdjacentHTML('afterbegin', `<button class="button secondary tiny" type="button" data-cancel-enrichment="${esc(run.id)}" ${state.customerEnrichmentPending ? 'disabled' : ''}>取消补全</button>`);
+    }
     const retryable = ['retry_wait', 'dead_letter', 'blocked', 'cancelled'].includes(job?.state);
     if (canRun && (retryable || !result || payload?.stale)) {
       const label = state.customerAiPending
@@ -705,40 +843,18 @@
             : '生成评分';
       actions.insertAdjacentHTML('afterbegin', `<button class="button ${retryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${retryable ? `data-retry-ai-job="${esc(job.id)}"` : 'data-run-customer-fit'}>${label}</button>`);
     }
-    if (state.customerAiError) {
-      body.innerHTML = `<div class="customer-ai-error"><strong>AI 暂不可用</strong><span>${esc(state.customerAiError)}</span></div>`;
-      return;
-    }
-    if (!job && !result) {
-      body.innerHTML = '<div class="customer-ai-empty"><span class="pill gray">未生成</span><span>暂无客户匹配评分</span></div>';
-      return;
-    }
-    const status = payload?.stale ? ['资料已变化', 'amber'] : (aiJobLabels[job?.state] || ['状态未知', 'gray']);
-    if (!result) {
-      body.innerHTML = `<div class="customer-ai-empty"><span class="pill ${status[1]}">${status[0]}</span><span>${job?.errorSummary ? esc(job.errorSummary) : '等待评分结果'}</span></div>`;
-      return;
-    }
-    const value = result.value || {};
-    const confidence = `${Math.round(Number(result.confidence || value.confidence || 0) * 100)}%`;
-    const reasons = (value.reasonCodes || []).map(code => `<span>${esc(aiReasonLabel(code))}</span>`).join('');
-    const evidence = (payload.evidence || []).map(item => `<li>
-      <div><strong>${esc(item.sourceTitle || item.field || item.sourceTable)}</strong><small>${esc(item.sourceTable)}${item.checkedAt ? ` · ${esc(shortDate(item.checkedAt, true))}` : ''}</small></div>
-      <p>${esc(item.value)}</p>${item.sourceUrl ? `<a href="${esc(item.sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a>` : ''}
-    </li>`).join('');
-    body.innerHTML = `<div class="customer-ai-result">
-      <div class="customer-ai-score"><strong>${Number(value.fitScore ?? 0)}</strong><span>匹配分</span></div>
-      <div class="customer-ai-grade"><strong>${esc(value.grade || '—')}</strong><span>等级</span></div>
-      <div class="customer-ai-confidence"><strong>${confidence}</strong><span>置信度</span></div>
-      <div class="customer-ai-summary"><div><span class="pill ${status[1]}">${status[0]}</span><div class="customer-ai-reasons">${reasons}</div></div>
-        <small>${esc(result.engine)} / ${esc(result.model)} · Prompt ${esc(result.promptVersion)} · Schema ${esc(result.schemaVersion)} · ${esc(shortDate(result.generatedAt, true))}</small></div>
-    </div>${evidence ? `<details class="customer-ai-evidence"><summary>评分证据 · ${payload.evidence.length}</summary><ul>${evidence}</ul></details>` : ''}`;
+    body.innerHTML = `${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
   }
 
   function scheduleCustomerAIPoll() {
     clearTimeout(state.customerAiTimer);
     state.customerAiTimer = null;
-    if (!['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state)
-        || !state.customerProfileExternalId) return;
+    const fitPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state);
+    const enrichmentState = (state.customerEnrichment || state.customerEnrichmentLastSuccess)?.run?.state;
+    const enrichmentPending = enrichmentState && !ENRICHMENT_TERMINAL_STATES.has(enrichmentState);
+    if ((!fitPending && !enrichmentPending) || !state.customerProfileExternalId
+        || state.customerAiPollCount >= CUSTOMER_AI_MAX_POLLS) return;
+    state.customerAiPollCount += 1;
     state.customerAiTimer = setTimeout(() => void loadCustomerAI(state.customerProfileExternalId, { quiet: true }), 2500);
   }
 
@@ -748,14 +864,23 @@
     state.customerAiTimer = null;
     if (!quiet) state.customerAiLoading = true;
     state.customerAiError = '';
+    state.customerEnrichmentError = '';
     renderCustomerAI();
     try {
-      const payload = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/results`);
+      const [fit, enrichment] = await Promise.allSettled([
+        api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/results`),
+        api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment`),
+      ]);
       if (state.customerProfileExternalId !== customerId) return;
-      state.customerAi = payload;
-    } catch (error) {
-      if (state.customerProfileExternalId !== customerId) return;
-      state.customerAiError = error.message;
+      if (fit.status === 'fulfilled') state.customerAi = fit.value;
+      else state.customerAiError = fit.reason?.message || '评分读取失败';
+      if (enrichment.status === 'fulfilled') {
+        state.customerEnrichment = enrichment.value;
+        state.customerEnrichmentLastSuccess = enrichment.value;
+      } else {
+        state.customerEnrichmentError = enrichment.reason?.message || '资料补全读取失败';
+        state.customerEnrichment = state.customerEnrichmentLastSuccess;
+      }
     } finally {
       if (state.customerProfileExternalId === customerId) {
         state.customerAiLoading = false;
@@ -765,10 +890,64 @@
     }
   }
 
+  async function retryCustomerEnrichment() {
+    const customerId = state.customerProfileExternalId;
+    if (!customerAIEnabled() || !customerId || state.customerEnrichmentPending) return;
+    state.customerEnrichmentPending = true;
+    state.customerAiPollCount = 0;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment/run`, {
+        method: 'POST', body: '{}',
+      });
+      await loadCustomerAI(customerId, { quiet: true });
+    } catch (error) {
+      state.customerEnrichmentError = error.message;
+    } finally {
+      state.customerEnrichmentPending = false;
+      renderCustomerAI();
+    }
+  }
+
+  async function cancelCustomerEnrichment(runId) {
+    if (!runId || state.customerEnrichmentPending) return;
+    state.customerEnrichmentPending = true;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/enrichment/${encodeURIComponent(runId)}/cancel`, {
+        method: 'POST', body: '{}',
+      });
+      await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
+    } catch (error) {
+      state.customerEnrichmentError = error.message;
+    } finally {
+      state.customerEnrichmentPending = false;
+      renderCustomerAI();
+    }
+  }
+
+  async function reviewCustomerEnrichmentProposal(proposalId, decision) {
+    if (!proposalId || !['accepted', 'rejected'].includes(decision) || state.customerEnrichmentPending) return;
+    state.customerEnrichmentPending = true;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/proposals/${encodeURIComponent(proposalId)}/review`, {
+        method: 'POST', body: JSON.stringify({ decision }),
+      });
+      await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
+    } catch (error) {
+      state.customerEnrichmentError = error.message;
+    } finally {
+      state.customerEnrichmentPending = false;
+      renderCustomerAI();
+    }
+  }
+
   async function runCustomerFit() {
     const customerId = state.customerProfileExternalId;
     if (!customerAIEnabled() || !customerId || state.customerAiPending) return;
     state.customerAiPending = true;
+    state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
       await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/stations/customer_fit/run`, { method: 'POST', body: '{}' });
@@ -785,6 +964,7 @@
   async function retryCustomerFit(jobId) {
     if (!customerAIEnabled() || !jobId || state.customerAiPending) return;
     state.customerAiPending = true;
+    state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
       await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', body: '{}' });
@@ -1610,8 +1790,9 @@
   function openNewCustomerModal() {
     const sales = state.data.users.filter(user => user.role === 'sales');
     openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two">
-      <label class="span-2">公司名称<input name="companyName" required></label>
-      <label>国家<input name="country" required></label><label>城市<input name="city"></label>
+      <label>公司名称<input name="companyName" placeholder="公司名称或官网至少填写一项"></label>
+      <label>官网<input name="website" type="url" placeholder="https://example.com"></label>
+      <label>国家（可选）<input name="country"></label><label>城市<input name="city"></label>
       <label>行业<input name="industry" placeholder="工业控制、汽车电子等"></label><label>客户类型<select name="customerType"><option>终端制造商</option><option>EMS/代工厂</option><option>贸易商</option><option>维修企业</option><option>方案公司</option></select></label>
       <label>客户来源<select name="source"><option>公司指派</option><option>销售自行搜索</option><option>展会</option><option>LinkedIn</option><option>海关数据</option><option>老客户介绍</option></select></label>
       <label>负责人<select name="ownerId" required>${sales.map(user => `<option value="${user.id}">${esc(user.name)}</option>`).join('')}</select></label>
@@ -1876,11 +2057,18 @@
         await refresh('客户动作已记录，阶段和预警已同步');
       } else if (form.id === 'customerForm') {
         const payload = formPayload(form);
+        payload.companyName = String(payload.companyName || '').trim();
+        payload.website = String(payload.website || '').trim();
+        if (!payload.companyName && !payload.website) throw new Error('公司名称或官网至少填写一项');
         payload.nextActionAt = apiTime(payload.nextActionAt);
         const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh(`客户已创建并分配 · ${result.externalCustomerId}`);
-        switchView('customers');
-        openCustomer(result.customerId);
+        const enrichmentState = result.enrichment?.state === 'pending_dispatch'
+          ? '资料补全已排队'
+          : result.enrichment?.reasonCode
+            ? `资料补全未启动：${result.enrichment.reasonCode}`
+            : '资料补全状态已记录';
+        await refresh(`客户已创建并分配 · ${result.externalCustomerId} · ${enrichmentState}`);
+        openCustomerProfile(result.externalCustomerId);
       } else if (form.id === 'quoteForm') {
         const payload = formPayload(form);
         payload.nextFollowAt = apiTime(payload.nextFollowAt);
@@ -2042,6 +2230,16 @@
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
     if (event.target.closest('[data-run-customer-fit]')) void runCustomerFit();
+    if (event.target.closest('[data-retry-enrichment]')) void retryCustomerEnrichment();
+    const cancelEnrichment = event.target.closest('[data-cancel-enrichment]');
+    if (cancelEnrichment) void cancelCustomerEnrichment(cancelEnrichment.dataset.cancelEnrichment);
+    const reviewEnrichment = event.target.closest('[data-review-enrichment-proposal]');
+    if (reviewEnrichment) {
+      void reviewCustomerEnrichmentProposal(
+        reviewEnrichment.dataset.proposalId,
+        reviewEnrichment.dataset.reviewEnrichmentProposal,
+      );
+    }
     const openAITask = event.target.closest('[data-open-ai-task]');
     if (openAITask) {
       if (state.view !== 'aiTasks') switchView('aiTasks');
