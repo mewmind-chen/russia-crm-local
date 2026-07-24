@@ -96,7 +96,15 @@ set +a
 npm run crm:ai-worker
 ```
 
-Use `npm run crm:ai-worker -- --once` for one claim attempt. `CRM_AI_JOB_LEASE_MS`, `CRM_AI_WORKER_IDLE_MS`, and `CRM_AI_WORKER_ID` may be set in the development runtime. Queue warnings use `CRM_AI_QUEUE_BACKLOG_WARNING` and `CRM_AI_QUEUE_WAIT_WARNING_MS`; only due, dependency-ready jobs contribute to the wait warning. Do not start this Worker against production until the Control Plane release gate explicitly enables AI Stations.
+Use `npm run crm:ai-worker -- --once` for one claim attempt. `CRM_AI_JOB_LEASE_MS`, `CRM_AI_WORKER_IDLE_MS`, `CRM_AI_EXECUTION_TIMEOUT_MS`, and `CRM_AI_WORKER_ID` may be set in the development runtime. Queue warnings use `CRM_AI_QUEUE_BACKLOG_WARNING` and `CRM_AI_QUEUE_WAIT_WARNING_MS`; only due, dependency-ready jobs contribute to the wait warning.
+
+Worker concurrency is coordinated through the shared SQLite database, not process memory. The defaults are `global=10`, `deepseek=4`, `web=4`, `kimi-cli=1`, and `hermes=1`. Override the complete resource map with `CRM_AI_EXECUTION_RESOURCES_JSON`; each entry requires `maxConcurrency` and may set `rateLimit` plus `rateWindowMs`. For example:
+
+```bash
+CRM_AI_EXECUTION_RESOURCES_JSON='{"global":{"maxConcurrency":8,"rateLimit":60,"rateWindowMs":60000},"deepseek":{"maxConcurrency":4,"rateLimit":30,"rateWindowMs":60000},"kimi-cli":{"maxConcurrency":1,"rateLimit":0,"rateWindowMs":60000},"hermes":{"maxConcurrency":1,"rateLimit":0,"rateWindowMs":60000}}'
+```
+
+`CRM_AI_STATION_RESOURCES_JSON` optionally maps a station to an additional task-level resource. The Worker holds the global task slot and customer lock for the full job lease, while each real Router engine attempt holds its own engine slot. Heartbeats renew all claims; success, retry, cancellation, policy block, timeout, 429, and expired-lease recovery release them transactionally. Do not start this Worker against production until the Control Plane release gate explicitly enables AI Stations.
 
 ## Production Customer Snapshot
 

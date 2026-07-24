@@ -287,3 +287,39 @@ test('worker completes cancellation racing with execution-time authorization', a
   assert.equal(outcome.job.leaseOwner, '');
   assert.equal(fx.jobs.getJob(queued.id).state, 'cancelled');
 });
+
+for (const failure of [
+  { name: 'engine 429', code: 'DEEPSEEK_HTTP_ERROR', statusCode: 429 },
+  { name: 'engine timeout', code: 'DEEPSEEK_TIMEOUT', statusCode: 504 },
+]) {
+  test(`worker releases persistent execution claims after ${failure.name}`, async t => {
+    const fx = fixture();
+    t.after(() => fx.close());
+    const queued = fx.enqueue();
+    const error = Object.assign(new Error(failure.name), failure);
+    const worker = createAIStationWorker({
+      workerId: `worker-${failure.statusCode}`,
+      openDb: fx.openDb,
+      jobStoreOptions: {
+        executionResources: {
+          global: { maxConcurrency: 2, rateLimit: 0, rateWindowMs: 60_000 },
+          deepseek: { maxConcurrency: 1, rateLimit: 0, rateWindowMs: 60_000 },
+        },
+      },
+      executeCustomerFitJob: async ({ jobs, jobId, workerId }) => {
+        const claim = jobs.acquireResource('deepseek', jobId, workerId);
+        assert.equal(claim.acquired, true);
+        throw error;
+      },
+    });
+
+    const outcome = await worker.runOnce();
+
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.job.id, queued.id);
+    assert.equal(outcome.job.state, 'retry_wait');
+    assert.equal(outcome.job.errorSummary, failure.name);
+    assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_resource_slots').get().count, 0);
+    assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_customer_locks').get().count, 0);
+  });
+}
