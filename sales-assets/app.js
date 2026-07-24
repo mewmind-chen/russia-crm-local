@@ -19,6 +19,7 @@
     customerAiLoading: false,
     customerAiPending: false,
     customerAiTimer: null,
+    aiTasks: { items: [], page: 1, pageSize: 20, total: 0, overview: null, loaded: false, loading: false },
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -46,13 +47,17 @@
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
     pipeline: ['PIPELINE CONTROL', '推进管道'],
     alerts: ['TODAY TASKS', '今日待办'],
+    aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
     team: ['CAPABILITY REVIEW', '销售能力'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
     maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
-  const viewPermissions = { pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers', maintenance: 'manage_data_maintenance' };
+  const viewPermissions = {
+    pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
+    aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
+  };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
     social: ['社媒联系', '社'], reply: ['客户回复', '回'], meeting: ['视频/电话会议', '会'],
@@ -276,6 +281,7 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    $('#nav [data-view="aiTasks"]')?.classList.toggle('hidden', !customerAIEnabled() || !can('view_customers'));
     if (state.data.impersonation) {
       $$('#nav [data-view="users"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
     }
@@ -663,7 +669,7 @@
 
   const aiJobLabels = {
     queued: ['排队中', 'amber'], running: ['分析中', 'amber'], retry_wait: ['等待重试', 'amber'],
-    needs_review: ['需要复核', 'amber'], succeeded: ['已完成', ''], dead_letter: ['生成失败', 'red'],
+    needs_review: ['需要复核', 'amber'], succeeded: ['已完成', ''], failed: ['执行失败', 'red'], dead_letter: ['生成失败', 'red'],
     blocked: ['等待处理', 'amber'], cancel_requested: ['正在取消', 'amber'], cancelled: ['已取消', 'gray'],
   };
 
@@ -676,7 +682,7 @@
     const body = $('#customerAiStationBody');
     const actions = $('#customerAiStationActions');
     if (!body || !actions) return;
-    actions.innerHTML = '';
+    actions.innerHTML = job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">任务详情</button>` : '';
     if (state.customerAiLoading) {
       body.innerHTML = '<span class="subtle">正在读取评分状态…</span>';
       return;
@@ -694,7 +700,7 @@
           : result
             ? '重新评分'
             : '生成评分';
-      actions.innerHTML = `<button class="button ${retryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${retryable ? `data-retry-ai-job="${esc(job.id)}"` : 'data-run-customer-fit'}>${label}</button>`;
+      actions.insertAdjacentHTML('afterbegin', `<button class="button ${retryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${retryable ? `data-retry-ai-job="${esc(job.id)}"` : 'data-run-customer-fit'}>${label}</button>`);
     }
     if (state.customerAiError) {
       body.innerHTML = `<div class="customer-ai-error"><strong>AI 暂不可用</strong><span>${esc(state.customerAiError)}</span></div>`;
@@ -787,6 +793,124 @@
       state.customerAiPending = false;
       renderCustomerAI();
     }
+  }
+
+  const aiTaskTypeLabels = {
+    customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
+    prospect_discovery: 'Prospect', manager_evaluation: '经理评价', assistant_chat: '对话 AI',
+  };
+
+  function aiTaskFilters() {
+    return {
+      state: $('#aiTaskStateFilter')?.value || '',
+      type: $('#aiTaskTypeFilter')?.value || '',
+      customer: $('#aiTaskCustomerFilter')?.value.trim() || '',
+      owner: $('#aiTaskOwnerFilter')?.value.trim() || '',
+      model: $('#aiTaskModelFilter')?.value.trim() || '',
+      from: $('#aiTaskFromFilter')?.value || '',
+      to: $('#aiTaskToFilter')?.value || '',
+    };
+  }
+
+  function renderAiTasks() {
+    const tasks = state.aiTasks;
+    const overview = $('#aiTaskOverview');
+    if (tasks.overview) {
+      const queue = tasks.overview.queue || {};
+      overview.classList.remove('hidden');
+      overview.innerHTML = [
+        ['排队任务', Number(queue.queued || 0) + Number(queue.retry_wait || 0), '等待调度'],
+        ['执行任务', Number(queue.running || 0), '跨进程槽位保护'],
+        ['24h 失败率', `${Math.round(Number(tasks.overview.failureRate24h || 0) * 100)}%`, '模型尝试'],
+        ['24h 成本', `$${Number(tasks.overview.dailyCost || 0).toFixed(4)}`, '已入账'],
+      ].map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    } else overview.classList.add('hidden');
+    if (tasks.loading) {
+      $('#aiTaskTable').innerHTML = '<div class="empty">正在加载 AI 任务…</div>';
+      return;
+    }
+    const rows = tasks.items.map(item => {
+      const stateMeta = aiJobLabels[item.state] || [item.state || '未知', 'gray'];
+      const row = [
+        `<div class="company-cell"><strong>${esc(item.taskId)}</strong><span>${esc(item.source)}</span></div>`,
+        esc(aiTaskTypeLabels[item.taskType] || item.taskType),
+        item.customerId ? `<button class="text-button" data-open-master="${esc(item.customerId)}">${esc(item.customerName || item.customerId)}</button>` : '工作区',
+        esc(item.actorId || '系统'),
+        `<span class="pill ${stateMeta[1]}">${esc(stateMeta[0])}</span>`,
+        `<div class="company-cell"><strong>${esc(item.model || item.engine || '—')}</strong><span>${item.cost ? `$${Number(item.cost).toFixed(4)}` : '无计费'}</span></div>`,
+        `<div class="company-cell"><strong>${shortDate(item.createdAt, true)}</strong><span>${item.durationMs == null ? '—' : `${item.durationMs} ms`}</span></div>`,
+        '<button class="button secondary tiny" type="button" data-open-ai-task="' + esc(item.taskId) + '">详情</button>',
+      ];
+      row._attrs = `data-ai-task-row="${esc(item.taskId)}"`;
+      return row;
+    });
+    $('#aiTaskTable').innerHTML = table(['任务', '类型', '客户', '发起人', '状态', '模型 / 成本', '创建 / 耗时', ''], rows);
+    const pages = Math.max(1, Math.ceil(tasks.total / tasks.pageSize));
+    $('#aiTaskPageInfo').textContent = `第 ${tasks.page} / ${pages} 页 · 共 ${tasks.total} 项`;
+    $('#aiTaskPrev').disabled = tasks.page <= 1;
+    $('#aiTaskNext').disabled = tasks.page >= pages;
+  }
+
+  async function loadAiTasks({ reset = false } = {}) {
+    if (!customerAIEnabled() || state.aiTasks.loading) return;
+    if (reset) state.aiTasks.page = 1;
+    state.aiTasks.loading = true;
+    renderAiTasks();
+    try {
+      const params = new URLSearchParams({
+        page: state.aiTasks.page,
+        pageSize: state.aiTasks.pageSize,
+        ...aiTaskFilters(),
+      });
+      const payload = await api(`/api/sales-crm/ai/tasks?${params}`);
+      Object.assign(state.aiTasks, payload, { loaded: true });
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      state.aiTasks.loading = false;
+      renderAiTasks();
+    }
+  }
+
+  function renderAiTaskDetail(task) {
+    const attempts = (task.attempts || []).map(item => `<li><strong>第 ${item.attempt || '—'} 次 · ${esc(item.engine || '—')} / ${esc(item.model || '—')}</strong><span>${esc(item.status ?? (item.ok ? 'succeeded' : 'failed'))} · ${Number(item.durationMs || 0)} ms · $${Number(item.cost || 0).toFixed(4)}</span>${item.errorSummary || item.error ? `<small>${esc(item.errorSummary || item.error)}</small>` : ''}</li>`).join('');
+    const timeline = (task.timeline || []).map(item => `<li><strong>${esc(item.kind)}</strong><span>${esc(item.state || '')}</span><time>${shortDate(item.at, true)}</time></li>`).join('');
+    const actions = [
+      task.canRetry && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="retry" data-job-id="${esc(task.taskId)}">重试</button>` : '',
+      task.canCancel && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
+      task.canReview && can('manage_evaluations') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
+    ].join('');
+    openModal('AI 任务详情', 'AI CONTROL PLANE', `<div class="ai-task-detail">
+      <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
+      ${task.errorSummary ? `<div class="customer-ai-error"><strong>错误</strong><span>${esc(task.errorSummary)}</span></div>` : ''}
+      <section><h3>模型尝试</h3><ul class="ai-task-events">${attempts || '<li>无模型尝试记录</li>'}</ul></section>
+      <section><h3>时间线</h3><ul class="ai-task-events">${timeline || '<li>无时间线记录</li>'}</ul></section>
+      ${task.result ? `<section><h3>结构化结果</h3><pre>${esc(JSON.stringify(task.result.value || {}, null, 2))}</pre></section>` : ''}
+      ${actions ? `<div class="ai-task-detail-actions">${actions}</div>` : ''}
+    </div>`);
+  }
+
+  async function openAiTask(taskId) {
+    try {
+      const payload = await api(`/api/sales-crm/ai/tasks/${encodeURIComponent(taskId)}`);
+      renderAiTaskDetail(payload.task);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function actOnAiTask(action, jobId) {
+    try {
+      if (['approved', 'rejected'].includes(action)) {
+        await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ decision: action, summary: $('#aiTaskReviewSummary')?.value || '' }),
+        });
+      } else {
+        await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST', body: '{}' });
+      }
+      closeModal();
+      await loadAiTasks();
+      toast(action === 'cancel' ? '已提交取消请求' : action === 'retry' ? '任务已重新入队' : '复核已提交');
+    } catch (error) { toast(error.message); }
   }
 
   function renderCustomers() {
@@ -1909,6 +2033,22 @@
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
     if (event.target.closest('[data-run-customer-fit]')) void runCustomerFit();
+    const openAITask = event.target.closest('[data-open-ai-task]');
+    if (openAITask) {
+      if (state.view !== 'aiTasks') switchView('aiTasks');
+      void openAiTask(openAITask.dataset.openAiTask);
+    }
+    const aiTaskAction = event.target.closest('[data-ai-task-action]');
+    if (aiTaskAction) void actOnAiTask(aiTaskAction.dataset.aiTaskAction, aiTaskAction.dataset.jobId);
+    if (event.target.closest('#aiTaskRefresh')) void loadAiTasks();
+    if (event.target.closest('#aiTaskPrev') && state.aiTasks.page > 1) {
+      state.aiTasks.page -= 1;
+      void loadAiTasks();
+    }
+    if (event.target.closest('#aiTaskNext') && state.aiTasks.page * state.aiTasks.pageSize < state.aiTasks.total) {
+      state.aiTasks.page += 1;
+      void loadAiTasks();
+    }
     const retryAIJob = event.target.closest('[data-retry-ai-job]');
     if (retryAIJob) void retryCustomerFit(retryAIJob.dataset.retryAiJob);
     const activity = event.target.closest('[data-activity]');
@@ -2040,10 +2180,12 @@
 
   document.addEventListener('change', event => {
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
+    if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
   });
 
   function switchView(view) {
     if (!viewMeta[view]) return;
+    if (view === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
     const permission = viewPermissions[view] || `view_${view}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
     state.view = view;
@@ -2062,6 +2204,7 @@
     document.body.classList.toggle('customer-profile-active', view === 'customerProfile');
     if (sectionView === 'intake') renderIntake();
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
+    if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
     if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
     document.body.classList.remove('sidebar-open');
@@ -2079,6 +2222,10 @@
     if (event.target.id === 'poolSearch') scheduleResearchReload('pool');
     if (event.target.id === 'peopleSearch') scheduleResearchReload('people');
     if (event.target.id === 'reconSearch') scheduleResearchReload('recon');
+    if (['aiTaskCustomerFilter', 'aiTaskOwnerFilter', 'aiTaskModelFilter'].includes(event.target.id)) {
+      clearTimeout(loadAiTasks.timer);
+      loadAiTasks.timer = setTimeout(() => void loadAiTasks({ reset: true }), 250);
+    }
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();

@@ -145,6 +145,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /ai/customers/:customerId/stations/customer_fit/run',
     'POST /ai/jobs/:jobId/cancel',
     'POST /ai/jobs/:jobId/retry',
+    'POST /ai/jobs/:jobId/review',
     'POST /data-maintenance/execute',
     'POST /data-maintenance/preview',
     'POST /impersonation/start',

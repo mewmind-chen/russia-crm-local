@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260723-7/);
-  assert.match(html, /app\.js\?v=20260723-7/);
+  assert.match(html, /app\.css\?v=20260724-8/);
+  assert.match(html, /app\.js\?v=20260724-8/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
@@ -49,4 +49,20 @@ test('customer fit surface has bounded responsive layout and preserves the profi
   assert.match(css, /\.customer-ai-station\{[^}]*max-height:270px[^}]*overflow:auto/);
   assert.match(css, /@media\(max-width:780px\)\{\.customer-ai-station/);
   assert.match(html, /id="customerProfileFrame"/);
+});
+
+test('AI task center has permission-scoped filters, pagination, details and operations', () => {
+  assert.match(html, /data-view="aiTasks" data-permission="view_customers"/);
+  assert.match(html, /id="aiTasksView"/);
+  for (const id of [
+    'aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',
+    'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter', 'aiTaskPrev', 'aiTaskNext',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\?\$\{params\}/);
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\/\$\{encodeURIComponent\(taskId\)\}/);
+  assert.match(app, /data-ai-task-action="retry"/);
+  assert.match(app, /data-ai-task-action="cancel"/);
+  assert.match(app, /data-ai-task-action="approved"/);
+  assert.match(app, /can\('manage_evaluations'\)/);
+  assert.match(css, /\.ai-task-filters/);
 });
