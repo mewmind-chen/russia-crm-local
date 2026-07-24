@@ -504,7 +504,7 @@ test('explicit permissions are authoritative even when the account role is sales
   assert.notEqual(contact.status, 403);
 });
 
-test('sales-role create_customer honors an explicitly selected sales owner', async t => {
+test('sales-role create_customer forces the new customer owner to the current user', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO sales_users
@@ -523,7 +523,7 @@ test('sales-role create_customer honors an explicitly selected sales owner', asy
   });
   const body = await response.json();
   assert.equal(response.status, 200, body.error);
-  assert.equal(fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE id=?').get(body.customerId).owner_id, 'U-SALES2');
+  assert.equal(fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE id=?').get(body.customerId).owner_id, 'U-OTHER');
 });
 
 test('manual CRM customer creation generates a canonical customer code', async t => {
@@ -561,7 +561,7 @@ test('manual CRM customer creation generates a canonical customer code', async t
   assert.equal(secondBody.externalCustomerId, 'GB-9005');
 });
 
-test('sales-role edit_customer applies explicit owner and stage updates', async t => {
+test('sales-role edit_customer cannot reassign ownership without assignment management', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO sales_users
@@ -577,11 +577,18 @@ test('sales-role edit_customer applies explicit owner and stage updates', async 
     method: 'PATCH',
     body: { ownerId: 'U-SALES2', stage: 'won' },
   });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 403);
   assert.deepEqual(
     fx.db.prepare("SELECT owner_id,stage FROM crm_accounts WHERE id='CRM-OTHER'").get(),
-    { owner_id: 'U-SALES2', stage: 'won' },
+    { owner_id: 'U-OTHER', stage: 'qualified' },
   );
+  const stageOnly = await fx.request('/api/sales-crm/accounts/CRM-OTHER', {
+    cookie,
+    method: 'PATCH',
+    body: { stage: 'won' },
+  });
+  assert.equal(stageOnly.status, 200);
+  assert.equal(fx.db.prepare("SELECT stage FROM crm_accounts WHERE id='CRM-OTHER'").get().stage, 'won');
 });
 
 test('Sales contact writes require both contact view and customer edit permissions', async t => {
