@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 const {
+  CLEAR_ONLY_TABLES,
   assertSyncBoundaries,
   copyTable,
   createPrivateBackup,
@@ -14,6 +15,21 @@ const {
   prepareRowForImport,
   remapUserReferences,
 } = require('../scripts/sync-production-customer-data');
+
+test('development sync clears enrichment children before their referenced control-plane rows', () => {
+  const provenance = CLEAR_ONLY_TABLES.indexOf('crm_ai_field_provenance');
+  const evidence = CLEAR_ONLY_TABLES.indexOf('crm_ai_enrichment_evidence');
+  const events = CLEAR_ONLY_TABLES.indexOf('crm_ai_enrichment_events');
+  const links = CLEAR_ONLY_TABLES.indexOf('crm_ai_enrichment_node_links');
+  const runs = CLEAR_ONLY_TABLES.indexOf('crm_ai_enrichment_runs');
+  const jobs = CLEAR_ONLY_TABLES.indexOf('crm_ai_jobs');
+  assert.ok(provenance >= 0 && evidence >= 0 && events >= 0 && links >= 0 && runs >= 0 && jobs >= 0);
+  assert.ok(provenance < evidence);
+  assert.ok(evidence < runs);
+  assert.ok(events < links);
+  assert.ok(links < runs);
+  assert.ok(runs < jobs);
+});
 
 function userDatabase(users) {
   const db = new Database(':memory:');

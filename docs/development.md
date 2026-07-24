@@ -9,7 +9,7 @@ TradePulse development must run from an external Git worktree with its own runti
   repo/                         # clean main clone
   worktrees/
     environment-unification/    # codex/environment-unification
-    ai-integration/             # future codex/ai-integration
+    ai-integration/             # short-lived codex/ai-* branches from codex/ai-integration
   runtime/
     <worktree>/
       .env
@@ -27,6 +27,14 @@ TradePulse development must run from an external Git worktree with its own runti
 ```
 
 The clean clone is only for fetching `origin/main` and managing worktrees. Make code changes in a named worktree, never in `repo/main`.
+
+The authoritative roadmap and execution ledger live in
+`docs/planning/tradepulse-unified-master-plan.md` and
+`docs/planning/tradepulse-execution-plan.md`. Each AI task starts from the
+latest `origin/codex/ai-integration`, merges back through a CI-passing PR, and
+is followed by a documentation PR recording the feature commit, PR, merge
+SHA, verification evidence, remaining scope, and next task. Do not begin the
+next feature until that ledger update is merged.
 
 ## Runtime Configuration
 
@@ -86,6 +94,35 @@ npm start
 Development uses port 3100. Additional worktrees use 3201 or higher. Bind only to `127.0.0.1`.
 
 Set `CRM_AI_STATIONS_ENABLED=true` only in the isolated development runtime when testing AI stations. Production defaults to disabled when the variable is absent; a production rollout must opt in explicitly after the release gate.
+
+AI Station requests only enqueue durable jobs. Run the independent development Worker in a second terminal with the same development runtime loaded:
+
+```bash
+set -a
+source /Users/ylf/Desktop/projects/tradepulse-development/runtime/<worktree>/.env
+set +a
+npm run crm:ai-worker
+```
+
+Use `npm run crm:ai-worker -- --once` for one claim attempt. `CRM_AI_JOB_LEASE_MS`, `CRM_AI_WORKER_IDLE_MS`, `CRM_AI_EXECUTION_TIMEOUT_MS`, and `CRM_AI_WORKER_ID` may be set in the development runtime. Queue warnings use `CRM_AI_QUEUE_BACKLOG_WARNING` and `CRM_AI_QUEUE_WAIT_WARNING_MS`; only due, dependency-ready jobs contribute to the wait warning.
+
+Worker concurrency is coordinated through the shared SQLite database, not process memory. The defaults are `global=10`, `deepseek=4`, `web=4`, `kimi-cli=1`, and `hermes=1`. Override the complete resource map with `CRM_AI_EXECUTION_RESOURCES_JSON`; each entry requires `maxConcurrency` and may set `rateLimit` plus `rateWindowMs`. For example:
+
+```bash
+CRM_AI_EXECUTION_RESOURCES_JSON='{"global":{"maxConcurrency":8,"rateLimit":60,"rateWindowMs":60000},"deepseek":{"maxConcurrency":4,"rateLimit":30,"rateWindowMs":60000},"kimi-cli":{"maxConcurrency":1,"rateLimit":0,"rateWindowMs":60000},"hermes":{"maxConcurrency":1,"rateLimit":0,"rateWindowMs":60000}}'
+```
+
+`CRM_AI_STATION_RESOURCES_JSON` optionally maps a station to an additional task-level resource. The Worker holds the global task slot and customer lock for the full job lease, while each real Router engine attempt holds its own engine slot. Heartbeats renew all claims; success, retry, cancellation, policy block, timeout, 429, and expired-lease recovery release them transactionally. Do not start this Worker against production until the Control Plane release gate explicitly enables AI Stations.
+
+AI usage and budget governance is also coordinated through the shared database. Each Router attempt is normalized into the cost ledger; provider usage is preferred, while missing usage is explicitly marked and charged with the configured conservative estimate. The Worker reserves the maximum Router-attempt estimate before a model call, settles the actual attempts afterwards, and releases unused or orphaned reservations. Configure a versioned pricing snapshot and persistent policies with:
+
+```bash
+CRM_AI_COMPANY_ID=default
+CRM_AI_PRICING_JSON='{"version":"internal-pricing-v1","default":{"defaultAttemptCost":0.05,"inputPerMillion":1,"outputPerMillion":4,"reserveInputTokens":3000,"reserveOutputTokens":1500},"engines":{},"models":{}}'
+CRM_AI_BUDGET_POLICIES_JSON='[{"scopeType":"company","scopeId":"default","dailyLimit":20,"monthlyLimit":400,"perTaskLimit":0.5,"warningRatio":0.8}]'
+```
+
+Policy scopes are `company`, `team`, `user`, and `station`; limit amounts are USD and zero means no limit for that period. A projected 80% threshold writes an `ai_budget_alert`; reaching 100% blocks new nonessential model calls as durable policy blocks. CRM reads, history, and manual non-AI workflows remain available. Keep `CRM_AI_STATIONS_ENABLED=false` until the production release gate is approved.
 
 ## Production Customer Snapshot
 

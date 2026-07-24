@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260723-7/);
-  assert.match(html, /app\.js\?v=20260723-7/);
+  assert.match(html, /app\.css\?v=20260724-10/);
+  assert.match(html, /app\.js\?v=20260724-10/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
@@ -28,7 +28,10 @@ test('customer fit UI exposes result metadata, evidence and every job state', ()
   for (const field of ['fitScore', 'grade', 'confidence', 'reasonCodes', 'promptVersion', 'schemaVersion', 'generatedAt', 'evidence']) {
     assert.match(app, new RegExp(field), `missing field: ${field}`);
   }
-  for (const state of ['queued', 'running', 'retry_wait', 'needs_review', 'succeeded', 'dead_letter', 'stale']) {
+  for (const state of [
+    'queued', 'running', 'retry_wait', 'needs_review', 'succeeded', 'dead_letter',
+    'blocked', 'cancel_requested', 'cancelled', 'stale',
+  ]) {
     assert.match(app, new RegExp(state), `missing state: ${state}`);
   }
 });
@@ -46,4 +49,24 @@ test('customer fit surface has bounded responsive layout and preserves the profi
   assert.match(css, /\.customer-ai-station\{[^}]*max-height:270px[^}]*overflow:auto/);
   assert.match(css, /@media\(max-width:780px\)\{\.customer-ai-station/);
   assert.match(html, /id="customerProfileFrame"/);
+});
+
+test('AI task center has permission-scoped filters, pagination, details and operations', () => {
+  assert.match(html, /data-view="aiTasks" data-permission="view_customers"/);
+  assert.match(html, /id="aiTasksView"/);
+  for (const id of [
+    'aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',
+    'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter', 'aiTaskPrev', 'aiTaskNext',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\?\$\{params\}/);
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\/\$\{encodeURIComponent\(taskId\)\}/);
+  assert.match(app, /data-ai-task-action="retry"/);
+  assert.match(app, /data-ai-task-action="cancel"/);
+  assert.match(app, /data-ai-task-action="approved"/);
+  assert.match(app, /can\('cancel_ai_tasks'\)/);
+  assert.match(app, /can\('review_ai_tasks'\)/);
+  assert.match(html, /id="aiTaskDegraded"/);
+  assert.match(app, /保留上次成功加载的历史任务/);
+  assert.match(css, /\.ai-task-filters/);
+  assert.match(css, /\.ai-task-degraded/);
 });

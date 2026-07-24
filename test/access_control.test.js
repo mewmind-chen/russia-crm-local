@@ -110,8 +110,12 @@ test('every browser API has an explicit permission policy or separate token boun
     'POST /intake/scan', 'POST /intake/action', 'PATCH /intake/settings',
     'POST /contacts', 'POST /evaluations', 'POST /evaluations/:evaluationId/retry',
     'GET /ai/customers/:customerId/results',
+    'GET /ai/tasks', 'GET /ai/tasks/:taskId',
     'POST /ai/customers/:customerId/stations/customer_fit/run',
     'POST /ai/jobs/:jobId/retry',
+    'POST /ai/jobs/:jobId/cancel', 'POST /ai/jobs/:jobId/review',
+    'POST /ai/bulk/retry', 'POST /ai/bulk/cancel',
+    'GET /ai/budgets', 'PUT /ai/budgets/:scopeType/:scopeId',
   ];
   for (const key of legacyRoutes) assert.ok(LEGACY_ROUTE_POLICIES[key], key);
   for (const action of appActions) assert.ok(LEGACY_ACTION_POLICIES.app[action], `app:${action}`);
@@ -138,12 +142,20 @@ test('identity inspection blocks exactly the Recon and account-security policies
   const blockedSales = Object.entries(SALES_ROUTE_POLICIES)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([key]) => key).sort();
   assert.deepEqual(blockedSales, [
+    'GET /ai/budgets',
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
+    'POST /ai/bulk/cancel',
+    'POST /ai/bulk/retry',
+    'POST /ai/customers/:customerId/enrichment/run',
     'POST /ai/customers/:customerId/stations/customer_fit/run',
+    'POST /ai/enrichment/:runId/cancel',
+    'POST /ai/jobs/:jobId/cancel',
     'POST /ai/jobs/:jobId/retry',
+    'POST /ai/jobs/:jobId/review',
+    'POST /ai/proposals/:proposalId/review',
     'POST /data-maintenance/execute',
     'POST /data-maintenance/preview',
     'POST /impersonation/start',
@@ -152,6 +164,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /permission-groups',
     'POST /users',
     'POST /users/:userId/password-reset',
+    'PUT /ai/budgets/:scopeType/:scopeId',
     'PUT /users/:userId/permission-overrides',
   ]);
   assert.equal(typeof assertPolicyAllowed, 'function');

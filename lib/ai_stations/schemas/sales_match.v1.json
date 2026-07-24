@@ -1,0 +1,40 @@
+{
+  "$id": "tradepulse://ai/sales_match/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "confidence", "evidenceIds", "reasonCodes", "rankedCandidates"],
+  "properties": {
+    "version": { "const": "v1" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "evidenceIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "reasonCodes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" }
+    },
+    "rankedCandidates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["employeeId", "score", "reasons"],
+        "properties": {
+          "employeeId": { "type": "integer", "minimum": 1 },
+          "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "reasons": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+          }
+        }
+      }
+    }
+  }
+}

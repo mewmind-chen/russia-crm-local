@@ -2,9 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Database = require('better-sqlite3');
 const fixtures = require('./helpers/permission_fixture');
 const { buildCustomerContext } = require('../lib/ai_stations/context');
 const { createAIJobStore } = require('../lib/ai_stations/jobs');
+const { createAIStationWorker } = require('../lib/ai_stations/worker');
 
 function successfulExecutor(calls) {
   return async input => {
@@ -32,7 +34,7 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   const fx = await fixtures.seededFixture({
     managerViewAll: false,
     permissions: { use_ai_assistant: true, view_customers: true },
-    appOptions: { salesCrm: { executeCustomerFitJob: successfulExecutor(calls) } },
+    appOptions: { salesCrm: {} },
   });
   t.after(() => fx.close());
 
@@ -45,10 +47,30 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   const run = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
     cookie: fx.cookie, method: 'POST',
   });
-  assert.equal(run.status, 200);
+  assert.equal(run.status, 202);
   const runBody = await run.json();
-  assert.equal(runBody.job.state, 'succeeded');
-  assert.equal(runBody.result.value.fitScore, 89);
+  assert.equal(runBody.job.state, 'queued');
+  assert.equal(runBody.result, null);
+  assert.equal(calls.length, 0);
+
+  const pendingReplay = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
+    cookie: fx.cookie, method: 'POST',
+  });
+  assert.equal(pendingReplay.status, 202);
+  assert.equal((await pendingReplay.json()).job.id, runBody.job.id);
+  assert.deepEqual(fx.db.prepare(`SELECT status,charged_cost_micros,cost_source
+    FROM crm_ai_usage_ledger WHERE job_id=?`).all(runBody.job.id), [{
+    status: 'deduplicated',
+    charged_cost_micros: 0,
+    cost_source: 'not_billable',
+  }]);
+
+  const worker = createAIStationWorker({
+    openDb: () => new Database(fx.dbPath),
+    workerId: 'api-test-worker',
+    executeCustomerFitJob: successfulExecutor(calls),
+  });
+  assert.equal((await worker.runOnce()).status, 'succeeded');
   assert.equal(calls.length, 1);
 
   const replay = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
@@ -57,6 +79,19 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   assert.equal(replay.status, 200);
   assert.equal((await replay.json()).job.id, runBody.job.id);
   assert.equal(calls.length, 1);
+  assert.deepEqual(fx.db.prepare(`SELECT status,charged_cost_micros,cost_source
+    FROM crm_ai_usage_ledger WHERE job_id=? ORDER BY status`).all(runBody.job.id), [
+    {
+      status: 'cache_hit',
+      charged_cost_micros: 0,
+      cost_source: 'not_billable',
+    },
+    {
+      status: 'deduplicated',
+      charged_cost_micros: 0,
+      cost_source: 'not_billable',
+    },
+  ]);
 
   const results = await fx.request('/api/sales-crm/ai/customers/RU-9002/results', { cookie: fx.cookie });
   assert.equal(results.status, 200);
@@ -66,7 +101,10 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   assert.ok(resultBody.evidence.length > 0);
 
   await new Promise(resolve => setImmediate(resolve));
-  const audit = fx.db.prepare("SELECT * FROM crm_audit_log WHERE entity_type='ai_station' ORDER BY rowid DESC LIMIT 1").get();
+  const audit = fx.db.prepare(`SELECT * FROM crm_audit_log
+    WHERE entity_type='ai_station'
+      AND action='POST /ai/customers/:customerId/stations/customer_fit/run'
+    ORDER BY rowid DESC LIMIT 1`).get();
   assert.equal(audit.action, 'POST /ai/customers/:customerId/stations/customer_fit/run');
   assert.equal(audit.entity_id, '');
   assert.doesNotMatch(audit.detail_json, /RU-9002|AIJ-/);
@@ -79,9 +117,21 @@ test('AI execution requires use_ai_assistant and reading requires view_customers
   });
   t.after(() => fx.close());
   assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9001/results', { cookie: fx.cookie })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9001/stations/customer_fit/run', {
     cookie: fx.cookie, method: 'POST',
   })).status, 403);
+});
+
+test('AI enqueue requires customer visibility even when use_ai_assistant is granted', async t => {
+  const fx = await fixtures.seededFixture({
+    permissions: { use_ai_assistant: true, view_customers: false },
+  });
+  t.after(() => fx.close());
+  assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9001/stations/customer_fit/run', {
+    cookie: fx.cookie, method: 'POST',
+  })).status, 403);
+  assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name='crm_ai_jobs'").get().count, 0);
 });
 
 test('retry is scope checked, revives dead letters and rejects a completed job', async t => {
@@ -106,16 +156,24 @@ test('retry is scope checked, revives dead letters and rejects a completed job',
   const run = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
     cookie: fx.cookie, method: 'POST',
   });
-  assert.equal(run.status, 200);
-  const failed = await run.json();
-  assert.equal(failed.job.state, 'dead_letter');
+  assert.equal(run.status, 202);
+  const queued = await run.json();
+  const worker = createAIStationWorker({
+    openDb: () => new Database(fx.dbPath),
+    workerId: 'retry-test-worker',
+    executeCustomerFitJob: executor,
+  });
+  assert.equal((await worker.runOnce()).status, 'failed');
+  const failed = createAIJobStore(fx.db).getJob(queued.job.id);
+  assert.equal(failed.state, 'dead_letter');
 
-  const retried = await fx.request(`/api/sales-crm/ai/jobs/${failed.job.id}/retry`, {
+  const retried = await fx.request(`/api/sales-crm/ai/jobs/${failed.id}/retry`, {
     cookie: fx.cookie, method: 'POST',
   });
-  assert.equal(retried.status, 200);
-  assert.equal((await retried.json()).job.state, 'succeeded');
-  const rejected = await fx.request(`/api/sales-crm/ai/jobs/${failed.job.id}/retry`, {
+  assert.equal(retried.status, 202);
+  assert.equal((await retried.json()).job.state, 'queued');
+  assert.equal((await worker.runOnce()).status, 'succeeded');
+  const rejected = await fx.request(`/api/sales-crm/ai/jobs/${failed.id}/retry`, {
     cookie: fx.cookie, method: 'POST',
   });
   assert.equal(rejected.status, 409);
@@ -143,6 +201,165 @@ test('identity inspection blocks AI execution and retry before creating model wo
   assert.equal((await fx.request('/api/sales-crm/ai/jobs/AIJ-NONE/retry', {
     cookie: fx.adminCookie, method: 'POST',
   })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/jobs/AIJ-NONE/cancel', {
+    cookie: fx.adminCookie, method: 'POST',
+  })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/jobs/AIJ-NONE/review', {
+    cookie: fx.adminCookie, method: 'POST', body: { decision: 'approved' },
+  })).status, 403);
   assert.equal(calls.length, 0);
   assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name='crm_ai_jobs'").get().count, 0);
+});
+
+test('queued cancellation is scope checked, prevents execution and can be retried', async t => {
+  const calls = [];
+  const fx = await fixtures.seededFixture({
+    managerViewAll: false,
+    permissions: { use_ai_assistant: true },
+  });
+  t.after(() => fx.close());
+  const otherCookie = await fx.login('other@example.com', 'Password123!');
+  const run = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
+    cookie: fx.cookie, method: 'POST',
+  });
+  const queued = await run.json();
+  assert.equal((await fx.request(`/api/sales-crm/ai/jobs/${queued.job.id}/cancel`, {
+    cookie: otherCookie, method: 'POST',
+  })).status, 403);
+  const cancelled = await fx.request(`/api/sales-crm/ai/jobs/${queued.job.id}/cancel`, {
+    cookie: fx.cookie, method: 'POST',
+  });
+  assert.equal(cancelled.status, 200);
+  assert.equal((await cancelled.json()).job.state, 'cancelled');
+  const worker = createAIStationWorker({
+    openDb: () => new Database(fx.dbPath), workerId: 'cancel-test-worker',
+    executeCustomerFitJob: successfulExecutor(calls),
+  });
+  assert.equal((await worker.runOnce()).status, 'idle');
+  assert.equal(calls.length, 0);
+  const retried = await fx.request(`/api/sales-crm/ai/jobs/${queued.job.id}/retry`, {
+    cookie: fx.cookie, method: 'POST',
+  });
+  assert.equal(retried.status, 202);
+  assert.equal((await retried.json()).job.state, 'queued');
+  assert.equal((await worker.runOnce()).status, 'succeeded');
+  assert.equal(calls.length, 1);
+
+  const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-RUNNING-CANCEL' });
+  const active = jobs.enqueue({
+    customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
+    contextHash: 'b'.repeat(64), createdBy: 'U-MGR',
+  }, 'cancel:running-api');
+  jobs.claimById(active.id, 'worker-running-api');
+  const requested = await fx.request(`/api/sales-crm/ai/jobs/${active.id}/cancel`, {
+    cookie: fx.cookie, method: 'POST',
+  });
+  assert.equal(requested.status, 202);
+  assert.equal((await requested.json()).job.state, 'cancel_requested');
+  jobs.completeCancellation(active.id, 'worker-running-api');
+});
+
+test('cancel and bulk actions use independent permissions and preflight every customer scope', async t => {
+  const fx = await fixtures.seededFixture({
+    managerViewAll: false,
+    permissions: {
+      use_ai_assistant: true,
+      cancel_ai_tasks: false,
+      bulk_manage_ai_tasks: false,
+    },
+  });
+  t.after(() => fx.close());
+  const own = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-OWN' }).enqueue({
+    customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
+    contextHash: 'e'.repeat(64), createdBy: 'U-MGR',
+  }, 'bulk:own');
+  const other = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-OTHER' }).enqueue({
+    customerId: 'RU-9003', crmAccountId: 'CRM-OTHER', station: 'customer_fit',
+    contextHash: 'f'.repeat(64), createdBy: 'U-OTHER',
+  }, 'bulk:other');
+  fx.db.prepare("UPDATE crm_ai_jobs SET state='retry_wait' WHERE id IN (?,?)").run(own.id, other.id);
+
+  assert.equal((await fx.request(`/api/sales-crm/ai/jobs/${own.id}/cancel`, {
+    cookie: fx.cookie, method: 'POST',
+  })).status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/bulk/retry', {
+    cookie: fx.cookie, method: 'POST', body: { jobIds: [own.id] },
+  })).status, 403);
+
+  fx.setUserPermissions('U-MGR', { bulk_manage_ai_tasks: true });
+  assert.equal((await fx.request('/api/sales-crm/ai/bulk/retry', {
+    cookie: fx.cookie, method: 'POST', body: { jobIds: [own.id, other.id] },
+  })).status, 403);
+  assert.equal(createAIJobStore(fx.db).getJob(own.id).state, 'retry_wait');
+
+  const retried = await fx.request('/api/sales-crm/ai/bulk/retry', {
+    cookie: fx.cookie, method: 'POST', body: { jobIds: [own.id] },
+  });
+  assert.equal(retried.status, 202);
+  assert.equal((await retried.json()).jobs[0].state, 'queued');
+
+  fx.setUserPermissions('U-MGR', { cancel_ai_tasks: true });
+  const cancelled = await fx.request('/api/sales-crm/ai/bulk/cancel', {
+    cookie: fx.cookie, method: 'POST', body: { jobIds: [own.id] },
+  });
+  assert.equal(cancelled.status, 200);
+  assert.equal((await cancelled.json()).jobs[0].state, 'cancelled');
+
+  const atomicQueued = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-ATOMIC-QUEUED' }).enqueue({
+    customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
+    contextHash: '1'.repeat(64), createdBy: 'U-MGR',
+  }, 'bulk:atomic:queued');
+  const atomicDone = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-ATOMIC-DONE' }).enqueue({
+    customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
+    contextHash: '2'.repeat(64), createdBy: 'U-MGR',
+  }, 'bulk:atomic:done');
+  fx.db.prepare("UPDATE crm_ai_jobs SET state='succeeded' WHERE id=?").run(atomicDone.id);
+  assert.equal((await fx.request('/api/sales-crm/ai/bulk/cancel', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: { jobIds: [atomicQueued.id, atomicDone.id] },
+  })).status, 409);
+  assert.equal(createAIJobStore(fx.db).getJob(atomicQueued.id).state, 'queued');
+
+  await new Promise(resolve => setImmediate(resolve));
+  const audit = fx.db.prepare(`SELECT action,detail_json FROM crm_audit_log
+    WHERE entity_type='ai_station' ORDER BY rowid DESC LIMIT 1`).get();
+  assert.equal(audit.action, 'POST /ai/bulk/cancel');
+  assert.doesNotMatch(audit.detail_json, /AIJ-BULK|RU-9002/);
+});
+
+test('AI budget configuration has a dedicated permission and anonymous audit boundary', async t => {
+  const fx = await fixtures.adminFixture();
+  t.after(() => fx.close());
+  const route = '/api/sales-crm/ai/budgets/company/default';
+  assert.equal((await fx.request(route, {
+    cookie: fx.cookie,
+    method: 'PUT',
+    body: { dailyLimit: 5, monthlyLimit: 50, perTaskLimit: 1 },
+  })).status, 403);
+
+  const configured = await fx.request(route, {
+    cookie: fx.adminCookie,
+    method: 'PUT',
+    body: { dailyLimit: 5, monthlyLimit: 50, perTaskLimit: 1, warningRatio: 0.8 },
+  });
+  assert.equal(configured.status, 200);
+  const policy = (await configured.json()).policy;
+  assert.equal(policy.scopeType, 'company');
+  assert.equal(policy.scopeId, 'default');
+  assert.equal(policy.dailyLimit, 5);
+  const listed = await fx.request('/api/sales-crm/ai/budgets', { cookie: fx.adminCookie });
+  assert.equal(listed.status, 200);
+  assert.equal((await listed.json()).policies.length, 1);
+
+  assert.equal((await fx.request(route, {
+    cookie: fx.adminCookie,
+    method: 'PUT',
+    body: { dailyLimit: 5, providerKey: 'must-not-be-accepted' },
+  })).status, 400);
+  await new Promise(resolve => setImmediate(resolve));
+  const audit = fx.db.prepare(`SELECT action,entity_id,detail_json FROM crm_audit_log
+    WHERE action='PUT /ai/budgets/:scopeType/:scopeId' ORDER BY rowid DESC LIMIT 1`).get();
+  assert.equal(audit.entity_id, '');
+  assert.doesNotMatch(audit.detail_json, /default|providerKey|must-not-be-accepted/);
 });

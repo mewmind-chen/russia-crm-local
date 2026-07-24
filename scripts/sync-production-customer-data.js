@@ -14,7 +14,13 @@ const COPY_TABLES = Object.freeze([
 ]);
 
 const CLEAR_ONLY_TABLES = Object.freeze([
-  'crm_ai_evidence_bindings', 'crm_ai_model_runs', 'crm_ai_station_results', 'crm_ai_jobs',
+  'crm_ai_field_provenance', 'crm_ai_enrichment_evidence',
+  'crm_ai_enrichment_events', 'crm_ai_enrichment_node_links', 'crm_ai_enrichment_runs',
+  'crm_ai_budget_alerts', 'crm_ai_usage_ledger', 'crm_ai_budget_reservations',
+  'crm_ai_interaction_runs', 'crm_ai_task_reviews',
+  'crm_ai_evidence_bindings', 'crm_ai_model_runs', 'crm_ai_station_results',
+  'crm_ai_job_dependencies', 'crm_ai_resource_slots', 'crm_ai_customer_locks',
+  'crm_ai_dispatch_fairness', 'crm_ai_resource_rate_windows', 'crm_ai_jobs',
   'crm_notifications', 'crm_migration_review', 'crm_data_maintenance_runs', 'crm_audit_log',
   'prospect_sources', 'prospect_candidates', 'prospect_tasks',
 ]);
@@ -219,6 +225,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  CLEAR_ONLY_TABLES,
   COPY_TABLES,
   assertSyncBoundaries,
   copyTable,
