@@ -22,6 +22,16 @@ DEFAULT_HERMES = "/Users/ylf/.hermes/hermes-agent/venv/bin/hermes"
 DEFAULT_SKILL = "russia-contact-recon"
 
 
+class JobCancelled(RuntimeError):
+    pass
+
+
+def ensure_active(response: dict[str, Any]) -> dict[str, Any]:
+    if response.get("cancel_requested"):
+        raise JobCancelled("Contact Recon job cancellation requested")
+    return response
+
+
 def load_dotenv(path: Path) -> None:
     if not path.exists(): return
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -185,21 +195,54 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
     root = Path(args.output_dir).expanduser().resolve()
     output = root / f"{datetime.now():%Y%m%d-%H%M%S}-{safe_name(job.get('company_name') or job['job_id'])}-{job['job_id']}"
     output.mkdir(parents=True, exist_ok=True)
-    post_json(args.url, args.token, "heartbeatContactReconJob", {"job_id": job["job_id"], "worker_id": args.worker_id, "lease_seconds": args.timeout + 600, "output_dir": str(output), "stage": "researching"})
-    prompt = build_prompt(job)
-    (output / "prompt.txt").write_text(prompt, encoding="utf-8")
+    def heartbeat() -> dict[str, Any]:
+        return ensure_active(post_json(args.url, args.token, "heartbeatContactReconJob", {
+            "job_id": job["job_id"],
+            "worker_id": args.worker_id,
+            "lease_seconds": args.timeout + 600,
+            "output_dir": str(output),
+            "stage": "researching",
+        }))
     try:
+        heartbeat()
+        prompt = build_prompt(job)
+        (output / "prompt.txt").write_text(prompt, encoding="utf-8")
         command = [args.hermes, "chat", "--query", prompt, "--yolo", "--quiet", "--skills", args.skill]
-        completed = subprocess.run(command, cwd=output, text=True, capture_output=True, timeout=args.timeout, check=False)
-        (output / "hermes_stdout.txt").write_text(completed.stdout or "", encoding="utf-8")
-        (output / "hermes_stderr.log").write_text(completed.stderr or "", encoding="utf-8")
-        if completed.returncode != 0: raise RuntimeError(f"Hermes exited with {completed.returncode}")
-        result = extract_result(completed.stdout or "", output)
+        process = subprocess.Popen(command, cwd=output, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        deadline = time.monotonic() + args.timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                process.communicate()
+                raise subprocess.TimeoutExpired(command, args.timeout)
+            try:
+                stdout, stderr = process.communicate(timeout=min(30, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                try:
+                    heartbeat()
+                except Exception:
+                    process.terminate()
+                    try:
+                        process.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.communicate()
+                    raise
+        (output / "hermes_stdout.txt").write_text(stdout or "", encoding="utf-8")
+        (output / "hermes_stderr.log").write_text(stderr or "", encoding="utf-8")
+        if process.returncode != 0: raise RuntimeError(f"Hermes exited with {process.returncode}")
+        result = extract_result(stdout or "", output)
         result["job_id"] = job["job_id"]
         result["customer_id"] = job["customer_id"]
         (output / "contact-result-v1.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        heartbeat()
         post_json(args.url, args.token, "submitContactReconResult", {"job_id": job["job_id"], "result": result, "output_dir": str(output)})
         print(f"[done] {job['job_id']} -> {output}", flush=True)
+    except JobCancelled:
+        print(f"[cancelled] {job['job_id']}", flush=True)
+        return
     except Exception as exc:
         post_json(args.url, args.token, "failContactReconJob", {"job_id": job["job_id"], "error": str(exc), "output_dir": str(output)})
         raise

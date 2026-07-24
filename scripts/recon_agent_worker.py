@@ -33,6 +33,16 @@ class ReconApiError(RuntimeError):
     pass
 
 
+class JobCancelled(RuntimeError):
+    pass
+
+
+def ensure_active(response: dict[str, Any]) -> dict[str, Any]:
+    if response.get("cancel_requested"):
+        raise JobCancelled("Recon job cancellation requested")
+    return response
+
+
 def load_dotenv(path: Path) -> None:
     if not path.exists():
         return
@@ -430,6 +440,7 @@ def run_agent(
     prompt_name: str = "prompt.txt",
     stdout_name: str = "hermes_stdout.txt",
     stderr_name: str = "hermes_stderr.log",
+    heartbeat: Any = None,
 ) -> str:
     prompt_path = output_dir / prompt_name
     stdout_path = output_dir / stdout_name
@@ -438,12 +449,34 @@ def run_agent(
     command = [hermes_bin, "chat", "--query", prompt, "--yolo", "--quiet"]
     if hermes_skill:
         command.extend(["--skills", hermes_skill])
-    completed = subprocess.run(command, cwd=str(output_dir), text=True, capture_output=True, timeout=timeout, check=False)
-    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
-    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
-    if completed.returncode != 0:
-        raise RuntimeError(f"Hermes exited with {completed.returncode}; see {stderr_path}")
-    return completed.stdout or ""
+    process = subprocess.Popen(command, cwd=str(output_dir), text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            process.kill()
+            process.communicate()
+            raise subprocess.TimeoutExpired(command, timeout)
+        try:
+            stdout, stderr = process.communicate(timeout=min(30, remaining))
+            break
+        except subprocess.TimeoutExpired:
+            try:
+                if heartbeat:
+                    heartbeat()
+            except Exception:
+                process.terminate()
+                try:
+                    process.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
+                raise
+    stdout_path.write_text(stdout or "", encoding="utf-8")
+    stderr_path.write_text(stderr or "", encoding="utf-8")
+    if process.returncode != 0:
+        raise RuntimeError(f"Hermes exited with {process.returncode}; see {stderr_path}")
+    return stdout or ""
 
 
 def validate_payload(result: dict[str, Any], evidence: list[dict[str, Any]]) -> None:
@@ -2459,19 +2492,26 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
     output_dir = (Path(args.output_dir).expanduser().resolve()
                   / f"{now_slug()}-{safe_name(job.get('company_name') or job_id)}-{safe_name(job_id)}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    if job.get("worker_id"):
-        post_json(args.webapp_url, args.token, "heartbeatReconJob", {
+    def heartbeat() -> dict[str, Any]:
+        return ensure_active(post_json(args.webapp_url, args.token, "heartbeatReconJob", {
             "job_id": job_id,
             "worker_id": args.worker_id,
             "lease_seconds": max(1800, args.timeout + 300),
             "output_dir": str(output_dir),
-        })
-    else:
-        post_json(args.webapp_url, args.token, "markJobRunning", {"job_id": job_id, "output_dir": str(output_dir)})
+        }))
     try:
+        if job.get("worker_id"):
+            heartbeat()
+        else:
+            post_json(args.webapp_url, args.token, "markJobRunning", {"job_id": job_id, "output_dir": str(output_dir)})
         capabilities = probe_execution_capabilities(job, output_dir)
+        if job.get("worker_id"):
+            heartbeat()
         prompt = build_prompt(job, output_dir, capabilities)
-        report_markdown = run_agent(args.hermes_bin, args.hermes_skill, prompt, output_dir, args.timeout).strip()
+        report_markdown = run_agent(
+            args.hermes_bin, args.hermes_skill, prompt, output_dir, args.timeout,
+            heartbeat=heartbeat if job.get("worker_id") else None,
+        ).strip()
         if not report_markdown and (output_dir / "report.md").exists():
             report_markdown = (output_dir / "report.md").read_text(encoding="utf-8").strip()
         if not report_markdown:
@@ -2500,6 +2540,8 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
         result["artifacts_json"] = json.dumps(artifacts, ensure_ascii=False)
         result["source_file"] = job.get("source", "")
         result["deep_report"] = str(html_path)
+        if job.get("worker_id"):
+            heartbeat()
         post_json(args.webapp_url, args.token, "submitReconResult", {
             "job_id": job_id, "result": result, "evidence": evidence,
             "report_markdown": report_markdown,
@@ -2511,6 +2553,9 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> None:
             "parser_mode": "v3_envelope",
         })
         print(f"[done] {job_id} -> {output_dir}", flush=True)
+    except JobCancelled:
+        print(f"[cancelled] {job_id}", flush=True)
+        return
     except Exception as exc:
         post_json(args.webapp_url, args.token, "markJobFailed", {"job_id": job_id, "error": str(exc), "output_dir": str(output_dir)})
         raise
