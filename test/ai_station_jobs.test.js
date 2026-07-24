@@ -31,7 +31,7 @@ test('AI schema installation is idempotent and leaves identity/router tables unc
   const before = db.prepare('SELECT * FROM assistant_runtime_settings').all();
   installAIStationSchema(db);
   installAIStationSchema(db);
-  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 6);
+  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 10);
   assert.deepEqual(db.prepare('SELECT * FROM assistant_runtime_settings').all(), before);
   assert.equal(db.prepare('SELECT count(*) count FROM customer_pool').get().count, 1);
   db.close();
@@ -68,8 +68,8 @@ test('AI schema migration is serialized across concurrent processes', async t =>
   });
   await Promise.all([install(), install()]);
   const verified = new Database(dbPath, { readonly: true });
-  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 1);
-  assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 6);
+  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 2);
+  assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 10);
   verified.close();
 });
 
@@ -129,8 +129,10 @@ test('AI schema incrementally migrates the legacy four-table layout without losi
     'blocked_reason',
     'cancel_requested_at',
     'cancelled_at',
+    'execution_resource',
+    'fairness_at',
   ]) assert.equal(columns.has(name), true, `missing migrated column ${name}`);
-  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 6);
+  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 10);
   assert.deepEqual(
     db.prepare('SELECT id,state,attempts,finished_at FROM crm_ai_jobs WHERE id=?').get('AIJ-LEGACY'),
     {
