@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  budgetConfigurationFromEnvironment,
   defaultExecutionResources,
   executionResourcesFromEnvironment,
   stationResourcesFromEnvironment,
@@ -16,6 +17,24 @@ test('independent Worker exposes safe default global and engine concurrency', ()
     'kimi-cli': { maxConcurrency: 1, rateLimit: 0, rateWindowMs: 60_000 },
     hermes: { maxConcurrency: 1, rateLimit: 0, rateWindowMs: 60_000 },
   });
+});
+
+test('Worker validates persistent budget policy and pricing environment config', () => {
+  assert.deepEqual(budgetConfigurationFromEnvironment({
+    CRM_AI_PRICING_JSON: '{"version":"pricing-v2","default":{"defaultAttemptCost":0.02}}',
+    CRM_AI_BUDGET_POLICIES_JSON: '[{"scopeType":"company","scopeId":"default","dailyLimit":10}]',
+  }), {
+    pricing: { version: 'pricing-v2', default: { defaultAttemptCost: 0.02 } },
+    policies: [{ scopeType: 'company', scopeId: 'default', dailyLimit: 10 }],
+  });
+  assert.throws(
+    () => budgetConfigurationFromEnvironment({ CRM_AI_BUDGET_POLICIES_JSON: '{}' }),
+    /CRM_AI_BUDGET_POLICIES_JSON must be a JSON array/,
+  );
+  assert.throws(
+    () => budgetConfigurationFromEnvironment({ CRM_AI_PRICING_JSON: '[]' }),
+    /CRM_AI_PRICING_JSON must be a JSON object/,
+  );
 });
 
 test('Worker resource and station maps are overridden by validated JSON environment config', () => {

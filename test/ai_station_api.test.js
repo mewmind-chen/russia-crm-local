@@ -53,6 +53,18 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   assert.equal(runBody.result, null);
   assert.equal(calls.length, 0);
 
+  const pendingReplay = await fx.request('/api/sales-crm/ai/customers/RU-9002/stations/customer_fit/run', {
+    cookie: fx.cookie, method: 'POST',
+  });
+  assert.equal(pendingReplay.status, 202);
+  assert.equal((await pendingReplay.json()).job.id, runBody.job.id);
+  assert.deepEqual(fx.db.prepare(`SELECT status,charged_cost_micros,cost_source
+    FROM crm_ai_usage_ledger WHERE job_id=?`).all(runBody.job.id), [{
+    status: 'deduplicated',
+    charged_cost_micros: 0,
+    cost_source: 'not_billable',
+  }]);
+
   const worker = createAIStationWorker({
     openDb: () => new Database(fx.dbPath),
     workerId: 'api-test-worker',
@@ -67,6 +79,19 @@ test('AI station APIs enforce login, permissions, row scope, idempotency and ano
   assert.equal(replay.status, 200);
   assert.equal((await replay.json()).job.id, runBody.job.id);
   assert.equal(calls.length, 1);
+  assert.deepEqual(fx.db.prepare(`SELECT status,charged_cost_micros,cost_source
+    FROM crm_ai_usage_ledger WHERE job_id=? ORDER BY status`).all(runBody.job.id), [
+    {
+      status: 'cache_hit',
+      charged_cost_micros: 0,
+      cost_source: 'not_billable',
+    },
+    {
+      status: 'deduplicated',
+      charged_cost_micros: 0,
+      cost_source: 'not_billable',
+    },
+  ]);
 
   const results = await fx.request('/api/sales-crm/ai/customers/RU-9002/results', { cookie: fx.cookie });
   assert.equal(results.status, 200);

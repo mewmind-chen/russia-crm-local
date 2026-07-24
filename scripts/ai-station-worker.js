@@ -55,6 +55,26 @@ function stationResourcesFromEnvironment(env = process.env) {
   return jsonObject(env.CRM_AI_STATION_RESOURCES_JSON, 'CRM_AI_STATION_RESOURCES_JSON', {});
 }
 
+function jsonArray(value, name, fallback = []) {
+  const selected = String(value || '').trim();
+  if (!selected) return fallback;
+  let parsed;
+  try {
+    parsed = JSON.parse(selected);
+  } catch (_error) {
+    throw new Error(`${name} must be valid JSON`);
+  }
+  if (!Array.isArray(parsed)) throw new Error(`${name} must be a JSON array`);
+  return parsed;
+}
+
+function budgetConfigurationFromEnvironment(env = process.env) {
+  return {
+    pricing: jsonObject(env.CRM_AI_PRICING_JSON, 'CRM_AI_PRICING_JSON', {}),
+    policies: jsonArray(env.CRM_AI_BUDGET_POLICIES_JSON, 'CRM_AI_BUDGET_POLICIES_JSON'),
+  };
+}
+
 function openDb() {
   const db = new Database(databasePath());
   db.pragma('journal_mode = WAL');
@@ -71,6 +91,7 @@ async function main(options = {}) {
   }
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
+  const budgetConfiguration = budgetConfigurationFromEnvironment(env);
   const worker = createAIStationWorker({
     openDb,
     workerId: env.CRM_AI_WORKER_ID,
@@ -79,8 +100,15 @@ async function main(options = {}) {
       executionResources: executionResourcesFromEnvironment(env),
       resourceForStation: stationResourcesFromEnvironment(env),
     },
+    budgetOptions: {
+      companyId: String(env.CRM_AI_COMPANY_ID || 'default'),
+      pricing: budgetConfiguration.pricing,
+      onAlert: alert => process.stderr.write(`${JSON.stringify({ event: 'ai_budget_alert', ...alert })}\n`),
+    },
+    budgetPolicies: budgetConfiguration.policies,
     executorOptions: {
       timeoutMs: integerArgument('--timeout-ms', Number(env.CRM_AI_EXECUTION_TIMEOUT_MS) || 75_000, argv),
+      maxEngineAttempts: Number(env.ASSISTANT_ROUTER_MAX_ATTEMPTS) || 2,
     },
     queueHealthOptions: {
       backlogWarning: Number(env.CRM_AI_QUEUE_BACKLOG_WARNING) || 100,
@@ -105,6 +133,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  budgetConfigurationFromEnvironment,
   defaultExecutionResources,
   executionResourcesFromEnvironment,
   stationResourcesFromEnvironment,
