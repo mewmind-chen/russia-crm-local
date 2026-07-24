@@ -7,6 +7,7 @@ const { createAIStationWorker } = require('../lib/ai_stations/worker');
 const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
 const { resolveCustomerEnrichmentFlags } = require('../lib/ai_stations/enrichment/flags');
 const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
+const { consumePendingEnrichmentEvent } = require('../lib/ai_stations/enrichment/events');
 const { resolveAIStationsEnabled } = require('../lib/ai_stations/routes');
 const { databasePath } = require('../lib/runtime_paths');
 
@@ -119,10 +120,15 @@ async function main(options = {}) {
     },
     budgetPolicies: budgetConfiguration.policies,
     executors: createEnrichmentExecutors(),
-    beforeClaim: enrichmentConfiguration.enabled && enrichmentConfiguration.autoTriggerEnabled
-      ? ({ db, workerId }) => dispatchPendingEnrichment(db, undefined, {
-        dispatcherId: `${workerId}:customer-enrichment`,
-      })
+    beforeClaim: enrichmentConfiguration.enabled
+      ? async ({ db, workerId }) => {
+        if (enrichmentConfiguration.autoTriggerEnabled) {
+          await dispatchPendingEnrichment(db, undefined, {
+            dispatcherId: `${workerId}:customer-enrichment`,
+          });
+        }
+        return consumePendingEnrichmentEvent(db, `${workerId}:customer-enrichment-events`);
+      }
       : undefined,
     executorOptions: {
       timeoutMs: integerArgument('--timeout-ms', Number(env.CRM_AI_EXECUTION_TIMEOUT_MS) || 75_000, argv),
