@@ -30,6 +30,7 @@ const { registerReleaseHealth } = require('./lib/release_health');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
 const { createAITaskCenterStore } = require('./lib/ai_stations/task_center');
+const { createAssistantConversationStore } = require('./lib/assistant_conversations');
 
 function createApp(options = {}) {
 const paths = runtimePaths();
@@ -832,12 +833,129 @@ app.get('/api/assistant/runtime', runtimeHandlers.get);
 app.patch('/api/assistant/runtime', runtimeHandlers.patch);
 app.post('/api/assistant/runtime/recheck', runtimeHandlers.recheck);
 
+app.get('/api/assistant/conversations', (req, res) => {
+  const value = getDb();
+  try {
+    const store = createAssistantConversationStore(value);
+    res.json({ ok: true, conversations: store.list(req.salesUser, {
+      includeArchived: String(req.query.includeArchived || '') === '1',
+      search: req.query.search,
+    }) });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ ok: false, error: error.message });
+  } finally {
+    value.close();
+  }
+});
+
+app.post('/api/assistant/conversations', (req, res) => {
+  const value = getDb();
+  try {
+    const store = createAssistantConversationStore(value);
+    res.status(201).json({ ok: true, conversation: store.create(req.salesUser, req.body || {}) });
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ ok: false, error: error.message, code: error.code || 'ASSISTANT_CONVERSATION_ERROR' });
+  } finally {
+    value.close();
+  }
+});
+
+app.get('/api/assistant/conversations/:conversationId', (req, res) => {
+  const value = getDb();
+  try {
+    const store = createAssistantConversationStore(value);
+    const row = store.rowById(req.params.conversationId);
+    const conversation = store.getForActor(req.params.conversationId, req.salesUser, { messages: true });
+    if (!conversation) return res.status(row ? 403 : 404).json({ ok: false, error: row ? '无权访问该 AI 会话' : 'AI 会话不存在' });
+    if (String(row.owner_user_id) !== String(req.salesUser.id)) store.audit(req.realUser || req.salesUser, row, 'assistant_conversation_view');
+    return res.json({ ok: true, conversation });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ ok: false, error: error.message });
+  } finally {
+    value.close();
+  }
+});
+
+app.patch('/api/assistant/conversations/:conversationId', (req, res) => {
+  const value = getDb();
+  try {
+    const store = createAssistantConversationStore(value);
+    const row = store.rowById(req.params.conversationId);
+    if (!row) return res.status(404).json({ ok: false, error: 'AI 会话不存在' });
+    let conversation = store.getForActor(req.params.conversationId, req.salesUser);
+    if (!conversation) return res.status(403).json({ ok: false, error: '无权访问该 AI 会话' });
+    const auditActions = [];
+    if (req.body?.title !== undefined) {
+      conversation = store.rename(req.params.conversationId, req.salesUser, req.body.title);
+      auditActions.push('assistant_conversation_rename');
+    }
+    if (req.body?.favorite !== undefined) {
+      conversation = store.setFavorite(req.params.conversationId, req.salesUser, Boolean(req.body.favorite));
+      auditActions.push(req.body.favorite ? 'assistant_conversation_favorite' : 'assistant_conversation_unfavorite');
+    }
+    if (req.body?.archived !== undefined) {
+      conversation = store.setArchived(req.params.conversationId, req.salesUser, Boolean(req.body.archived));
+      auditActions.push(req.body.archived ? 'assistant_conversation_archive' : 'assistant_conversation_restore');
+    }
+    auditActions.forEach(action => store.audit(req.realUser || req.salesUser, row, action));
+    return res.json({ ok: true, conversation });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ ok: false, error: error.message, code: error.code || 'ASSISTANT_CONVERSATION_ERROR' });
+  } finally {
+    value.close();
+  }
+});
+
 app.post('/api/assistant/chat', async (req, res) => {
   const startedAt = Date.now();
   const requestId = `asst-${startedAt.toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
   const input = compactAssistantPayload(req.body || {});
+  const conversationDb = getDb();
+  const conversationStore = createAssistantConversationStore(conversationDb);
+  let preparedConversation = null;
   try {
-    const result = await answerAssistantQuestion(req.body || {}, req.accessContext);
+    preparedConversation = conversationStore.prepare(
+      String(req.body?.conversationId || ''),
+      req.salesUser,
+      { scope: req.body?.context, title: req.body?.title },
+    );
+    const existing = conversationStore.existingTurn(
+      preparedConversation.conversationId,
+      req.body?.clientMessageId,
+    );
+    if (existing) {
+      return res.json({
+        ok: true,
+        answer: existing.content,
+        sources: existing.sources,
+        matchedCustomers: existing.matchedCustomers,
+        actions: existing.actions,
+        resultSets: existing.resultSets,
+        retrievalMode: existing.retrievalMode,
+        usage: existing.usage,
+        model: existing.model,
+        engine: existing.engine,
+        sessionId: preparedConversation.nativeSessionId,
+        sessionEngine: preparedConversation.nativeSessionEngine,
+        conversationId: preparedConversation.conversationId,
+        conversation: conversationStore.getForActor(preparedConversation.conversationId, req.salesUser),
+        messageId: existing.id,
+        duplicate: true,
+      });
+    }
+    const result = await answerAssistantQuestion({
+      ...(req.body || {}),
+      conversationId: preparedConversation.conversationId,
+      history: preparedConversation.history,
+      sessionId: preparedConversation.nativeSessionId,
+      sessionEngine: preparedConversation.nativeSessionEngine,
+    }, req.accessContext);
+    const persisted = conversationStore.appendTurn(preparedConversation.conversationId, {
+      clientMessageId: req.body?.clientMessageId,
+      message: req.body?.message,
+      context: req.body?.context,
+      result,
+    });
     const runtimeMode = assistantRuntimeMode();
     logAssistantChat({
       ts: new Date().toISOString(),
@@ -848,7 +966,13 @@ app.post('/api/assistant/chat', async (req, res) => {
       output: { ...compactAssistantResult(result), runtimeMode },
     });
     recordAssistantTask(req, startedAt, result, null);
-    res.json(result);
+    res.json({
+      ...result,
+      conversationId: preparedConversation.conversationId,
+      conversation: conversationStore.getForActor(preparedConversation.conversationId, req.salesUser),
+      messageId: persisted.assistantMessage?.id || '',
+      duplicate: Boolean(persisted.duplicate),
+    });
   } catch (e) {
     const runtimeMode = assistantRuntimeMode();
     logAssistantChat({
@@ -872,6 +996,8 @@ app.post('/api/assistant/chat', async (req, res) => {
     res.status(e.statusCode || 500).json(
       serializeAssistantEngineError(e, hasPermission(req.salesUser, 'manage_users')),
     );
+  } finally {
+    conversationDb.close();
   }
 });
 
