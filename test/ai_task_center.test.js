@@ -8,6 +8,7 @@ const { createAIJobStore } = require('../lib/ai_stations/jobs');
 const { createAIResultStore } = require('../lib/ai_stations/results');
 const { createAITaskCenterStore } = require('../lib/ai_stations/task_center');
 const { createAIBudgetStore } = require('../lib/ai_stations/budgets');
+const { createCustomerEnrichmentStore } = require('../lib/ai_stations/enrichment/store');
 
 function enqueue(db, id, customerId, crmAccountId, actorId) {
   return createAIJobStore(db, { idFactory: () => id }).enqueue({
@@ -94,6 +95,24 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
     contextHash: context.contextHash, payload: { fullPrompt: 'secret' }, createdBy: 'U-MGR',
   }, 'task-center:detail');
   jobs.claimById('AIJ-DETAIL', 'worker-secret');
+  const enrichment = createCustomerEnrichmentStore(fx.db, {
+    idFactory: prefix => `${prefix}-DETAIL`,
+  });
+  const enrichmentRun = enrichment.createTrigger({
+    customerId: 'RU-9002',
+    crmAccountId: 'CRM-OWN',
+    triggerSource: 'manual_create',
+    triggeredBy: 'U-MGR',
+    inputFingerprint: 'a'.repeat(64),
+    pipelineVersion: 'v1',
+  });
+  enrichment.linkNode({
+    runId: enrichmentRun.id,
+    nodeKey: 'recon_dispatch',
+    aiJobId: 'AIJ-DETAIL',
+    legacyTaskType: 'recon',
+    legacyTaskId: 'JOB-OWN',
+  });
   const results = createAIResultStore(fx.db, { idFactory: prefix => `${prefix}-DETAIL` });
   results.recordModelRun({
     jobId: 'AIJ-DETAIL', attempt: 1, engine: 'openai', model: 'gpt-test',
@@ -118,6 +137,12 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
   const body = await response.json();
   assert.equal(body.task.result.value.fitScore, 88);
   assert.equal(body.task.attempts[0].durationMs, 321);
+  assert.deepEqual(body.task.legacyTasks, [{
+    nodeKey: 'recon_dispatch',
+    type: 'recon',
+    taskId: 'recon:JOB-OWN',
+    state: 'succeeded',
+  }]);
   assert.ok(body.task.timeline.some(item => item.kind === 'attempt_finished'));
   const serialized = JSON.stringify(body);
   assert.doesNotMatch(serialized, /worker-secret|fullPrompt|leaseOwner|input_json|idempotency/i);
