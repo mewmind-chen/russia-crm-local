@@ -7,6 +7,7 @@ const { buildCustomerContext } = require('../lib/ai_stations/context');
 const { createAIJobStore } = require('../lib/ai_stations/jobs');
 const { createAIResultStore } = require('../lib/ai_stations/results');
 const { createAITaskCenterStore } = require('../lib/ai_stations/task_center');
+const { createAIBudgetStore } = require('../lib/ai_stations/budgets');
 
 function enqueue(db, id, customerId, crmAccountId, actorId) {
   return createAIJobStore(db, { idFactory: () => id }).enqueue({
@@ -149,11 +150,18 @@ test('only administrators receive global runtime metrics', async t => {
   const fx = await fixtures.adminFixture({ permissions: { view_customers: true } });
   t.after(() => fx.close());
   enqueue(fx.db, 'AIJ-ADMIN', 'RU-9003', 'CRM-OTHER', 'U-OTHER');
+  createAIBudgetStore(fx.db).setPolicy({
+    scopeType: 'company', scopeId: 'default', dailyLimit: 10, monthlyLimit: 100, perTaskLimit: 1,
+  });
   const response = await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.adminCookie });
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.ok(body.overview);
   assert.equal(body.overview.queue.queued, 1);
+  assert.equal(body.overview.budget.policies.length, 1);
+  assert.equal(body.overview.budget.policies[0].dailyLimit, 10);
+  assert.equal(body.overview.budget.alertCount, 0);
+  assert.equal(body.overview.monthlyCost, 0);
   assert.ok(body.items.some(item => item.taskId === 'AIJ-ADMIN'));
   assert.ok(body.items.some(item => item.taskId === 'recon:JOB-OTHER'));
 });
