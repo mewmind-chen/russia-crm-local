@@ -113,6 +113,11 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
     legacyTaskType: 'recon',
     legacyTaskId: 'JOB-OWN',
   });
+  fx.db.prepare(`UPDATE crm_ai_enrichment_runs
+    SET workflow_id='AIW-DETAIL',state='running',route_state='needs_review',
+      completeness=72,missing_items_json='["verified_contact"]',
+      tags_json='["missing_info","needs_review"]'
+    WHERE id=?`).run(enrichmentRun.id);
   const results = createAIResultStore(fx.db, { idFactory: prefix => `${prefix}-DETAIL` });
   results.recordModelRun({
     jobId: 'AIJ-DETAIL', attempt: 1, engine: 'openai', model: 'gpt-test',
@@ -143,6 +148,25 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
     taskId: 'recon:JOB-OWN',
     state: 'succeeded',
   }]);
+  assert.deepEqual(body.task.enrichment, {
+    runId: enrichmentRun.id,
+    workflowId: 'AIW-DETAIL',
+    state: 'running',
+    routeState: 'needs_review',
+    completeness: 72,
+    missingItems: ['verified_contact'],
+    tags: ['missing_info', 'needs_review'],
+    currentNodeKey: 'recon_dispatch',
+    nodes: [{
+      nodeKey: 'recon_dispatch',
+      state: 'succeeded',
+      taskId: 'AIJ-DETAIL',
+      legacyTask: {
+        type: 'recon',
+        taskId: 'recon:JOB-OWN',
+      },
+    }],
+  });
   assert.ok(body.task.timeline.some(item => item.kind === 'attempt_finished'));
   const serialized = JSON.stringify(body);
   assert.doesNotMatch(serialized, /worker-secret|fullPrompt|leaseOwner|input_json|idempotency/i);
