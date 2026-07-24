@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260724-8/);
-  assert.match(html, /app\.js\?v=20260724-8/);
+  assert.match(html, /app\.css\?v=20260724-9/);
+  assert.match(html, /app\.js\?v=20260724-9/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
@@ -63,6 +63,10 @@ test('AI task center has permission-scoped filters, pagination, details and oper
   assert.match(app, /data-ai-task-action="retry"/);
   assert.match(app, /data-ai-task-action="cancel"/);
   assert.match(app, /data-ai-task-action="approved"/);
-  assert.match(app, /can\('manage_evaluations'\)/);
+  assert.match(app, /can\('cancel_ai_tasks'\)/);
+  assert.match(app, /can\('review_ai_tasks'\)/);
+  assert.match(html, /id="aiTaskDegraded"/);
+  assert.match(app, /保留上次成功加载的历史任务/);
   assert.match(css, /\.ai-task-filters/);
+  assert.match(css, /\.ai-task-degraded/);
 });

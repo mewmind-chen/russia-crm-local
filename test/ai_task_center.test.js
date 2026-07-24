@@ -55,6 +55,28 @@ test('task center unifies sources, paginates and enforces customer plus actor sc
   assert.deepEqual((await filtered.json()).items.map(item => item.taskId), ['recon:JOB-OWN']);
 });
 
+test('administrator, manager and sales task lists follow the role plus customer row matrix', async t => {
+  const fx = await fixtures.adminFixture({ managerViewAll: false });
+  t.after(() => fx.close());
+  enqueue(fx.db, 'AIJ-MATRIX-MANAGER', 'RU-9002', 'CRM-OWN', 'U-MGR');
+  enqueue(fx.db, 'AIJ-MATRIX-SALES', 'RU-9003', 'CRM-OTHER', 'U-OTHER');
+
+  const manager = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
+    cookie: fx.cookie,
+  })).json();
+  const sales = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
+    cookie: fx.otherCookie,
+  })).json();
+  const admin = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
+    cookie: fx.adminCookie,
+  })).json();
+  assert.deepEqual(manager.items.map(item => item.taskId), ['AIJ-MATRIX-MANAGER']);
+  assert.deepEqual(sales.items.map(item => item.taskId), ['AIJ-MATRIX-SALES']);
+  assert.deepEqual(new Set(admin.items.map(item => item.taskId)), new Set([
+    'AIJ-MATRIX-MANAGER', 'AIJ-MATRIX-SALES',
+  ]));
+});
+
 test('task detail exposes safe attempts, result evidence and timeline without queue internals', async t => {
   const fx = await fixtures.seededFixture({
     managerViewAll: false,
@@ -104,7 +126,7 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
 test('review action is separately authorized, audited and finalizes a needs-review task', async t => {
   const fx = await fixtures.seededFixture({
     managerViewAll: false,
-    permissions: { view_customers: true, manage_evaluations: true },
+    permissions: { view_customers: true, review_ai_tasks: true },
   });
   t.after(() => fx.close());
   const context = buildCustomerContext(fx.db, {
@@ -195,7 +217,9 @@ test('assistant requests persist only safe runtime metadata and honor the AI fea
 test('review requires its separate evaluation permission before resolving a task', async t => {
   const fx = await fixtures.seededFixture({
     managerViewAll: false,
-    permissions: { view_customers: true, manage_evaluations: false, use_ai_assistant: true },
+    permissions: {
+      view_customers: true, manage_evaluations: true, review_ai_tasks: false, use_ai_assistant: true,
+    },
   });
   t.after(() => fx.close());
   const response = await fx.request('/api/sales-crm/ai/jobs/AIJ-NOT-EXPOSED/review', {
@@ -206,4 +230,78 @@ test('review requires its separate evaluation permission before resolving a task
   assert.equal(response.status, 403);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM sqlite_master
     WHERE type='table' AND name='crm_ai_task_reviews'`).get().count, 0);
+});
+
+test('task summaries and details redact contact plus Recon content independently', async t => {
+  const fx = await fixtures.seededFixture({
+    managerViewAll: false,
+    permissions: { view_customers: true, view_contacts: false, view_recon: false },
+  });
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  fx.db.prepare(`INSERT INTO contact_recon_jobs
+    (job_id,customer_id,company_name,status,failure_reason,created_at,updated_at)
+    VALUES ('CONTACT-OWN','RU-9002','Owned Fixture','failed','buyer@secret.test +7 999 111 22 33',?,?)`)
+    .run(now, now);
+  fx.db.prepare(`UPDATE recon_jobs SET status='failed',error='https://secret-recon.test/report'
+    WHERE job_id='JOB-OWN'`).run();
+
+  const hidden = await (await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).json();
+  const hiddenContact = hidden.items.find(item => item.taskId === 'contact:CONTACT-OWN');
+  const hiddenRecon = hidden.items.find(item => item.taskId === 'recon:JOB-OWN');
+  assert.equal(hiddenContact.contentRestricted, true);
+  assert.equal(hiddenContact.restrictedContent, 'contacts');
+  assert.equal(hiddenContact.errorSummary, '');
+  assert.equal(hiddenRecon.contentRestricted, true);
+  assert.equal(hiddenRecon.restrictedContent, 'recon');
+  assert.equal(hiddenRecon.errorSummary, '');
+  for (const taskId of ['contact:CONTACT-OWN', 'recon:JOB-OWN']) {
+    const detail = await (await fx.request(`/api/sales-crm/ai/tasks/${encodeURIComponent(taskId)}`, {
+      cookie: fx.cookie,
+    })).json();
+    assert.equal(detail.task.errorSummary, '');
+    assert.doesNotMatch(JSON.stringify(detail), /buyer@secret|secret-recon|999 111/);
+  }
+
+  fx.setUserPermissions('U-MGR', { view_contacts: true, view_recon: false });
+  const contactsOnly = await (await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).json();
+  assert.match(contactsOnly.items.find(item => item.taskId === 'contact:CONTACT-OWN').errorSummary, /buyer@secret/);
+  assert.equal(contactsOnly.items.find(item => item.taskId === 'recon:JOB-OWN').errorSummary, '');
+
+  fx.setUserPermissions('U-MGR', { view_contacts: false, view_recon: true });
+  const reconOnly = await (await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).json();
+  assert.equal(reconOnly.items.find(item => item.taskId === 'contact:CONTACT-OWN').errorSummary, '');
+  assert.match(reconOnly.items.find(item => item.taskId === 'recon:JOB-OWN').errorSummary, /secret-recon/);
+
+  fx.setUserPermissions('U-MGR', { view_contacts: true, view_recon: true });
+  const visible = await (await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie })).json();
+  assert.match(visible.items.find(item => item.taskId === 'contact:CONTACT-OWN').errorSummary, /buyer@secret/);
+  assert.match(visible.items.find(item => item.taskId === 'recon:JOB-OWN').errorSummary, /secret-recon/);
+});
+
+test('queued or failed AI execution never blocks CRM and historical task reads', async t => {
+  const fx = await fixtures.seededFixture({
+    managerViewAll: false,
+    permissions: { view_customers: true, view_contacts: false, view_recon: false },
+  });
+  t.after(() => fx.close());
+  const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-DEGRADED' });
+  jobs.enqueue({
+    customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
+    contextHash: 'd'.repeat(64), createdBy: 'U-MGR',
+  }, 'degraded:queued');
+
+  const queuedTasks = await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.cookie });
+  const profile = await fx.request('/api/sales-crm/profile/RU-9002', { cookie: fx.cookie });
+  assert.equal(queuedTasks.status, 200);
+  assert.equal(profile.status, 200);
+  assert.ok((await queuedTasks.json()).items.some(item => item.taskId === 'AIJ-DEGRADED'));
+
+  jobs.claimById('AIJ-DEGRADED', 'unavailable-router-worker');
+  fx.db.prepare('UPDATE crm_ai_jobs SET max_attempts=1 WHERE id=?').run('AIJ-DEGRADED');
+  jobs.fail('AIJ-DEGRADED', 'unavailable-router-worker', new Error('router unavailable buyer@secret.test'));
+  const historical = await fx.request('/api/sales-crm/ai/tasks/AIJ-DEGRADED', { cookie: fx.cookie });
+  assert.equal(historical.status, 200);
+  assert.doesNotMatch(JSON.stringify(await historical.json()), /buyer@secret/);
+  assert.equal((await fx.request('/api/sales-crm/profile/RU-9002', { cookie: fx.cookie })).status, 200);
 });

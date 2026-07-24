@@ -19,7 +19,10 @@
     customerAiLoading: false,
     customerAiPending: false,
     customerAiTimer: null,
-    aiTasks: { items: [], page: 1, pageSize: 20, total: 0, overview: null, loaded: false, loading: false },
+    aiTasks: {
+      items: [], page: 1, pageSize: 20, total: 0, overview: null,
+      loaded: false, loading: false, error: '',
+    },
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -815,6 +818,11 @@
   function renderAiTasks() {
     const tasks = state.aiTasks;
     const overview = $('#aiTaskOverview');
+    const degraded = $('#aiTaskDegraded');
+    degraded?.classList.toggle('hidden', !tasks.error);
+    if (degraded) degraded.textContent = tasks.error
+      ? `实时控制面暂不可用，保留上次成功加载的历史任务。${tasks.error}`
+      : '';
     if (tasks.overview) {
       const queue = tasks.overview.queue || {};
       overview.classList.remove('hidden');
@@ -825,7 +833,7 @@
         ['预算 / 成本', `$${Number(tasks.overview.dailyCost || 0).toFixed(4)}`, `${tasks.overview.budget?.policies?.length || 0} 条策略 · ${tasks.overview.budget?.alertCount || 0} 条告警`],
       ].map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     } else overview.classList.add('hidden');
-    if (tasks.loading) {
+    if (tasks.loading && !tasks.loaded) {
       $('#aiTaskTable').innerHTML = '<div class="empty">正在加载 AI 任务…</div>';
       return;
     }
@@ -863,8 +871,9 @@
         ...aiTaskFilters(),
       });
       const payload = await api(`/api/sales-crm/ai/tasks?${params}`);
-      Object.assign(state.aiTasks, payload, { loaded: true });
+      Object.assign(state.aiTasks, payload, { loaded: true, error: '' });
     } catch (error) {
+      state.aiTasks.error = error.message;
       toast(error.message);
     } finally {
       state.aiTasks.loading = false;
@@ -877,8 +886,8 @@
     const timeline = (task.timeline || []).map(item => `<li><strong>${esc(item.kind)}</strong><span>${esc(item.state || '')}</span><time>${shortDate(item.at, true)}</time></li>`).join('');
     const actions = [
       task.canRetry && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="retry" data-job-id="${esc(task.taskId)}">重试</button>` : '',
-      task.canCancel && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
-      task.canReview && can('manage_evaluations') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
+      task.canCancel && can('cancel_ai_tasks') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
+      task.canReview && can('review_ai_tasks') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
     ].join('');
     openModal('AI 任务详情', 'AI CONTROL PLANE', `<div class="ai-task-detail">
       <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
