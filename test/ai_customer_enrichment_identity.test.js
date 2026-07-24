@@ -17,22 +17,69 @@ const {
 const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
 const { createEnrichmentExecutors } = require('../lib/ai_stations/enrichment/executors');
 const {
+  isPublicHttpUrl,
   resolveExplicitWebsiteIdentity,
 } = require('../lib/ai_stations/enrichment/identity_resolver');
+const { createEnrichmentEvidenceStore } = require('../lib/ai_stations/enrichment/evidence');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
 
-test('default runtime resolver accepts only an explicit employee-confirmed website', () => {
+test('default runtime resolver accepts only the current employee-confirmed public website', t => {
+  const fx = fixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE customer_pool SET website='https://example.org/about'
+    WHERE customer_id='CUST-1'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET website='https://example.org/about'
+    WHERE id='ACC-1'`).run();
+  createEnrichmentEvidenceStore(fx.db).setFieldProvenance({
+    customerId: 'CUST-1',
+    crmAccountId: 'ACC-1',
+    targetType: 'crm_account',
+    targetId: 'ACC-1',
+    fieldName: 'website',
+    value: 'https://example.org/about',
+    sourceState: 'employee_confirmed',
+    confirmedBy: 'U-ACTOR',
+  });
+
   assert.equal(resolveExplicitWebsiteIdentity({ companyName: 'Name only' }), null);
   const resolved = resolveExplicitWebsiteIdentity({
+    customerId: 'CUST-1',
+    crmAccountId: 'ACC-1',
     companyName: 'Website fixture',
     website: 'example.org/about?utm_source=smoke',
     country: 'DE',
-  }, { now: () => new Date('2026-07-24T06:30:00.000Z') });
+  }, {
+    db: fx.db,
+    now: () => new Date('2026-07-24T06:30:00.000Z'),
+  });
   assert.equal(resolved.officialWebsite, 'https://example.org/about');
   assert.equal(resolved.country, 'DE');
   assert.equal(resolved.confidence, 1);
   assert.equal(resolved.sources[0].collectedAt, '2026-07-24T06:30:00.000Z');
   assert.equal(resolved.sources[0].type, 'employee_confirmed_website');
+
+  fx.db.prepare(`UPDATE crm_ai_field_provenance SET value_hash=?
+    WHERE target_type='crm_account' AND target_id='ACC-1' AND field_name='website'`)
+    .run('0'.repeat(64));
+  assert.equal(resolveExplicitWebsiteIdentity({
+    customerId: 'CUST-1',
+    crmAccountId: 'ACC-1',
+    website: 'https://example.org/about',
+  }, { db: fx.db }), null);
+});
+
+test('default runtime resolver rejects private, local, credentialed, and non-public URLs', () => {
+  for (const website of [
+    'http://127.0.0.1/admin',
+    'http://10.1.2.3/',
+    'http://[::1]/',
+    'http://metadata.internal/',
+    'http://user:secret@example.org/',
+    'https://fixture.example/',
+  ]) {
+    assert.equal(isPublicHttpUrl(website), false, website);
+  }
+  assert.equal(isPublicHttpUrl('https://example.org/about'), true);
 });
 
 function fixture() {

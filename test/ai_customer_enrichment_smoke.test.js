@@ -117,6 +117,17 @@ test('smoke HTTP client aborts a hung request at the shared deadline', async () 
   await assert.rejects(client.get('/healthz', 'bounded health check'), /deadline exceeded/);
 });
 
+test('smoke HTTP client applies the shared deadline while reading the response body', async () => {
+  const client = makeClient('http://127.0.0.1:3100', async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: () => new Promise(() => {}),
+  }), Date.now() + 25);
+
+  await assert.rejects(client.get('/healthz', 'bounded response body'), /deadline exceeded/);
+});
+
 test('dry run makes no HTTP request, preserves owner intent, and never renders secrets', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'a1-09-smoke-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

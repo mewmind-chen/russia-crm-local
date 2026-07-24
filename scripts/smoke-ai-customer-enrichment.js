@@ -185,9 +185,18 @@ function makeClient(baseUrl, fetchImpl, deadline = Number.POSITIVE_INFINITY) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) throw new Error(`Smoke deadline exceeded before ${operation}`);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), remainingMs);
+    let rejectDeadline;
+    const deadlineFailure = new Promise((_resolve, reject) => {
+      rejectDeadline = reject;
+    });
+    const timer = Number.isFinite(remainingMs)
+      ? setTimeout(() => {
+        rejectDeadline(new Error(`Smoke deadline exceeded during ${operation}`));
+        controller.abort();
+      }, remainingMs)
+      : null;
     try {
-      return await fetchImpl(`${baseUrl}${route}`, {
+      const response = await Promise.race([fetchImpl(`${baseUrl}${route}`, {
         ...init,
         signal: controller.signal,
         headers: {
@@ -195,35 +204,39 @@ function makeClient(baseUrl, fetchImpl, deadline = Number.POSITIVE_INFINITY) {
           ...(init.body ? { 'content-type': 'application/json' } : {}),
           ...(cookie ? { cookie } : {}),
         },
-      });
+      }), deadlineFailure]);
+      const body = await Promise.race([
+        responseJson(response, operation),
+        deadlineFailure,
+      ]);
+      return Object.freeze({ response, body });
     } catch (error) {
       if (controller.signal.aborted) {
         throw new Error(`Smoke deadline exceeded during ${operation}`);
       }
       throw error;
     } finally {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     }
   }
   return Object.freeze({
     async login(email, password) {
-      const response = await request('/api/sales-auth/login', {
+      const result = await request('/api/sales-auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }, 'login');
-      const body = await responseJson(response, 'login');
-      cookie = cookieFrom(response);
+      cookie = cookieFrom(result.response);
       if (!cookie) throw new Error('login succeeded without a session cookie');
-      return body;
+      return result.body;
     },
     async get(route, operation) {
-      return responseJson(await request(route, {}, operation), operation);
+      return (await request(route, {}, operation)).body;
     },
     async post(route, payload, operation) {
-      return responseJson(await request(route, {
+      return (await request(route, {
         method: 'POST',
         body: JSON.stringify(payload),
-      }, operation), operation);
+      }, operation)).body;
     },
   });
 }
