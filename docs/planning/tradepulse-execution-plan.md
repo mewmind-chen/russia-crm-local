@@ -2,8 +2,8 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 17/38 个任务已完成；A1-08 进行中，A1-08.1 至 A1-08.3 已完成；下一步 A1-08.4 统一 AI 任务中心
-**版本：** v1.2
+**状态：** 17/38 个任务已完成；A1-08 进行中，A1-08.1 至 A1-08.4 已完成；下一步 A1-08.5 权限、审计和降级
+**版本：** v1.3
 **日期：** 2026-07-24
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
@@ -565,6 +565,8 @@ git diff --check
 - 支持按状态、任务类型、客户、负责人、模型和时间筛选，支持分页、详情时间线、取消、重试和复核。
 - 客户详情显示该客户的当前流水线节点；管理员任务中心显示全局队列、并发槽位、预算和失败率。
 
+状态（2026-07-24）：已完成。AI Schema v4 新增不含 prompt/message/history 的对话 AI 运行记录和人工复核历史；统一任务查询层聚合 AI Station、公司 Recon、联系人 Recon、Prospect、经理评价和对话 AI，提供状态/类型/客户/发起人/模型/时间筛选、分页和详情时间线。AI Station 详情显示依赖、模型尝试、usage/cost、fallback、Prompt/Schema 版本、失败摘要、结构化结果和按现有权限裁剪的证据；管理员额外获得全局队列、活跃并发槽位、24 小时/月度成本、预算策略/告警和失败率。正式 CRM 已新增 AI 任务中心页面、客户任务跳转以及权限化重试、取消和复核；经理/销售继续使用现有客户行级范围，非客户任务仅发起人或管理员可见，写操作继续匿名化审计并在身份检查时阻断。对话 AI 成功或失败均只记录作用域、引擎、模型、耗时、usage/cost、fallback、尝试与结果状态，记录失败不影响原请求。专项 18/18、全量 330/330，既有 6 Worker/20 跨客户、多连接竞争、每客户串行、租约恢复、429、超时和 fallback 回归继续通过，GitHub CI 通过。主代码提交 `c50259007817907839b583c72ad1e781b6443a04` 由 PR [#22](https://github.com/mewmind-chen/russia-crm-local/pull/22) 合并，预算概览补丁 `7d602e3` 由 PR [#23](https://github.com/mewmind-chen/russia-crm-local/pull/23) 合并；最终集成 SHA `87d9942d9779c78fbf3cc511feb1e01048558316`。生产 feature flag 和 Worker 仍关闭，本次未执行真实模型任务或部署。
+
 #### A1-08.5 权限、审计和降级
 
 - 列表、详情和操作继续使用现有权限组和客户行级范围；销售不得看到其他销售客户的任务。
@@ -860,7 +862,7 @@ E0-01 生产基线
 | A1-05 | 已完成 | 添加三条正式 Sales CRM AI API；读取使用 `view_customers`，执行/重试使用 `use_ai_assistant`，全部叠加客户行级范围；支持 context-hash 幂等、精确任务认领、dead-letter 有界重试、scoped evidence/stale 状态、身份检查阻断和匿名化审计；专项 18/18、受影响回归 55/55、全量 267/267；3100 真实只读 API smoke 为 200，开发库 AI jobs/results 仍为 0；代码提交 `1333506`，证据见 `tradepulse-development/artifacts/a1-05-scoped-ai-api-20260723T135014Z.md` |
 | A1-06 | 已完成 | 正式 CRM 完整客户页新增真实 `customer_fit` 区域，显示评分、等级、置信度、原因、证据、模型/Prompt/Schema 版本、时间和完整任务状态，并提供权限化生成/重试；开发库通过只读快照导入生产客户业务数据，保留 6 个开发账号、3 个权限组和现有 router 设置，不复制生产身份或会话；浏览器验证 9 个 CRM 客户、真实结果 78/B/85%、18 条证据、桌面/移动布局及 0 控制台错误；全量 277/277；提交 `7192e6f`、`b7d46a7`；证据见 `tradepulse-development/artifacts/a1-06-customer-fit-ui-and-production-snapshot-20260723T142232Z.md` |
 | A1-07 | 已完成 | 三角色浏览器验收通过：管理员/经理可查看全范围结果，销售仅见本人 6 个客户、无执行按钮且无法读取他人客户；`RU-0068` 真实模型 smoke 经 Kimi 15.277 秒生成 86/A/85% 和 14 条证据，客户业务状态前后 SHA 完全一致；全量 280/280；PR [#16](https://github.com/mewmind-chen/russia-crm-local/pull/16) 合并为 `92e9f609` 并自动部署；生产 current/health 为目标 SHA，previous 为 `2b55ed0f`，部署备份 `quick_check=ok`，生产 flag 实测关闭且未创建 `crm_ai_*` 表；证据见 `tradepulse-development/artifacts/a1-07-stage-one-release-gate-20260723T150532Z.md` 和 `tradepulse-production/state/a1-07-stage-one-deployment-20260723T151753Z.md` |
-| A1-08 | 进行中（A1-08.1 至 A1-08.3 已完成） | A1-08.1 持久入队、DAG、取消、恢复和独立 Worker 已由 PR [#17](https://github.com/mewmind-chen/russia-crm-local/pull/17) 合并为 `56d63ed2`；A1-08.2 新增数据库全局/资源槽位、速率窗口、公平调度、每客户串行和 Router 引擎调用期占位，6 个 Worker 进程完成 20 个跨客户任务且全局峰值 4，全量 307/307，提交 `61815c95`，PR [#18](https://github.com/mewmind-chen/russia-crm-local/pull/18) 合并为 `0a62398d`；A1-08.3 新增四级预算、原子预占/结算、80% 告警、100% policy block、每次 Router attempt 的 usage/cost/fallback 台账、缺失 usage 保守估算、缓存/去重零费用事件和孤儿预占恢复，全量 323/323、GitHub CI 通过，提交 `502579ff`，PR [#20](https://github.com/mewmind-chen/russia-crm-local/pull/20) 合并为 `d9910d29`。生产 AI Station 和 Worker 仍关闭且未部署。证据见 `tradepulse-development/artifacts/a1-08-1-persistent-queue-20260723T165726Z.md`、`tradepulse-development/artifacts/a1-08-2-global-concurrency-20260724T012512Z.md` 和 `tradepulse-development/artifacts/a1-08-3-usage-budget-20260724T023103Z.md`；下一步 A1-08.4 统一 AI 任务中心 |
+| A1-08 | 进行中（A1-08.1 至 A1-08.4 已完成） | A1-08.1 持久入队、DAG、取消、恢复和独立 Worker 已由 PR [#17](https://github.com/mewmind-chen/russia-crm-local/pull/17) 合并为 `56d63ed2`；A1-08.2 新增数据库全局/资源槽位、速率窗口、公平调度、每客户串行和 Router 引擎调用期占位，6 个 Worker 进程完成 20 个跨客户任务且全局峰值 4，全量 307/307，提交 `61815c95`，PR [#18](https://github.com/mewmind-chen/russia-crm-local/pull/18) 合并为 `0a62398d`；A1-08.3 新增四级预算、原子预占/结算、80% 告警、100% policy block、每次 Router attempt 的 usage/cost/fallback 台账、缺失 usage 保守估算、缓存/去重零费用事件和孤儿预占恢复，全量 323/323，PR [#20](https://github.com/mewmind-chen/russia-crm-local/pull/20) 合并为 `d9910d29`；A1-08.4 新增统一 AI 任务查询/详情/运行指标、CRM 任务中心、对话运行元数据、复核历史和权限化重试/取消/复核，管理员概览包含队列、并发槽位、成本、预算策略/告警和失败率，专项 18/18、全量 330/330、GitHub CI 通过，PR [#22](https://github.com/mewmind-chen/russia-crm-local/pull/22) 和 [#23](https://github.com/mewmind-chen/russia-crm-local/pull/23) 最终合并为 `87d9942d`。生产 AI Station 和 Worker 仍关闭且未部署。证据见 `tradepulse-development/artifacts/a1-08-1-persistent-queue-20260723T165726Z.md`、`tradepulse-development/artifacts/a1-08-2-global-concurrency-20260724T012512Z.md`、`tradepulse-development/artifacts/a1-08-3-usage-budget-20260724T023103Z.md` 和 `tradepulse-development/artifacts/a1-08-4-unified-task-center-20260724T030316Z.md`；下一步 A1-08.5 权限、审计和降级 |
 | A1-09 | 待执行 | 新客户最小记录立即创建，后台完成官网/主体验证、实时资料与联系人采集、需求提取、合规、评分、标签、证据和完整度，并进入待补查/复核/待分配 |
 
-当前停点：38 个计划任务中已完成 17 个，剩余 21 个。A1-08.1 至 A1-08.3 已实现，PR #17、#18 和 #20 均已通过 CI 并合并到 `codex/ai-integration`，A1-08 整体仍进行中；生产 AI Station 和 Worker 保持关闭且本次未执行真实模型任务或部署，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A1-08.4：实现统一 AI 任务中心、任务详情时间线、筛选分页、任务操作及管理员全局运行视图，再完成 A1-08.5 权限、审计和降级验收。
+当前停点：38 个计划任务中已完成 17 个，剩余 21 个。A1-08.1 至 A1-08.4 已实现，PR #17、#18、#20 和 #22 均已通过 CI 并合并到 `codex/ai-integration`，A1-08 整体仍进行中；生产 AI Station 和 Worker 保持关闭且本次未执行真实模型任务或部署，生产回滚点仍为 `releases/2b55ed0fb7fc`。下一步 A1-08.5：完成权限矩阵、联系人/Recon 摘要脱敏、各操作独立服务端授权、匿名化审计与 AI/Router/Worker 不可用时的降级验收。
