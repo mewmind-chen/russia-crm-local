@@ -47,8 +47,11 @@
   并合并，合并 SHA 为 `e1d3e611f5ef4ca3978f6f1c1e601ab337b52915`。
 - 预发布备份 `crm-pre-e1d3e611f5ef-20260725T131513Z.db` 和自动部署备份
   `crm-before-e1d3e611f5ef-20260725T131709Z-83318.db` 均为 `quick_check=ok`。
-- 生产 `current=e1d3e611f5ef`、`previous=d03092ec8b25`；活动库
-  `quick_check=ok`，schema version 为 16，`decision_trace_json` 列存在。
+- 功能发布 SHA 为 `e1d3e611f5ef`；发布记录 PR
+  [#88](https://github.com/mewmind-chen/russia-crm-local/pull/88) 合并并同步生产后，
+  `current=634372f750d7`、`previous=e1d3e611f5ef`。活动库 `quick_check=ok`，
+  schema version 为 16，`decision_trace_json` 列存在；发布记录部署备份
+  `crm-before-634372f750d7-20260725T133123Z-90036.db` 亦为 `quick_check=ok`。
 - local/public `/healthz` 均报告完整目标 SHA；公网首页 200，未登录 bootstrap 401，
   公网 HTML、JavaScript 和 CSS 已命中 v19 追溯资源。
 - 现有 AI Station、客户补全、自动触发、Qwen 在线和销售资料包运行时开关保持开启；
