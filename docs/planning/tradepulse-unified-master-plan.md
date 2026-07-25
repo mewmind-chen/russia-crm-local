@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续产品边界、阶段状态和验收结论必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**文档状态：** 29/38 个任务已完成；A3-04 消息和认领已完成开发、验证、合并与生产发布；下一步执行阶段 3 A3-05 RFQ、报价和订单边界
+**文档状态：** 30/38 个任务已完成；A3-05 RFQ、报价和订单边界已完成开发、验证、合并与生产发布；下一步执行阶段 3 A3-06 验收门
 **版本：** v1.8
 **日期：** 2026-07-25
 **产品依据：** `/Users/ylf/Desktop/ai-crm-complete-flow.html`
@@ -763,13 +763,13 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 | 阶段 0：环境统一 | 已完成 | 生产 `2b55ed0fb7fc2c455199dd11e269cf93115ac325`；回滚 `f7bb248e91f2bfe7003dfe443e1d04f0ed1887de`；开发分支 `codex/ai-integration` | PR #15 已合并并自动部署；current、previous、state.json 一致；本地/公网健康返回目标 SHA，首页 200，数据库 WAL/quick_check=ok，候选验证 242/242，账号/权限/会话/AI router 摘要未变化；3100 独立开发实例登录、bootstrap、路径隔离和 242/242 测试通过 | `releases/f7bb248e91f2` + E0-08/E0-09 备份 | E0-01 至 E0-10 全部完成；下一步阶段 1 A1-01 `customer_fit`，尚未开始 AI 业务集成 |
 | 阶段 1：评分、Control Plane 与客户补全 | 已完成 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `35341e8` | A1-01 至 A1-08 已完成既有门禁。A1-09.1 PR #28 完成最小客户事务和 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 evidence/provenance、去重和 identity；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、预算归因、事务 completion event、租约恢复与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案保护、finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵和隔离开发真实模型 smoke，最终聚焦 62/62、smoke/identity 14/14、完整回归 408/408、Python 检查、GitHub CI 与独立复审通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09 已完成；下一步阶段 2 A2-01 扩展合同 |
 | 阶段 2：判断分发 | 已完成 | 集成基线 `codex/ai-integration` @ `92e64cc`，当前功能分支 `codex/issue-62-ux-alignment` | A2-01 至 A2-05 已合并；A2-06 五项验收门通过，Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、完整回归 466/466、语法/diff 检查及本地管理员/390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并 `main`、迁移或部署，生产 current/health、AI Station、Worker 和 flags 未变化 | 工作站 feature flag | A2-06 已完成；下一步阶段 3 A3-01 `sales_pack` |
-| 阶段 3：销售执行 | 进行中 | `main` @ A3-04 合并提交 `b6da19e8b018ba7d35629e6c1d32062eadee1664`；功能分支 `codex/a3-03-next-action` | A3-01/A3-02/A3-03 已生产运行；A3-04 完成 web/wecom 独立通知投递、企微降级保留网页未读、claim/return/reject 服务端幂等和 claim 单客户创建；专项/受影响回归 64/64、完整回归 492/492、生产隔离验证 492/492，生产 `quick_check=ok`，current 为 `b6da19e8b018`、previous 为 `bf15ad7e2de6`，通知与认领 smoke 通过；证据见 `docs/evidence/a3-04-notifications-claims.md` | AI 工作站运行时开关 + `previous` | 生产 AI 开关显式开启；A3-04 完成后停止，下一项 A3-05 RFQ、报价和订单边界；外发和业务事实仍需人工确认 |
+| 阶段 3：销售执行 | 进行中 | `main` @ A3-05 合并提交 `bd0953c2eee0e92ab1f2f4e6f8da08a38c5ec27f`；功能分支 `codex/a3-05-rfq-order-boundary` | A3-01/A3-02/A3-03/A3-04 已生产运行；A3-05 完成 RFQ 字段校验、报价/订单人工权限边界、订单报价关联、报价/订单服务端幂等和 UI 报价选择；RFQ/报价继续生成 next_action 建议，AI 不写报价或订单；专项 3/3、完整回归 495/495、生产隔离 smoke 通过，生产 `quick_check=ok`，current 为 `bd0953c2eee0`、previous 为 `9545213db522`，RFQ/报价/订单 smoke 通过；证据见 `docs/evidence/a3-05-rfq-order-boundary.md` | AI 工作站运行时开关 + `previous` | 生产 AI 开关显式开启；A3-05 完成后停止，下一项 A3-06 验收门；外发和业务事实仍需人工确认 |
 | 阶段 4：经理与反馈 | 未开始 | 待填写 | 待填写 | 模型/提示词旧版本 | 禁止在线自我修改 |
 | 阶段 5：生产试运行 | 未开始 | 待填写 | 待填写 | previous release + flags | 分批开放 |
 
-当前总进度：38 个计划任务中已完成 29 个，剩余 9 个。A3-04 已完成通知投递降级和销售
-认领动作闭环：web/wecom 状态独立、失败不丢网页未读通知，claim/return/reject 服务端
-幂等且 claim 不重复创建客户。完整回归 492/492、生产 backup/quick_check、回滚确认、
-部署和 smoke 均通过，证据见 `docs/evidence/a3-04-notifications-claims.md`。下一项为
-阶段 3 A3-05 RFQ、报价和订单边界，本轮不实现。
+当前总进度：38 个计划任务中已完成 30 个，剩余 8 个。A3-05 已完成 RFQ→报价→订单
+边界：RFQ/商业金额字段先校验，订单必须绑定报价，报价和订单重复提交服务端幂等，
+AI 仅生成后续建议。完整回归 495/495、生产 backup/quick_check、回滚确认、部署和
+smoke 均通过，证据见 `docs/evidence/a3-05-rfq-order-boundary.md`。下一项为阶段 3
+A3-06 验收门，本轮不实现。
 任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。
