@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续产品边界、阶段状态和验收结论必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**文档状态：** 34/38 个任务已完成；A4-04 开发和本地验收完成，待 PR、CI 与生产发布
+**文档状态：** 35/38 个任务已完成；A4-04 已完成开发、CI 和生产发布；下一项 R5-01
 **版本：** v2.0
 **日期：** 2026-07-25
 **产品依据：** `/Users/ylf/Desktop/ai-crm-complete-flow.html`
@@ -764,10 +764,10 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 | 阶段 1：评分、Control Plane 与客户补全 | 已完成 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `35341e8` | A1-01 至 A1-08 已完成既有门禁。A1-09.1 PR #28 完成最小客户事务和 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 evidence/provenance、去重和 identity；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、预算归因、事务 completion event、租约恢复与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案保护、finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵和隔离开发真实模型 smoke，最终聚焦 62/62、smoke/identity 14/14、完整回归 408/408、Python 检查、GitHub CI 与独立复审通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09 已完成；下一步阶段 2 A2-01 扩展合同 |
 | 阶段 2：判断分发 | 已完成 | 集成基线 `codex/ai-integration` @ `92e64cc`，当前功能分支 `codex/issue-62-ux-alignment` | A2-01 至 A2-05 已合并；A2-06 五项验收门通过，Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、完整回归 466/466、语法/diff 检查及本地管理员/390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并 `main`、迁移或部署，生产 current/health、AI Station、Worker 和 flags 未变化 | 工作站 feature flag | A2-06 已完成；下一步阶段 3 A3-01 `sales_pack` |
 | 阶段 3：销售执行 | 已完成 | `main` @ A3-06 合并提交 `35858514259af935884e7745fd2e8db6db35e9ad`；生产 current `35858514259a`，previous `4e912fbd0d68` | A3-01 至 A3-05 已生产运行；A3-06 统一客户时间线覆盖认领、资料包、人工活动、人工采纳下一步、RFQ、报价和订单；外发、金额、订单保持人工确认；Worker 租约恢复和业务幂等、企微失败网页降级通过；专项 2/2、受影响回归 78/78、完整回归 497/497、生产备份/quick_check、local/public smoke 通过；证据见 `docs/evidence/a3-06-sales-execution-gate.md` | `previous` + AI 工作站运行时开关 | 阶段 3 已完成；下一步阶段 4 A4-01 `manager_anomaly`；AI 开关保持显式开启 |
-| 阶段 4：经理与反馈 | 进行中 | 功能分支 `codex/a4-04-stage-gate`，基线 `d03092ec8b25` | A4-01/A4-02/A4-03 已发布；A4-04 的经理授权范围、销售团队数据隔离、离线版本治理、新旧指标比较和历史决策追溯开发完成。schema v16 固化任务版本快照，管理端显示白名单化版本、上下文、证据和 stale 状态；聚焦 40/40、完整回归 535/535、语法/diff 和隔离桌面浏览器通过 | `previous` + AI 独立开关 | A4-04 待 PR/CI/生产发布；发布后阶段 4 完成，下一步 R5-01 影子运行 |
+| 阶段 4：经理与反馈 | 已完成 | `main`/生产 `current` @ `e1d3e611f5ef`；`previous` @ `d03092ec8b25` | A4-01 至 A4-04 已发布；经理授权范围、销售团队数据隔离、离线版本治理、新旧指标比较和历史决策追溯验收通过。schema v16 固化任务版本快照，管理端显示白名单化版本、上下文、证据和 stale 状态；聚焦 40/40、完整回归 535/535、GitHub CI、桌面/390px、生产备份/quick_check、schema v16 与 local/public smoke 通过；PR #87 已合并 | `previous` + AI 独立开关；Qwen Batch 价格/汇率保护保持关闭 | 阶段 4 已完成；下一步 R5-01 影子运行 |
 | 阶段 5：生产试运行 | 未开始 | 待填写 | 待填写 | previous release + flags | 分批开放 |
 
-当前总进度：38 个计划任务中已完成 34 个，剩余 4 个。A4-04 已完成开发和本地验收，
-待 PR、GitHub CI、生产备份和 `quick_check`、部署及 smoke；正式发布后计为 `35/38`，
-剩余 3 项，下一项为 R5-01 影子运行。
+当前总进度：38 个计划任务中已完成 35 个，剩余 3 个。A4-04 已完成开发、GitHub CI、
+生产备份和 `quick_check`、部署、schema v16 与 local/public smoke。阶段 4 已完成，
+下一项为 R5-01 影子运行。
 任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。

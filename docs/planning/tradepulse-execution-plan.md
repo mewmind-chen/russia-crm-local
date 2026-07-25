@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 34/38 个任务已完成；A4-04 开发和本地验收完成，待 PR、CI 与生产发布
+**状态：** 35/38 个任务已完成；A4-04 已完成开发、CI 和生产发布；下一项 R5-01
 **版本：** v2.0
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -915,15 +915,16 @@ PR #84 与生产验收修复 PR #85 均通过 CI；最终生产 `current=296edd2
 - AI 不在线修改 prompt、模型或规则。
 - 新旧版本指标可比较，旧决策仍可解释。
 
-状态（2026-07-25）：开发和本地验收完成，待 PR、CI 与生产发布。现有服务端客户范围、
+状态（2026-07-25）：已完成开发、CI 和生产发布。现有服务端客户范围、
 团队权限和治理写入门禁通过专项验收；AI schema v16 为新任务保存不可变决策版本快照，
 任务详情新增白名单化 `decisionTrace` 和“决策版本与证据”页面，历史任务使用明确的
 `v1` 兼容值。治理策略的创建、影子评估、批准和回滚前后，在线 Prompt Registry 与
 模型策略保持不变；新旧模型、Prompt 和规则版本指标可同时比较。聚焦 `40/40`、完整
-回归 `535/535`、JavaScript 语法和 diff 检查通过；隔离数据库桌面浏览器验收通过，
-390px 单列规则已有自动化覆盖并保留为发布 smoke 核对项。证据见
-`docs/evidence/a4-04-stage-gate.md`。正式进度发布前仍为 `34/38`；发布后为 `35/38`，
-下一项为 R5-01 影子运行。
+回归 `535/535`、GitHub CI、JavaScript 语法和 diff 检查通过；隔离数据库桌面和实际
+`390×844` 浏览器验收无溢出或控制台错误。PR #87 合并为 `e1d3e611f5ef`；生产两份
+备份、活动库与备份 `quick_check`、schema v16、local/public health、公网页面和未登录
+边界通过，previous 为 `d03092ec8b25`。证据见 `docs/evidence/a4-04-stage-gate.md`。
+正式进度为 `35/38`，剩余 3 项，下一项为 R5-01 影子运行。
 
 ## 9. 阶段 5：生产试运行与正式开放
 
@@ -1061,8 +1062,8 @@ E0-01 生产基线
 | A4-01 | 已完成 | 服务端确定性扫描会议无 RFQ、RFQ 未报价、报价无回复、高价值停滞和团队负荷不均；`manager_anomaly@v1` 只生成中文解释、优先分和人工介入建议，严格限制异常/客户/证据 ID；销售隔离、Worker 恢复、幂等和无业务写入通过；补齐通知中心、本人已读边界和客户跳转，并统一员工可见 AI 中文输出；聚焦 26/26、AI 214/214、完整与生产隔离验证 503/503、桌面/390px、CI、backup/quick_check、local/public smoke 通过；PR #79 已合并 `main` @ `a7f2841c8edcbe534e44ce8c3628873b764e224a` 并发布，current `a7f2841c8edc`、previous `cc4ea9b0d552`，四个 AI 开关为 1；证据见 `docs/evidence/a4-01-manager-anomaly.md`；下一步 A4-02 `sales_coaching` |
 | A4-02 | 已完成 | `sales_coaching@v1` 只使用授权团队聚合活动、转化、订单和 SLA；少于 10 个真实观察样本不调用模型，10-29 个样本限制置信度，结果中文且始终人工复核；销售隔离、任务中心锚点脱敏、过期判断、通知和约 2 分钟前端轮询通过；聚焦 36/36、AI 220/220、本地/GitHub CI/生产隔离完整回归 508/508，隔离库浏览器、backup/quick_check、local/public smoke 通过；PR #82 已合并 `main` @ `cbf8c596db315a88bb921529794e75d539ce32f3` 并发布，current `cbf8c596db31`、previous `8f3df69dafa9`，四个 AI 开关为 1；证据见 `docs/evidence/a4-02-sales-coaching.md`；下一步 A4-03 反馈和版本治理 |
 | A4-03 | 已完成 | 五类业务反馈、版本化指标及 shadow → 评估 → 申请发布 → 人工批准 → 回滚治理链完成；Issue #81 的 Qwen 在线路由、DeepSeek 单次降级、文件式 DashScope Batch、成本/汇率/预算、stale 重排和独立 LaunchAgent 同批交付；浏览器修复动态治理 API 权限映射及 390px 横向溢出；生产验收修复 Batch 关闭时退出码；治理专项 12/12、完整回归 531/531、GitHub CI、备份/quick_check、local/public health 和真实 Qwen smoke 通过；PR #84/#85 已合并，生产 `current=296edd268162`、`previous=a1e7043a2165`；证据见 `docs/evidence/a4-03-ai-governance.md`、`docs/evidence/issue-81-qwen-online-batch.md`；下一项 A4-04 |
-| A4-04 | 开发完成，待发布 | 经理授权范围、销售团队数据隔离、离线版本治理和新旧指标比较验收通过；schema v16 固化不可变决策版本快照，任务详情显示白名单化版本、上下文、证据和 stale 追溯且不泄露 Prompt/配置/队列内部字段；聚焦 40/40、完整回归 535/535、语法/diff 和隔离桌面浏览器通过；待 PR、CI、生产备份/quick_check、部署、390px 与 local/public smoke；证据见 `docs/evidence/a4-04-stage-gate.md` |
+| A4-04 | 已完成 | 经理授权范围、销售团队数据隔离、离线版本治理和新旧指标比较验收通过；schema v16 固化不可变决策版本快照，任务详情显示白名单化版本、上下文、证据和 stale 追溯且不泄露 Prompt/配置/队列内部字段；聚焦 40/40、完整回归 535/535、GitHub CI、语法/diff、桌面/390px、生产备份/quick_check、schema v16 和 local/public smoke 通过；PR #87 合并并发布 `e1d3e611f5ef`，previous `d03092ec8b25`；证据见 `docs/evidence/a4-04-stage-gate.md`；下一项 R5-01 |
 
-当前进度：38 个计划任务中已完成 34 个，剩余 4 个。A4-04 已完成开发和本地验收，
-待 PR、GitHub CI、生产备份和 `quick_check`、部署及 smoke；正式发布后计为 `35/38`，
-剩余 3 项，下一项为 R5-01 影子运行。
+当前进度：38 个计划任务中已完成 35 个，剩余 3 个。A4-04 已完成开发、GitHub CI、
+生产备份和 `quick_check`、部署、schema v16 与 local/public smoke。阶段 4 已完成，
+下一项为 R5-01 影子运行。
