@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 33/38 个任务已完成；A4-03 与 Issue #81 已完成开发和本地验收，待 PR、CI 与生产发布；发布后更新为 34/38，下一项 A4-04
+**状态：** 34/38 个任务已完成；A4-03 与 Issue #81 已完成开发、CI 和生产发布；下一项 A4-04
 **版本：** v2.0
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -896,16 +896,17 @@ PR [#79](https://github.com/mewmind-chen/russia-crm-local/pull/79) 已合并 `ma
 - 新策略先影子运行，不在线自动替换。
 - 发布需要管理员/经理批准并保留旧版本回滚。
 
-状态（2026-07-25）：开发与本地验收完成，待 PR、GitHub CI 和生产发布。新增五类中文
+状态（2026-07-25）：开发、CI 和生产发布完成。新增五类中文
 业务反馈标签及模型/Prompt/规则版本对照指标；策略严格经过影子运行、评估、申请发布、
 人工批准和旧版本回滚，模型不能自行发布。管理员和授权经理可见治理面板，销售和身份
 检查状态均被服务端阻断。浏览器验收发现并修复动态治理 API 未映射权限策略，以及
 390px 顶栏 7px 横向溢出；完整治理流程、Qwen 在线/Batch 开关和桌面/390px 页面通过。
-最新完整回归 `530/530`，全部修改 JavaScript 语法和 `git diff --check` 通过。同期按
+最终完整回归 `531/531`，全部修改 JavaScript 语法和 `git diff --check` 通过。同期按
 Issue #81 完成 Qwen 在线路由和文件式 DashScope Batch 通道；证据见
 `docs/evidence/a4-03-ai-governance.md` 和 `docs/evidence/issue-81-qwen-online-batch.md`。
-在合并、生产备份、`quick_check`、回滚确认、部署和 local/public smoke 完成前，本项
-不计入 34/38；下一项仍为 A4-04，本轮不实现。
+PR #84 与生产验收修复 PR #85 均通过 CI；最终生产 `current=296edd268162`、
+`previous=a1e7043a2165`，活动库/备份 `quick_check`、local/public health、Qwen 在线真实
+调用和 Batch 禁用态退出均通过。下一项为 A4-04，本轮不实现。
 
 ### A4-04 验收门
 
@@ -1049,9 +1050,8 @@ E0-01 生产基线
 | A3-06 | 已完成 | 统一客户时间线覆盖认领、资料包、人工活动、人工采纳下一步、RFQ、报价和订单；资料包/下一步保持人工复核，外发、金额、订单由授权员工确认；Worker 租约恢复、结果唯一写入、认领/建议采纳/报价/订单幂等和企微失败网页降级通过；专项 2/2、受影响回归 78/78、完整回归 497/497；PR #77 已合并 `main` @ `35858514259af935884e7745fd2e8db6db35e9ad` 并完成生产发布，current 为 `35858514259a`、previous 为 `4e912fbd0d68`；证据见 `docs/evidence/a3-06-sales-execution-gate.md`；下一步阶段 4 A4-01 `manager_anomaly` |
 | A4-01 | 已完成 | 服务端确定性扫描会议无 RFQ、RFQ 未报价、报价无回复、高价值停滞和团队负荷不均；`manager_anomaly@v1` 只生成中文解释、优先分和人工介入建议，严格限制异常/客户/证据 ID；销售隔离、Worker 恢复、幂等和无业务写入通过；补齐通知中心、本人已读边界和客户跳转，并统一员工可见 AI 中文输出；聚焦 26/26、AI 214/214、完整与生产隔离验证 503/503、桌面/390px、CI、backup/quick_check、local/public smoke 通过；PR #79 已合并 `main` @ `a7f2841c8edcbe534e44ce8c3628873b764e224a` 并发布，current `a7f2841c8edc`、previous `cc4ea9b0d552`，四个 AI 开关为 1；证据见 `docs/evidence/a4-01-manager-anomaly.md`；下一步 A4-02 `sales_coaching` |
 | A4-02 | 已完成 | `sales_coaching@v1` 只使用授权团队聚合活动、转化、订单和 SLA；少于 10 个真实观察样本不调用模型，10-29 个样本限制置信度，结果中文且始终人工复核；销售隔离、任务中心锚点脱敏、过期判断、通知和约 2 分钟前端轮询通过；聚焦 36/36、AI 220/220、本地/GitHub CI/生产隔离完整回归 508/508，隔离库浏览器、backup/quick_check、local/public smoke 通过；PR #82 已合并 `main` @ `cbf8c596db315a88bb921529794e75d539ce32f3` 并发布，current `cbf8c596db31`、previous `8f3df69dafa9`，四个 AI 开关为 1；证据见 `docs/evidence/a4-02-sales-coaching.md`；下一步 A4-03 反馈和版本治理 |
-| A4-03 | 待发布 | 五类业务反馈、版本化指标及 shadow → 评估 → 申请发布 → 人工批准 → 回滚治理链完成；Issue #81 的 Qwen 在线路由、DeepSeek 单次降级、文件式 DashScope Batch、成本/汇率/预算、stale 重排和独立 LaunchAgent 同批交付；浏览器发现并修复动态治理 API 权限映射及 390px 横向溢出；治理专项 12/12、完整回归 530/530、语法/diff 检查通过；证据见 `docs/evidence/a4-03-ai-governance.md`、`docs/evidence/issue-81-qwen-online-batch.md`；待 PR/CI/生产发布，完成后进入 A4-04 |
+| A4-03 | 已完成 | 五类业务反馈、版本化指标及 shadow → 评估 → 申请发布 → 人工批准 → 回滚治理链完成；Issue #81 的 Qwen 在线路由、DeepSeek 单次降级、文件式 DashScope Batch、成本/汇率/预算、stale 重排和独立 LaunchAgent 同批交付；浏览器修复动态治理 API 权限映射及 390px 横向溢出；生产验收修复 Batch 关闭时退出码；治理专项 12/12、完整回归 531/531、GitHub CI、备份/quick_check、local/public health 和真实 Qwen smoke 通过；PR #84/#85 已合并，生产 `current=296edd268162`、`previous=a1e7043a2165`；证据见 `docs/evidence/a4-03-ai-governance.md`、`docs/evidence/issue-81-qwen-online-batch.md`；下一项 A4-04 |
 
-当前进度：38 个计划任务中已完成 33 个，剩余 5 个。A4-02 已完成聚合销售辅导、
-样本门槛、中文输出、经理人工复核、销售隔离和完成通知。A4-03 与 Issue #81 已完成
-开发和本地验收，完整回归 530/530，但尚未合并和发布，因此暂不计入已完成任务。
-发布门通过后进度更新为 34/38、剩余 4 项，下一项为 A4-04；本轮不实现 A4-04。
+当前进度：38 个计划任务中已完成 34 个，剩余 4 个。A4-03 与 Issue #81 已完成开发、
+完整回归 531/531、GitHub CI、生产备份和 `quick_check`、部署及 smoke。下一项为 A4-04；
+本轮按约定停止，不实现 A4-04。

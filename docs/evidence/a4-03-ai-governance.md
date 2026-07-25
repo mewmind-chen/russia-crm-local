@@ -25,7 +25,7 @@
 ## 验证结果
 
 - 治理存储、权限和 API 聚焦回归：`12/12`。
-- 本地完整回归：`530/530`。
+- 本地完整回归：`531/531`。
 - 全部修改和新增 JavaScript `node --check`：通过。
 - `git diff --check`：通过。
 - 浏览器控制台未出现治理流程错误。
@@ -35,9 +35,15 @@
 
 - 基线：`origin/main @ 2989bce`
 - 功能分支：`codex/issue-81-a4-03-governance`
-- PR、合并 SHA、生产 current/previous、备份和 smoke：待发布后补充。
+- PR [#84](https://github.com/mewmind-chen/russia-crm-local/pull/84) 合并功能提交
+  `a1e7043a216585a05cf78412200e398d1a9927bb`；生产验收发现并由 PR
+  [#85](https://github.com/mewmind-chen/russia-crm-local/pull/85) 修复 Batch 关闭时的非零退出，
+  最终合并和生产 `current` 为 `296edd268162bacf0728ca1e731053eeb458a034`。
+- `previous` 为 `a1e7043a2165`；上线备份为
+  `crm-before-296edd268162-20260725T114342Z-57206.db`，活动库和备份 `quick_check` 均为 `ok`。
+- local/public `/healthz` 均报告 `296edd2`；公网首页 200，未登录 bootstrap 401。
 
 ## 结论
 
-A4-03 的功能开发与本地验收已完成，但在 PR、CI、生产备份、部署和 smoke 通过前不计入
-正式完成进度。发布完成后项目进度为 `34/38`，剩余 4 项，下一项为 A4-04；本轮不实施 A4-04。
+A4-03 已完成开发、CI、生产备份、部署和 smoke，正式进度为 `34/38`，剩余 4 项。
+下一项为 A4-04；本轮按约定停止，不实施 A4-04。
