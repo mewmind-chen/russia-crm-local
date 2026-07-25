@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 27/38 个任务已完成；A3-02 `action_proposal` 已完成开发与本地验收，正在进入发布门；下一步 A3-03 `next_action`
+**状态：** 28/38 个任务已完成；A3-03 `next_action` 已完成开发、验证、合并与生产发布；下一步 A3-04 消息和认领
 **版本：** v1.8
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -787,6 +787,18 @@ AI 任务中心显示“活动提案/需要复核”，未点击确认且未写�
 - 销售确认或规则采纳后进入现有 next_action 字段和提醒。
 - AI 失败时确定性 SLA 扫描继续工作。
 
+状态（2026-07-25）：已完成 `next_action@v1` 全流程。活动、回复、会议、RFQ
+经 `/activities` 写入，报价经 `/quotes` 写入后均以事件幂等入队；独立 Worker
+生成严格结构化建议并进入 `needs_review`。客户页显示建议、任务入口、动作/时间/经理
+介入字段；只有授权员工点击采纳（可编辑后提交）才写入既有
+`crm_accounts.next_action/next_action_at`，并复用今日待办、超期提醒和客户时间线。
+通用任务复核不能绕过采纳接口；权限撤销、owner scope、重复事件、Worker 重启和 AI
+失败均 fail-closed，确定性 SLA 提醒继续工作。schema 从 v10 升到 v11，新增一次性
+消费审计表。专项 24/24、完整回归 488/488、语法和 `git diff --check` 通过，
+桌面与 390px 客户页验收通过；证据见 `docs/evidence/a3-03-next-action.md`。
+已合并 `main` 并完成生产 backup/quick_check、回滚点确认、部署和 smoke；生产 AI
+开关保持显式开启。下一项为 A3-04 消息和认领，本轮完成后停止。
+
 ### A3-04 消息和认领
 
 - 复用现有 CRM 通知和企微基础。
@@ -968,11 +980,12 @@ E0-01 生产基线
 | A2-05 | 已完成 | 新增 `crm_intake_decisions` 决策历史，保存候选快照、AI 推荐、规则结果、人工最终决定、操作者和时间；bootstrap/入库队列/详情抽屉展示 Fit、readiness、priority、候选排名、阻断原因和三层裁决；销售端按 owner 范围脱敏；PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51) 已合并到 `codex/ai-integration` @ `92e64cc`，CI `test` 通过；专项 7/7、全量 437/437、语法/diff 检查通过；证据见 `docs/evidence/a2-05-intake-review-audit.md`；尚未部署；下一步 A2-06 验收门 |
 | A2-06 | 已完成 | 并发扫描幂等、owner scope/分页、AI 越权阻断、规则阻断、AI 故障回退和三角色权限验收通过；Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、全量 466/466、语法/diff 检查通过；本地 3101 管理员登录、`#intake`/后退和 390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并到 `main`、迁移或部署，生产 AI 开关保持关闭；下一步 A3-01 `sales_pack` |
 | A3-01 | 已完成 | `sales_pack@v1` 认领后异步幂等入队、Worker 执行、客户详情摘要/切入点/风险/审核草稿、`SALES_PACK_READY` 内部通知和企微禁发完成；管理员面板提供四个持久化 AI 开关，环境变量硬门禁、管理员权限和审计完成；Worker 已纳入 launchd/部署/回滚清单；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；PR #66 合并集成、PR #67 合并 `main` @ `8de1076` 并完成生产 smoke；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`；下一步 A3-02 `action_proposal` |
-| A3-02 | 已完成 | `action_proposal@v1` 自然语言输入、异步队列/Worker、可编辑活动草稿、人工确认后复用现有 activity API、低置信度/缺字段阻断、通用复核防绕过和一次性消费幂等已完成；完整回归 480/480、语法/diff 检查通过；桌面与 390px 浏览器生成/回填及任务中心验收通过且未写活动；证据见 `docs/evidence/a3-02-action-proposal.md`；正在进入 PR、CI 和生产发布门；下一步 A3-03 `next_action` |
+| A3-02 | 已完成 | `action_proposal@v1` 自然语言输入、异步队列/Worker、可编辑活动草稿、人工确认后复用现有 activity API、低置信度/缺字段阻断、通用复核防绕过和一次性消费幂等已完成；完整回归 480/480、语法/diff 检查通过；桌面与 390px 浏览器生成/回填及任务中心验收通过且未写活动；证据见 `docs/evidence/a3-02-action-proposal.md`；已合并并完成生产发布；下一步 A3-03 `next_action` |
+| A3-03 | 已完成 | `next_action@v1` 已接入活动/回复/会议/RFQ/报价事件，异步 Worker 生成 `needs_review` 建议；客户页可编辑并经独立采纳接口写入现有 next_action 字段，通用复核不能绕过，失败回退确定性 SLA；schema v11、消费审计、权限/owner scope/幂等和迁移完成；专项 24/24、完整回归 488/488、语法/diff 检查通过，桌面与 390px 验收通过；证据见 `docs/evidence/a3-03-next-action.md`；已合并 `main` 并完成生产 backup/quick_check、回滚确认、部署和 smoke，AI 开关显式开启；下一步 A3-04 消息和认领 |
 
-当前进度：38 个计划任务中已完成 27 个，剩余 11 个。A3-02 已在
-`codex/a3-02-action-proposal` 完成自然语言触达结果到人工确认活动的完整受控流程。
-完整回归 480/480、语法检查、`git diff --check` 和桌面/390px 浏览器验收通过，且未在
-本地验收中确认业务写入。当前进入 PR、CI、生产数据库 online backup/quick_check、
-回滚点确认、部署和生产 smoke 门；完成 A3-02 后停止。下一项为阶段 3 A3-03
-`next_action`，本轮不实现。
+当前进度：38 个计划任务中已完成 28 个，剩余 10 个。A3-03 已完成从业务事件到
+人工采纳下一步建议的受控闭环：活动/回复/会议/RFQ/报价统一异步入队，AI 只生成
+结构化建议，授权员工可编辑并经独立采纳接口写入现有字段，确定性 SLA 和权限边界
+持续有效。完整回归 488/488、语法/diff 检查、桌面/390px 验收、生产备份/quick_check、
+回滚确认、部署和 smoke 均通过；证据见 `docs/evidence/a3-03-next-action.md`。
+下一项为阶段 3 A3-04 消息和认领，本轮不实现。

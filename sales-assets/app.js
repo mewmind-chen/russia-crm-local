@@ -976,6 +976,30 @@
     </section>`;
   }
 
+  function renderNextActionSuggestion(payload) {
+    const job = payload?.job;
+    const result = payload?.result;
+    if (!job && !result) return '';
+    const status = aiJobLabels[job?.state] || ['未生成', 'gray'];
+    if (!result) {
+      return `<section class="next-action-suggestion"><div class="sales-pack-title"><strong>下一步建议</strong><span class="pill ${status[1]}">${esc(status[0])}</span></div>
+        <p class="subtle">${esc(job?.errorSummary || '正在根据最新业务动作生成建议。规则提醒仍会独立运行。')}</p></section>`;
+    }
+    const value = result.value || {};
+    const editable = job?.state === 'needs_review' && can('record_activity') && can('use_ai_assistant')
+      && !state.data?.impersonation;
+    return `<section class="next-action-suggestion">
+      <div class="sales-pack-title"><strong>下一步建议</strong><span class="pill ${status[1]}">${esc(status[0])}</span><small>置信度 ${Math.round(Number(value.confidence || 0) * 100)}%</small></div>
+      <p>${esc(value.reason || '')}</p>
+      <div class="next-action-suggestion-fields">
+        <label>下一步动作<input id="nextActionSuggestion" value="${esc(value.nextAction || '')}" ${editable ? '' : 'readonly'}></label>
+        <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" value="${esc(String(value.nextActionAt || '').replace(' ', 'T').slice(0, 16))}" ${editable ? '' : 'readonly'}></label>
+        <label class="check"><input id="nextActionSuggestionManager" type="checkbox" ${value.managerRequired ? 'checked' : ''} ${editable ? '' : 'disabled'}> 需要经理介入</label>
+      </div>
+      ${editable ? `<div class="next-action-suggestion-actions"><button class="button primary tiny" type="button" data-adopt-next-action="${esc(job.id)}">采纳下一步建议</button><span>采纳前可编辑；不会自动修改客户。</span></div>` : ''}
+    </section>`;
+  }
+
   function renderCustomerAI() {
     if (!customerAIEnabled()) return;
     const body = $('#customerAiStationBody');
@@ -985,8 +1009,11 @@
     const job = payload?.job;
     const salesPack = payload?.salesPack;
     const salesPackJob = salesPack?.job;
+    const nextAction = payload?.nextAction;
+    const nextActionJob = nextAction?.job;
     const enrichment = state.customerEnrichment || state.customerEnrichmentLastSuccess;
     actions.innerHTML = [
+      nextActionJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(nextActionJob.id)}">下一步任务</button>` : '',
       salesPackJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(salesPackJob.id)}">资料包任务</button>` : '',
       job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">评分任务</button>` : '',
     ].join('');
@@ -1021,7 +1048,7 @@
       const label = state.customerAiPending ? '处理中…' : packRetryable ? '重试资料包' : salesPack?.result ? '重新生成资料包' : '生成销售资料包';
       actions.insertAdjacentHTML('afterbegin', `<button class="button ${packRetryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${packRetryable ? `data-retry-ai-job="${esc(salesPackJob.id)}"` : 'data-run-sales-pack'}>${label}</button>`);
     }
-    body.innerHTML = `${renderSalesPack(salesPack)}${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
+    body.innerHTML = `${renderNextActionSuggestion(nextAction)}${renderSalesPack(salesPack)}${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
   }
 
   function scheduleCustomerAIPoll() {
@@ -1029,9 +1056,10 @@
     state.customerAiTimer = null;
     const fitPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state);
     const salesPackPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.salesPack?.job?.state);
+    const nextActionPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.nextAction?.job?.state);
     const enrichmentState = (state.customerEnrichment || state.customerEnrichmentLastSuccess)?.run?.state;
     const enrichmentPending = enrichmentState && !ENRICHMENT_TERMINAL_STATES.has(enrichmentState);
-    if ((!fitPending && !salesPackPending && !enrichmentPending) || !state.customerProfileExternalId
+    if ((!fitPending && !salesPackPending && !nextActionPending && !enrichmentPending) || !state.customerProfileExternalId
         || state.customerAiPollCount >= CUSTOMER_AI_MAX_POLLS) return;
     state.customerAiPollCount += 1;
     state.customerAiTimer = setTimeout(() => void loadCustomerAI(state.customerProfileExternalId, { quiet: true }), 2500);
@@ -1175,9 +1203,37 @@
     }
   }
 
+  async function adoptNextAction(jobId) {
+    if (!jobId || state.customerAiPending) return;
+    const nextAction = $('#nextActionSuggestion')?.value.trim() || '';
+    const nextActionAt = apiTime($('#nextActionSuggestionAt')?.value || '');
+    if (!nextAction || !nextActionAt) return toast('请填写下一步动作和计划时间');
+    state.customerAiPending = true;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/next-action/adopt`, {
+        method: 'POST',
+        body: JSON.stringify({
+          nextAction,
+          nextActionAt,
+          managerRequired: Boolean($('#nextActionSuggestionManager')?.checked),
+        }),
+      });
+      await load();
+      await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
+      toast('下一步建议已采纳，今日待办和提醒已更新');
+    } catch (error) {
+      state.customerAiError = error.message;
+      toast(error.message);
+    } finally {
+      state.customerAiPending = false;
+      renderCustomerAI();
+    }
+  }
+
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
-    sales_pack: '销售资料包', action_proposal: '活动提案', prospect_discovery: 'Prospect',
+    sales_pack: '销售资料包', action_proposal: '活动提案', next_action: '下一步建议', prospect_discovery: 'Prospect',
     manager_evaluation: '经理评价', assistant_chat: '对话 AI',
   };
 
@@ -2745,6 +2801,8 @@
     }
     const retryAIJob = event.target.closest('[data-retry-ai-job]');
     if (retryAIJob) void retryCustomerFit(retryAIJob.dataset.retryAiJob);
+    const adoptNextActionButton = event.target.closest('[data-adopt-next-action]');
+    if (adoptNextActionButton) void adoptNextAction(adoptNextActionButton.dataset.adoptNextAction);
     if (event.target.closest('#actionProposalGenerate')) void generateActionProposal();
     const activity = event.target.closest('[data-activity]');
     if (activity) setActivityType(activity.dataset.activity);
