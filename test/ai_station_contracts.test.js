@@ -80,6 +80,7 @@ for (const [station, value] of Object.entries(validOutputs)) {
   test(`${station} v1 accepts its strict immutable contract`, () => {
     const context = {
       evidenceIds: ['EV-1', 'EV-2'],
+      ...(station === 'contact_readiness' ? { contactIds: ['CONTACT-1'] } : {}),
       ...(station === 'sales_match' ? { candidateEmployeeIds: [7, 9] } : {}),
     };
     const result = validateStationOutput(station, 'v1', value, context);
@@ -92,6 +93,7 @@ for (const [station, value] of Object.entries(validOutputs)) {
   test(`${station} rejects unknown fields, invalid versions, and invented evidence`, () => {
     const context = {
       evidenceIds: ['EV-1', 'EV-2'],
+      ...(station === 'contact_readiness' ? { contactIds: ['CONTACT-1'] } : {}),
       ...(station === 'sales_match' ? { candidateEmployeeIds: [7, 9] } : {}),
     };
 
@@ -102,6 +104,28 @@ for (const [station, value] of Object.entries(validOutputs)) {
     assert.match(invented.errors.join('\n'), /evidence EV-OTHER is not allowed/);
   });
 }
+
+test('contact_readiness requires the server contact whitelist and a ready contact', () => {
+  const value = validOutputs.contact_readiness;
+  assert.equal(validateStationOutput('contact_readiness', 'v1', value, {
+    evidenceIds: ['EV-1'],
+  }).ok, false);
+  const invented = validateStationOutput('contact_readiness', 'v1', value, {
+    evidenceIds: ['EV-1'],
+    contactIds: ['CONTACT-OTHER'],
+  });
+  assert.equal(invented.ok, false);
+  assert.match(invented.errors.join('\n'), /contact CONTACT-1 is not allowed/);
+  const emptyReady = validateStationOutput('contact_readiness', 'v1', {
+    ...value,
+    contactIds: [],
+  }, {
+    evidenceIds: ['EV-1'],
+    contactIds: ['CONTACT-1'],
+  });
+  assert.equal(emptyReady.ok, false);
+  assert.match(emptyReady.errors.join('\n'), /requires at least one contact ID/);
+});
 
 test('sales_match requires the server candidate whitelist and rejects unknown or duplicate tokens', () => {
   const value = validOutputs.sales_match;
@@ -168,6 +192,7 @@ test('migrated contracts reject required-field omissions and boundary violations
     const value = validOutputs[station];
     const context = {
       evidenceIds: ['EV-1', 'EV-2'],
+      ...(station === 'contact_readiness' ? { contactIds: ['CONTACT-1'] } : {}),
       ...(station === 'sales_match' ? { candidateEmployeeIds: [7, 9] } : {}),
     };
     const { [missing]: omitted, ...withoutRequiredField } = value;

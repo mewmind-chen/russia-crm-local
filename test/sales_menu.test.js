@@ -15,10 +15,10 @@ function sidebarMarkup() {
 
 test('primary navigation follows the customer lifecycle and retains management', () => {
   const sidebar = sidebarMarkup();
-  for (const label of ['经营驾驶舱', '今日待办', '待领取', '已领取', 'CRM客户全景', '推进管道', '线索分配', '销售能力', '市场策略', '用户与权限']) {
+  for (const label of ['经营驾驶舱', '今日待办', '待领取', '已领取', 'CRM客户全景', '推进管道', '线索分配', '经理评价', '销售能力', '市场策略', '用户与权限']) {
     assert.match(sidebar, new RegExp(`>${label}<`), `missing navigation entry: ${label}`);
   }
-  for (const label of ['客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览', '经理评价']) {
+  for (const label of ['客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览']) {
     assert.doesNotMatch(sidebar, new RegExp(`>${label}<`), `obsolete primary entry remains: ${label}`);
   }
 });
@@ -112,7 +112,7 @@ test('issue 3 account administration and identity inspection remain intact', () 
   }
 });
 
-test('administrators can operate the AI engine runtime and workbench tracks its session engine', () => {
+test('administrators can operate the AI engine runtime and workbench restores server conversations', () => {
   assert.match(html, /id="assistantRuntimePanel"/);
   for (const label of ['Automatic', 'Kimi', 'Hermes', 'DeepSeek']) {
     assert.match(`${html}\n${appJs}`, new RegExp(label), `missing AI mode label: ${label}`);
@@ -141,8 +141,10 @@ test('administrators can operate the AI engine runtime and workbench tracks its 
   const persistConversation = workbenchHtml.match(/function persistAssistantConversation\(\)[\s\S]*?\n    function clearAssistantChat/)?.[0] || '';
   assert.match(sendAssistant, /sessionEngine:assistantState\.sessionEngine\|\|''/);
   assert.match(sendAssistant, /if\(responseEngine&&responseEngine!==assistantState\.sessionEngine\)\{assistantState\.sessionEngine=responseEngine;assistantState\.sessionId=responseSessionId\}/);
-  assert.match(sendAssistant, /sessionEngine:assistantState\.sessionEngine\|\|''/);
-  assert.match(restoreConversation, /assistantState\.sessionEngine=\['kimi-cli','hermes','deepseek'\]\.includes\(String\(saved\.sessionEngine\|\|''\)\)/);
-  assert.match(restoreConversation, /if\(!assistantState\.sessionEngine\)assistantState\.sessionId=''/);
-  assert.match(persistConversation, /JSON\.stringify\(\{sessionId:assistantState\.sessionId\|\|'',sessionEngine:assistantState\.sessionEngine\|\|''/);
+  assert.match(sendAssistant, /conversationId:assistantState\.conversationId\|\|''/);
+  assert.match(sendAssistant, /clientMessageId/);
+  assert.match(restoreConversation, /\/assistant\/conversations\/\$\{encodeURIComponent\(assistantState\.conversationId\)\}/);
+  assert.match(restoreConversation, /assistantState\.messages=\(c\.messages\|\|\[\]\)/);
+  assert.match(persistConversation, /JSON\.stringify\(\{conversationId:assistantState\.conversationId\|\|'',scope:assistantState\.scope\}\)/);
+  assert.doesNotMatch(persistConversation.split('\n')[0], /messages/);
 });

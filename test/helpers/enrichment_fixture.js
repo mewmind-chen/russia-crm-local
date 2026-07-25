@@ -6,6 +6,9 @@ const { createAIStationWorker } = require('../../lib/ai_stations/worker');
 const { createEnrichmentExecutors } = require('../../lib/ai_stations/enrichment/executors');
 const { dispatchPendingEnrichment } = require('../../lib/ai_stations/enrichment/workflow');
 const { consumePendingEnrichmentEvent } = require('../../lib/ai_stations/enrichment/events');
+const {
+  scheduleContactReadinessForCompletedFits,
+} = require('../../lib/ai_stations/contact_readiness');
 
 const FULL_ENRICHMENT_PERMISSIONS = Object.freeze({
   view_customers: true,
@@ -31,6 +34,29 @@ function appOptions() {
 function modelCall(messages) {
   const prompt = JSON.parse(messages[1].content);
   const evidenceIds = (prompt.evidence || []).slice(0, 4).map(item => item.id);
+  if (prompt.trustedCrmContext?.station === 'contact_readiness') {
+    return Promise.resolve({
+      answer: JSON.stringify({
+        version: 'v1',
+        confidence: 0.93,
+        evidenceIds,
+        reasonCodes: ['VERIFIED_BUYER_CONTACT'],
+        readiness: 'ready',
+        contactIds: prompt.trustedCrmContext.allowedContactIds.slice(0, 1),
+      }),
+      engine: 'fixture-engine',
+      model: 'fixture-model-v1',
+      usage: { input_tokens: 80, output_tokens: 30, total_tokens: 110 },
+      cost: 0.001,
+      engineAttempts: [{
+        engine: 'fixture-engine',
+        model: 'fixture-model-v1',
+        ok: true,
+        usage: { input_tokens: 80, output_tokens: 30, total_tokens: 110 },
+        cost: 0.001,
+      }],
+    });
+  }
   return Promise.resolve({
     answer: JSON.stringify({
       version: 'v1',
@@ -172,6 +198,7 @@ async function createEnrichmentFixture() {
       return db;
     },
     beforeClaim: async ({ db, workerId }) => {
+      scheduleContactReadinessForCompletedFits(db);
       await dispatchPendingEnrichment(db, undefined, {
         dispatcherId: `${workerId}:dispatcher`,
         jobIdFactory: () => `AIJ-E2E-${++sequence}`,
@@ -281,6 +308,9 @@ async function createEnrichmentFixture() {
     const fit = fx.db.prepare(`SELECT r.* FROM crm_ai_station_results r
       JOIN crm_ai_jobs j ON j.id=r.job_id
       WHERE j.workflow_id=? AND r.station='customer_fit'`).get(run.workflow_id);
+    const readiness = fx.db.prepare(`SELECT r.* FROM crm_ai_station_results r
+      JOIN crm_ai_jobs j ON j.id=r.job_id
+      WHERE j.workflow_id=? AND r.station='contact_readiness'`).get(run.workflow_id);
     return {
       customerId,
       crmAccountId,
@@ -300,6 +330,9 @@ async function createEnrichmentFixture() {
       evidence: fx.db.prepare('SELECT * FROM crm_ai_enrichment_evidence WHERE run_id=?').all(runId),
       proposals: fx.db.prepare('SELECT * FROM crm_ai_field_proposals WHERE run_id=?').all(runId),
       fit: fit ? { value: JSON.parse(fit.value_json), cost: fit.cost, engine: fit.engine, model: fit.model } : null,
+      readiness: readiness
+        ? { value: JSON.parse(readiness.value_json), cost: readiness.cost, engine: readiness.engine, model: readiness.model }
+        : null,
       tasks: fx.db.prepare(`SELECT id,station,state FROM crm_ai_jobs
         WHERE workflow_id=? ORDER BY created_at,id`).all(run.workflow_id),
       legacyTasks: fx.db.prepare(`SELECT legacy_task_type type,legacy_task_id taskId
