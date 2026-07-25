@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260725-14/);
-  assert.match(html, /app\.js\?v=20260725-14/);
+  assert.match(html, /app\.css\?v=20260725-16/);
+  assert.match(html, /app\.js\?v=20260725-16/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {
@@ -86,4 +86,18 @@ test('AI task center has permission-scoped filters, pagination, details and oper
   assert.match(app, /保留上次成功加载的历史任务/);
   assert.match(css, /\.ai-task-filters/);
   assert.match(css, /\.ai-task-degraded/);
+});
+
+test('notification center exposes unread counts, scoped read actions and customer navigation', () => {
+  assert.match(html, /data-view="notifications" data-permission="view_customers"/);
+  for (const id of [
+    'notificationsView', 'notificationButton', 'navNotificationCount', 'topNotificationCount',
+    'notificationSummary', 'notificationTabs', 'notificationList', 'notificationRefresh',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(app, /function renderNotifications\(\)/);
+  assert.match(app, /\/api\/sales-crm\/notifications\/\$\{encodeURIComponent\(notificationId\)\}\/read/);
+  assert.match(app, /data-notification-customer/);
+  assert.match(app, /只能标记|notification\.user_id === state\.data\.user\.id/);
+  assert.match(css, /\.notification-item/);
+  assert.match(css, /@media\(max-width:780px\)\{\.notification-button/);
 });

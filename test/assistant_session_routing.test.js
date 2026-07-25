@@ -19,14 +19,15 @@ function switchedEngineResult() {
 async function assertSessionRouting(payload) {
   const seen = [];
   const result = await answerAssistantQuestion(payload, null, {
-    callAssistantModel: async (_messages, options) => {
-      seen.push(options);
+    callAssistantModel: async (messages, options) => {
+      seen.push({ messages, options });
       return switchedEngineResult();
     },
   });
   assert.equal(seen.length, 1);
-  assert.equal(seen[0].sessionEngine, 'hermes');
-  assert.equal(seen[0].sessionId, 'old_hermes_session');
+  assert.equal(seen[0].options.sessionEngine, 'hermes');
+  assert.equal(seen[0].options.sessionId, 'old_hermes_session');
+  assert.match(seen[0].messages[0].content, /必须使用简体中文/);
   assert.equal(result.sessionEngine, 'kimi-cli');
   assert.equal(result.sessionId, '');
   assert.deepEqual(result.engineAttempts, [{ engine: 'kimi-cli', ok: true, durationMs: 1 }]);
