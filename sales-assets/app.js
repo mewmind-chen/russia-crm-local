@@ -2315,6 +2315,7 @@
   function openQuoteModal(customerId) {
     openModal('记录报价', 'QUOTATION', `<form id="quoteForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
+      <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label>报价金额<input name="amount" type="number" min="0" required></label><label>币种<select name="currency"><option>USD</option><option>EUR</option><option>CNY</option></select></label>
       <label>预计毛利率 %<input name="grossMargin" type="number" step=".1" value="8"></label><label>报价后跟进时间<input name="nextFollowAt" type="datetime-local" value="${dateInput(3)}"></label>
       <label class="span-2 check"><input name="lossLeader" type="checkbox"> 首单低价/亏本引流报价</label>
@@ -2322,8 +2323,12 @@
     </form>`);
   }
   function openOrderModal(customerId) {
+    const quotes = state.data.quotes.filter(item => item.customer_id === customerId)
+      .slice().sort((a, b) => String(b.sent_at || '').localeCompare(String(a.sent_at || '')));
     openModal('记录客户订单', 'ORDER WON', `<form id="orderForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
+      <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+      <label class="span-2">关联报价<select name="quoteId" required>${quotes.map(quote => `<option value="${esc(quote.id)}">${esc(quote.id)} · ${money(quote.amount)} ${esc(quote.currency || 'USD')} · ${esc(quote.status || 'sent')}</option>`).join('')}</select></label>
       <label>订单金额<input name="amount" type="number" min="0" required></label><label>币种<select name="currency"><option>USD</option><option>EUR</option><option>CNY</option></select></label>
       <label>实际毛利率 %<input name="grossMargin" type="number" step=".1" value="5"></label><label>下一次经营动作<input name="nextActionAt" type="datetime-local" value="${dateInput(14)}"></label>
       <label class="span-2 check"><input name="isRepeat" type="checkbox"> 这是复购订单</label>
