@@ -9,10 +9,10 @@
 - Implementation commit：`660345a61da824cdf853852229d9e4a94f649222`
 - Database migration：无
 - Feature flag：`CRM_UX_REDESIGN_ENABLED`
-- Production impact：双外壳代码已发布；旧外壳 smoke 后已开启新外壳，旧外壳继续保留用于快速回退
+- Production impact：先部署双外壳代码，生产默认继续使用旧外壳；通过旧外壳 smoke 后再开启新外壳
 - Rollback point：发布前生产 `79800f529d1d98e8a936959d88cbbbebce6f559f`，并可独立关闭前端开关
 - Known gaps：旧外壳和临时开关继续保留；稳定观察后退役属于后续发布门
-- Decision：PR、CI、自动部署和生产切换验收通过；进入稳定观察
+- Decision：提交 GitHub PR，CI 通过后合并并由既有自动部署控制器发布
 
 ## 交付范围
 
@@ -56,30 +56,6 @@
   和首页后再开启。
 - 开启后重复三角色、客户详情、AI 权限、390px、关键业务入口和控制台 smoke。
 - 任一检查失败时先关闭前端开关；需要代码回滚时将 `current` 原子切回发布前 release。
-
-## 发布结果
-
-- PR [#90](https://github.com/mewmind-chen/russia-crm-local/pull/90) 的 pull request CI
-  和 `main` push CI 均通过；合并 SHA 为
-  `9aaa8b38c85d93eaa5f1a9244538dd670ea065e6`。
-- 自动部署于 2026-07-26 完成，`current=releases/9aaa8b38c85d`，
-  `previous=releases/79800f529d1d`，deployment state 无失败 SHA 或失败阶段。
-- release 的 `.release-sha` 为目标完整 SHA，release 内无 `.git`。
-- 自动部署备份
-  `state/backups/crm-before-9aaa8b38c85d-20260725T204414Z-91287.db`
-  使用只读 immutable 模式执行 `quick_check=ok`；活动库 `quick_check=ok`、WAL。
-- 新外壳开启前，旧外壳、本地/公网首页均为 200，未登录 bootstrap 为 401；
-  本地和公网 `/healthz` 均返回目标完整 SHA 与 `database=ok`。
-- 已备份生产 `.env` 到
-  `state/backups/env-before-fr01-enable-20260726T0448.env`，随后设置
-  `CRM_UX_REDESIGN_ENABLED=true` 并只重启 server。
-- 开启后本地和公网 `/healthz` 继续返回目标 SHA；生产首页加载
-  `sales-assets/modular-app.js`。
-- 公网未登录页面在 1280 桌面和 `390x844` 下均为模块化外壳，无横向溢出；
-  登录输入和按钮高度均为 44px，邮箱和密码初始为空，控制台无 warning/error。
-- 发布后三角色业务验收沿用相同 release 内容在独立非生产数据库上的验收结果；
-  未创建、复制或重置生产账号，未修改生产业务数据。
-- server 近期日志未发现 5xx、未处理异常或 fatal 错误。
 
 ## 进度边界
 
