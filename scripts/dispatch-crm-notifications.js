@@ -5,8 +5,15 @@ require('dotenv').config();
 const path = require('path');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
+const {
+  claimDelivery,
+  ensureNotificationDeliveries,
+  finishDelivery,
+  installNotificationDeliverySchema,
+} = require('../lib/crm_notifications');
 const db = new Database(path.join(__dirname, '..', 'data', 'crm.db'));
 db.pragma('journal_mode = WAL');
+installNotificationDeliverySchema(db);
 const now = new Date();
 const nowText = now.toISOString().slice(0, 19).replace('T', ' ');
 const day = nowText.slice(0, 10);
@@ -39,17 +46,38 @@ const insert = db.prepare(`INSERT OR IGNORE INTO crm_notifications
   VALUES (?,?,?,?,?,?,?,'unread',?,'pending',?)`);
 for (const [row, code, severity, title] of candidates) {
   const key = `${day}:${code}:${row.customer_id}`;
-  insert.run(`NTF-${crypto.createHash('sha1').update(key).digest('hex').slice(0,16)}`, row.owner_id, row.customer_id,
+  const notificationId = `NTF-${crypto.createHash('sha1').update(key).digest('hex').slice(0,16)}`;
+  insert.run(notificationId, row.owner_id, row.customer_id,
     code, severity, title, row.company_name, key, nowText);
+  ensureNotificationDeliveries(db, notificationId, { wecomEnabled: Boolean(String(process.env.WECOM_WEBHOOK_URL || '').trim()) });
 }
-const pending = db.prepare("SELECT * FROM crm_notifications WHERE wecom_status='pending' ORDER BY created_at LIMIT 30").all();
 const webhook = String(process.env.WECOM_WEBHOOK_URL || '');
+const workerId = `notify-${process.pid}`;
 async function main() {
-  if (!webhook || !pending.length) return;
+  for (const notification of db.prepare('SELECT id FROM crm_notifications').all()) {
+    ensureNotificationDeliveries(db, notification.id, { wecomEnabled: Boolean(webhook) });
+  }
+  const pending = db.prepare("SELECT * FROM crm_notifications WHERE wecom_status IN ('pending','failed') ORDER BY created_at LIMIT 30").all();
+  if (!pending.length) return;
+  if (!webhook) {
+    db.prepare(`UPDATE crm_notification_deliveries SET status='disabled',updated_at=?
+      WHERE channel='wecom' AND status IN ('pending','failed')`).run(new Date().toISOString());
+    db.prepare("UPDATE crm_notifications SET wecom_status='disabled' WHERE wecom_status='pending'").run();
+    return;
+  }
+  const deliveries = pending.map(() => claimDelivery(db, { channel: 'wecom', workerId })).filter(Boolean);
+  if (!deliveries.length) return;
   const content = ['TradePulse 客户跟进提醒', ...pending.map(row => `- ${row.title}｜${row.detail}`)].join('\n');
-  const response = await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ msgtype: 'text', text: { content } }) });
-  if (!response.ok) throw new Error(`企业微信通知失败：${response.status}`);
-  db.prepare(`UPDATE crm_notifications SET wecom_status='sent' WHERE id IN (${pending.map(() => '?').join(',')})`).run(...pending.map(row => row.id));
+  try {
+    const response = await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msgtype: 'text', text: { content } }) });
+    if (!response.ok) throw new Error(`企业微信通知失败：${response.status}`);
+    for (const delivery of deliveries) finishDelivery(db, { deliveryId: delivery.id, workerId, success: true });
+  } catch (error) {
+    for (const delivery of deliveries) {
+      try { finishDelivery(db, { deliveryId: delivery.id, workerId, error: error.message }); } catch (_finishError) { /* keep the next retry available */ }
+    }
+    throw error;
+  }
 }
 main().finally(() => db.close()).catch(error => { console.error(error.message); process.exitCode = 1; });
