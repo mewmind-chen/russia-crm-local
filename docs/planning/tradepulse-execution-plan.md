@@ -1,9 +1,9 @@
-ji x# TradePulse AI CRM 执行计划
+# TradePulse AI CRM 执行计划
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 32/38 个任务已完成；A4-01 经理异常、中文输出和通知中心已完成开发、验证、合并与生产发布；下一步 A4-02 `sales_coaching`
-**版本：** v1.9
+**状态：** 33/38 个任务已完成；A4-02 聚合销售辅导已完成开发、验证、合并与生产发布；下一步 A4-03 反馈和版本治理
+**版本：** v2.0
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
@@ -878,6 +878,17 @@ PR [#79](https://github.com/mewmind-chen/russia-crm-local/pull/79) 已合并 `ma
 - 样本不足时明确标记，不输出伪精确结论。
 - 在现有团队能力页面显示优势、差距和建议。
 
+状态（2026-07-25）：已完成。`sales_coaching@v1` 只接收授权团队的聚合活动、转化、
+订单和 SLA 指标，不包含客户身份、联系方式或单条活动正文；少于 10 个真实观察样本时
+不调用模型，10-29 个样本限制置信度，所有结果保持经理人工复核并强制中文展示。销售
+无法查看团队辅导或从任务中心绕过，内部持久化锚点不对外显示；结果完成后创建本人网页
+通知。聚焦 36/36、AI 220/220、本地/GitHub CI/生产隔离完整回归均为 508/508，隔离库
+浏览器、backup/quick_check、回滚确认和 local/public smoke 通过。PR
+[#82](https://github.com/mewmind-chen/russia-crm-local/pull/82) 已合并 `main` @
+`cbf8c596db315a88bb921529794e75d539ce32f3` 并发布，current `cbf8c596db31`、previous
+`8f3df69dafa9`，四个 AI 开关保持开启。证据见
+`docs/evidence/a4-02-sales-coaching.md`。下一项为 A4-03 反馈和版本治理，本轮不实现。
+
 ### A4-03 反馈和版本治理
 
 - 保存成交、回复、退回、停滞和人工驳回标签。
@@ -1026,8 +1037,9 @@ E0-01 生产基线
 | A3-05 | 已完成 | RFQ BOM/金额/完整度校验，报价金额/币种/毛利校验，订单必须绑定同客户报价；新增报价/订单幂等请求表，重复提交不重复写业务对象；订单 UI 明确选择报价并携带幂等键；RFQ/报价继续通过 `next_action@v1` 生成建议，AI 无报价/订单写入权限；专项 3/3、完整回归 495/495、生产隔离验证通过，current 为 `bd0953c2eee0`、previous 为 `9545213db522`；PR #75 已合并并发布；证据见 `docs/evidence/a3-05-rfq-order-boundary.md`；下一步 A3-06 验收门 |
 | A3-06 | 已完成 | 统一客户时间线覆盖认领、资料包、人工活动、人工采纳下一步、RFQ、报价和订单；资料包/下一步保持人工复核，外发、金额、订单由授权员工确认；Worker 租约恢复、结果唯一写入、认领/建议采纳/报价/订单幂等和企微失败网页降级通过；专项 2/2、受影响回归 78/78、完整回归 497/497；PR #77 已合并 `main` @ `35858514259af935884e7745fd2e8db6db35e9ad` 并完成生产发布，current 为 `35858514259a`、previous 为 `4e912fbd0d68`；证据见 `docs/evidence/a3-06-sales-execution-gate.md`；下一步阶段 4 A4-01 `manager_anomaly` |
 | A4-01 | 已完成 | 服务端确定性扫描会议无 RFQ、RFQ 未报价、报价无回复、高价值停滞和团队负荷不均；`manager_anomaly@v1` 只生成中文解释、优先分和人工介入建议，严格限制异常/客户/证据 ID；销售隔离、Worker 恢复、幂等和无业务写入通过；补齐通知中心、本人已读边界和客户跳转，并统一员工可见 AI 中文输出；聚焦 26/26、AI 214/214、完整与生产隔离验证 503/503、桌面/390px、CI、backup/quick_check、local/public smoke 通过；PR #79 已合并 `main` @ `a7f2841c8edcbe534e44ce8c3628873b764e224a` 并发布，current `a7f2841c8edc`、previous `cc4ea9b0d552`，四个 AI 开关为 1；证据见 `docs/evidence/a4-01-manager-anomaly.md`；下一步 A4-02 `sales_coaching` |
+| A4-02 | 已完成 | `sales_coaching@v1` 只使用授权团队聚合活动、转化、订单和 SLA；少于 10 个真实观察样本不调用模型，10-29 个样本限制置信度，结果中文且始终人工复核；销售隔离、任务中心锚点脱敏、过期判断、通知和约 2 分钟前端轮询通过；聚焦 36/36、AI 220/220、本地/GitHub CI/生产隔离完整回归 508/508，隔离库浏览器、backup/quick_check、local/public smoke 通过；PR #82 已合并 `main` @ `cbf8c596db315a88bb921529794e75d539ce32f3` 并发布，current `cbf8c596db31`、previous `8f3df69dafa9`，四个 AI 开关为 1；证据见 `docs/evidence/a4-02-sales-coaching.md`；下一步 A4-03 反馈和版本治理 |
 
-当前进度：38 个计划任务中已完成 32 个，剩余 6 个。A4-01 已完成五类经理异常扫描、
-严格 review-only AI、销售隔离、员工可见中文输出和通知中心补缺；完整回归与生产隔离验证
-503/503、生产 backup/quick_check、回滚确认、部署和 smoke 均通过，证据见
-`docs/evidence/a4-01-manager-anomaly.md`。下一项为 A4-02 `sales_coaching`，本轮不实现。
+当前进度：38 个计划任务中已完成 33 个，剩余 5 个。A4-02 已完成聚合销售辅导、
+样本门槛、中文输出、经理人工复核、销售隔离和完成通知；本地、GitHub CI 与生产隔离
+完整回归 508/508，生产 backup/quick_check、回滚确认、部署和 smoke 均通过，证据见
+`docs/evidence/a4-02-sales-coaching.md`。下一项为 A4-03 反馈和版本治理，本轮不实现。
