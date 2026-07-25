@@ -31,7 +31,6 @@ function linkedDispatch(db, suffix, legacyTaskType, legacyTaskId) {
   const jobs = createAIJobStore(db, { idFactory: () => `AIJ-CANCEL-${suffix}` });
   const station = legacyTaskType === 'recon' ? 'recon_dispatch' : 'contact_dispatch';
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station,

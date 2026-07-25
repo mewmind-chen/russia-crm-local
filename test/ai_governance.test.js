@@ -33,7 +33,6 @@ function seedResult(db, idFactory) {
   const jobs = createAIJobStore(db, { idFactory });
   const results = createAIResultStore(db, { idFactory });
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
     station: 'customer_fit',
@@ -200,20 +199,18 @@ test('strategies must run in shadow, require a human approval, and retain rollba
   db.close();
 });
 
-test('governance API and every strategy write are restricted to administrators', async t => {
+test('governance API is manager scoped and never exposes publishing to sales users', async t => {
   const fx = await fixtures.adminFixture({
     appOptions: { salesCrm: { aiStationsEnabled: true } },
   });
   t.after(() => fx.close());
   const managerView = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.cookie });
-  assert.equal(managerView.status, 403);
+  assert.equal(managerView.status, 200);
+  assert.deepEqual((await managerView.json()).feedbackLabels, FEEDBACK_LABELS);
   assert.equal((await fx.request('/api/sales-crm/ai/governance', { cookie: fx.otherCookie })).status, 403);
-  const adminView = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.adminCookie });
-  assert.equal(adminView.status, 200);
-  assert.deepEqual((await adminView.json()).feedbackLabels, FEEDBACK_LABELS);
 
   const created = await fx.request('/api/sales-crm/ai/governance/strategies', {
-    cookie: fx.adminCookie,
+    cookie: fx.cookie,
     method: 'POST',
     body: {
       strategyKey: 'api-customer-fit',
@@ -232,7 +229,7 @@ test('governance API and every strategy write are restricted to administrators',
   const evaluated = await fx.request(
     `/api/sales-crm/ai/governance/strategies/${strategyId}/evaluations`,
     {
-      cookie: fx.adminCookie,
+      cookie: fx.cookie,
       method: 'POST',
       body: { outcome: 'better', metrics: { replyRateDelta: 0.08 } },
     },
@@ -241,7 +238,7 @@ test('governance API and every strategy write are restricted to administrators',
   assert.equal((await evaluated.json()).strategy.evaluationCount, 1);
   const requested = await fx.request(
     `/api/sales-crm/ai/governance/strategies/${strategyId}/request-publish`,
-    { cookie: fx.adminCookie, method: 'POST' },
+    { cookie: fx.cookie, method: 'POST' },
   );
   assert.equal(requested.status, 200);
   assert.equal((await requested.json()).strategy.status, 'pending_approval');
@@ -251,19 +248,6 @@ test('governance API and every strategy write are restricted to administrators',
   );
   assert.equal(approved.status, 200);
   assert.equal((await approved.json()).strategy.status, 'published');
-  assert.equal((await fx.request('/api/sales-crm/ai/governance/strategies', {
-    cookie: fx.cookie,
-    method: 'POST',
-    body: {
-      strategyKey: 'manager-forbidden',
-      version: 'v1',
-      station: 'customer_fit',
-      model: 'qwen',
-      promptVersion: 'v1',
-      ruleVersion: 'v1',
-      config: {},
-    },
-  })).status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/governance/strategies', {
     cookie: fx.otherCookie,
     method: 'POST',

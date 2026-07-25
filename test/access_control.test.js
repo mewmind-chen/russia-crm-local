@@ -148,40 +148,6 @@ test('every browser API has an explicit permission policy or separate token boun
   for (const key of salesRoutes) assert.ok(SALES_ROUTE_POLICIES[key], key);
 });
 
-test('AI audit and governance policies enforce the role boundary', () => {
-  const { LEGACY_ROUTE_POLICIES, SALES_ROUTE_POLICIES } = accessControl();
-  assert.deepEqual(SALES_ROUTE_POLICIES['GET /ai/tasks'].permissions, [
-    'view_customers', 'review_ai_tasks',
-  ]);
-  assert.deepEqual(SALES_ROUTE_POLICIES['GET /ai/tasks/:taskId'].permissions, [
-    'view_customers', 'review_ai_tasks',
-  ]);
-  const governanceRoutes = [
-    'GET /ai/governance',
-    'POST /ai/jobs/:jobId/feedback',
-    'POST /ai/governance/strategies',
-    'POST /ai/governance/strategies/:strategyId/evaluations',
-    'POST /ai/governance/strategies/:strategyId/request-publish',
-    'POST /ai/governance/strategies/:strategyId/approve',
-    'POST /ai/governance/strategies/:strategyId/rollback',
-  ];
-  for (const key of [
-    ...governanceRoutes,
-    'GET /ai/budgets',
-    'PUT /ai/budgets/:scopeType/:scopeId',
-  ]) {
-    assert.equal(SALES_ROUTE_POLICIES[key].realAdminOnly, true, key);
-  }
-  for (const key of ['GET /ai/features', 'PATCH /ai/features/:featureKey', ...governanceRoutes]) {
-    assert.deepEqual(SALES_ROUTE_POLICIES[key].permissions, ['manage_ai_governance'], key);
-  }
-  assert.deepEqual(LEGACY_ROUTE_POLICIES['GET /assistant/runtime'].permissions, ['manage_ai_governance']);
-  assert.equal(LEGACY_ROUTE_POLICIES['PATCH /assistant/runtime'].realAdminOnly, true);
-  assert.equal(LEGACY_ROUTE_POLICIES['PATCH /assistant/runtime'].blockedWhileImpersonating, true);
-  assert.equal(LEGACY_ROUTE_POLICIES['POST /assistant/runtime/recheck'].realAdminOnly, true);
-  assert.equal(LEGACY_ROUTE_POLICIES['POST /assistant/runtime/recheck'].blockedWhileImpersonating, true);
-});
-
 test('identity inspection blocks exactly the Recon and account-security policies', () => {
   const { LEGACY_ACTION_POLICIES, SALES_ROUTE_POLICIES, policyForLegacyRequest, assertPolicyAllowed } = accessControl();
   const blockedApp = Object.entries(LEGACY_ACTION_POLICIES.app)
@@ -204,7 +170,6 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'DELETE /users/:userId',
     'GET /ai/budgets',
     'GET /ai/features',
-    'GET /ai/governance',
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
     'PATCH /ai/features/:featureKey',

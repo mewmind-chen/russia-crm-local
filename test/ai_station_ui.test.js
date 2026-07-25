@@ -14,11 +14,11 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
   assert.match(html, /app\.css\?v=20260725-19/);
-  assert.match(html, /app\.js\?v=20260725-20/);
+  assert.match(html, /app\.js\?v=20260725-19/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {
-  assert.match(app, /aiService\.runSalesPack\(customerId\)/);
+  assert.match(app, /stations\/sales_pack\/run/);
   for (const field of ['summary', 'entryPoints', 'risks', 'draft', 'salesPack']) {
     assert.match(app, new RegExp(field));
   }
@@ -28,8 +28,7 @@ test('sales pack UI exposes evidence-backed drafts without any send action', () 
 
 test('administrator AI feature switches expose hard and runtime state', () => {
   assert.match(html, /id="aiFeatureRows"/);
-  assert.match(app, /aiService\.features\(\)/);
-  assert.match(app, /aiService\.updateFeature\(key, \{ enabled \}\)/);
+  assert.match(app, /\/api\/sales-crm\/ai\/features/);
   assert.match(app, /hardEnabled/);
   assert.match(app, /runtimeEnabled/);
   assert.match(app, /effectiveEnabled/);
@@ -41,8 +40,7 @@ test('AI governance UI exposes outcome labels, shadow approval and rollback cont
     'aiStrategyCreate', 'aiGovernanceRefresh',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   for (const label of ['成交', '回复', '退回', '停滞', '人工驳回']) assert.match(app, new RegExp(label));
-  assert.match(app, /aiService\.governance\(\)/);
-  assert.match(app, /aiService\.strategyAction\(strategyId, action, \{\}\)/);
+  assert.match(app, /\/api\/sales-crm\/ai\/governance/);
   assert.match(app, /data-strategy-evaluate/);
   assert.match(app, /request-publish/);
   assert.match(app, /data-strategy-action="approve"/);
@@ -51,9 +49,9 @@ test('AI governance UI exposes outcome labels, shadow approval and rollback cont
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
-  assert.match(app, /aiService\.customerResults\(customerId\)/);
-  assert.match(app, /aiService\.runCustomerFit\(customerId\)/);
-  assert.match(app, /aiService\.retryJob\(jobId\)/);
+  assert.match(app, /\/api\/sales-crm\/ai\/customers\/\$\{encodeURIComponent\(customerId\)\}\/results/);
+  assert.match(app, /\/api\/sales-crm\/ai\/customers\/\$\{encodeURIComponent\(customerId\)\}\/stations\/customer_fit\/run/);
+  assert.match(app, /\/api\/sales-crm\/ai\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/retry/);
   assert.doesNotMatch(app, /fetch\(['"`]https?:\/\//);
 });
 
@@ -91,8 +89,8 @@ test('AI task center has permission-scoped filters, pagination, details and oper
     'aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',
     'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter', 'aiTaskPrev', 'aiTaskNext',
   ]) assert.match(html, new RegExp(`id="${id}"`));
-  assert.match(app, /aiService\.listTasks\(Object\.fromEntries\(params\)\)/);
-  assert.match(app, /aiService\.getTask\(taskId\)/);
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\?\$\{params\}/);
+  assert.match(app, /\/api\/sales-crm\/ai\/tasks\/\$\{encodeURIComponent\(taskId\)\}/);
   assert.match(app, /data-ai-task-action="retry"/);
   assert.match(app, /data-ai-task-action="cancel"/);
   assert.match(app, /data-ai-task-action="approved"/);
@@ -121,7 +119,7 @@ test('notification center exposes unread counts, scoped read actions and custome
     'notificationSummary', 'notificationTabs', 'notificationList', 'notificationRefresh',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /function renderNotifications\(\)/);
-  assert.match(app, /activityService\.markNotificationRead\(notificationId\)/);
+  assert.match(app, /\/api\/sales-crm\/notifications\/\$\{encodeURIComponent\(notificationId\)\}\/read/);
   assert.match(app, /data-notification-customer/);
   assert.match(app, /只能标记|notification\.user_id === state\.data\.user\.id/);
   assert.match(css, /\.notification-item/);

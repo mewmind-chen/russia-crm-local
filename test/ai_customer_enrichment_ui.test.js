@@ -34,9 +34,9 @@ test('customer enrichment supports review, retry and cancellation through protec
   assert.match(app, /data-review-enrichment-proposal="rejected"/);
   assert.match(app, /data-retry-enrichment/);
   assert.match(app, /data-cancel-enrichment/);
-  assert.match(app, /aiService\.reviewProposal\(proposalId, \{ decision \}\)/);
-  assert.match(app, /aiService\.cancelEnrichment\(runId, \{\}\)/);
-  assert.match(app, /aiService\.runCustomerEnrichment\(customerId, \{\}\)/);
+  assert.match(app, /\/api\/sales-crm\/ai\/proposals\/\$\{encodeURIComponent\(proposalId\)\}\/review/);
+  assert.match(app, /\/api\/sales-crm\/ai\/enrichment\/\$\{encodeURIComponent\(runId\)\}\/cancel/);
+  assert.match(app, /\/api\/sales-crm\/ai\/customers\/\$\{encodeURIComponent\(customerId\)\}\/enrichment\/run/);
 });
 
 test('enrichment polling is terminal-aware, bounded and retains last successful data on degradation', () => {

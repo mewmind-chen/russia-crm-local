@@ -26,13 +26,7 @@ const value = {
 
 function prepareJob(db, id = 'AIJ-RESULT') {
   const jobs = createAIJobStore(db, { idFactory: () => id });
-  jobs.enqueue({
-    customerId: 'CUST-1',
-    crmAccountId: 'ACC-1',
-    station: 'customer_fit',
-    contextHash: hash,
-    trigger: { source: 'api', reason: 'test_fixture' },
-  }, `job:${id}`);
+  jobs.enqueue({ customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit', contextHash: hash }, `job:${id}`);
   const claimed = jobs.claimNext('worker-1');
   return { jobs, claimed };
 }
