@@ -73,7 +73,7 @@ test('natural-language result becomes an async proposal and confirmation writes 
       modelCall: async messages => {
         modelInput = JSON.parse(messages[1].content);
         return {
-          answer: JSON.stringify(output()),
+          answer: `Here is the structured proposal:\n${JSON.stringify(output())}\nPlease review it before saving.`,
           engine: 'test',
           model: 'action-proposal-fixture',
           usage: { inputTokens: 40, outputTokens: 50 },
