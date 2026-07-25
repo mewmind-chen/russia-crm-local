@@ -1,4 +1,5 @@
 import { escapeAttribute, escapeHtml } from '../../components/html.js';
+import { renderAIResult } from '../../components/ai-result.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 
 export const id = 'team-insights';
@@ -72,6 +73,14 @@ function coachingBlock(data, item) {
   const sampleStatus = snapshot.sampleStatus
     || (sampleSize < 10 ? 'insufficient' : sampleSize < 30 ? 'limited' : 'sufficient');
   const value = coaching?.ai?.stale ? null : coaching?.ai?.result?.value;
+  if (coaching?.ai?.presentation) {
+    return renderAIResult(coaching.ai.presentation, {
+      view_evidence() {},
+      regenerate() {},
+      review() {},
+      close() {},
+    });
+  }
   if (value) {
     return `<div class="coaching-output">
       <strong>AI 辅导建议</strong>
@@ -89,7 +98,7 @@ function selectedDetail(data) {
   const item = data.payload.teamReport?.find(row => row.user?.id === data.selectedUserId);
   if (!item) return '';
   return `<section class="workspace-section" data-section="team-detail">
-    <div class="panel-head"><div><p class="eyebrow">DETERMINISTIC REVIEW</p><h2>${escapeHtml(item.user?.name)} · 团队检视</h2></div></div>
+    <div class="panel-head"><div><p class="eyebrow">确定性指标检视</p><h2>${escapeHtml(item.user?.name)} · 团队检视</h2></div></div>
     <div class="metric-grid">
       <article class="metric"><span>资源激活率</span><strong>${percent(item.rates?.activation)}</strong></article>
       <article class="metric"><span>有效回复率</span><strong>${percent(item.rates?.reply)}</strong></article>
@@ -97,7 +106,7 @@ function selectedDetail(data) {
       <article class="metric"><span>询价转首单</span><strong>${percent(item.rates?.order)}</strong></article>
     </div>
     <div class="recommendation"><strong>确定性分配依据</strong><p>优势国家：${escapeHtml((item.bestCountries || []).join('、') || '待积累')}；优势渠道：${escapeHtml((item.bestChannels || []).join('、') || '待积累')}。</p></div>
-    <section data-section="ai-coaching"><p class="eyebrow">AI COACHING · AFTER METRICS</p>${coachingBlock(data, item)}</section>
+    <section data-section="ai-coaching"><p class="eyebrow">AI 辅导 · 位于确定性指标之后</p>${coachingBlock(data, item)}</section>
   </section>`;
 }
 
@@ -109,7 +118,7 @@ function content(data) {
   });
   const countries = data.payload.countryReport || [];
   return `<div class="module-workspace" data-module="${id}">
-    <header class="workspace-header"><div><p class="eyebrow">TEAM INSIGHTS</p><h1>团队洞察</h1>
+    <header class="workspace-header"><div><p class="eyebrow">团队洞察</p><h1>团队洞察</h1>
       <p>指标仅来自当前管理范围，确定性业务数据优先于 AI 辅导。</p></div></header>
     <section class="workspace-section" data-section="deterministic-metrics">
       <div class="panel-head"><div><h2>确定性团队指标</h2><p>成员能力、漏斗和市场表现</p></div></div>
@@ -133,6 +142,24 @@ export function render(context) {
   }
   context.mount.innerHTML = content(context.data);
   context.lifecycle.listen(context.mount, 'click', event => {
+    const aiAction = event.target.closest?.('[data-ai-result-action]');
+    if (aiAction) {
+      const action = aiAction.dataset.aiResultAction;
+      if (action === 'view_evidence') {
+        aiAction.closest('.ai-result')?.querySelector('[data-ai-layer="facts"]')
+          ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      } else if (action === 'close') {
+        const result = aiAction.closest('.ai-result');
+        if (result) result.hidden = true;
+      } else if (action === 'review') {
+        context.navigate?.('ai-control');
+      } else if (action === 'regenerate' && context.data.selectedUserId) {
+        void context.services.ai.runSalesCoaching(context.data.selectedUserId, {}, {
+          signal: context.lifecycle.signal,
+        });
+      }
+      return;
+    }
     const member = event.target.closest?.('[data-team-user]');
     if (!member) return;
     context.data.selectedUserId = member.dataset.teamUser;

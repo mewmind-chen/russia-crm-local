@@ -77,7 +77,7 @@ export const PAGE_REGISTRY = Object.freeze([
   }),
   page('ai-control', {
     roles: LEADERS,
-    permissions: ['view_customers'],
+    permissions: ['review_ai_tasks'],
     featureFlags: ['aiStations'],
     shellView: 'aiTasks',
   }),
@@ -124,7 +124,7 @@ export const LEGACY_ROUTE_PERMISSIONS = Object.freeze({
   contacts: ['view_contacts'],
   recon: ['view_recon'],
   customerProfile: ['view_customers'],
-  aiTasks: ['view_customers'],
+  aiTasks: ['review_ai_tasks'],
   users: ['view_users'],
   recycleBin: ['manage_customer_recycle'],
   maintenance: ['manage_data_maintenance'],

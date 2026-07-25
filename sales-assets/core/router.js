@@ -26,6 +26,8 @@ export function resolveRoute(value, { base } = {}) {
   const requestedRoute = normalizedHash(url.hash);
   const page = pageByRoute(requestedRoute);
   const customerId = url.searchParams.get('customer') || '';
+  const from = url.searchParams.get('from') || '';
+  const tab = url.searchParams.get('tab') || '';
   return {
     url,
     requestedRoute,
@@ -37,6 +39,8 @@ export function resolveRoute(value, { base } = {}) {
       ? requestedRoute
       : page?.shellView || '',
     customerId,
+    from,
+    tab,
     isLegacy: Boolean(page && requestedRoute !== page.id),
     found: Boolean(page),
   };
@@ -64,10 +68,23 @@ export function createRouter({
     return getAccessContext() || {};
   }
 
-  function write(pageId, { replace = true, customerId = '', requestedRoute = pageId } = {}) {
+  function write(pageId, {
+    replace = true,
+    customerId = '',
+    requestedRoute = pageId,
+    from = '',
+    tab = '',
+  } = {}) {
     const url = asUrl(browserWindow.location);
-    if (customerId) url.searchParams.set('customer', customerId);
-    else if (pageId !== 'customer-detail') url.searchParams.delete('customer');
+    if (pageId === 'customer-detail') {
+      if (customerId) url.searchParams.set('customer', customerId);
+      if (from) url.searchParams.set('from', from);
+      if (tab) url.searchParams.set('tab', tab);
+    } else {
+      url.searchParams.delete('customer');
+      url.searchParams.delete('from');
+      url.searchParams.delete('tab');
+    }
     url.hash = requestedRoute;
     const nextHref = `${url.pathname}${url.search}${url.hash}`;
     browserWindow.history[replace ? 'replaceState' : 'pushState'](null, '', nextHref);
@@ -99,6 +116,24 @@ export function createRouter({
       onForbidden(resolved);
       return fallback('forbidden', resolved);
     }
+    if (resolved.requestedRoute === 'customerProfile') {
+      write(resolved.pageId, {
+        replace: true,
+        customerId: resolved.customerId,
+        from: resolved.from,
+        tab: resolved.tab,
+        requestedRoute: resolved.pageId,
+      });
+      const canonical = resolveRoute(browserWindow.location);
+      lastHref = routeHref(browserWindow.location);
+      onRoute({
+        ...canonical,
+        isLegacy: true,
+        legacyRoute: resolved.requestedRoute,
+        source,
+      });
+      return canonical;
+    }
     onRoute({ ...resolved, source });
     return resolved;
   }
@@ -106,6 +141,8 @@ export function createRouter({
   function navigate(route, {
     replace = false,
     customerId = '',
+    from = '',
+    tab = '',
   } = {}) {
     const requested = String(route || '').replace(/^#\/?/, '');
     const resolved = resolveRoute(`#${requested}`, { base: browserWindow.location.href });
@@ -120,6 +157,8 @@ export function createRouter({
     write(resolved.pageId, {
       replace,
       customerId,
+      from,
+      tab,
       requestedRoute: requested,
     });
     return refresh({ force: true, source: 'navigate' });

@@ -113,7 +113,7 @@ function panel(data, kind) {
 function content(data) {
   const state = data.collections[data.active];
   return `<div class="module-workspace" data-module="${id}">
-    <header class="workspace-header"><div><p class="eyebrow">INTELLIGENCE</p><h1>情报中心</h1>
+    <header class="workspace-header"><div><p class="eyebrow">客户情报</p><h1>情报中心</h1>
       <p>结果由服务端按客户与联系人权限裁剪。</p></div></header>
     <div class="workspace-toolbar">
       <div class="segmented-control" role="tablist">${KINDS.map(kind =>

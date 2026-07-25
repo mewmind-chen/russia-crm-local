@@ -83,7 +83,7 @@ function messages(data) {
 function content(data) {
   const visibleScope = data.conversation?.scope || data.scope;
   return `<div class="module-workspace assistant-workspace" data-module="${id}">
-    <header class="workspace-header"><div><p class="eyebrow">ASSISTANT</p><h1>AI 助手 · ${escapeHtml(scopeLabel(visibleScope))}</h1>
+    <header class="workspace-header"><div><p class="eyebrow">AI 助手</p><h1>AI 助手 · ${escapeHtml(scopeLabel(visibleScope))}</h1>
       <p>标题和每次请求都显示并携带明确 scope。</p></div>
       <button class="button secondary" type="button" data-new-conversation>新对话</button>
     </header>

@@ -67,7 +67,7 @@ export function render({ mount, data = {} } = {}) {
   const funnel = data.funnel || [];
   const activities = data.activities || [];
   const output = `<div class="role-home manager-home">
-    <div class="section-intro"><div><p class="eyebrow">MANAGEMENT OVERVIEW</p><h2>经营驾驶舱</h2></div></div>
+    <div class="section-intro"><div><p class="eyebrow">经营概览</p><h2>经营驾驶舱</h2></div></div>
     <div class="metric-grid">
       <article class="metric"><span>客户总量</span><strong>${Number(summary.accounts || 0)}</strong></article>
       <article class="metric"><span>活跃客户</span><strong>${Number(summary.active || 0)}</strong></article>

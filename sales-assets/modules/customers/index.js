@@ -179,12 +179,14 @@ function customerTable(model, context) {
     <thead><tr><th>选择</th><th>客户</th><th>阶段</th><th>负责人</th><th>优先级</th><th>下一步</th><th>操作</th></tr></thead>
     <tbody>${rows.map(account => `<tr data-row-key="${escapeAttribute(account.id)}">
       <td><input type="checkbox" data-customer-select="${escapeAttribute(account.id)}"${model.selected.includes(account.id) ? ' checked' : ''}></td>
-      <td><strong>${escapeHtml(account.company_name)}</strong><br><small>${escapeHtml(account.external_customer_id || account.id)}</small></td>
-      <td>${escapeHtml(account.stage || 'new')}</td>
+      <td><button class="text-button customer-name-detail" type="button" data-customer-detail="${escapeAttribute(account.external_customer_id || account.id)}"><strong>${escapeHtml(account.company_name)}</strong></button><br><small>${escapeHtml(account.external_customer_id || account.id)}</small></td>
+      <td>${escapeHtml(context.store.state.session?.stages
+        ?.find(stage => stage.key === account.stage)?.label || account.stage || '新客户')}</td>
       <td>${escapeHtml(account.owner_name || '未分配')}</td>
       <td>${escapeHtml(account.priority || 'B')}</td>
       <td>${escapeHtml(account.next_action || '未填写')}</td>
-      <td><button class="button secondary" type="button" data-customer-focus="${escapeAttribute(account.id)}">经营写入</button>
+      <td><button class="button secondary customer-detail-secondary" type="button" data-customer-detail="${escapeAttribute(account.external_customer_id || account.id)}">查看详情</button>
+        <button class="button secondary" type="button" data-customer-focus="${escapeAttribute(account.id)}">经营写入</button>
         ${context.access.permissions?.manage_customer_recycle ? `<button class="button secondary" type="button" data-customer-return="${escapeAttribute(account.id)}">退回</button>
         <button class="button secondary" type="button" data-customer-trash="${escapeAttribute(account.id)}">回收</button>` : ''}</td>
     </tr>`).join('')}</tbody>
@@ -225,7 +227,7 @@ function paint(context) {
   const focused = (model.accounts || []).find(account => account.id === model.focusedCustomerId);
   if (model.mode === 'recycle') {
     context.mount.innerHTML = `<section data-module="${id}" data-mode="recycle">
-      <header class="section-intro"><div><p class="eyebrow">RECYCLE</p><h2>客户回收与重分配</h2></div></header>
+      <header class="section-intro"><div><p class="eyebrow">客户回收</p><h2>客户回收与重分配</h2></div></header>
       <form class="toolbar" data-customer-filter><input name="search" value="${escapeAttribute(model.filters.search)}" placeholder="搜索回收客户"><button class="button secondary">搜索</button></form>
       <div role="status">${escapeHtml(model.error || model.message || `共 ${model.recycle.total || 0} 条`)}</div>
       ${recycleTable(model)}
@@ -234,7 +236,7 @@ function paint(context) {
   }
   const stages = activeContext.store.state.session?.stages || [];
   context.mount.innerHTML = `<section class="workflow-module" data-module="${id}" data-mode="${escapeAttribute(model.mode)}">
-    <header class="section-intro"><div><p class="eyebrow">CUSTOMER WORKFLOW</p><h2>${model.mode === 'pipeline' ? '销售管道' : '客户经营'}</h2></div>
+    <header class="section-intro"><div><p class="eyebrow">客户经营流程</p><h2>${model.mode === 'pipeline' ? '销售管道' : '客户经营'}</h2></div>
       <div class="top-actions"><a class="button secondary" data-customer-export href="${escapeAttribute(context.services.customers.exportUrl(model.filters))}">导出</a></div></header>
     <form class="toolbar" data-customer-filter>
       <input name="search" type="search" value="${escapeAttribute(model.filters.search)}" placeholder="搜索客户">
@@ -335,6 +337,14 @@ function bind(context) {
   });
 
   context.lifecycle.listen(context.mount, 'click', event => {
+    const detail = event.target.closest('[data-customer-detail]');
+    if (detail) {
+      context.navigate?.('customer-detail', {
+        customerId: detail.dataset.customerDetail,
+        from: context.route?.requestedRoute || context.route?.pageId || 'customers',
+      });
+      return;
+    }
     const focus = event.target.closest('[data-customer-focus]');
     if (focus) {
       commit(context, { focusedCustomerId: focus.dataset.customerFocus });

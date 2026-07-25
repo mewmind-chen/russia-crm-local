@@ -15,10 +15,64 @@ function queryString(query = {}) {
   return result ? `?${result}` : '';
 }
 
+function customerAccount(payload, customerId) {
+  const selected = String(customerId || '');
+  return (payload.accounts || []).find(item =>
+    String(item.external_customer_id || '') === selected || String(item.id || '') === selected);
+}
+
+function scopedRows(rows, account, customerId) {
+  if (!account) return [];
+  const ids = new Set([String(account.id || ''), String(account.external_customer_id || ''), String(customerId || '')]);
+  return (rows || []).filter(item =>
+    ids.has(String(item.customer_id || item.customerId || item.external_customer_id || '')));
+}
+
 export function createCustomerService(api) {
+  const bootstrap = (sections, options = {}) =>
+    api(`/api/sales-crm/bootstrap${queryString({ sections: sections.join(',') })}`, options);
+
   return {
     getProfile(customerId, options = {}) {
       return api(`/api/sales-crm/profile/${encode(customerId)}`, options);
+    },
+    async getTimeline(customerId, options = {}) {
+      const payload = await bootstrap(['customers', 'today'], options);
+      const account = customerAccount(payload, customerId);
+      return {
+        account,
+        activities: scopedRows(payload.activities, account, customerId),
+        timeline: scopedRows(payload.timeline, account, customerId),
+        alerts: scopedRows(payload.alerts, account, customerId),
+        notifications: scopedRows(payload.notifications, account, customerId),
+      };
+    },
+    async getCommerce(customerId, options = {}) {
+      const payload = await bootstrap(['customers'], options);
+      const account = customerAccount(payload, customerId);
+      return {
+        account,
+        rfqs: scopedRows(payload.rfqs, account, customerId),
+        quotes: scopedRows(payload.quotes, account, customerId),
+        orders: scopedRows(payload.orders, account, customerId),
+      };
+    },
+    async getEvaluations(customerId, options = {}) {
+      const payload = await bootstrap(['customers', 'intelligence'], options);
+      const account = customerAccount(payload, customerId);
+      return {
+        account,
+        evaluations: scopedRows(payload.insights?.evaluations, account, customerId),
+      };
+    },
+    async getTags(customerId, options = {}) {
+      const payload = await api(`/api/sales-crm/profile/${encode(customerId)}`, options);
+      const pool = payload.customerPool?.[0] || {};
+      return {
+        tags: pool.tags || payload.customers?.[0]?.tags || [],
+        availableTags: payload.tags || [],
+        tagCategories: payload.tagCategories || [],
+      };
     },
     create(payload, options = {}) {
       return api('/api/sales-crm/accounts', { ...jsonOptions('POST', payload), ...options });

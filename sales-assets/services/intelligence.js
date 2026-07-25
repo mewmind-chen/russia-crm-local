@@ -13,5 +13,8 @@ export function createIntelligenceService(api) {
       const safeKind = encodeURIComponent(String(kind));
       return api(`/api/sales-crm/research/${safeKind}${queryString(query)}`, options);
     },
+    customerDetail(customerId, options = {}) {
+      return api(`/api/sales-crm/profile/${encodeURIComponent(String(customerId))}`, options);
+    },
   };
 }

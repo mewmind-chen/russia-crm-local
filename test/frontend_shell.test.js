@@ -42,6 +42,8 @@ test('both shells use the same sales API and extracted service layer', () => {
   const modularApp = fs.readFileSync(path.join(root, 'sales-assets', 'modular-app.js'), 'utf8');
   assert.match(legacy, /\/sales-assets\/app\.js/);
   assert.match(modular, /\/sales-assets\/modular-app\.js/);
+  assert.match(modularApp, /loginForm\.reset\(\)/);
+  assert.match(modularApp, /field\.value = ''/);
   assert.match(modularApp, /from '\.\/services\/session\.js'/);
   assert.match(modularApp, /bootstrap\(\['core'\]/);
   assert.doesNotMatch(modularApp, /bootstrap\(null/);

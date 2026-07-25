@@ -87,7 +87,7 @@ export function render({ mount, data = {} } = {}) {
   const formalTasks = data.formalTasks || [];
   const aiSuggestions = data.aiSuggestions || [];
   const output = `<div class="role-home sales-home">
-    <div class="section-intro"><div><p class="eyebrow">MY DAY</p><h2>我的今日</h2></div></div>
+    <div class="section-intro"><div><p class="eyebrow">我的工作日</p><h2>我的今日</h2></div></div>
     <div class="metric-grid">
       <article class="metric"><span>待我领取</span><strong>${claims.length}</strong></article>
       <article class="metric"><span>我的预警</span><strong>${alerts.length}</strong></article>

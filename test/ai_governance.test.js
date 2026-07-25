@@ -200,18 +200,20 @@ test('strategies must run in shadow, require a human approval, and retain rollba
   db.close();
 });
 
-test('governance API is manager scoped and never exposes publishing to sales users', async t => {
+test('governance API and every strategy write are restricted to administrators', async t => {
   const fx = await fixtures.adminFixture({
     appOptions: { salesCrm: { aiStationsEnabled: true } },
   });
   t.after(() => fx.close());
   const managerView = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.cookie });
-  assert.equal(managerView.status, 200);
-  assert.deepEqual((await managerView.json()).feedbackLabels, FEEDBACK_LABELS);
+  assert.equal(managerView.status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/governance', { cookie: fx.otherCookie })).status, 403);
+  const adminView = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.adminCookie });
+  assert.equal(adminView.status, 200);
+  assert.deepEqual((await adminView.json()).feedbackLabels, FEEDBACK_LABELS);
 
   const created = await fx.request('/api/sales-crm/ai/governance/strategies', {
-    cookie: fx.cookie,
+    cookie: fx.adminCookie,
     method: 'POST',
     body: {
       strategyKey: 'api-customer-fit',
@@ -230,7 +232,7 @@ test('governance API is manager scoped and never exposes publishing to sales use
   const evaluated = await fx.request(
     `/api/sales-crm/ai/governance/strategies/${strategyId}/evaluations`,
     {
-      cookie: fx.cookie,
+      cookie: fx.adminCookie,
       method: 'POST',
       body: { outcome: 'better', metrics: { replyRateDelta: 0.08 } },
     },
@@ -239,7 +241,7 @@ test('governance API is manager scoped and never exposes publishing to sales use
   assert.equal((await evaluated.json()).strategy.evaluationCount, 1);
   const requested = await fx.request(
     `/api/sales-crm/ai/governance/strategies/${strategyId}/request-publish`,
-    { cookie: fx.cookie, method: 'POST' },
+    { cookie: fx.adminCookie, method: 'POST' },
   );
   assert.equal(requested.status, 200);
   assert.equal((await requested.json()).strategy.status, 'pending_approval');
@@ -249,6 +251,19 @@ test('governance API is manager scoped and never exposes publishing to sales use
   );
   assert.equal(approved.status, 200);
   assert.equal((await approved.json()).strategy.status, 'published');
+  assert.equal((await fx.request('/api/sales-crm/ai/governance/strategies', {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      strategyKey: 'manager-forbidden',
+      version: 'v1',
+      station: 'customer_fit',
+      model: 'qwen',
+      promptVersion: 'v1',
+      ruleVersion: 'v1',
+      config: {},
+    },
+  })).status, 403);
   assert.equal((await fx.request('/api/sales-crm/ai/governance/strategies', {
     cookie: fx.otherCookie,
     method: 'POST',

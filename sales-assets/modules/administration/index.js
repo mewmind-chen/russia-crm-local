@@ -159,6 +159,7 @@ function aiRuntimeTab(data) {
       <article class="metric"><span>功能开关</span><strong>${Object.keys(features).length}</strong></article>
     </div>
     <button class="button secondary" type="button" data-admin-action="set-assistant-mode">切换路由模式</button>
+    <a class="button secondary" href="#ai-control">打开 AI 运行审计与版本治理</a>
     <div class="ai-feature-list">${Object.entries(features).map(([key, feature]) => `<div class="list-row">
       <span><strong>${escapeHtml(key)}</strong> · ${feature.effectiveEnabled ? '运行中' : '已暂停'}</span>
       <button class="button secondary" type="button" data-admin-action="toggle-ai-feature"
@@ -194,7 +195,7 @@ function panel(data, context) {
 
 function content(data, context) {
   return `<div class="module-workspace" data-module="${id}">
-    <header class="workspace-header"><div><p class="eyebrow">ADMINISTRATION</p><h1>系统管理</h1>
+    <header class="workspace-header"><div><p class="eyebrow">系统管理</p><h1>系统管理</h1>
       <p>管理员专用，不进入经理日常工作区。</p></div></header>
     ${data.notice ? `<div class="status-banner" role="status">${escapeHtml(data.notice)}</div>` : ''}
     ${data.error ? `<div class="status-banner error" role="alert">${escapeHtml(data.error)}</div>` : ''}

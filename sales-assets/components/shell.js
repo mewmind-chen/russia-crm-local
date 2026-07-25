@@ -46,13 +46,14 @@ export function renderShell({
   const name = user.name || 'TradePulse 用户';
   const role = user.role || context.role || '';
   return `<div class="modular-shell">
-    <aside class="modular-sidebar">
+    <aside id="modularNavigation" class="modular-sidebar">
+      <button class="icon-button modular-nav-close" type="button" data-action="menu-close" aria-label="关闭导航">&times;</button>
       <a class="modular-brand" href="#${role === 'sales' ? 'my-today' : 'team-dashboard'}"><span>TP</span><strong>TradePulse</strong></a>
       <nav aria-label="主导航">${navigation({ ...context, role }, activePageId, preference)}</nav>
       <footer><span class="avatar">${escapeHtml(name.slice(0, 1))}</span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(role)}</small></div><button class="icon-button" type="button" data-action="logout" title="退出登录" aria-label="退出登录">&#8617;</button></footer>
     </aside>
     <main class="modular-main">
-      <header class="modular-topbar"><button class="icon-button modular-menu" type="button" data-action="menu" aria-label="打开导航">&#9776;</button><div><p class="eyebrow">TRADEPULSE CRM</p><h1 data-page-title>工作台</h1></div></header>
+      <header class="modular-topbar"><button class="icon-button modular-menu" type="button" data-action="menu" aria-controls="modularNavigation" aria-expanded="false" aria-label="打开导航">&#9776;</button><div><p class="eyebrow">TRADEPULSE CRM</p><h1 data-page-title>工作台</h1></div></header>
       <section id="pageMount" class="modular-page" tabindex="-1"></section>
     </main>
   </div>`;

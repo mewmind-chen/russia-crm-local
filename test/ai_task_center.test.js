@@ -68,14 +68,17 @@ test('administrator, manager and sales task lists follow the role plus customer 
   const manager = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.cookie,
   })).json();
-  const sales = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
+  const salesResponse = await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.otherCookie,
-  })).json();
+  });
   const admin = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.adminCookie,
   })).json();
   assert.deepEqual(manager.items.map(item => item.taskId), ['AIJ-MATRIX-MANAGER']);
-  assert.deepEqual(sales.items.map(item => item.taskId), ['AIJ-MATRIX-SALES']);
+  assert.equal(salesResponse.status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/tasks/AIJ-MATRIX-SALES', {
+    cookie: fx.otherCookie,
+  })).status, 403);
   assert.deepEqual(new Set(admin.items.map(item => item.taskId)), new Set([
     'AIJ-MATRIX-MANAGER', 'AIJ-MATRIX-SALES',
   ]));

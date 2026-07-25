@@ -130,9 +130,26 @@ function actionButtons(item, access) {
     ].join('');
   }
   if (access.permissions?.manage_intake && ['pending', 'approved', 'returned'].includes(item.status)) {
-    return `<button class="button primary" type="button" data-intake-action="assign" data-item-id="${escapeAttribute(item.id)}" data-owner-id="${escapeAttribute(item.suggested_owner_id || '')}"${disabled}>按建议分配</button>`;
+    return `<button class="button primary" type="button" data-intake-action="assign" data-item-id="${escapeAttribute(item.id)}" data-owner-id="${escapeAttribute(item.suggested_owner_id || '')}"${disabled}>人工确认并分配</button>`;
   }
   return '';
+}
+
+function arbitrationCells(item) {
+  const arbitration = item.arbitration || {};
+  const rule = arbitration.ruleDecision || {};
+  const ai = arbitration.aiRecommendation || {};
+  const candidate = ai.rankedCandidates?.[0];
+  const manual = arbitration.manualDecision;
+  return {
+    rule: `<strong>确定性规则</strong><br><small>${escapeHtml(rule.reason || item.decision_reason || '等待规则裁决')}</small>`,
+    ai: ai.available
+      ? `<span class="status-badge status-info">AI 推断</span><br><small>${escapeHtml(candidate?.name || '候选待确认')} · 置信度 ${Math.round(Number(ai.confidence || 0) * 100)}%</small>`
+      : `<span class="status-badge">未生成 AI 结果</span><br><small>${escapeHtml(ai.reasonCode || '沿用确定性规则')}</small>`,
+    human: manual
+      ? `<strong>人工已决定</strong><br><small>${escapeHtml(manual.reason || manual.userId || '')}</small>`
+      : `<strong>等待人工确认</strong><br><small>确认前不改变负责人</small>`,
+  };
 }
 
 function intakeRows(model, access) {
@@ -143,16 +160,19 @@ function intakeRows(model, access) {
     });
   }
   return `<div class="table-scroll" tabindex="0"><table>
-    <thead><tr><th>选择</th><th>企业</th><th>地区 / 行业</th><th>状态</th><th>建议负责人</th><th>裁决</th><th>操作</th></tr></thead>
-    <tbody>${model.items.map(item => `<tr data-row-key="${escapeAttribute(item.id)}">
+    <thead><tr><th>选择</th><th>企业</th><th>地区 / 行业</th><th>状态</th><th>候选负责人</th><th>规则结果</th><th>AI 辅助</th><th>人工决定</th><th>操作</th></tr></thead>
+    <tbody>${model.items.map(item => {
+      const layers = arbitrationCells(item);
+      return `<tr data-row-key="${escapeAttribute(item.id)}">
       <td><input type="checkbox" data-intake-select="${escapeAttribute(item.id)}" aria-label="选择 ${escapeAttribute(item.company_name || item.id)}"></td>
       <td><strong>${escapeHtml(item.company_name || '未命名企业')}</strong><br><small>${escapeHtml(item.external_customer_id || item.id)}</small></td>
       <td>${escapeHtml(item.country || '未标注')}<br><small>${escapeHtml(item.industry || '未标注')}</small></td>
       <td>${escapeHtml(STATUS_LABELS[item.status] || item.status || '未知')}</td>
       <td>${escapeHtml(item.suggested_owner_name || item.assigned_owner_name || '未分配')}</td>
-      <td>${escapeHtml(item.decision_reason || item.arbitration?.ruleDecision?.reason || '等待裁决')}</td>
+      <td>${layers.rule}</td><td>${layers.ai}</td><td>${layers.human}</td>
       <td>${actionButtons(item, access)}</td>
-    </tr>`).join('')}</tbody>
+    </tr>`;
+    }).join('')}</tbody>
   </table></div>`;
 }
 
@@ -163,7 +183,7 @@ function paint(context) {
   const totalPages = Math.max(1, Math.ceil(Number(model.total || 0) / model.query.pageSize));
   context.mount.innerHTML = `<section class="workflow-module" data-module="${id}">
     <header class="section-intro">
-      <div><p class="eyebrow">LEAD INTAKE</p><h2>${canManage ? '线索分配' : '我的线索'}</h2></div>
+      <div><p class="eyebrow">线索入库</p><h2>${canManage ? '线索分配' : '我的线索'}</h2></div>
       <div class="top-actions">
         ${canManage ? '<button class="button secondary" type="button" data-intake-scan>同步线索</button><button class="button primary" type="button" data-intake-bulk>批量分配</button>' : ''}
       </div>

@@ -142,7 +142,8 @@ test('router owns history events, handles refresh/back/forward once, and preserv
   });
 
   router.start();
-  assert.deepEqual(routed, ['customerProfile:RU-1']);
+  assert.deepEqual(routed, ['customer-detail:RU-1']);
+  assert.equal(browser.location.hash, '#customer-detail');
   router.navigate('customers');
   router.navigate('pending');
   assert.equal(browser.location.hash, '#pending');
@@ -150,7 +151,7 @@ test('router owns history events, handles refresh/back/forward once, and preserv
   browser.history.back();
   browser.history.forward();
   assert.deepEqual(routed, [
-    'customerProfile:RU-1',
+    'customer-detail:RU-1',
     'customers:',
     'pending:',
     'customers:',

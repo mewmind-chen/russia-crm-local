@@ -23,6 +23,9 @@ const loginError = document.getElementById('loginError');
 const appMount = document.getElementById('appMount');
 
 function showLogin() {
+  loginForm.reset();
+  for (const field of loginForm.querySelectorAll('input')) field.value = '';
+  loginStatus.textContent = '';
   store.setSection('session', null);
   activeModule?.dispose?.();
   activeModule = null;
@@ -65,7 +68,39 @@ let workspaceScope = null;
 let routeVersion = 0;
 let layoutPreference = null;
 
+function mobileNavigationOpen(open, { restoreFocus = true } = {}) {
+  if (!shell?.root) return;
+  const mobile = Boolean(globalThis.matchMedia?.('(max-width: 780px)')?.matches);
+  const next = mobile && Boolean(open);
+  const sidebar = shell.root.querySelector('.modular-sidebar');
+  const main = shell.root.querySelector('.modular-main');
+  const menu = shell.root.querySelector('.modular-menu');
+  shell.root.classList.toggle('navigation-open', next);
+  menu?.setAttribute('aria-expanded', String(next));
+  if (!mobile) {
+    sidebar?.removeAttribute('aria-hidden');
+    sidebar?.removeAttribute('role');
+    sidebar?.removeAttribute('aria-modal');
+    if (main) main.inert = false;
+    return;
+  }
+  if (next) {
+    sidebar?.setAttribute('aria-hidden', 'false');
+    sidebar?.setAttribute('role', 'dialog');
+    sidebar?.setAttribute('aria-modal', 'true');
+    if (main) main.inert = true;
+    sidebar?.querySelector('.modular-nav-close')?.focus({ preventScroll: true });
+  } else {
+    if (main) main.inert = false;
+    if (restoreFocus) menu?.focus({ preventScroll: true });
+    sidebar?.setAttribute('aria-hidden', 'true');
+    sidebar?.removeAttribute('role');
+    sidebar?.removeAttribute('aria-modal');
+  }
+}
+
 async function renderRoute(route) {
+  globalThis.scrollTo?.(0, 0);
   const version = ++routeVersion;
   activeModule?.dispose?.();
   activeModule = null;
@@ -85,6 +120,7 @@ async function renderRoute(route) {
       lifecycle: moduleScope,
       access: accessContext(),
       mount,
+      navigate: (target, options) => router.navigate(target, options),
     };
     context.onRefresh = data => {
       if (version !== routeVersion || moduleScope.disposed || typeof module.render !== 'function') return;
@@ -127,7 +163,8 @@ async function renderRoute(route) {
     const title = shell.root.querySelector('[data-page-title]');
     if (title) title.textContent = route.page.nav?.label || '工作台';
     mount.removeAttribute('aria-busy');
-    mount.focus();
+    mount.focus({ preventScroll: true });
+    globalThis.scrollTo?.(0, 0);
   }
 }
 
@@ -150,12 +187,15 @@ function mountWorkspace(session) {
     user: session.user,
     preference: layoutPreference,
   });
+  mobileNavigationOpen(false, { restoreFocus: false });
   workspaceScope.listen(shell.root, 'click', event => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'logout') {
       void services.session.logout().finally(showLogin);
     } else if (action === 'menu') {
-      shell.root.classList.toggle('navigation-open');
+      mobileNavigationOpen(!shell.root.classList.contains('navigation-open'));
+    } else if (action === 'menu-close') {
+      mobileNavigationOpen(false);
     } else if (action === 'toggle-nav-group') {
       const button = event.target.closest('[data-nav-group-id]');
       const group = button?.dataset.navGroupId;
@@ -175,13 +215,25 @@ function mountWorkspace(session) {
       button.setAttribute('aria-label', `${expanded ? '折叠' : '展开'}${section?.querySelector('h2')?.textContent || '导航分组'}`);
       button.innerHTML = expanded ? '&#8722;' : '+';
     }
-    if (event.target.closest('[data-page-id]')) shell.root.classList.remove('navigation-open');
+    if (event.target.closest('[data-page-id]')) {
+      mobileNavigationOpen(false, { restoreFocus: false });
+    }
+  });
+  workspaceScope.listen(shell.root, 'keydown', event => {
+    if (event.key === 'Escape' && shell.root.classList.contains('navigation-open')) {
+      event.preventDefault();
+      mobileNavigationOpen(false);
+    }
+  });
+  workspaceScope.listen(globalThis, 'resize', () => {
+    mobileNavigationOpen(shell?.root?.classList.contains('navigation-open'), { restoreFocus: false });
   });
   if (!location.hash) {
     const target = layoutPreference?.defaultPageId || accessibleDefaultPage(accessContext())?.id;
     if (target) location.hash = target;
   }
   router.start();
+  globalThis.scrollTo?.(0, 0);
 }
 
 async function bootstrap() {
