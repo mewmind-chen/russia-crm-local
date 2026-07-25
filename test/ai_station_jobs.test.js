@@ -8,7 +8,19 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const Database = require('better-sqlite3');
 const { installAIStationSchema } = require('../lib/ai_stations/schema');
-const { createAIJobStore } = require('../lib/ai_stations/jobs');
+const { createAIJobStore: createRawAIJobStore } = require('../lib/ai_stations/jobs');
+
+const TEST_TRIGGER = Object.freeze({ source: 'api', reason: 'ai_station_jobs_test' });
+
+function createAIJobStore(db, options) {
+  const jobs = createRawAIJobStore(db, options);
+  return {
+    ...jobs,
+    enqueue(input, key) {
+      return jobs.enqueue({ ...input, trigger: input.trigger || TEST_TRIGGER }, key);
+    },
+  };
+}
 
 function fixture() {
   const db = new Database(':memory:');
@@ -48,7 +60,7 @@ test('AI schema upgrades an existing v10 database with the next-action consumpti
     VALUES (10,'2026-07-25T00:00:00.000Z');
   `);
   installAIStationSchema(db);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
   assert.ok(db.prepare(`SELECT 1 found FROM sqlite_master
     WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
   db.close();
@@ -85,7 +97,7 @@ test('AI schema migration is serialized across concurrent processes', async t =>
   });
   await Promise.all([install(), install()]);
   const verified = new Database(dbPath, { readonly: true });
-  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
   assert.ok(verified.prepare(`SELECT 1 found FROM sqlite_master
     WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
   assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 33);
@@ -108,7 +120,7 @@ test('AI schema upgrades v14 batch runs with provider file audit columns', () =>
   for (const column of ['provider_input_file_id', 'provider_output_file_id', 'provider_error_file_id']) {
     assert.equal(columns.has(column), true);
   }
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
   assert.equal(new Set(db.prepare('PRAGMA table_info(crm_ai_jobs)').all().map(row => row.name))
     .has('decision_trace_json'), true);
   db.close();
@@ -176,6 +188,10 @@ test('AI schema incrementally migrates the legacy four-table layout without losi
     'batch_not_before',
     'stale_requeue_count',
     'decision_trace_json',
+    'trigger_source',
+    'trigger_actor_id',
+    'trigger_reason',
+    'triggered_at',
   ]) assert.equal(columns.has(name), true, `missing migrated column ${name}`);
   assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 33);
   assert.deepEqual(
@@ -186,6 +202,10 @@ test('AI schema incrementally migrates the legacy four-table layout without losi
       attempts: 1,
       finished_at: '2026-07-23T00:01:00.000Z',
     },
+  );
+  assert.equal(
+    db.prepare('SELECT trigger_source FROM crm_ai_jobs WHERE id=?').get('AIJ-LEGACY').trigger_source,
+    'legacy_unknown',
   );
 
   const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-AFTER-MIGRATION' });

@@ -80,6 +80,7 @@ function databaseFixture(customerCount = 3) {
 
 function enqueue(jobs, customerIndex, key) {
   return jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: `CUST-${customerIndex}`,
     crmAccountId: `ACC-${customerIndex}`,
     station: 'customer_fit',

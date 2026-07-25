@@ -24,6 +24,7 @@ function fixture(dbPath = ':memory:') {
   function job(key, customerId = `CUST-${sequence + 1}`) {
     db.prepare('INSERT OR IGNORE INTO customer_pool(customer_id) VALUES (?)').run(customerId);
     return jobs.enqueue({
+      trigger: { source: 'api', reason: 'test_fixture' },
       customerId,
       station: 'customer_fit',
       contextHash: hash,

@@ -122,10 +122,21 @@ test('administrator can persist auto mode and force recheck', async () => {
   assert.equal(runtime.calls.recheck.length, 1);
 });
 
-test('runtime routes have explicit legacy permission policies', () => {
-  assert.deepEqual(policyForLegacyRequest('GET', '/assistant/runtime'), { permissions: ['use_ai_assistant'] });
-  assert.deepEqual(policyForLegacyRequest('PATCH', '/assistant/runtime'), { permissions: ['manage_users'] });
-  assert.deepEqual(policyForLegacyRequest('POST', '/assistant/runtime/recheck'), { permissions: ['manage_users'] });
+test('runtime routes are restricted to AI governance administrators', () => {
+  assert.deepEqual(policyForLegacyRequest('GET', '/assistant/runtime'), {
+    permissions: ['manage_ai_governance'],
+    realAdminOnly: true,
+  });
+  assert.deepEqual(policyForLegacyRequest('PATCH', '/assistant/runtime'), {
+    permissions: ['manage_ai_governance'],
+    realAdminOnly: true,
+    blockedWhileImpersonating: true,
+  });
+  assert.deepEqual(policyForLegacyRequest('POST', '/assistant/runtime/recheck'), {
+    permissions: ['manage_ai_governance'],
+    realAdminOnly: true,
+    blockedWhileImpersonating: true,
+  });
 });
 
 test('ordinary chat users receive a generic message for direct provider failures', () => {

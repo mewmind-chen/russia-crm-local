@@ -12,6 +12,7 @@ const { createCustomerEnrichmentStore } = require('../lib/ai_stations/enrichment
 
 function enqueue(db, id, customerId, crmAccountId, actorId) {
   return createAIJobStore(db, { idFactory: () => id }).enqueue({
+    trigger: { source: 'api', actorId, reason: 'test_fixture' },
     customerId,
     crmAccountId,
     station: 'customer_fit',
@@ -50,6 +51,8 @@ test('task center unifies sources, paginates and enforces customer plus actor sc
   assert.equal(body.total, 4);
   assert.ok(body.items.some(item => item.taskId === 'AIJ-OWN'));
   assert.ok(body.items.some(item => item.taskId === 'prospect:PROSPECT-OWN'));
+  assert.equal(body.items.find(item => item.taskId === 'AIJ-OWN').trigger.source, 'api');
+  assert.equal(body.items.find(item => item.taskId === 'prospect:PROSPECT-OWN').trigger.source, 'legacy_unknown');
   assert.ok(body.items.every(item => !['AIJ-OTHER', 'prospect:PROSPECT-OTHER', 'interaction:AII-OTHER'].includes(item.taskId)));
 
   const filtered = await fx.request('/api/sales-crm/ai/tasks?type=company_recon&customer=RU-9002', { cookie: fx.cookie });
@@ -65,14 +68,17 @@ test('administrator, manager and sales task lists follow the role plus customer 
   const manager = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.cookie,
   })).json();
-  const sales = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
+  const salesResponse = await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.otherCookie,
-  })).json();
+  });
   const admin = await (await fx.request('/api/sales-crm/ai/tasks?type=customer_fit', {
     cookie: fx.adminCookie,
   })).json();
   assert.deepEqual(manager.items.map(item => item.taskId), ['AIJ-MATRIX-MANAGER']);
-  assert.deepEqual(sales.items.map(item => item.taskId), ['AIJ-MATRIX-SALES']);
+  assert.equal(salesResponse.status, 403);
+  assert.equal((await fx.request('/api/sales-crm/ai/tasks/AIJ-MATRIX-SALES', {
+    cookie: fx.otherCookie,
+  })).status, 403);
   assert.deepEqual(new Set(admin.items.map(item => item.taskId)), new Set([
     'AIJ-MATRIX-MANAGER', 'AIJ-MATRIX-SALES',
   ]));
@@ -91,6 +97,7 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
   }, 'RU-9002');
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-DETAIL' });
   jobs.enqueue({
+    trigger: { source: 'api', actorId: 'U-MGR', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: context.contextHash, payload: { fullPrompt: 'secret' }, createdBy: 'U-MGR',
   }, 'task-center:detail');
@@ -140,6 +147,15 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
   const response = await fx.request('/api/sales-crm/ai/tasks/AIJ-DETAIL', { cookie: fx.cookie });
   assert.equal(response.status, 200);
   const body = await response.json();
+  assert.deepEqual(body.task.trigger, {
+    source: 'api',
+    eventType: '',
+    eventId: '',
+    actorId: 'U-MGR',
+    workflowId: '',
+    reason: 'test_fixture',
+    triggeredAt: body.task.createdAt,
+  });
   assert.equal(body.task.result.value.fitScore, 88);
   assert.equal(body.task.attempts[0].durationMs, 321);
   assert.deepEqual(body.task.legacyTasks, [{
@@ -199,6 +215,7 @@ test('review action is separately authorized, audited and finalizes a needs-revi
   }, 'RU-9002');
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-REVIEW' });
   jobs.enqueue({
+    trigger: { source: 'api', actorId: 'U-MGR', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: context.contextHash, createdBy: 'U-MGR',
   }, 'task-center:review');
@@ -350,6 +367,7 @@ test('queued or failed AI execution never blocks CRM and historical task reads',
   t.after(() => fx.close());
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-DEGRADED' });
   jobs.enqueue({
+    trigger: { source: 'api', actorId: 'U-MGR', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: 'd'.repeat(64), createdBy: 'U-MGR',
   }, 'degraded:queued');

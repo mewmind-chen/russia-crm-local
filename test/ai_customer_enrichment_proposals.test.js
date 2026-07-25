@@ -218,6 +218,7 @@ test('partial contact readiness keeps missing_info ahead of pending field review
 
   const jobs = createAIJobStore(fx.db);
   const readiness = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'contact_readiness',

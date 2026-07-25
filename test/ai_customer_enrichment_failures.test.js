@@ -78,6 +78,7 @@ test('trigger, event, AI job, and legacy task leases all recover after expiry', 
 
   const jobs = createAIJobStore(fx.db, { now: () => current, leaseMs: 1_000 });
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'intake_precheck',
     executionResource: 'deterministic', contextHash: 'b'.repeat(64), createdBy: 'U-MGR',
   }, 'failure:lease:ai-job');
@@ -103,6 +104,7 @@ test('429, timeout, fallback, permanent failure, and budget block retain governe
 
   async function execute(kind, options = {}) {
     const job = jobs.enqueue({
+      trigger: { source: 'api', reason: 'test_fixture' },
       customerId: 'RU-9002',
       crmAccountId: 'CRM-OWN',
       station: 'customer_fit',
@@ -195,6 +197,7 @@ test('exact duplicate, uncertain identity, no contacts, and evidence conflict ro
   uncertain.store.attachWorkflow(claimed.id, 'AIW-UNCERTAIN');
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-UNCERTAIN' });
   const identity = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'identity_verify',
@@ -271,6 +274,7 @@ test('cancellation wins over a late Recon result and preserves evidence without 
   const linked = createRun(fx.db, 'LATE');
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-LATE' });
   const dispatch = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'recon_dispatch',
     executionResource: 'deterministic', contextHash: linked.run.inputFingerprint,
     workflowId: 'AIW-LATE', createdBy: 'U-MGR',

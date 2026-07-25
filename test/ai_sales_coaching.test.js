@@ -167,8 +167,7 @@ test('manager can run scoped coaching asynchronously while sales cannot read tea
   const hiddenTasks = await fx.request('/api/sales-crm/ai/tasks?type=sales_coaching', {
     cookie: salesCookie,
   });
-  assert.equal(hiddenTasks.status, 200);
-  assert.equal((await hiddenTasks.json()).total, 0);
+  assert.equal(hiddenTasks.status, 403);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_activities').get().count, before);
 });
 

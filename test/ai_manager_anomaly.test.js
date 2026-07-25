@@ -154,12 +154,11 @@ test('manager scope enqueues idempotent review-only jobs while sales is denied',
   const hiddenTasks = await fx.request('/api/sales-crm/ai/tasks?type=manager_anomaly', {
     cookie: salesCookie,
   });
-  assert.equal(hiddenTasks.status, 200);
-  assert.equal((await hiddenTasks.json()).total, 0);
+  assert.equal(hiddenTasks.status, 403);
   const hiddenDetail = await fx.request(`/api/sales-crm/ai/tasks/${firstBody.jobs[0].id}`, {
     cookie: salesCookie,
   });
-  assert.equal(hiddenDetail.status, 404);
+  assert.equal(hiddenDetail.status, 403);
 
   const workerOptions = {
     workerId: 'manager-anomaly-worker',
@@ -208,7 +207,7 @@ test('manager anomaly UI remains manager-gated and exposes explicit AI scan cont
   const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
   assert.match(html, /id="runManagerAnomaly"/);
   assert.match(html, /data-permission="view_team"/);
-  assert.match(app, /manager-anomalies\/run/);
+  assert.match(app, /aiService\.runManagerAnomalies/);
   assert.match(app, /AI建议仅供经理复核/);
   assert.doesNotMatch(app, /autoIntervene|autoWriteManagerAction/);
 });

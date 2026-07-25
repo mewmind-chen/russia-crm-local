@@ -31,6 +31,7 @@ const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
 const { createAITaskCenterStore } = require('./lib/ai_stations/task_center');
 const { createAssistantConversationStore } = require('./lib/assistant_conversations');
+const { resolveFrontendShell } = require('./lib/frontend_shell');
 
 function createApp(options = {}) {
 const paths = runtimePaths();
@@ -57,7 +58,10 @@ app.use((req, res, next) => {
   next();
 });
 registerReleaseHealth(app);
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(
+  __dirname,
+  resolveFrontendShell(options.env || process.env),
+)));
 if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
   app.get('/legacy', (_req, res) => res.sendFile(path.join(__dirname, 'Index.html')));
 }

@@ -360,6 +360,7 @@ test('same-customer enrichment jobs remain serialized across database connection
   const first = createAIJobStore(firstDb, options);
   const second = createAIJobStore(secondDb, options);
   const enqueue = (store, id, key) => store.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'enrichment_finalize',
