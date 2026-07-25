@@ -140,6 +140,15 @@ body.customer-profile-active .top-actions{display:none}
 .sales-pack-draft label{display:grid;gap:4px;font-size:10px;font-weight:750;color:var(--muted)}.sales-pack-draft input,.sales-pack-draft textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);padding:8px;font:inherit;resize:vertical}
 @media(max-width:780px){.sales-pack-grid{grid-template-columns:1fr}}
 
+.next-action-suggestion{padding:12px 0;border-bottom:1px solid var(--line)}
+.next-action-suggestion>p{margin:8px 0;color:var(--muted);line-height:1.5}
+.next-action-suggestion-fields{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr) auto;gap:9px;align-items:end}
+.next-action-suggestion-fields label{display:grid;gap:4px;font-size:10px;font-weight:750;color:var(--muted)}
+.next-action-suggestion-fields input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);padding:8px;font:inherit}
+.next-action-suggestion-fields .check{display:flex;align-items:center;min-height:34px;white-space:nowrap}.next-action-suggestion-fields .check input{width:16px;height:16px}
+.next-action-suggestion-actions{display:flex;align-items:center;gap:10px;margin-top:9px}.next-action-suggestion-actions span{font-size:9px;color:var(--muted)}
+@media(max-width:780px){.next-action-suggestion-fields{grid-template-columns:1fr}.next-action-suggestion-actions{align-items:flex-start;flex-direction:column}}
+
 .maintenance-panel{border-top:3px solid var(--red)}
 .maintenance-form{padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .maintenance-form label,.maintenance-confirm label{display:grid;gap:6px;font-size:11px;font-weight:750;color:#425149}

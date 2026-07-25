@@ -31,9 +31,26 @@ test('AI schema installation is idempotent and leaves identity/router tables unc
   const before = db.prepare('SELECT * FROM assistant_runtime_settings').all();
   installAIStationSchema(db);
   installAIStationSchema(db);
-  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 25);
+  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 26);
   assert.deepEqual(db.prepare('SELECT * FROM assistant_runtime_settings').all(), before);
   assert.equal(db.prepare('SELECT count(*) count FROM customer_pool').get().count, 1);
+  db.close();
+});
+
+test('AI schema upgrades an existing v10 database with the next-action consumption table', () => {
+  const db = fixture();
+  db.exec(`
+    CREATE TABLE crm_ai_schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    );
+    INSERT INTO crm_ai_schema_migrations(version,applied_at)
+    VALUES (10,'2026-07-25T00:00:00.000Z');
+  `);
+  installAIStationSchema(db);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 11);
+  assert.ok(db.prepare(`SELECT 1 found FROM sqlite_master
+    WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
   db.close();
 });
 
@@ -68,8 +85,10 @@ test('AI schema migration is serialized across concurrent processes', async t =>
   });
   await Promise.all([install(), install()]);
   const verified = new Database(dbPath, { readonly: true });
-  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 10);
-  assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 25);
+  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 11);
+  assert.ok(verified.prepare(`SELECT 1 found FROM sqlite_master
+    WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
+  assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 26);
   verified.close();
 });
 
@@ -132,7 +151,7 @@ test('AI schema incrementally migrates the legacy four-table layout without losi
     'execution_resource',
     'fairness_at',
   ]) assert.equal(columns.has(name), true, `missing migrated column ${name}`);
-  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 25);
+  assert.equal(db.prepare("SELECT count(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 26);
   assert.deepEqual(
     db.prepare('SELECT id,state,attempts,finished_at FROM crm_ai_jobs WHERE id=?').get('AIJ-LEGACY'),
     {
