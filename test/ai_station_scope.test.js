@@ -227,7 +227,8 @@ test('customer_fit execution charges failed fallback and successful engine attem
   const accessContext = access();
   const context = buildCustomerContext(db, accessContext, 'CUST-1');
   const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-FALLBACK-COST' });
-  const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-FALLBACK-COST` });
+  let resultSequence = 0;
+  const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-FALLBACK-COST-${++resultSequence}` });
   const job = jobs.enqueue({
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
@@ -268,7 +269,8 @@ test('customer_fit execution charges failed fallback and successful engine attem
 
   assert.equal(execution.budget.chargedCost, 0.07);
   assert.equal(execution.result.cost, 0.07);
-  assert.equal(execution.modelRun.cost, 0.07);
+  assert.equal(execution.modelRun.cost, 0.02);
+  assert.equal(db.prepare('SELECT COUNT(*) count FROM crm_ai_model_runs WHERE job_id=?').get(job.id).count, 2);
   const ledger = db.prepare(`SELECT engine,status,usage_source,cost_source,fallback_from
     FROM crm_ai_usage_ledger WHERE job_id=? ORDER BY sequence`).all(job.id);
   assert.deepEqual(ledger, [

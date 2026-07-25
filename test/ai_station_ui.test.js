@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260725-17/);
-  assert.match(html, /app\.js\?v=20260725-17/);
+  assert.match(html, /app\.css\?v=20260725-18/);
+  assert.match(html, /app\.js\?v=20260725-18/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {
@@ -32,6 +32,20 @@ test('administrator AI feature switches expose hard and runtime state', () => {
   assert.match(app, /hardEnabled/);
   assert.match(app, /runtimeEnabled/);
   assert.match(app, /effectiveEnabled/);
+});
+
+test('AI governance UI exposes outcome labels, shadow approval and rollback controls', () => {
+  for (const id of [
+    'aiGovernancePanel', 'aiGovernanceMetrics', 'aiGovernanceStrategies',
+    'aiStrategyCreate', 'aiGovernanceRefresh',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  for (const label of ['成交', '回复', '退回', '停滞', '人工驳回']) assert.match(app, new RegExp(label));
+  assert.match(app, /\/api\/sales-crm\/ai\/governance/);
+  assert.match(app, /data-strategy-evaluate/);
+  assert.match(app, /request-publish/);
+  assert.match(app, /data-strategy-action="approve"/);
+  assert.match(app, /data-strategy-action="rollback"/);
+  assert.match(css, /\.ai-governance-grid/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {

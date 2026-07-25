@@ -20,6 +20,7 @@ const { databasePath } = require('../lib/runtime_paths');
 
 const DEFAULT_EXECUTION_RESOURCES = Object.freeze({
   global: Object.freeze({ maxConcurrency: 10, rateLimit: 0, rateWindowMs: 60_000 }),
+  qwen: Object.freeze({ maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 }),
   deepseek: Object.freeze({ maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 }),
   web: Object.freeze({ maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 }),
   'kimi-cli': Object.freeze({ maxConcurrency: 1, rateLimit: 0, rateWindowMs: 60_000 }),

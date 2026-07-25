@@ -7,6 +7,7 @@ const path = require('path');
 const {
   createAssistantRouter,
   DEFAULT_ENGINE_PRIORITY,
+  LEGACY_ENGINE_PRIORITY,
 } = require('../lib/assistant_router');
 
 function testRouter(options = {}) {
@@ -61,7 +62,147 @@ test('defaults to automatic mode with Kimi, Hermes, DeepSeek priority', () => {
     const state = ctx.router.getRuntimeState({ detailed: true });
     assert.equal(state.mode, 'auto');
     assert.deepEqual(state.priority, ['kimi-cli', 'hermes', 'deepseek']);
-    assert.deepEqual(DEFAULT_ENGINE_PRIORITY, ['kimi-cli', 'hermes', 'deepseek']);
+    assert.deepEqual(LEGACY_ENGINE_PRIORITY, ['kimi-cli', 'hermes', 'deepseek']);
+    assert.deepEqual(DEFAULT_ENGINE_PRIORITY, ['qwen', 'deepseek']);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('Qwen online route uses Qwen then one direct DeepSeek Pro fallback', async () => {
+  const ctx = testRouter({ qwenOnlineEnabled: true });
+  try {
+    const calls = [];
+    const result = await ctx.router.route([{ role: 'user', content: 'test' }], {
+      engineModels: { qwen: 'qwen3.7-plus', deepseek: 'deepseek-v4-pro' },
+    }, {
+      qwen: async (_messages, options) => {
+        calls.push(['qwen', options.model, options.probe]);
+        if (options.probe) return engineResult('qwen');
+        throw engineError('QWEN_RATE_LIMITED', 'limited', 429);
+      },
+      deepseek: async (_messages, options) => {
+        calls.push(['deepseek', options.model, options.probe]);
+        return { ...engineResult('deepseek'), model: options.model, requestId: 'deepseek-request' };
+      },
+    });
+    assert.equal(result.engine, 'deepseek');
+    assert.equal(result.model, 'deepseek-v4-pro');
+    assert.deepEqual(result.engineAttempts.map(item => item.engine), ['qwen', 'deepseek']);
+    assert.equal(result.engineAttempts[1].requestId, 'deepseek-request');
+    assert.deepEqual(calls, [
+      ['qwen', 'qwen3.7-plus', false],
+      ['deepseek', 'deepseek-v4-pro', false],
+    ]);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('Qwen online route does not fallback for auth, cancellation or non-429 request errors', async () => {
+  for (const [code, status] of [
+    ['QWEN_AUTH_ERROR', 401],
+    ['QWEN_REQUEST_ERROR', 400],
+    ['QWEN_CANCELLED', 499],
+    ['QWEN_NOT_CONFIGURED', 503],
+  ]) {
+    const ctx = testRouter({ qwenOnlineEnabled: true });
+    let deepseekCalls = 0;
+    try {
+      await assert.rejects(() => ctx.router.route([], {}, {
+        qwen: async (_messages, options) => {
+          if (options.probe) return engineResult('qwen');
+          throw engineError(code, code, status);
+        },
+        deepseek: async () => {
+          deepseekCalls += 1;
+          return engineResult('deepseek');
+        },
+      }), error => error.code === code);
+      assert.equal(deepseekCalls, 0);
+    } finally {
+      ctx.cleanup();
+    }
+  }
+});
+
+test('Qwen schema-invalid result falls back once and keeps both attempt metadata records', async () => {
+  const ctx = testRouter({ qwenOnlineEnabled: true });
+  try {
+    const result = await ctx.router.route([], {
+      validateResult(response) {
+        if (response.model === 'qwen-invalid') {
+          throw engineError('AI_STATION_INVALID_OUTPUT', 'schema rejected', 422);
+        }
+        return { accepted: true };
+      },
+    }, {
+      qwen: async (_messages, options) => options.probe
+        ? engineResult('qwen')
+        : {
+          answer: '{}',
+          model: 'qwen-invalid',
+          usage: { prompt_tokens: 10, completion_tokens: 2 },
+          requestId: 'qwen-request',
+          finishReason: 'stop',
+        },
+      deepseek: async () => ({
+        answer: '{"accepted":true}',
+        model: 'deepseek-v4-pro',
+        usage: { prompt_tokens: 11, completion_tokens: 3 },
+        requestId: 'deepseek-request',
+        finishReason: 'stop',
+      }),
+    });
+    assert.deepEqual(result.validatedValue, { accepted: true });
+    assert.deepEqual(result.engineAttempts.map(item => [item.engine, item.status || 'succeeded']), [
+      ['qwen', 'invalid_output'],
+      ['deepseek', 'succeeded'],
+    ]);
+    assert.equal(result.engineAttempts[0].requestId, 'qwen-request');
+    assert.equal(result.engineAttempts[1].requestId, 'deepseek-request');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('fixed Qwen mode preserves billable metadata when schema validation rejects the result', async () => {
+  const ctx = testRouter({ qwenOnlineEnabled: true });
+  try {
+    ctx.router.setMode('qwen', 'admin-1');
+    await assert.rejects(() => ctx.router.route([], {
+      validateResult() {
+        throw engineError('AI_STATION_INVALID_OUTPUT', 'schema rejected', 422);
+      },
+    }, {
+      qwen: async () => ({
+        answer: '{}',
+        model: 'qwen3.7-plus',
+        usage: { prompt_tokens: 9, completion_tokens: 1 },
+        requestId: 'qwen-fixed-request',
+        finishReason: 'stop',
+      }),
+    }), error => {
+      assert.equal(error.code, 'AI_STATION_INVALID_OUTPUT');
+      assert.equal(error.model, 'qwen3.7-plus');
+      assert.equal(error.requestId, 'qwen-fixed-request');
+      assert.equal(error.engineAttempts.length, 1);
+      assert.ok(error.engineAttempts[0].durationMs >= 0);
+      assert.deepEqual({ ...error.engineAttempts[0], durationMs: 0 }, {
+        engine: 'qwen',
+        model: 'qwen3.7-plus',
+        ok: false,
+        durationMs: 0,
+        usage: { prompt_tokens: 9, completion_tokens: 1 },
+        requestId: 'qwen-fixed-request',
+        finishReason: 'stop',
+        traceId: '',
+        code: 'AI_STATION_INVALID_OUTPUT',
+        error: 'schema rejected',
+        status: 'invalid_output',
+      });
+      return true;
+    });
   } finally {
     ctx.cleanup();
   }
