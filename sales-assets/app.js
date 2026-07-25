@@ -725,7 +725,7 @@
       ['未开发线索', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'],
       items.map(item => {
         let actions = '';
-        if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
+        if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
         else if (!salesView && ['pending', 'approved', 'returned'].includes(item.status)) {
           const suggested = item.suggested_owner_id && item.suggested_owner_name
@@ -2482,7 +2482,7 @@
   function openIntakeReasonModal(itemId, action) {
     const title = action === 'reject' ? '标记客户不对口' : '退回客户';
     openModal(title, 'REASON REQUIRED', `<form id="intakeReasonForm" class="form-grid">
-      <input type="hidden" name="itemId" value="${esc(itemId)}"><input type="hidden" name="action" value="${esc(action)}">
+      <input type="hidden" name="itemId" value="${esc(itemId)}"><input type="hidden" name="action" value="${esc(action)}"><input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label>原因<textarea name="reason" required placeholder="${action === 'reject' ? '说明行业、产品、地区或客户类型为何不匹配' : '说明无法继续跟进或需要重新分配的原因'}"></textarea></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">确认提交</button></div>
     </form>`);
@@ -2937,7 +2937,7 @@
       if (['return', 'reject'].includes(action)) openIntakeReasonModal(itemId, action);
       else {
         try {
-          await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action, itemId, ownerId: intakeAction.dataset.ownerId || '' }) });
+          await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action, itemId, ownerId: intakeAction.dataset.ownerId || '', idempotencyKey: intakeAction.dataset.idempotencyKey || proposalRequestId() }) });
           await refresh(action === 'claim' ? '客户已领取，请在规定时间内完成首次触达' : '客户已分配');
         } catch (error) { toast(error.message); }
       }
