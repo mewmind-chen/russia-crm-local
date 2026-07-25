@@ -1,5 +1,6 @@
 import { createApiClient } from './core/api.js';
 import { createLifecycleScope } from './core/lifecycle.js';
+import { loadLayoutPreference, saveLayoutPreference } from './core/preferences.js';
 import { createRouter } from './core/router.js';
 import { accessibleDefaultPage } from './core/registry.js';
 import { createStore } from './core/state.js';
@@ -62,6 +63,7 @@ let shell = null;
 let activeModule = null;
 let workspaceScope = null;
 let routeVersion = 0;
+let layoutPreference = null;
 
 async function renderRoute(route) {
   const version = ++routeVersion;
@@ -83,6 +85,17 @@ async function renderRoute(route) {
       lifecycle: moduleScope,
       access: accessContext(),
       mount,
+    };
+    context.onRefresh = data => {
+      if (version !== routeVersion || moduleScope.disposed || typeof module.render !== 'function') return;
+      void module.render({ ...context, data });
+    };
+    context.onRefreshError = error => {
+      if (version !== routeVersion || moduleScope.disposed) return;
+      mount.innerHTML = renderEmptyState({
+        title: route.page.nav?.label || '页面刷新失败',
+        description: error?.message || '无法读取最新数据，请稍后重试。',
+      });
     };
     activeModule = {
       dispose() {
@@ -125,6 +138,7 @@ const router = createRouter({
 
 function mountWorkspace(session) {
   store.setSection('session', session);
+  layoutPreference = loadLayoutPreference(session.user?.id, accessContext());
   loginScreen.hidden = true;
   appMount.hidden = false;
   workspaceScope?.dispose();
@@ -134,6 +148,7 @@ function mountWorkspace(session) {
     context: accessContext(),
     activePageId: location.hash.replace(/^#/, ''),
     user: session.user,
+    preference: layoutPreference,
   });
   workspaceScope.listen(shell.root, 'click', event => {
     const action = event.target.closest('[data-action]')?.dataset.action;
@@ -141,11 +156,30 @@ function mountWorkspace(session) {
       void services.session.logout().finally(showLogin);
     } else if (action === 'menu') {
       shell.root.classList.toggle('navigation-open');
+    } else if (action === 'toggle-nav-group') {
+      const button = event.target.closest('[data-nav-group-id]');
+      const group = button?.dataset.navGroupId;
+      if (!group) return;
+      const collapsed = new Set(layoutPreference?.collapsedGroups || []);
+      if (collapsed.has(group)) collapsed.delete(group);
+      else collapsed.add(group);
+      layoutPreference = saveLayoutPreference(session.user?.id, {
+        ...layoutPreference,
+        collapsedGroups: [...collapsed],
+      }, accessContext());
+      const section = shell.root.querySelector(`[data-nav-group="${CSS.escape(group)}"]`);
+      const links = section?.querySelector('.modular-nav-links');
+      const expanded = !collapsed.has(group);
+      if (links) links.hidden = !expanded;
+      button.setAttribute('aria-expanded', String(expanded));
+      button.setAttribute('aria-label', `${expanded ? '折叠' : '展开'}${section?.querySelector('h2')?.textContent || '导航分组'}`);
+      button.innerHTML = expanded ? '&#8722;' : '+';
     }
+    if (event.target.closest('[data-page-id]')) shell.root.classList.remove('navigation-open');
   });
   if (!location.hash) {
-    const target = accessibleDefaultPage(accessContext());
-    if (target) location.hash = target.id;
+    const target = layoutPreference?.defaultPageId || accessibleDefaultPage(accessContext())?.id;
+    if (target) location.hash = target;
   }
   router.start();
 }

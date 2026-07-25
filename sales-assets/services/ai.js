@@ -23,6 +23,21 @@ export function createAIService(api) {
     chat(payload, options = {}) {
       return post('/api/assistant/chat', payload, options);
     },
+    conversations(query = {}, options = {}) {
+      return api(`/api/assistant/conversations${queryString(query)}`, options);
+    },
+    createConversation(payload, options = {}) {
+      return post('/api/assistant/conversations', payload, options);
+    },
+    conversation(conversationId, options = {}) {
+      return api(`/api/assistant/conversations/${encode(conversationId)}`, options);
+    },
+    updateConversation(conversationId, payload, options = {}) {
+      return api(`/api/assistant/conversations/${encode(conversationId)}`, {
+        ...jsonOptions('PATCH', payload),
+        ...options,
+      });
+    },
     customerResults(customerId, options = {}) {
       return api(`/api/sales-crm/ai/customers/${encode(customerId)}/results`, options);
     },
