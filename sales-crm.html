@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-17&ux62=1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-18&ux62=1">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -159,6 +159,19 @@
             <button id="aiTaskPrev" class="button secondary tiny" type="button">上一页</button>
             <span id="aiTaskPageInfo" class="subtle">第 1 页</span>
             <button id="aiTaskNext" class="button secondary tiny" type="button">下一页</button>
+          </div>
+        </article>
+        <article id="aiGovernancePanel" class="panel ai-governance-panel hidden">
+          <div class="panel-head">
+            <div><p class="eyebrow">AI VERSION GOVERNANCE</p><h2>反馈与版本治理</h2></div>
+            <div class="top-actions">
+              <button id="aiStrategyCreate" class="button primary" type="button">新建影子版本</button>
+              <button id="aiGovernanceRefresh" class="button secondary" type="button">刷新</button>
+            </div>
+          </div>
+          <div class="ai-governance-grid">
+            <section><h3>版本对照指标</h3><div id="aiGovernanceMetrics" class="data-table"><div class="empty">尚未加载指标</div></div></section>
+            <section><h3>策略版本</h3><div id="aiGovernanceStrategies" class="data-table"><div class="empty">尚未加载版本</div></div></section>
           </div>
         </article>
       </section>
@@ -374,7 +387,7 @@
               <div class="assistant-runtime-head">
                 <div><p class="eyebrow">AI ENGINE RUNTIME</p><h2 id="assistantRuntimeTitle">AI 引擎运行状态</h2><p>切换全局对话引擎模式，重新检测会更新健康状态。</p></div>
                 <div class="assistant-runtime-actions">
-                  <label>运行模式<select id="assistantRuntimeMode" aria-label="AI 引擎运行模式"><option value="auto">Automatic（自动）</option><option value="kimi-cli">Kimi</option><option value="hermes">Hermes</option><option value="deepseek">DeepSeek</option></select></label>
+                  <label>运行模式<select id="assistantRuntimeMode" aria-label="AI 引擎运行模式"><option value="auto">Automatic（自动）</option><option value="qwen">通义千问</option><option value="kimi-cli">Kimi</option><option value="hermes">Hermes</option><option value="deepseek">DeepSeek</option></select></label>
                   <button id="assistantRuntimeRecheck" class="button secondary" type="button">重新检测</button>
                 </div>
               </div>
@@ -442,6 +455,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260725-17&ux62=1"></script>
+  <script src="/sales-assets/app.js?v=20260725-18&ux62=1"></script>
 </body>
 </html>

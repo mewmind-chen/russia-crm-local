@@ -76,7 +76,7 @@ test('contact redaction removes narrative fields that can embed contacts', () =>
 });
 
 test('unknown browser route and action are denied by default', () => {
-  const { policyForLegacyRequest, policyForSalesRequest } = accessControl();
+  const { policyForLegacyRequest, policyForSalesRequest, SALES_ROUTE_POLICIES } = accessControl();
   assert.equal(typeof policyForLegacyRequest, 'function');
   assert.deepEqual(policyForLegacyRequest('GET', '/unknown', ''), { deny: true });
   assert.deepEqual(policyForLegacyRequest('POST', '/app', 'unknown'), { deny: true });
@@ -84,6 +84,26 @@ test('unknown browser route and action are denied by default', () => {
   assert.deepEqual(policyForLegacyRequest('GET', '/report', ''), { permissions: ['view_recon', 'view_contacts'] });
   assert.deepEqual(policyForSalesRequest('GET', '/unmapped'), { deny: true });
   assert.deepEqual(policyForSalesRequest('PATCH', '/accounts/CRM-1'), { permissions: ['edit_customer'] });
+  assert.deepEqual(
+    policyForSalesRequest('POST', '/ai/governance/strategies/STRATEGY-1/evaluations'),
+    SALES_ROUTE_POLICIES['POST /ai/governance/strategies/:strategyId/evaluations'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('POST', '/ai/governance/strategies/STRATEGY-1/request-publish'),
+    SALES_ROUTE_POLICIES['POST /ai/governance/strategies/:strategyId/request-publish'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('POST', '/ai/governance/strategies/STRATEGY-1/approve'),
+    SALES_ROUTE_POLICIES['POST /ai/governance/strategies/:strategyId/approve'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('POST', '/ai/governance/strategies/STRATEGY-1/rollback'),
+    SALES_ROUTE_POLICIES['POST /ai/governance/strategies/:strategyId/rollback'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('POST', '/ai/jobs/JOB-1/feedback'),
+    SALES_ROUTE_POLICIES['POST /ai/jobs/:jobId/feedback'],
+  );
 });
 
 test('every browser API has an explicit permission policy or separate token boundary', () => {
@@ -165,7 +185,13 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /ai/customers/:customerId/stations/customer_fit/run',
     'POST /ai/customers/:customerId/stations/sales_pack/run',
     'POST /ai/enrichment/:runId/cancel',
+    'POST /ai/governance/strategies',
+    'POST /ai/governance/strategies/:strategyId/approve',
+    'POST /ai/governance/strategies/:strategyId/evaluations',
+    'POST /ai/governance/strategies/:strategyId/request-publish',
+    'POST /ai/governance/strategies/:strategyId/rollback',
     'POST /ai/jobs/:jobId/cancel',
+    'POST /ai/jobs/:jobId/feedback',
     'POST /ai/jobs/:jobId/next-action/adopt',
     'POST /ai/jobs/:jobId/retry',
     'POST /ai/jobs/:jobId/review',

@@ -39,6 +39,10 @@
       items: [], page: 1, pageSize: 20, total: 0, overview: null,
       loaded: false, loading: false, error: '',
     },
+    aiGovernance: {
+      metrics: [], strategies: [], feedbackLabels: {},
+      loaded: false, loading: false, error: '',
+    },
     managerAnomalies: {
       items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
     },
@@ -436,6 +440,7 @@
     renderMarkets();
     renderUsers();
     renderMaintenance();
+    renderAiGovernance();
     if (state.selectedCustomerId && state.data.accounts.some(item => item.id === state.selectedCustomerId)) renderDrawer();
   }
 
@@ -1357,6 +1362,127 @@
     }
   }
 
+  function canGovernAI() {
+    return ['admin', 'manager'].includes(state.data?.user?.role)
+      && can('view_team') && can('review_ai_tasks') && !state.data?.impersonation;
+  }
+
+  const strategyStatusLabels = {
+    shadow: '影子运行',
+    pending_approval: '待批准',
+    published: '已发布',
+    retired: '可回滚',
+  };
+
+  function renderAiGovernance() {
+    const panel = $('#aiGovernancePanel');
+    if (!panel) return;
+    const allowed = canGovernAI();
+    panel.classList.toggle('hidden', !allowed);
+    if (!allowed) return;
+    const governance = state.aiGovernance;
+    const metrics = governance.metrics || [];
+    $('#aiGovernanceMetrics').innerHTML = metrics.length ? table(
+      ['工作站', '模型', 'Prompt / 规则', '样本', '成交', '回复', '人工驳回'],
+      metrics.map(item => [
+        esc(aiTaskTypeLabels[item.station] || item.station),
+        esc(item.model),
+        `<div class="company-cell"><strong>${esc(item.promptVersion)}</strong><span>${esc(item.ruleVersion)}</span></div>`,
+        item.total,
+        `${Math.round(Number(item.winRate || 0) * 100)}%`,
+        `${Math.round(Number(item.replyRate || 0) * 100)}%`,
+        `${Math.round(Number(item.rejectionRate || 0) * 100)}%`,
+      ]),
+    ) : `<div class="empty">${governance.loading ? '正在加载指标…' : '暂无反馈样本'}</div>`;
+    const strategies = governance.strategies || [];
+    $('#aiGovernanceStrategies').innerHTML = strategies.length ? table(
+      ['策略 / 版本', '模型', 'Prompt / 规则', '状态', '影子样本', '操作'],
+      strategies.map(item => {
+        const actions = [
+          item.status === 'shadow'
+            ? `<button class="button secondary tiny" data-strategy-evaluate="${esc(item.id)}">记录影子结果</button>` : '',
+          item.status === 'shadow' && item.evaluationCount > 0
+            ? `<button class="button primary tiny" data-strategy-action="request-publish" data-strategy-id="${esc(item.id)}">申请发布</button>` : '',
+          item.status === 'pending_approval'
+            ? `<button class="button primary tiny" data-strategy-action="approve" data-strategy-id="${esc(item.id)}">批准发布</button>` : '',
+          item.status === 'retired'
+            ? `<button class="button secondary tiny" data-strategy-action="rollback" data-strategy-id="${esc(item.id)}">回滚到此版本</button>` : '',
+        ].filter(Boolean).join('');
+        return [
+          `<div class="company-cell"><strong>${esc(item.strategyKey)}</strong><span>${esc(item.version)}</span></div>`,
+          esc(item.model),
+          `<div class="company-cell"><strong>${esc(item.promptVersion)}</strong><span>${esc(item.ruleVersion)}</span></div>`,
+          `<span class="pill">${esc(strategyStatusLabels[item.status] || item.status)}</span>`,
+          item.evaluationCount,
+          `<div class="top-actions">${actions || '—'}</div>`,
+        ];
+      }),
+    ) : `<div class="empty">${governance.loading ? '正在加载版本…' : '暂无策略版本'}</div>`;
+  }
+
+  async function loadAiGovernance() {
+    if (!canGovernAI() || state.aiGovernance.loading) return;
+    state.aiGovernance.loading = true;
+    renderAiGovernance();
+    try {
+      const payload = await api('/api/sales-crm/ai/governance');
+      Object.assign(state.aiGovernance, payload, { loaded: true, error: '' });
+    } catch (error) {
+      state.aiGovernance.error = error.message;
+      toast(error.message);
+    } finally {
+      state.aiGovernance.loading = false;
+      renderAiGovernance();
+    }
+  }
+
+  function openStrategyModal() {
+    openModal('新建影子版本', 'AI VERSION GOVERNANCE', `<form id="aiStrategyForm" class="form-grid two">
+      <label>策略键<input name="strategyKey" required placeholder="customer-fit-default"></label>
+      <label>版本<input name="version" required placeholder="2026.07.1"></label>
+      <label>工作站<select name="station"><option value="customer_fit">客户匹配</option><option value="contact_readiness">联系人就绪</option><option value="distribution_priority">分配优先级</option><option value="manager_anomaly">经理异常</option><option value="sales_coaching">销售辅导</option></select></label>
+      <label>模型<input name="model" required value="qwen3.7-flash"></label>
+      <label>Prompt 版本<input name="promptVersion" required value="v1"></label>
+      <label>规则版本<input name="ruleVersion" required value="v1"></label>
+      <label class="span-2">配置 JSON<textarea name="configJson">{}</textarea></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">创建影子版本</button></div>
+    </form>`);
+  }
+
+  function openShadowEvaluationModal(strategyId) {
+    openModal('记录影子结果', 'SHADOW EVALUATION', `<form id="aiShadowEvaluationForm" class="form-grid">
+      <input type="hidden" name="strategyId" value="${esc(strategyId)}">
+      <label>对照结果<select name="outcome"><option value="better">更好</option><option value="same">相同</option><option value="worse">更差</option><option value="inconclusive">样本不足</option></select></label>
+      <label>指标 JSON<textarea name="metricsJson">{}</textarea></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存影子结果</button></div>
+    </form>`);
+  }
+
+  async function recordAiFeedback(jobId) {
+    const label = $('#aiFeedbackLabel')?.value || '';
+    if (!label) return toast('请选择结果标签');
+    await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({
+        label,
+        note: $('#aiFeedbackNote')?.value || '',
+        idempotencyKey: `feedback:${jobId}:${label}:${crypto.randomUUID()}`,
+      }),
+    });
+    closeModal();
+    await loadAiGovernance();
+    toast('结果标签已保存');
+  }
+
+  async function strategyAction(action, strategyId) {
+    await api(`/api/sales-crm/ai/governance/strategies/${encodeURIComponent(strategyId)}/${action}`, {
+      method: 'POST',
+      body: '{}',
+    });
+    await loadAiGovernance();
+    toast(action === 'approve' ? '版本已批准发布' : action === 'rollback' ? '旧版本已恢复' : '已提交发布审批');
+  }
+
   function renderAiTaskDetail(task) {
     const attempts = (task.attempts || []).map(item => `<li><strong>第 ${item.attempt || '—'} 次 · ${esc(item.engine || '—')} / ${esc(item.model || '—')}</strong><span>${esc(item.status ?? (item.ok ? 'succeeded' : 'failed'))} · ${Number(item.durationMs || 0)} ms · $${Number(item.cost || 0).toFixed(4)}</span>${item.errorSummary || item.error ? `<small>${esc(item.errorSummary || item.error)}</small>` : ''}</li>`).join('');
     const timeline = (task.timeline || []).map(item => `<li><strong>${esc(item.kind)}</strong><span>${esc(item.state || '')}</span><time>${shortDate(item.at, true)}</time></li>`).join('');
@@ -1365,12 +1491,19 @@
       task.canCancel && can('cancel_ai_tasks') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
       task.canReview && can('review_ai_tasks') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
     ].join('');
+    const feedback = canGovernAI() && task.source === 'ai_station'
+      ? `<section class="ai-feedback-form"><h3>结果标签</h3><div class="form-grid two">
+        <label>标签<select id="aiFeedbackLabel"><option value="">请选择</option><option value="won">成交</option><option value="replied">回复</option><option value="returned">退回</option><option value="stalled">停滞</option><option value="human_rejected">人工驳回</option></select></label>
+        <label>备注<input id="aiFeedbackNote" maxlength="500"></label>
+        <div class="form-actions"><button class="button secondary" type="button" data-ai-feedback="${esc(task.taskId)}">保存标签</button></div>
+      </div></section>` : '';
     openModal('AI 任务详情', 'AI CONTROL PLANE', `<div class="ai-task-detail">
       <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
       ${task.errorSummary ? `<div class="customer-ai-error"><strong>错误</strong><span>${esc(task.errorSummary)}</span></div>` : ''}
       <section><h3>模型尝试</h3><ul class="ai-task-events">${attempts || '<li>无模型尝试记录</li>'}</ul></section>
       <section><h3>时间线</h3><ul class="ai-task-events">${timeline || '<li>无时间线记录</li>'}</ul></section>
       ${task.result ? `<section><h3>结构化结果</h3><pre>${esc(JSON.stringify(task.result.value || {}, null, 2))}</pre></section>` : ''}
+      ${feedback}
       ${actions ? `<div class="ai-task-detail-actions">${actions}</div>` : ''}
     </div>`);
   }
@@ -2047,7 +2180,7 @@
   }
 
   const assistantEngineLabels = {
-    'kimi-cli': 'Kimi', hermes: 'Hermes', deepseek: 'DeepSeek', auto: '自动',
+    qwen: '通义千问', 'kimi-cli': 'Kimi', hermes: 'Hermes', deepseek: 'DeepSeek', auto: '自动',
   };
 
   function assistantRuntimeError(value) {
@@ -2071,13 +2204,13 @@
     recheck.textContent = pending ? '检测中…' : '重新检测';
     if (!runtime) {
       status.textContent = state.assistantRuntimeError || '正在加载运行状态…';
-      rows.innerHTML = ['kimi-cli', 'hermes', 'deepseek'].map(engine => `<div class="assistant-runtime-row"><strong>${assistantEngineLabels[engine]}</strong><span>等待状态</span><span>—</span><span>—</span><span>—</span></div>`).join('');
+      rows.innerHTML = ['qwen', 'kimi-cli', 'hermes', 'deepseek'].map(engine => `<div class="assistant-runtime-row"><strong>${assistantEngineLabels[engine]}</strong><span>等待状态</span><span>—</span><span>—</span><span>—</span></div>`).join('');
       return;
     }
     mode.value = runtime.mode || 'auto';
     const active = runtime.activeEngine ? `当前优先使用 ${assistantEngineLabels[runtime.activeEngine] || runtime.activeEngine}` : '当前没有健康引擎';
     status.textContent = state.assistantRuntimeError || `${assistantEngineLabels[runtime.mode] || runtime.mode}模式 · ${active}`;
-    rows.innerHTML = ['kimi-cli', 'hermes', 'deepseek'].map(engine => {
+    rows.innerHTML = ['qwen', 'kimi-cli', 'hermes', 'deepseek'].map(engine => {
       const health = runtime.engines?.[engine] || {};
       const error = assistantRuntimeError(health.errorMessage || health.errorCode);
       return `<div class="assistant-runtime-row">
@@ -2095,6 +2228,8 @@
     customer_enrichment: '客户资料补全',
     customer_enrichment_auto_trigger: '客户补全自动触发',
     sales_pack: '销售资料包',
+    qwen_online: '通义千问在线路由',
+    qwen_batch: '通义千问夜间 Batch',
   };
 
   function syncBootstrapFeatures(features) {
@@ -2913,6 +3048,30 @@
         await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)), timeoutMs: 10000 });
         setLoginState('workspace');
         await load({ fromLogin: true });
+      } else if (form.id === 'aiStrategyForm') {
+        const payload = formPayload(form);
+        payload.config = JSON.parse(payload.configJson || '{}');
+        delete payload.configJson;
+        await api('/api/sales-crm/ai/governance/strategies', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        closeModal();
+        await loadAiGovernance();
+        toast('影子版本已创建');
+      } else if (form.id === 'aiShadowEvaluationForm') {
+        const payload = formPayload(form);
+        const strategyId = payload.strategyId;
+        await api(`/api/sales-crm/ai/governance/strategies/${encodeURIComponent(strategyId)}/evaluations`, {
+          method: 'POST',
+          body: JSON.stringify({
+            outcome: payload.outcome,
+            metrics: JSON.parse(payload.metricsJson || '{}'),
+          }),
+        });
+        closeModal();
+        await loadAiGovernance();
+        toast('影子评估已保存');
       } else if (form.id === 'activityForm') {
         const payload = formPayload(form);
         payload.nextActionAt = apiTime(payload.nextActionAt);
@@ -3151,6 +3310,24 @@
     }
     const aiTaskAction = event.target.closest('[data-ai-task-action]');
     if (aiTaskAction) void actOnAiTask(aiTaskAction.dataset.aiTaskAction, aiTaskAction.dataset.jobId);
+    const aiFeedback = event.target.closest('[data-ai-feedback]');
+    if (aiFeedback) {
+      try { await recordAiFeedback(aiFeedback.dataset.aiFeedback); }
+      catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#aiGovernanceRefresh')) void loadAiGovernance();
+    if (event.target.closest('#aiStrategyCreate')) openStrategyModal();
+    const strategyEvaluate = event.target.closest('[data-strategy-evaluate]');
+    if (strategyEvaluate) openShadowEvaluationModal(strategyEvaluate.dataset.strategyEvaluate);
+    const strategyActionButton = event.target.closest('[data-strategy-action]');
+    if (strategyActionButton) {
+      try {
+        await strategyAction(
+          strategyActionButton.dataset.strategyAction,
+          strategyActionButton.dataset.strategyId,
+        );
+      } catch (error) { toast(error.message); }
+    }
     if (event.target.closest('#aiTaskRefresh')) void loadAiTasks();
     if (event.target.closest('#aiTaskPrev') && state.aiTasks.page > 1) {
       state.aiTasks.page -= 1;
@@ -3444,6 +3621,7 @@
     }
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
     if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
+    if (view === 'aiTasks' && !state.aiGovernance.loaded) void loadAiGovernance();
     if (view === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
       void loadManagerAnomalies();
     }

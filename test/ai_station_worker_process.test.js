@@ -13,6 +13,7 @@ const {
 test('independent Worker exposes safe default global and engine concurrency', () => {
   assert.deepEqual(defaultExecutionResources(), {
     global: { maxConcurrency: 10, rateLimit: 0, rateWindowMs: 60_000 },
+    qwen: { maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 },
     deepseek: { maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 },
     web: { maxConcurrency: 4, rateLimit: 0, rateWindowMs: 60_000 },
     'kimi-cli': { maxConcurrency: 1, rateLimit: 0, rateWindowMs: 60_000 },

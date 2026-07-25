@@ -16,6 +16,7 @@ const codeLabels = [
   'com.russia-crm.contact-worker-1',
   'com.russia-crm.contact-worker-2',
   'com.russia-crm.ai-station-worker',
+  'com.russia-crm.qwen-batch-worker',
   'com.russia-crm.daily-enqueue',
   'com.russia-crm.daily-report',
   'com.russia-crm.completion-notifier',
@@ -163,12 +164,26 @@ test('renders code services through the stable current symlink', () => {
     'com.russia-crm.contact-worker-1',
     'com.russia-crm.contact-worker-2',
     'com.russia-crm.ai-station-worker',
+    'com.russia-crm.qwen-batch-worker',
   ]);
   for (const definition of definitions.filter(item => item.kind === 'code')) {
     const plist = renderPlist(definition);
     assert.match(plist, /\/fixture\/russia-crm-current/);
     assert.doesNotMatch(plist, /russia-crm-local\/scripts/);
   }
+});
+
+test('renders the Qwen Batch worker every five minutes without keep-alive', () => {
+  const definitions = buildServiceDefinitions(fixtureOptions());
+  const batch = definitions.find(item => item.label === 'com.russia-crm.qwen-batch-worker');
+
+  assert.ok(batch);
+  assert.deepEqual(batch.programArguments, [
+    '/fixture/bin/node',
+    '/fixture/russia-crm-current/scripts/qwen-batch-worker.js',
+  ]);
+  assert.equal(batch.keepAlive, undefined);
+  assert.match(renderPlist(batch), /<key>StartInterval<\/key><integer>300<\/integer>/);
 });
 
 test('renders the optional auto deploy service every 60 seconds', () => {
@@ -308,6 +323,7 @@ test('auto deploy installer bootstraps code services before enabling deployment 
     for (const label of [
       'com.russia-crm.server',
       'com.russia-crm.ai-station-worker',
+      'com.russia-crm.qwen-batch-worker',
       'com.russia-crm.daily-enqueue',
       'com.russia-crm.daily-report',
       'com.russia-crm.completion-notifier',
