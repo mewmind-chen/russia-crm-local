@@ -12,9 +12,9 @@ const { createAIStationWorker } = require('../lib/ai_stations/worker');
 function output(overrides = {}) {
   return {
     version: 'v1',
-    summary: 'Verified manufacturer with an active component sourcing signal.',
-    entryPoints: ['Lead with the verified MCU requirement.'],
-    risks: ['Confirm the current purchasing window.'],
+    summary: '已核验为制造商，并存在明确的元器件采购信号。',
+    entryPoints: ['从已核验的 MCU 需求切入。'],
+    risks: ['需要确认当前采购窗口。'],
     draft: {
       channel: 'email',
       subject: 'Component sourcing support',

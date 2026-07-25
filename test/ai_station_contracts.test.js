@@ -41,8 +41,8 @@ const validOutputs = Object.freeze({
     evidenceIds: ['EV-2'],
     reasonCodes: ['COUNTRY_LANGUAGE_MATCH'],
     rankedCandidates: [
-      { employeeId: 7, score: 94, reasons: ['Country, language, and workload match'] },
-      { employeeId: 9, score: 81, reasons: ['Channel experience match'] },
+      { employeeId: 7, score: 94, reasons: ['国家、语言和负荷匹配'] },
+      { employeeId: 9, score: 81, reasons: ['客户渠道经验匹配'] },
     ],
   },
 });
@@ -183,8 +183,8 @@ test('migrated contracts reject required-field omissions and boundary violations
     {
       station: 'sales_match',
       missing: 'rankedCandidates',
-      invalid: { rankedCandidates: [{ employeeId: 0, score: 100, reasons: ['Invalid token'] }] },
-      valid: { confidence: 1, rankedCandidates: [{ employeeId: 7, score: 100, reasons: ['Upper boundary'] }] },
+      invalid: { rankedCandidates: [{ employeeId: 0, score: 100, reasons: ['无效候选'] }] },
+      valid: { confidence: 1, rankedCandidates: [{ employeeId: 7, score: 100, reasons: ['达到评分上限'] }] },
     },
   ];
 
@@ -276,4 +276,22 @@ test('station registry is versioned and fails closed', () => {
   assert.equal(getStation('sales_match', 'v1').name, 'sales_match');
   assert.throws(() => getStation('customer_fit', 'v2'), /unknown station version/);
   assert.throws(() => getStation('unknown', 'v1'), /unknown station/);
+});
+
+test('employee-facing structured AI text must be Chinese', () => {
+  const salesPack = {
+    version: 'v1',
+    summary: '客户正在准备 BOM，建议先确认交期。',
+    entryPoints: ['从缺料和交期切入'],
+    risks: ['采购窗口尚未确认'],
+    draft: { channel: 'email', subject: 'Follow up', body: 'Customer-facing draft may use the customer language.' },
+    evidenceIds: [],
+    confidence: 0.8,
+    reviewRequired: true,
+  };
+  assert.equal(validateStationOutput('sales_pack', 'v1', salesPack, { evidenceIds: [] }).ok, true);
+  assert.equal(validateStationOutput('sales_pack', 'v1', {
+    ...salesPack,
+    summary: 'The customer is preparing a BOM.',
+  }, { evidenceIds: [] }).ok, false);
 });

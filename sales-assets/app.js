@@ -28,6 +28,7 @@
     customerAiTimer: null,
     customerAiPollCount: 0,
     selectedCustomerIds: new Set(),
+    notificationStatus: 'unread',
     recycleKind: 'sales_return',
     recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
     customerEnrichment: null,
@@ -37,6 +38,9 @@
     aiTasks: {
       items: [], page: 1, pageSize: 20, total: 0, overview: null,
       loaded: false, loading: false, error: '',
+    },
+    managerAnomalies: {
+      items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
     },
     loginPending: false,
     impersonationTimer: null,
@@ -69,6 +73,7 @@
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
     pipeline: ['PIPELINE CONTROL', '推进管道'],
     alerts: ['TODAY TASKS', '今日待办'],
+    notifications: ['CRM NOTIFICATIONS', '通知中心'],
     aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
     team: ['CAPABILITY REVIEW', '销售能力'],
@@ -79,6 +84,7 @@
   const viewPermissions = {
     pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'manage_customer_recycle',
+    notifications: 'view_customers',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -151,12 +157,17 @@
     if (!state.data) return;
     Object.assign(state.data, {
       accounts: [], activities: [], rfqs: [], quotes: [], orders: [], alerts: [],
+      notifications: [],
       countryReport: [], cohortReport: [], teamReport: [], funnel: [], summary: {},
       intake: { settings: {}, stats: {}, items: [], batches: [] },
       insights: { contacts: [], evaluations: [] }, customerEvaluationTags: [], customerPool: [], people: [], reconResults: [],
       researchTotals: { pool: 0, poolAvailable: 0, people: 0, recon: 0 },
     });
     state.selectedCustomerId = '';
+    clearTimeout(state.managerAnomalies.timer);
+    Object.assign(state.managerAnomalies, {
+      items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
+    });
     resetResearchState();
     setTimeout(() => load(), 0);
   }
@@ -169,6 +180,7 @@
     if (state.data) {
       Object.assign(state.data, {
         accounts: [], activities: [], rfqs: [], quotes: [], orders: [], alerts: [],
+        notifications: [],
         countryReport: [], cohortReport: [], teamReport: [], funnel: [], summary: {},
         intake: { settings: {}, stats: {}, items: [], batches: [] },
         insights: { contacts: [], evaluations: [] }, customerEvaluationTags: [], customerPool: [], people: [], reconResults: [],
@@ -177,6 +189,10 @@
       });
     }
     state.selectedCustomerId = '';
+    clearTimeout(state.managerAnomalies.timer);
+    Object.assign(state.managerAnomalies, {
+      items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
+    });
     resetResearchState();
     closeModal();
     toast('身份检查已结束，正在恢复管理员账号');
@@ -273,6 +289,10 @@
       state.aiFeatures = null;
       state.aiFeaturesError = '';
       state.aiFeaturePending = '';
+      clearTimeout(state.managerAnomalies.timer);
+      Object.assign(state.managerAnomalies, {
+        items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
+      });
       resetResearchState();
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
@@ -318,6 +338,8 @@
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索分配' : '我的线索';
     $('#nav [data-view="aiTasks"]')?.classList.toggle('hidden', !customerAIEnabled() || !can('view_customers'));
+    $('#runManagerAnomaly')?.classList.toggle('hidden',
+      !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
     if (state.data.impersonation) {
       $$('#nav [data-view="users"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
     }
@@ -373,6 +395,13 @@
   function renderAll() {
     if ($('#navCustomerCount')) $('#navCustomerCount').textContent = state.data.accounts.length;
     if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.filter(item => item.severity === 'critical').length;
+    const unreadNotifications = (state.data.notifications || [])
+      .filter(item => item.user_id === state.data.user.id && item.status === 'unread').length;
+    if ($('#navNotificationCount')) $('#navNotificationCount').textContent = unreadNotifications;
+    if ($('#topNotificationCount')) {
+      $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
+      $('#topNotificationCount').classList.toggle('hidden', unreadNotifications === 0);
+    }
     if ($('#navIntakeCount')) $('#navIntakeCount').textContent = (state.data.intake?.stats.assigned || 0) + (state.data.intake?.stats.pending || 0) + (state.data.intake?.stats.approved || 0);
     if ($('#navPendingCount')) $('#navPendingCount').textContent = state.data.intake?.stats.assigned || 0;
     if ($('#navClaimedCount')) $('#navClaimedCount').textContent = state.data.intake?.stats.claimed || 0;
@@ -390,6 +419,7 @@
     renderUnifiedRecon();
     renderPipeline();
     renderAlerts();
+    renderNotifications();
     renderInsightsHub();
     renderTeam();
     renderMarkets();
@@ -1234,7 +1264,7 @@
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
     sales_pack: '销售资料包', action_proposal: '活动提案', next_action: '下一步建议', prospect_discovery: 'Prospect',
-    manager_evaluation: '经理评价', assistant_chat: '对话 AI',
+    manager_evaluation: '经理评价', manager_anomaly: '经理异常', assistant_chat: '对话 AI',
   };
 
   function aiTaskFilters() {
@@ -1512,6 +1542,182 @@
         return row;
       }),
     );
+    renderManagerAnomalies();
+  }
+
+  function notificationAccount(notification) {
+    return state.data.accounts.find(account =>
+      account.id === notification.customer_id || account.external_customer_id === notification.customer_id);
+  }
+
+  function renderNotifications() {
+    const root = $('#notificationList');
+    if (!root) return;
+    const all = state.data.notifications || [];
+    const own = all.filter(item => item.user_id === state.data.user.id);
+    const unread = own.filter(item => item.status === 'unread');
+    const failed = own.filter(item => item.wecom_delivery_status === 'failed' || item.wecom_status === 'failed');
+    const teamUnread = all.filter(item => item.user_id !== state.data.user.id && item.status === 'unread');
+    $('#notificationSummary').innerHTML = [
+      ['我的未读', unread.length, '需要查看的新消息', unread.length ? 'alert' : ''],
+      ['我的通知', own.length, '当前账号最近 100 条', ''],
+      ['渠道降级', failed.length, failed.length ? '企微失败，网页通知仍可处理' : '网页投递正常', failed.length ? 'warn' : ''],
+      ...(can('view_all_customers') ? [['团队未读', teamUnread.length, '仅查看，不代替接收人标记已读', '']] : []),
+    ].map(([label, value, note, cls]) => `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    const rows = all.filter(item => !state.notificationStatus || item.status === state.notificationStatus);
+    $('#notificationResultCount').textContent = `显示 ${rows.length} / ${all.length} 条`;
+    $$('#notificationTabs [data-notification-status]').forEach(button => {
+      button.classList.toggle('active', button.dataset.notificationStatus === state.notificationStatus);
+    });
+    root.innerHTML = rows.length ? rows.map(item => {
+      const account = notificationAccount(item);
+      const isOwn = item.user_id === state.data.user.id;
+      const isUnread = item.status === 'unread';
+      const channelFailed = item.wecom_delivery_status === 'failed' || item.wecom_status === 'failed';
+      const severity = item.severity === 'critical' ? 'red' : item.severity === 'warning' ? 'amber' : '';
+      const recipient = isOwn ? '发给我' : `发给 ${item.recipient_name || item.user_id || '团队成员'}`;
+      const action = account
+        ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
+        : item.code === 'MANAGER_ANOMALY_READY'
+          ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="alerts">查看异常</button>`
+          : '';
+      return `<article class="notification-item ${isUnread ? 'unread' : ''}">
+        <span class="notification-state" aria-label="${isUnread ? '未读' : '已读'}"></span>
+        <div class="notification-copy">
+          <div class="notification-title"><span class="pill ${severity}">${esc(item.title)}</span><strong>${esc(account?.company_name || '')}</strong></div>
+          <p>${esc(item.detail || '暂无详细说明')}</p>
+          <small>${esc(recipient)} · ${shortDate(item.created_at, true)}${channelFailed ? ' · 企微失败，网页可用' : ''}</small>
+        </div>
+        <div class="notification-actions">
+          ${action}
+          ${isOwn && isUnread ? `<button class="icon-button notification-read" type="button" data-notification-read="${esc(item.id)}" title="标记已读" aria-label="标记已读">✓</button>` : ''}
+        </div>
+      </article>`;
+    }).join('') : `<div class="empty">${state.notificationStatus === 'unread' ? '当前没有未读通知' : '暂无通知'}</div>`;
+  }
+
+  async function markNotificationRead(notificationId, options = {}) {
+    const notification = (state.data.notifications || []).find(item => item.id === notificationId);
+    if (!notification) return;
+    if (notification.user_id === state.data.user.id && notification.status === 'unread') {
+      await api(`/api/sales-crm/notifications/${encodeURIComponent(notificationId)}/read`, {
+        method: 'POST', body: '{}',
+      });
+      notification.status = 'read';
+      notification.read_at = new Date().toISOString();
+      renderAll();
+    }
+    if (options.customerId) openCustomer(options.customerId);
+    if (options.view) switchView(options.view);
+  }
+
+  function canViewManagerAnomalies() {
+    return ['admin', 'manager'].includes(state.data?.user?.role)
+      && can('view_alerts') && can('view_team');
+  }
+
+  function renderManagerAnomalies() {
+    const root = $('#managerAnomalyTable');
+    const status = $('#managerAnomalyStatus');
+    if (!root || !status || !canViewManagerAnomalies()) return;
+    const meta = state.managerAnomalies;
+    const rows = meta.items.filter(item => {
+      const account = state.data.accounts.find(accountItem => accountItem.id === item.customerId);
+      return (!$('#countryFilter')?.value || account?.country === $('#countryFilter').value)
+        && (!$('#ownerFilter')?.value
+          || ($('#ownerFilter').value === '__unassigned__'
+            ? !item.ownerId : item.ownerId === $('#ownerFilter').value))
+        && (!state.alertSeverity || item.severity === state.alertSeverity);
+    });
+    const ready = rows.filter(item => item.ai?.result && !item.ai.stale).length;
+    const pending = rows.filter(item =>
+      ['queued', 'running', 'retry_wait'].includes(item.ai?.job?.state)).length;
+    status.textContent = meta.loading
+      ? '正在读取经理异常…'
+      : meta.error
+        ? `经理异常暂不可用：${meta.error}`
+        : `${rows.length} 条规则异常 · ${ready} 条 AI 建议已生成${pending ? ` · ${pending} 条处理中` : ''} · AI建议仅供经理复核`;
+    if (meta.loading && !meta.loaded) {
+      root.innerHTML = '<div class="empty">正在加载经理异常…</div>';
+      return;
+    }
+    if (!rows.length) {
+      root.innerHTML = `<div class="empty">${meta.loaded ? '当前授权范围内没有五类经理异常' : '尚未读取经理异常'}</div>`;
+      return;
+    }
+    root.innerHTML = table(
+      ['优先级', '客户 / 负责人', '规则异常', 'AI 中文解释', '介入建议', '经理操作'],
+      rows.map(item => {
+        const value = item.ai?.stale ? null : item.ai?.result?.value;
+        const job = item.ai?.job;
+        const jobStatus = aiJobLabels[job?.state]?.[0] || (job ? '等待处理' : '尚未生成');
+        return [
+          `<div class="manager-priority"><strong>${Number(value?.priorityScore || (item.severity === 'critical' ? 80 : 50))}</strong><span class="pill ${item.severity === 'critical' ? 'red' : 'amber'}">${item.severity === 'critical' ? '立即' : '关注'}</span></div>`,
+          `<div class="company-cell"><strong>${esc(item.companyName)}</strong><span>${esc(item.ownerName || userById(item.ownerId)?.name || '未分配')}</span></div>`,
+          `<div class="manager-anomaly-copy"><strong>${esc(item.title)}</strong><span>${esc(item.detail)}</span></div>`,
+          value
+            ? `<div class="manager-ai-copy"><span class="pill">AI 中文</span><p>${esc(value.explanation)}</p></div>`
+            : `<span class="subtle">${esc(item.ai?.stale ? '业务状态已变化，请重新扫描' : jobStatus)}</span>`,
+          `<div class="manager-anomaly-copy"><strong>${value ? 'AI 建议' : '规则建议'}</strong><span>${esc(value?.interventionSuggestion || item.action)}</span></div>`,
+          `<button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看并决定介入</button>`,
+        ];
+      }),
+    );
+  }
+
+  async function loadManagerAnomalies({ quiet = false } = {}) {
+    if (!canViewManagerAnomalies() || !customerAIEnabled() || state.managerAnomalies.loading) return;
+    state.managerAnomalies.loading = true;
+    if (!quiet) renderManagerAnomalies();
+    try {
+      const payload = await api('/api/sales-crm/ai/manager-anomalies');
+      state.managerAnomalies.items = payload.anomalies || [];
+      state.managerAnomalies.loaded = true;
+      state.managerAnomalies.error = '';
+    } catch (error) {
+      state.managerAnomalies.error = error.message;
+    } finally {
+      state.managerAnomalies.loading = false;
+      renderManagerAnomalies();
+    }
+  }
+
+  async function runManagerAnomalies() {
+    if (!canViewManagerAnomalies() || state.managerAnomalies.pending) return;
+    state.managerAnomalies.pending = true;
+    const button = $('#runManagerAnomaly');
+    if (button) {
+      button.disabled = true;
+      button.textContent = '正在提交…';
+    }
+    try {
+      const payload = await api('/api/sales-crm/ai/manager-anomalies/run', {
+        method: 'POST',
+        body: '{}',
+      });
+      await loadManagerAnomalies({ quiet: true });
+      toast(payload.jobs.length ? `已提交 ${payload.jobs.length} 条经理异常建议` : '当前没有需要生成建议的异常');
+      clearTimeout(state.managerAnomalies.timer);
+      state.managerAnomalies.pollCount = 0;
+      const poll = async () => {
+        state.managerAnomalies.pollCount += 1;
+        await loadManagerAnomalies({ quiet: true });
+        const hasPending = state.managerAnomalies.items.some(item =>
+          ['queued', 'running', 'retry_wait'].includes(item.ai?.job?.state));
+        if (hasPending && state.managerAnomalies.pollCount < 10) {
+          state.managerAnomalies.timer = setTimeout(poll, 1800);
+        }
+      };
+      state.managerAnomalies.timer = setTimeout(poll, 1000);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      state.managerAnomalies.pending = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = '✦ 生成 AI 介入建议';
+      }
+    }
   }
 
   function renderInsightsHub() {
@@ -2778,6 +2984,27 @@
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileActivity')) openActivityModal(state.selectedCustomerId);
     if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
+    const notificationRead = event.target.closest('[data-notification-read]');
+    if (notificationRead) {
+      try { await markNotificationRead(notificationRead.dataset.notificationRead); }
+      catch (error) { toast(error.message); }
+    }
+    const notificationCustomer = event.target.closest('[data-notification-customer]');
+    if (notificationCustomer) {
+      try {
+        await markNotificationRead(notificationCustomer.dataset.notificationCustomer, {
+          customerId: notificationCustomer.dataset.customerId,
+        });
+      } catch (error) { toast(error.message); }
+    }
+    const notificationView = event.target.closest('[data-notification-view]');
+    if (notificationView) {
+      try {
+        await markNotificationRead(notificationView.dataset.notificationView, {
+          view: notificationView.dataset.targetView,
+        });
+      } catch (error) { toast(error.message); }
+    }
     if (event.target.closest('[data-run-customer-fit]')) void runCustomerFit();
     if (event.target.closest('[data-retry-enrichment]')) void retryCustomerEnrichment();
     const cancelEnrichment = event.target.closest('[data-cancel-enrichment]');
@@ -3003,6 +3230,7 @@
     if (event.target.closest('#assistantRuntimeRecheck')) {
       await recheckAssistantRuntime();
     }
+    if (event.target.closest('#runManagerAnomaly')) await runManagerAnomalies();
     if (event.target.closest('[data-run-sales-pack]')) await runSalesPack();
     if (event.target.closest('#maintenancePreviewBtn')) {
       try { await previewMaintenance(); } catch (error) { toast(error.message); }
@@ -3052,6 +3280,15 @@
     }
   });
 
+  document.addEventListener('click', event => {
+    const tab = event.target.closest('[data-notification-status]');
+    if (tab) {
+      state.notificationStatus = tab.dataset.notificationStatus;
+      renderNotifications();
+    }
+    if (event.target.closest('#notificationRefresh')) void refresh('通知已刷新').catch(error => toast(error.message));
+  });
+
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
     if (view === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
@@ -3077,6 +3314,9 @@
     }
     if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
     if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
+    if (view === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
+      void loadManagerAnomalies();
+    }
     if (view === 'recycleBin') void loadRecycleBin();
     if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();

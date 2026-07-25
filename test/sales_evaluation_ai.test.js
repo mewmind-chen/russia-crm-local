@@ -34,4 +34,5 @@ test('manager evaluation uses the unified model router with read-only options', 
     scope: 'manager_evaluation:企业',
     externalAllowed: false,
   });
+  assert.match(calls[0].messages[0].content, /员工可见内容必须使用简体中文/);
 });

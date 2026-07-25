@@ -92,4 +92,14 @@ test('notification read endpoint is idempotent and scoped', async t => {
   assert.equal((await first.json()).changed, true);
   assert.equal((await second.json()).changed, false);
   assert.equal(fx.db.prepare('SELECT status FROM crm_notifications WHERE id=?').get('NOTE-A3-04').status, 'read');
+
+  fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,created_at)
+    VALUES ('NOTE-A3-04-OTHER','U-OTHER','CRM-OTHER','A3_04','info','Other','Other','unread','a3-04:read:other','2026-07-25 05:00:00')`).run();
+  const forbidden = await fx.request('/api/sales-crm/notifications/NOTE-A3-04-OTHER/read', {
+    cookie, method: 'POST', body: {},
+  });
+  assert.equal(forbidden.status, 403);
+  assert.equal(fx.db.prepare('SELECT status FROM crm_notifications WHERE id=?')
+    .get('NOTE-A3-04-OTHER').status, 'unread');
 });
