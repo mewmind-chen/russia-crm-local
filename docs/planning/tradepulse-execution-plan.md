@@ -1,8 +1,8 @@
-# TradePulse AI CRM 执行计划
+ji x# TradePulse AI CRM 执行计划
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 30/38 个任务已完成；A3-05 RFQ、报价和订单边界已完成开发、验证、合并与生产发布；下一步 A3-06 验收门
+**状态：** 31/38 个任务已完成；A3-06 销售执行验收门已完成开发、验证、合并与生产发布；下一步 A4-01 `manager_anomaly`
 **版本：** v1.8
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -840,6 +840,16 @@ AI 任务中心显示“活动提案/需要复核”，未点击确认且未写�
 - Worker 重启不丢任务、不重复业务写入。
 - 企微不可用时网页流程完整。
 
+状态（2026-07-25）：已完成阶段 3 销售执行验收门。客户 bootstrap 和客户抽屉统一展示
+认领、`sales_pack`、人工 activity、人工采纳的 `next_action`、RFQ、报价和订单七类
+时间线事件；资料包和下一步建议均保持人工复核，外发、金额和订单继续由授权员工确认。
+专项 2/2、受影响回归 78/78、完整回归 497/497、GitHub CI、Node/Zsh/Python
+语法和 `git diff --check` 均通过。验收测试覆盖 Worker 租约过期后由新 Worker 恢复、
+结果唯一写入、认领/建议采纳/报价/订单幂等，以及企微失败时网页通知保持可用。PR
+[#77](https://github.com/mewmind-chen/russia-crm-local/pull/77) 已合并 `main` @
+`35858514259af935884e7745fd2e8db6db35e9ad` 并完成生产备份、`quick_check`、回滚点确认、
+部署和 local/public smoke；证据见 `docs/evidence/a3-06-sales-execution-gate.md`。
+阶段 3 已完成，下一项为阶段 4 A4-01 `manager_anomaly`，本轮不实现。
 ## 8. 阶段 4：经理监督与反馈
 
 **目标：** 完成原始步骤 15-16。
@@ -1004,9 +1014,10 @@ E0-01 生产基线
 | A3-03 | 已完成 | `next_action@v1` 已接入活动/回复/会议/RFQ/报价事件，异步 Worker 生成 `needs_review` 建议；客户页可编辑并经独立采纳接口写入现有 next_action 字段，通用复核不能绕过，失败回退确定性 SLA；schema v11、消费审计、权限/owner scope/幂等和迁移完成；专项 24/24、完整回归 488/488、语法/diff 检查通过，桌面与 390px 验收通过；证据见 `docs/evidence/a3-03-next-action.md`；已合并 `main` 并完成生产 backup/quick_check、回滚确认、部署和 smoke，AI 开关显式开启；下一步 A3-04 消息和认领 |
 | A3-04 | 已完成 | 新增通知 web/wecom 独立投递状态、租约、失败记录和幂等键；企微失败/未配置时保留网页未读通知；claim/return/reject 新增服务端幂等重放，不重复创建客户；专项/受影响回归 64/64、完整回归 492/492、生产隔离验证 492/492，生产 `quick_check=ok`，current 为 `b6da19e8b018`、previous 回滚点为 `bf15ad7e2de6`；PR #73 已合并并发布；证据见 `docs/evidence/a3-04-notifications-claims.md`；下一步 A3-05 RFQ、报价和订单边界 |
 | A3-05 | 已完成 | RFQ BOM/金额/完整度校验，报价金额/币种/毛利校验，订单必须绑定同客户报价；新增报价/订单幂等请求表，重复提交不重复写业务对象；订单 UI 明确选择报价并携带幂等键；RFQ/报价继续通过 `next_action@v1` 生成建议，AI 无报价/订单写入权限；专项 3/3、完整回归 495/495、生产隔离验证通过，current 为 `bd0953c2eee0`、previous 为 `9545213db522`；PR #75 已合并并发布；证据见 `docs/evidence/a3-05-rfq-order-boundary.md`；下一步 A3-06 验收门 |
+| A3-06 | 已完成 | 统一客户时间线覆盖认领、资料包、人工活动、人工采纳下一步、RFQ、报价和订单；资料包/下一步保持人工复核，外发、金额、订单由授权员工确认；Worker 租约恢复、结果唯一写入、认领/建议采纳/报价/订单幂等和企微失败网页降级通过；专项 2/2、受影响回归 78/78、完整回归 497/497；PR #77 已合并 `main` @ `35858514259af935884e7745fd2e8db6db35e9ad` 并完成生产发布，current 为 `35858514259a`、previous 为 `4e912fbd0d68`；证据见 `docs/evidence/a3-06-sales-execution-gate.md`；下一步阶段 4 A4-01 `manager_anomaly` |
 
-当前进度：38 个计划任务中已完成 30 个，剩余 8 个。A3-05 已完成从 RFQ 到报价、
-订单的受控业务边界：输入字段先校验，订单强制关联报价，报价和订单重复提交服务端幂等，
-AI 继续只生成后续建议。完整回归 495/495、生产备份/quick_check、回滚确认、部署和
-smoke 均通过；证据见 `docs/evidence/a3-05-rfq-order-boundary.md`。下一项为阶段 3
-A3-06 验收门，本轮不实现。
+当前进度：38 个计划任务中已完成 31 个，剩余 7 个。A3-06 已完成阶段 3 销售执行验收门：
+统一客户时间线、人工确认边界、Worker 租约恢复/幂等和企微失败网页降级均通过；完整回归
+497/497、生产备份/quick_check、回滚确认、部署和 smoke 均通过，证据见
+`docs/evidence/a3-06-sales-execution-gate.md`。下一项为阶段 4 A4-01 `manager_anomaly`，
+本轮不实现。
