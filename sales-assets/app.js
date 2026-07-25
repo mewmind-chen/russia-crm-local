@@ -2106,6 +2106,7 @@
     const rfqs = state.data.rfqs.filter(item => item.customer_id === account.id);
     const quotes = state.data.quotes.filter(item => item.customer_id === account.id);
     const orders = state.data.orders.filter(item => item.customer_id === account.id);
+    const timeline = (state.data.timeline || []).filter(item => item.customer_id === account.id);
     const insightData = state.data.insights || { contacts: [], evaluations: [] };
     const contacts = insightData.contacts.filter(item => item.customerId === account.id);
     const evaluations = insightData.evaluations.filter(item => item.customerId === account.id);
@@ -2155,10 +2156,10 @@
             ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
         }).join('') : '<div class="empty">暂无对接人，可由管理者新增</div>'}</div>
       </section>
-      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${activities.length} 条记录</span></div>
-      <div class="timeline">${activities.map(activity => {
-        const meta = activityMeta[activity.activity_type] || [activity.activity_type, '记'];
-        return `<div class="timeline-item"><h4>${esc(meta[0])} · ${esc(activity.outcome || '')}</h4><p>${esc(activity.summary || '无补充说明')}${activity.next_action ? `<br><strong>下一步：</strong>${esc(activity.next_action)}` : ''}</p><time>${esc(activity.user_name || '')} · ${shortDate(activity.occurred_at, true)}</time></div>`;
+      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span></div>
+      <div class="timeline">${timeline.map(event => {
+        const meta = activityMeta[event.event_type] || [event.title || event.kind || '客户事件', '记'];
+        return `<div class="timeline-item" data-timeline-kind="${esc(event.kind || 'activity')}"><h4>${esc(event.title || meta[0])}</h4><p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p><time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
       }).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
   }
 
