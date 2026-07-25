@@ -59,19 +59,20 @@ adoption; no adoption was performed during the UI check.
 
 ## Production result
 
-Fill these values from the release operator output after merge and deployment:
-
-- Merge commit / release SHA: `<release-sha>`
-- Backup path: `<backup-path>`
-- Backup SHA-256: `<backup-sha256>`
+- Merge commit / release SHA: `72393f3fd96539f91bd536418bb753253a13e49c`
+- Backup path: `/Users/ylf/Desktop/projects/tradepulse-production/state/backups/crm-before-72393f3fd965-20260725T035629Z-3723.db`
+- Backup SHA-256: `80f15dd1b362c04cd7ff1960e4f52a7ebaac0cbc7f47c2cecf0d211a69916d9f`
 - Backup quick check: `ok`
-- Previous release: `<previous-release>`
-- Current release: `<current-release>`
-- Local `/healthz`: `ok=true`, `database=ok`, `releaseSha=<release-sha>`
-- Public `/healthz`: `ok=true`, `database=ok`, `releaseSha=<release-sha>`
+- Previous release: `/Users/ylf/Desktop/projects/tradepulse-production/releases/a0c645edda0a`
+- Current release: `/Users/ylf/Desktop/projects/tradepulse-production/releases/72393f3fd965`
+- Local `/healthz`: `ok=true`, `database=ok`, `releaseSha=72393f3fd96539f91bd536418bb753253a13e49c`
+- Public `/healthz`: `ok=true`, `database=ok`, `releaseSha=72393f3fd96539f91bd536418bb753253a13e49c`
 - Homepage: HTTP 200
-- Production smoke: controlled activity event accepted; exactly one `next_action` job observed;
-  Worker reached `needs_review`; customer `next_action` remained unchanged before adoption.
+- Production smoke: activity `ACT-mrzuhn4g-809ba8fe` for `RU-0028` was accepted; exactly one
+  `next_action` job (`AIJ-519da72e-f81d-46fa-afe4-c931eb2f1639`) was observed; Worker reached
+  `needs_review` at `2026-07-25T04:04:47.112Z`; the generated result had `reviewRequired=true`;
+  no consumption row existed and the customer's `next_action` remained
+  `A3-03 smoke review only; do not adopt`.
 - Production database after smoke: `quick_check=ok`; AI flags remained enabled; no real customer
   suggestion was adopted.
 
