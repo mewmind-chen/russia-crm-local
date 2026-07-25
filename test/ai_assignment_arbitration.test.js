@@ -137,7 +137,6 @@ test('database recommendation resolves only server snapshot tokens and rechecks 
 
   const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-MATCH' });
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'C-1',
     station: 'sales_match',
     contextHash: 'a'.repeat(64),
@@ -214,7 +213,6 @@ test('automatic intake assigns fallback candidates but leaves value, risk and AI
 
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-ARB-CONFLICT' });
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9102',
     station: 'sales_match',
     contextHash: 'b'.repeat(64),

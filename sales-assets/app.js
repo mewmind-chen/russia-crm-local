@@ -1,22 +1,9 @@
-import { createApiClient } from './core/api.js';
-import { createStore } from './core/state.js';
-import { createLifecycleScope } from './core/lifecycle.js';
-import { createRouter } from './core/router.js';
-import { createSessionService } from './services/session.js';
-import { createCustomerService } from './services/customers.js';
-import { createIntakeService } from './services/intake.js';
-import { createActivityService } from './services/activities.js';
-import { createIntelligenceService } from './services/intelligence.js';
-import { createAIService } from './services/ai.js';
-import { createAdministrationService } from './services/administration.js';
-
 (() => {
   'use strict';
 
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
-  const lifecycle = createLifecycleScope();
-  const store = createStore({
+  const state = {
     data: null,
     view: 'dashboard',
     selectedCustomerId: '',
@@ -78,34 +65,7 @@ import { createAdministrationService } from './services/administration.js';
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       recon: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
     },
-  });
-  const state = store.state;
-  const request = createApiClient({
-    fetchImpl: window.fetch.bind(window),
-    defaultTimeoutMs: 0,
-  });
-  const router = createRouter({
-    window,
-    getAccessContext: () => ({
-      role: state.data?.user?.role || '',
-      permissions: state.data?.user?.permissions || {},
-      featureFlags: state.data?.features || {},
-      impersonating: Boolean(state.data?.impersonation),
-    }),
-    onRoute(route) {
-      if (!state.data) return;
-      const view = viewMeta[route.viewId] ? route.viewId : route.shellView;
-      if (view === 'customerProfile') {
-        if (route.customerId && renderCustomerProfile(route.customerId)) return;
-        router.navigate('customers', { replace: true });
-        return;
-      }
-      switchView(view, false);
-    },
-    onForbidden() {
-      if (state.data) toast('当前账号没有该模块权限');
-    },
-  });
+  };
 
   const viewMeta = {
     dashboard: ['MANAGEMENT OVERVIEW', '经营驾驶舱'],
@@ -273,40 +233,48 @@ import { createAdministrationService } from './services/administration.js';
   }
 
   async function startIdentityInspection(userId) {
-    await sessionService.startImpersonation(userId);
+    await api('/api/sales-crm/impersonation/start', { method: 'POST', body: JSON.stringify({ targetUserId: userId }) });
     closeModal();
     await load();
     toast('已进入身份检查，所有操作将以该账号权限执行');
   }
 
   async function stopIdentityInspection() {
-    await sessionService.stopImpersonation();
+    await api('/api/sales-crm/impersonation/stop', { method: 'POST', body: '{}' });
     clearInterval(state.impersonationTimer);
     state.impersonationTimer = null;
     await load();
     toast('已返回管理员账号');
   }
   async function api(url, options = {}) {
+    const timeoutMs = Number(options.timeoutMs || 0);
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
-      return await request(url, {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
         ...options,
-        signal: options.signal || lifecycle.signal,
+        signal: controller?.signal || options.signal,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
       });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) {
+        const error = new Error(result.error || '请求失败');
+        error.status = response.status;
+        error.code = result.code || '';
+        error.details = result;
+        if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
+        else if (error.status === 403 && error.code !== 'IMPERSONATION_ACTION_BLOCKED') clearForbiddenState();
+        throw error;
+      }
+      return result;
     } catch (error) {
-      const result = error.details || {};
-      error.code = result.code || error.code || '';
-      if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
-      else if (error.status === 403 && error.code !== 'IMPERSONATION_ACTION_BLOCKED') clearForbiddenState();
+      if (error.name === 'AbortError') throw new Error('请求超时，请检查网络后重试');
       throw error;
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
-  const sessionService = createSessionService(api);
-  const customerService = createCustomerService(api);
-  const intakeService = createIntakeService(api);
-  const activityService = createActivityService(api);
-  const intelligenceService = createIntelligenceService(api);
-  const aiService = createAIService(api);
-  const administrationService = createAdministrationService(api);
 
   function setLoginState(stage = '') {
     const form = $('#loginForm');
@@ -329,7 +297,7 @@ import { createAdministrationService } from './services/administration.js';
 
   async function load({ fromLogin = false } = {}) {
     try {
-      state.data = await sessionService.bootstrap(null, { timeoutMs: 15000 });
+      state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
       state.assistantRuntimePending = false;
@@ -354,10 +322,14 @@ import { createAdministrationService } from './services/administration.js';
       const requestedView = location.hash.replace(/^#/, '');
       const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
-      void requestedPermission;
-      router.refresh({ force: true });
-      if (requestedView === 'customerProfile' && requestedCustomerId && state.view !== 'customerProfile') {
-        openCustomerProfile(requestedCustomerId);
+      const firstAllowedView = Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
+      const salesLanding = !requestedView && !can('manage_intake') && Number(state.data.intake?.stats?.assigned || 0) > 0
+        ? 'pending'
+        : firstAllowedView;
+      switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : salesLanding, false);
+      if (requestedView === 'customerProfile') {
+        if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
+        else switchView('customers');
       }
       return true;
     } catch (error) {
@@ -597,11 +569,7 @@ import { createAdministrationService } from './services/administration.js';
     try {
       const params = new URLSearchParams({ page: String(meta.page + 1), pageSize: '100' });
       Object.entries(researchQuery(kind)).forEach(([key, value]) => { if (value) params.set(key, value); });
-      const result = await intelligenceService.research(
-        kind,
-        Object.fromEntries(params),
-        { timeoutMs: 12000 },
-      );
+      const result = await api(`/api/sales-crm/research/${kind}?${params}`, { timeoutMs: 12000 });
       state.data[config.dataKey] = reset ? result.rows : [...state.data[config.dataKey], ...result.rows];
       Object.assign(meta, { page: result.page, total: result.total, hasMore: result.hasMore, loaded: true });
     } catch (error) {
@@ -753,7 +721,7 @@ import { createAdministrationService } from './services/administration.js';
       if (country) params.set('country', country);
       if (owner) params.set('owner', owner);
       if (state.intakeStatus) params.set('status', state.intakeStatus);
-      const result = await intakeService.list(Object.fromEntries(params), { timeoutMs: 12000 });
+      const result = await api(`/api/sales-crm/intake?${params}`, { timeoutMs: 12000 });
       const previousItems = reset ? [] : (state.data.intake?.items || []);
       state.data.intake = { ...result, items: [...previousItems, ...(result.items || [])] };
       state.intakePage = result.page;
@@ -854,12 +822,6 @@ import { createAdministrationService } from './services/administration.js';
 
   function openCustomerProfile(externalCustomerId) {
     if (!externalCustomerId) return toast('缺少客户编码，无法打开完整资料');
-    const url = new URL(location.href);
-    url.searchParams.set('customer', externalCustomerId);
-    router.navigate('customerProfile', { customerId: url.searchParams.get('customer') });
-  }
-
-  function renderCustomerProfile(externalCustomerId) {
     const account = state.data.accounts.find(item => item.external_customer_id === externalCustomerId);
     if (!account) return toast('未找到对应客户资料');
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
@@ -870,15 +832,18 @@ import { createAdministrationService } from './services/administration.js';
     state.customerEnrichmentLastSuccess = null;
     state.customerEnrichmentError = '';
     closeDrawer();
-    switchView('customerProfile', false);
+    switchView('customerProfile');
     $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
     $('#customerProfileEdit').classList.toggle('hidden', !can('edit_customer'));
     const frame = $('#customerProfileFrame');
     frame.src = `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+    const url = new URL(location.href);
+    url.searchParams.set('customer', externalCustomerId);
+    url.hash = 'customerProfile';
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     const station = $('#customerAiStation');
     station?.classList.toggle('hidden', !customerAIEnabled());
     if (customerAIEnabled()) void loadCustomerAI(externalCustomerId);
-    return true;
   }
 
   function returnFromCustomerProfile() {
@@ -891,6 +856,9 @@ import { createAdministrationService } from './services/administration.js';
     state.customerEnrichmentLastSuccess = null;
     state.customerEnrichmentError = '';
     state.customerProfileExternalId = '';
+    const url = new URL(location.href);
+    url.searchParams.delete('customer');
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     switchView(state.customerProfileReturnView || 'customers');
   }
 
@@ -1154,8 +1122,8 @@ import { createAdministrationService } from './services/administration.js';
     renderCustomerAI();
     try {
       const [fit, enrichment] = await Promise.allSettled([
-        aiService.customerResults(customerId),
-        aiService.customerEnrichment(customerId),
+        api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/results`),
+        api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment`),
       ]);
       if (state.customerProfileExternalId !== customerId) return;
       if (fit.status === 'fulfilled') state.customerAi = fit.value;
@@ -1183,7 +1151,9 @@ import { createAdministrationService } from './services/administration.js';
     state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
-      await aiService.runCustomerEnrichment(customerId, {});
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment/run`, {
+        method: 'POST', body: '{}',
+      });
       await loadCustomerAI(customerId, { quiet: true });
     } catch (error) {
       state.customerEnrichmentError = error.message;
@@ -1198,7 +1168,9 @@ import { createAdministrationService } from './services/administration.js';
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
-      await aiService.cancelEnrichment(runId, {});
+      await api(`/api/sales-crm/ai/enrichment/${encodeURIComponent(runId)}/cancel`, {
+        method: 'POST', body: '{}',
+      });
       await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
     } catch (error) {
       state.customerEnrichmentError = error.message;
@@ -1213,7 +1185,9 @@ import { createAdministrationService } from './services/administration.js';
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
-      await aiService.reviewProposal(proposalId, { decision });
+      await api(`/api/sales-crm/ai/proposals/${encodeURIComponent(proposalId)}/review`, {
+        method: 'POST', body: JSON.stringify({ decision }),
+      });
       await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
     } catch (error) {
       state.customerEnrichmentError = error.message;
@@ -1230,7 +1204,7 @@ import { createAdministrationService } from './services/administration.js';
     state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
-      await aiService.runCustomerFit(customerId);
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/stations/customer_fit/run`, { method: 'POST', body: '{}' });
       await loadCustomerAI(customerId, { quiet: true });
     } catch (error) {
       state.customerAiError = error.message;
@@ -1248,7 +1222,7 @@ import { createAdministrationService } from './services/administration.js';
     state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
-      await aiService.runSalesPack(customerId);
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/stations/sales_pack/run`, { method: 'POST', body: '{}' });
       await loadCustomerAI(customerId, { quiet: true });
     } catch (error) {
       state.customerAiError = error.message;
@@ -1265,7 +1239,7 @@ import { createAdministrationService } from './services/administration.js';
     state.customerAiPollCount = 0;
     renderCustomerAI();
     try {
-      await aiService.retryJob(jobId);
+      await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', body: '{}' });
       await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
     } catch (error) {
       state.customerAiError = error.message;
@@ -1284,10 +1258,13 @@ import { createAdministrationService } from './services/administration.js';
     state.customerAiPending = true;
     renderCustomerAI();
     try {
-      await aiService.adoptNextAction(jobId, {
-        nextAction,
-        nextActionAt,
-        managerRequired: Boolean($('#nextActionSuggestionManager')?.checked),
+      await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/next-action/adopt`, {
+        method: 'POST',
+        body: JSON.stringify({
+          nextAction,
+          nextActionAt,
+          managerRequired: Boolean($('#nextActionSuggestionManager')?.checked),
+        }),
       });
       await load();
       await loadCustomerAI(state.customerProfileExternalId, { quiet: true });
@@ -1374,7 +1351,7 @@ import { createAdministrationService } from './services/administration.js';
         pageSize: state.aiTasks.pageSize,
         ...aiTaskFilters(),
       });
-      const payload = await aiService.listTasks(Object.fromEntries(params));
+      const payload = await api(`/api/sales-crm/ai/tasks?${params}`);
       Object.assign(state.aiTasks, payload, { loaded: true, error: '' });
     } catch (error) {
       state.aiTasks.error = error.message;
@@ -1448,7 +1425,7 @@ import { createAdministrationService } from './services/administration.js';
     state.aiGovernance.loading = true;
     renderAiGovernance();
     try {
-      const payload = await aiService.governance();
+      const payload = await api('/api/sales-crm/ai/governance');
       Object.assign(state.aiGovernance, payload, { loaded: true, error: '' });
     } catch (error) {
       state.aiGovernance.error = error.message;
@@ -1484,10 +1461,13 @@ import { createAdministrationService } from './services/administration.js';
   async function recordAiFeedback(jobId) {
     const label = $('#aiFeedbackLabel')?.value || '';
     if (!label) return toast('请选择结果标签');
-    await aiService.submitFeedback(jobId, {
-      label,
-      note: $('#aiFeedbackNote')?.value || '',
-      idempotencyKey: `feedback:${jobId}:${label}:${crypto.randomUUID()}`,
+    await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({
+        label,
+        note: $('#aiFeedbackNote')?.value || '',
+        idempotencyKey: `feedback:${jobId}:${label}:${crypto.randomUUID()}`,
+      }),
     });
     closeModal();
     await loadAiGovernance();
@@ -1495,7 +1475,10 @@ import { createAdministrationService } from './services/administration.js';
   }
 
   async function strategyAction(action, strategyId) {
-    await aiService.strategyAction(strategyId, action, {});
+    await api(`/api/sales-crm/ai/governance/strategies/${encodeURIComponent(strategyId)}/${action}`, {
+      method: 'POST',
+      body: '{}',
+    });
     await loadAiGovernance();
     toast(action === 'approve' ? '版本已批准发布' : action === 'rollback' ? '旧版本已恢复' : '已提交发布审批');
   }
@@ -1544,7 +1527,7 @@ import { createAdministrationService } from './services/administration.js';
 
   async function openAiTask(taskId) {
     try {
-      const payload = await aiService.getTask(taskId);
+      const payload = await api(`/api/sales-crm/ai/tasks/${encodeURIComponent(taskId)}`);
       renderAiTaskDetail(payload.task);
     } catch (error) { toast(error.message); }
   }
@@ -1552,12 +1535,12 @@ import { createAdministrationService } from './services/administration.js';
   async function actOnAiTask(action, jobId) {
     try {
       if (['approved', 'rejected'].includes(action)) {
-        await aiService.jobAction(jobId, 'review', {
-          decision: action,
-          summary: $('#aiTaskReviewSummary')?.value || '',
+        await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ decision: action, summary: $('#aiTaskReviewSummary')?.value || '' }),
         });
       } else {
-        await aiService.jobAction(jobId, action, {});
+        await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST', body: '{}' });
       }
       closeModal();
       await loadAiTasks();
@@ -1631,12 +1614,7 @@ import { createAdministrationService } from './services/administration.js';
     state.recycleBin.loading = true;
     try {
       const search = ($('#recycleSearch')?.value || '').trim();
-      const payload = await customerService.listRecycleBin({
-        kind: state.recycleKind,
-        page: 1,
-        pageSize: 100,
-        search,
-      });
+      const payload = await api(`/api/sales-crm/accounts/recycle-bin?kind=${encodeURIComponent(state.recycleKind)}&page=1&pageSize=100&search=${encodeURIComponent(search)}`);
       state.recycleBin = { ...state.recycleBin, ...payload, loading: false };
       renderRecycleBin();
     } catch (error) {
@@ -1786,7 +1764,9 @@ import { createAdministrationService } from './services/administration.js';
     const notification = (state.data.notifications || []).find(item => item.id === notificationId);
     if (!notification) return;
     if (notification.user_id === state.data.user.id && notification.status === 'unread') {
-      await activityService.markNotificationRead(notificationId);
+      await api(`/api/sales-crm/notifications/${encodeURIComponent(notificationId)}/read`, {
+        method: 'POST', body: '{}',
+      });
       notification.status = 'read';
       notification.read_at = new Date().toISOString();
       renderAll();
@@ -1854,7 +1834,7 @@ import { createAdministrationService } from './services/administration.js';
     state.managerAnomalies.loading = true;
     if (!quiet) renderManagerAnomalies();
     try {
-      const payload = await aiService.managerAnomalies();
+      const payload = await api('/api/sales-crm/ai/manager-anomalies');
       state.managerAnomalies.items = payload.anomalies || [];
       state.managerAnomalies.loaded = true;
       state.managerAnomalies.error = '';
@@ -1875,7 +1855,10 @@ import { createAdministrationService } from './services/administration.js';
       button.textContent = '正在提交…';
     }
     try {
-      const payload = await aiService.runManagerAnomalies({});
+      const payload = await api('/api/sales-crm/ai/manager-anomalies/run', {
+        method: 'POST',
+        body: '{}',
+      });
       await loadManagerAnomalies({ quiet: true });
       toast(payload.jobs.length ? `已提交 ${payload.jobs.length} 条经理异常建议` : '当前没有需要生成建议的异常');
       clearTimeout(state.managerAnomalies.timer);
@@ -1955,7 +1938,7 @@ import { createAdministrationService } from './services/administration.js';
     state.salesCoaching.loading = true;
     if (!quiet) renderTeam();
     try {
-      const payload = await aiService.salesCoaching();
+      const payload = await api('/api/sales-crm/ai/sales-coaching');
       state.salesCoaching.items = payload.items || [];
       state.salesCoaching.loaded = true;
       state.salesCoaching.error = '';
@@ -1972,7 +1955,10 @@ import { createAdministrationService } from './services/administration.js';
     state.salesCoaching.pendingUserId = userId;
     renderTeam();
     try {
-      await aiService.runSalesCoaching(userId, {});
+      await api(`/api/sales-crm/ai/sales-coaching/${encodeURIComponent(userId)}/run`, {
+        method: 'POST',
+        body: '{}',
+      });
       toast('销售辅导任务已提交');
       await loadSalesCoaching({ quiet: true });
       clearTimeout(state.salesCoaching.timer);
@@ -2297,7 +2283,7 @@ import { createAdministrationService } from './services/administration.js';
     if (!can('manage_users') || state.data?.impersonation) return;
     state.assistantRuntimeError = '';
     try {
-      state.assistantRuntime = await administrationService.assistantRuntime();
+      state.assistantRuntime = await api('/api/assistant/runtime');
     } catch (error) {
       state.assistantRuntime = null;
       state.assistantRuntimeError = assistantRuntimeError(error.message || '无法加载 AI 引擎状态');
@@ -2309,7 +2295,7 @@ import { createAdministrationService } from './services/administration.js';
     if (!can('manage_users') || state.data?.impersonation) return;
     state.aiFeaturesError = '';
     try {
-      const response = await aiService.features();
+      const response = await api('/api/sales-crm/ai/features');
       state.aiFeatures = response.features || {};
       syncBootstrapFeatures(state.aiFeatures);
     } catch (error) {
@@ -2325,7 +2311,10 @@ import { createAdministrationService } from './services/administration.js';
     state.aiFeaturesError = '';
     renderAIFeatures();
     try {
-      const response = await aiService.updateFeature(key, { enabled });
+      const response = await api(`/api/sales-crm/ai/features/${encodeURIComponent(key)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      });
       state.aiFeatures = response.features || state.aiFeatures;
       syncBootstrapFeatures(state.aiFeatures);
       toast(`${aiFeatureLabels[key] || key}已${enabled ? '开启' : '关闭'}`);
@@ -2344,7 +2333,7 @@ import { createAdministrationService } from './services/administration.js';
     state.assistantRuntimeError = '';
     renderAssistantRuntime();
     try {
-      state.assistantRuntime = await administrationService.updateAssistantRuntime({ mode });
+      state.assistantRuntime = await api('/api/assistant/runtime', { method: 'PATCH', body: JSON.stringify({ mode }) });
       toast('AI 引擎模式已更新');
     } catch (error) {
       state.assistantRuntimeError = assistantRuntimeError(error.message || '无法更新 AI 引擎模式');
@@ -2360,7 +2349,7 @@ import { createAdministrationService } from './services/administration.js';
     state.assistantRuntimeError = '';
     renderAssistantRuntime();
     try {
-      state.assistantRuntime = await administrationService.recheckAssistantRuntime();
+      state.assistantRuntime = await api('/api/assistant/runtime/recheck', { method: 'POST', body: '{}' });
       toast('AI 引擎状态已重新检测');
     } catch (error) {
       state.assistantRuntimeError = assistantRuntimeError(error.message || 'AI 引擎检测失败');
@@ -2437,7 +2426,7 @@ import { createAdministrationService } from './services/administration.js';
 
   async function loadMaintenanceRuns() {
     if (!can('manage_data_maintenance') || state.data.impersonation) return;
-    const result = await administrationService.maintenanceRuns({ limit: 20 });
+    const result = await api('/api/sales-crm/data-maintenance/runs?limit=20');
     state.maintenanceRuns = result.runs || [];
     renderMaintenanceRuns();
   }
@@ -2450,9 +2439,8 @@ import { createAdministrationService } from './services/administration.js';
     const filters = {
       batchIds: batchId ? [batchId] : [], ownerIds: ownerId ? [ownerId] : [], intakeItemIds: itemIds, allAssigned,
     };
-    const result = await administrationService.previewMaintenance({
-      operation: 'reset_assignments',
-      filters,
+    const result = await api('/api/sales-crm/data-maintenance/preview', {
+      method: 'POST', body: JSON.stringify({ operation: 'reset_assignments', filters }),
     });
     state.maintenancePreview = result;
     renderMaintenancePreview();
@@ -2467,10 +2455,9 @@ import { createAdministrationService } from './services/administration.js';
     button.disabled = true;
     button.textContent = '正在备份并重置…';
     try {
-      const result = await administrationService.executeMaintenance(
-        { previewId: preview.previewId, confirmationText },
-        { timeoutMs: 120000 },
-      );
+      const result = await api('/api/sales-crm/data-maintenance/execute', {
+        method: 'POST', body: JSON.stringify({ previewId: preview.previewId, confirmationText }), timeoutMs: 120000,
+      });
       state.maintenancePreview = null;
       await load();
       switchView('maintenance');
@@ -2724,7 +2711,7 @@ import { createAdministrationService } from './services/administration.js';
 
   async function loadActionProposal(jobId) {
     for (let attempt = 0; attempt < 32; attempt += 1) {
-      const payload = await aiService.getTask(jobId);
+      const payload = await api(`/api/sales-crm/ai/tasks/${encodeURIComponent(jobId)}`);
       const task = payload.task;
       if (task?.result && ['needs_review', 'succeeded'].includes(task.state)) return task;
       if (['dead_letter', 'failed', 'blocked', 'cancelled'].includes(task?.state)) {
@@ -2747,9 +2734,9 @@ import { createAdministrationService } from './services/administration.js';
     status.className = 'action-proposal-status';
     status.textContent = '正在整理活动字段…';
     try {
-      const created = await aiService.createActionProposal(account.external_customer_id, {
-        input,
-        clientRequestId: proposalRequestId(),
+      const created = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(account.external_customer_id)}/action-proposals`, {
+        method: 'POST',
+        body: JSON.stringify({ input, clientRequestId: proposalRequestId() }),
       });
       const task = await loadActionProposal(created.job.id);
       applyActionProposal(task);
@@ -3038,7 +3025,7 @@ import { createAdministrationService } from './services/administration.js';
 
   async function refresh(message = '') {
     const previous = state.data;
-    const next = await sessionService.bootstrap(null, { timeoutMs: 15000 });
+    const next = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
     for (const config of Object.values(researchConfig)) {
       if (previous?.[config.dataKey]?.length) next[config.dataKey] = previous[config.dataKey];
     }
@@ -3066,7 +3053,7 @@ import { createAdministrationService } from './services/administration.js';
     return permissions;
   }
 
-  lifecycle.listen(document, 'submit', async event => {
+  document.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.target;
     try {
@@ -3075,23 +3062,29 @@ import { createAdministrationService } from './services/administration.js';
         state.loginPending = true;
         $('#loginError').textContent = '';
         setLoginState('login');
-        await sessionService.login(formPayload(form), { timeoutMs: 10000 });
+        await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)), timeoutMs: 10000 });
         setLoginState('workspace');
         await load({ fromLogin: true });
       } else if (form.id === 'aiStrategyForm') {
         const payload = formPayload(form);
         payload.config = JSON.parse(payload.configJson || '{}');
         delete payload.configJson;
-        await aiService.createStrategy(payload);
+        await api('/api/sales-crm/ai/governance/strategies', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
         closeModal();
         await loadAiGovernance();
         toast('影子版本已创建');
       } else if (form.id === 'aiShadowEvaluationForm') {
         const payload = formPayload(form);
         const strategyId = payload.strategyId;
-        await aiService.evaluateStrategy(strategyId, {
-          outcome: payload.outcome,
-          metrics: JSON.parse(payload.metricsJson || '{}'),
+        await api(`/api/sales-crm/ai/governance/strategies/${encodeURIComponent(strategyId)}/evaluations`, {
+          method: 'POST',
+          body: JSON.stringify({
+            outcome: payload.outcome,
+            metrics: JSON.parse(payload.metricsJson || '{}'),
+          }),
         });
         closeModal();
         await loadAiGovernance();
@@ -3102,7 +3095,7 @@ import { createAdministrationService } from './services/administration.js';
         payload.bomLines = Number(payload.bomLines || 0);
         payload.expectedValue = Number(payload.expectedValue || 0);
         payload.completeness = Number(payload.completeness || 0);
-        await activityService.create(payload);
+        await api('/api/sales-crm/activities', { method: 'POST', body: JSON.stringify(payload) });
         await refresh('客户动作已记录，阶段和预警已同步');
       } else if (form.id === 'customerForm') {
         const payload = formPayload(form);
@@ -3110,7 +3103,7 @@ import { createAdministrationService } from './services/administration.js';
         payload.website = String(payload.website || '').trim();
         if (!payload.companyName && !payload.website) throw new Error('公司名称或官网至少填写一项');
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        const result = await customerService.create(payload);
+        const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
         const enrichmentState = result.enrichment?.state === 'pending_dispatch'
           ? '资料补全已排队'
           : result.enrichment?.reasonCode
@@ -3121,24 +3114,24 @@ import { createAdministrationService } from './services/administration.js';
       } else if (form.id === 'quoteForm') {
         const payload = formPayload(form);
         payload.nextFollowAt = apiTime(payload.nextFollowAt);
-        await activityService.createQuote(payload);
+        await api('/api/sales-crm/quotes', { method: 'POST', body: JSON.stringify(payload) });
         await refresh('报价已记录，客户进入已报价阶段');
       } else if (form.id === 'orderForm') {
         const payload = formPayload(form);
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        await activityService.createOrder(payload);
+        await api('/api/sales-crm/orders', { method: 'POST', body: JSON.stringify(payload) });
         await refresh('订单已记录，客户价值指标已更新');
       } else if (form.id === 'userForm') {
         const payload = formPayload(form);
         payload.languages = splitTags(payload.languages);
         payload.countries = splitTags(payload.countries);
         payload.channels = splitTags(payload.channels);
-        const result = await administrationService.createUser(payload);
+        const result = await api('/api/sales-crm/users', { method: 'POST', body: JSON.stringify(payload) });
         await refresh(result.temporaryPassword ? `新用户已创建，临时密码：${result.temporaryPassword}` : '新用户已创建');
       } else if (form.id === 'editUserForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
-        await administrationService.updateUser(userId, {
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({
           name: String(payload.name || '').trim(),
           role: payload.role,
           active: payload.active === 'true',
@@ -3146,7 +3139,7 @@ import { createAdministrationService } from './services/administration.js';
           languages: splitTags(payload.languages),
           countries: splitTags(payload.countries),
           channels: splitTags(payload.channels),
-        });
+        }) });
         await refresh('账号已更新');
       } else if (form.id === 'permissionGroupForm') {
         const payload = formPayload(form);
@@ -3157,10 +3150,10 @@ import { createAdministrationService } from './services/administration.js';
           permissions: permissionsFromPayload(payload),
         };
         if (groupId) {
-          await administrationService.updatePermissionGroup(groupId, body);
+          await api(`/api/sales-crm/permission-groups/${encodeURIComponent(groupId)}`, { method: 'PATCH', body: JSON.stringify(body) });
           await refresh('权限组已更新');
         } else {
-          await administrationService.createPermissionGroup({ ...body, role: payload.role });
+          await api('/api/sales-crm/permission-groups', { method: 'POST', body: JSON.stringify({ ...body, role: payload.role }) });
           await refresh('权限组已创建');
         }
       } else if (form.id === 'permissionOverrideForm') {
@@ -3170,15 +3163,14 @@ import { createAdministrationService } from './services/administration.js';
         Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
           overrides[key] = ['inherit', 'allow', 'deny'].includes(payload[`override__${key}`]) ? payload[`override__${key}`] : 'inherit';
         });
-        await administrationService.replacePermissionOverrides(userId, overrides);
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, { method: 'PUT', body: JSON.stringify(overrides) });
         await refresh('个人权限已更新');
       } else if (form.id === 'adminPasswordResetForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
         if (payload.password !== payload.passwordConfirm) throw new Error('两次输入的新密码不一致');
-        await administrationService.resetPassword(userId, {
-          password: payload.password,
-          passwordConfirm: payload.passwordConfirm,
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/password-reset`, {
+          method: 'POST', body: JSON.stringify({ password: payload.password, passwordConfirm: payload.passwordConfirm }),
         });
         form.reset();
         await refresh('密码已重置，该账号的现有登录态已失效');
@@ -3187,12 +3179,12 @@ import { createAdministrationService } from './services/administration.js';
         const customerId = payload.customerId;
         delete payload.customerId;
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        await customerService.update(customerId, payload);
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         await refresh('客户信息已调整');
       } else if (form.id === 'passwordForm') {
         const payload = formPayload(form);
         if (payload.newPassword !== payload.confirmPassword) throw new Error('两次输入的新密码不一致');
-        await sessionService.changePassword(payload);
+        await api('/api/sales-crm/password', { method: 'POST', body: JSON.stringify(payload) });
         toast('密码修改成功，请重新登录');
         setTimeout(() => location.reload(), 700);
       } else if (form.id === 'intakeSettingsForm') {
@@ -3200,37 +3192,40 @@ import { createAdministrationService } from './services/administration.js';
         payload.enabled = payload.enabled === 'true';
         payload.matchGroups = splitTags(payload.matchGroups);
         payload.countries = splitTags(payload.countries);
-        await intakeService.updateSettings(payload);
+        await api('/api/sales-crm/intake/settings', { method: 'PATCH', body: JSON.stringify(payload) });
         await refresh('每日入库规则已更新');
       } else if (form.id === 'intakeAssignForm') {
         const payload = formPayload(form);
         payload.action = 'assign';
-        await intakeService.act(payload);
+        await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
         await refresh('客户已分配并生成领取任务');
       } else if (form.id === 'intakeReasonForm') {
         const payload = formPayload(form);
-        await intakeService.act(payload);
+        await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
         await refresh(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
       } else if (form.id === 'recycleReasonForm') {
         const payload = formPayload(form);
         const action = payload.action;
+        const route = action === 'trash'
+          ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/trash`
+          : action === 'bulk'
+            ? '/api/sales-crm/accounts/bulk-return'
+            : `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/return`;
         const body = action === 'bulk'
           ? { customerIds: [...state.selectedCustomerIds], reason: payload.reason }
           : { reason: payload.reason };
-        if (action === 'trash') await customerService.trash(payload.customerId, body);
-        else if (action === 'bulk') await customerService.bulkReturn(body);
-        else await customerService.returnToPool(payload.customerId, body);
+        await api(route, { method: 'POST', body: JSON.stringify(body) });
         state.selectedCustomerIds.clear();
         await refresh(action === 'trash' ? '客户已移入回收站' : '客户已退回线索池');
         if (action === 'bulk') switchView('recycleBin');
       } else if (form.id === 'contactForm') {
-        await activityService.createContact(formPayload(form));
+        await api('/api/sales-crm/contacts', { method: 'POST', body: JSON.stringify(formPayload(form)) });
         await refresh('对接人已保存，可以分别添加经理评价');
       } else if (form.id === 'evaluationForm') {
         const button = form.querySelector('button[type=submit]');
         button.disabled = true;
         button.textContent = 'AI分析中…';
-        const result = await activityService.createEvaluation(formPayload(form));
+        const result = await api('/api/sales-crm/evaluations', { method: 'POST', body: JSON.stringify(formPayload(form)) });
         await refresh(result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成');
       } else if (form.id === 'drawerAiForm') {
         const message = String(new FormData(form).get('message') || '').trim();
@@ -3242,7 +3237,10 @@ import { createAdministrationService } from './services/administration.js';
         button.disabled = true;
         button.textContent = '分析中…';
         answer.textContent = '正在结合当前客户资料分析…';
-        const result = await aiService.chat({ message: scopedMessage, history: [], context });
+        const result = await api('/api/assistant/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: scopedMessage, history: [], context }),
+        });
         answer.textContent = result.answer || 'AI 暂未返回有效内容，请稍后重试。';
         button.disabled = false;
         button.textContent = '发送';
@@ -3265,7 +3263,7 @@ import { createAdministrationService } from './services/administration.js';
     }
   });
 
-  lifecycle.listen(document, 'click', async event => {
+  document.addEventListener('click', async event => {
     const nav = event.target.closest('[data-view]');
     if (nav) switchView(nav.dataset.view);
     const go = event.target.closest('[data-go]');
@@ -3382,7 +3380,7 @@ import { createAdministrationService } from './services/administration.js';
     if (retryEvaluation) {
       try {
         toast('正在重新生成AI标注…');
-        const result = await activityService.retryEvaluation(retryEvaluation.dataset.retryEvaluation);
+        const result = await api(`/api/sales-crm/evaluations/${encodeURIComponent(retryEvaluation.dataset.retryEvaluation)}/retry`, { method: 'POST', body: '{}' });
         await refresh(result.aiWarning ? 'AI标注仍未成功，请稍后再试' : 'AI标注已重新生成');
       } catch (error) { toast(error.message); }
     }
@@ -3397,7 +3395,7 @@ import { createAdministrationService } from './services/administration.js';
         evaluationTag: $('#evaluationTagFilter')?.value || '',
         onlyOverdue: $('#onlyOverdue')?.checked ? '1' : '',
       });
-      link.href = customerService.exportUrl(Object.fromEntries(params));
+      link.href = `/api/sales-crm/export?${params}`;
       link.download = '';
       document.body.appendChild(link);
       link.click();
@@ -3418,9 +3416,9 @@ import { createAdministrationService } from './services/administration.js';
         if (!state.selectedCustomerIds.size) throw new Error('请先选择客户');
         const owner = userById(ownerId);
         if (!window.confirm(`将设置 ${state.selectedCustomerIds.size} 个客户的负责人为 ${owner?.name || ownerId}。确认继续？`)) return;
-        const result = await customerService.bulkAssign({
-          customerIds: [...state.selectedCustomerIds],
-          ownerId,
+        const result = await api('/api/sales-crm/accounts/bulk-assign', {
+          method: 'POST',
+          body: JSON.stringify({ customerIds: [...state.selectedCustomerIds], ownerId }),
         });
         state.selectedCustomerIds.clear();
         await refresh(`已批量分配 ${result.updated} 个客户`);
@@ -3443,7 +3441,7 @@ import { createAdministrationService } from './services/administration.js';
     const restoreCustomer = event.target.closest('[data-restore-customer]');
     if (restoreCustomer) {
       try {
-        await customerService.restore(restoreCustomer.dataset.restoreCustomer);
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(restoreCustomer.dataset.restoreCustomer)}/restore`, { method: 'POST', body: '{}' });
         await loadRecycleBin();
         await refresh('手工客户已恢复');
       } catch (error) { toast(error.message); }
@@ -3455,7 +3453,9 @@ import { createAdministrationService } from './services/administration.js';
       const reason = window.prompt('请输入重新分配原因', '按区域和语言能力重新分配') || '';
       if (!reason.trim()) return;
       try {
-        await customerService.reassign(reassignCustomer.dataset.reassignCustomer, { ownerId, reason });
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(reassignCustomer.dataset.reassignCustomer)}/reassign`, {
+          method: 'POST', body: JSON.stringify({ ownerId, reason }),
+        });
         await loadRecycleBin();
         await refresh('客户已重新分配');
       } catch (error) { toast(error.message); }
@@ -3467,13 +3467,13 @@ import { createAdministrationService } from './services/administration.js';
     if (event.target.closest('#intakeSettingsBtn')) openIntakeSettingsModal();
     if (event.target.closest('#bulkAssignIntakeBtn')) {
       try {
-        const result = await intakeService.act({ action: 'bulk_assign' });
+        const result = await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action: 'bulk_assign' }) });
         await refresh(`批量分配完成：已分配 ${result.assigned} 个客户`);
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#scanIntakeBtn')) {
       try {
-        const result = await intakeService.scan();
+        const result = await api('/api/sales-crm/intake/scan', { method: 'POST', body: '{}' });
         await refresh(`同步完成：入库 ${result.imported}，分配 ${result.assigned}，跳过 ${result.skipped}`);
       } catch (error) { toast(error.message); }
     }
@@ -3492,12 +3492,7 @@ import { createAdministrationService } from './services/administration.js';
       if (['return', 'reject'].includes(action)) openIntakeReasonModal(itemId, action);
       else {
         try {
-          await intakeService.act({
-            action,
-            itemId,
-            ownerId: intakeAction.dataset.ownerId || '',
-            idempotencyKey: intakeAction.dataset.idempotencyKey || proposalRequestId(),
-          });
+          await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action, itemId, ownerId: intakeAction.dataset.ownerId || '', idempotencyKey: intakeAction.dataset.idempotencyKey || proposalRequestId() }) });
           await refresh(action === 'claim' ? '客户已领取，请在规定时间内完成首次触达' : '客户已分配');
         } catch (error) { toast(error.message); }
       }
@@ -3519,30 +3514,28 @@ import { createAdministrationService } from './services/administration.js';
     const toggleUser = event.target.closest('[data-toggle-user]');
     if (toggleUser) {
       try {
-        await administrationService.updateUser(toggleUser.dataset.toggleUser, {
-          active: toggleUser.dataset.active !== '1',
-        });
+        await api(`/api/sales-crm/users/${encodeURIComponent(toggleUser.dataset.toggleUser)}`, { method: 'PATCH', body: JSON.stringify({ active: toggleUser.dataset.active !== '1' }) });
         await refresh('用户状态已更新');
       } catch (error) { toast(error.message); }
     }
     const archiveUserButton = event.target.closest('[data-archive-user]');
     if (archiveUserButton && window.confirm('归档后该用户将立即退出且不能再登录，历史业务记录会保留。确认归档？')) {
       try {
-        await administrationService.archiveUser(archiveUserButton.dataset.archiveUser);
+        await api(`/api/sales-crm/users/${encodeURIComponent(archiveUserButton.dataset.archiveUser)}/archive`, { method: 'POST', body: '{}' });
         await refresh('用户已归档');
       } catch (error) { toast(error.message); }
     }
     const restoreUserButton = event.target.closest('[data-restore-user]');
     if (restoreUserButton) {
       try {
-        await administrationService.restoreUser(restoreUserButton.dataset.restoreUser);
+        await api(`/api/sales-crm/users/${encodeURIComponent(restoreUserButton.dataset.restoreUser)}/restore`, { method: 'POST', body: '{}' });
         await refresh('用户已恢复为在职状态');
       } catch (error) { toast(error.message); }
     }
     const deleteUserButton = event.target.closest('[data-delete-user]');
     if (deleteUserButton && window.confirm('永久删除仅适用于没有任何业务引用的归档用户，删除后不可恢复。确认继续？')) {
       try {
-        await administrationService.deleteUser(deleteUserButton.dataset.deleteUser);
+        await api(`/api/sales-crm/users/${encodeURIComponent(deleteUserButton.dataset.deleteUser)}`, { method: 'DELETE' });
         await refresh('归档用户已永久删除');
       } catch (error) {
         const references = (error.details?.references || []).map(item => `${item.label} ${item.count} 条`).join('、');
@@ -3586,13 +3579,13 @@ import { createAdministrationService } from './services/administration.js';
       const reviewId = resolveReview.dataset.resolveReview;
       const ownerId = document.querySelector(`[data-review-owner="${CSS.escape(reviewId)}"]`)?.value || '';
       try {
-        await administrationService.resolveMigrationReview(reviewId, { ownerId });
+        await api(`/api/sales-crm/migration-review/${encodeURIComponent(reviewId)}`, { method: 'POST', body: JSON.stringify({ ownerId }) });
         await refresh('旧跟进已迁移到统一客户档案');
       } catch (error) { toast(error.message); }
     }
   });
 
-  lifecycle.listen(document, 'change', event => {
+  document.addEventListener('change', event => {
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
     if (event.target.matches('[data-ai-feature]')) void setAIFeature(event.target.dataset.aiFeature, event.target.checked);
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
@@ -3604,14 +3597,14 @@ import { createAdministrationService } from './services/administration.js';
     }
   });
 
-  lifecycle.listen(document, 'input', event => {
+  document.addEventListener('input', event => {
     if (event.target.id === 'recycleSearch') {
       clearTimeout(loadRecycleBin.timer);
       loadRecycleBin.timer = setTimeout(() => void loadRecycleBin(), 250);
     }
   });
 
-  lifecycle.listen(document, 'click', event => {
+  document.addEventListener('click', event => {
     const tab = event.target.closest('[data-notification-status]');
     if (tab) {
       state.notificationStatus = tab.dataset.notificationStatus;
@@ -3657,10 +3650,13 @@ import { createAdministrationService } from './services/administration.js';
     closeDrawer();
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
-    if (pushHistory && location.hash !== `#${view}`) router.navigate(view);
+    if (location.hash !== `#${view}`) {
+      if (pushHistory) history.pushState(null, '', `#${view}`);
+      else history.replaceState(null, '', `#${view}`);
+    }
   }
 
-  ['countryFilter', 'ownerFilter', 'periodFilter'].forEach(id => lifecycle.listen(document, 'change', event => {
+  ['countryFilter', 'ownerFilter', 'periodFilter'].forEach(id => document.addEventListener('change', event => {
     if (event.target.id === id) {
       renderAll();
       if (['countryFilter', 'ownerFilter'].includes(event.target.id) && ['intake', 'pending', 'claimed'].includes(state.view)) {
@@ -3668,13 +3664,13 @@ import { createAdministrationService } from './services/administration.js';
       }
     }
   }));
-  ['customerSearch', 'stageFilter', 'priorityFilter', 'evaluationTagFilter', 'onlyOverdue'].forEach(id => lifecycle.listen(document, id === 'customerSearch' ? 'input' : 'change', event => {
+  ['customerSearch', 'stageFilter', 'priorityFilter', 'evaluationTagFilter', 'onlyOverdue'].forEach(id => document.addEventListener(id === 'customerSearch' ? 'input' : 'change', event => {
     if (event.target.id === id) {
       if (event.target.id === 'stageFilter') state.stageReached = '';
       renderCustomers();
     }
   }));
-  lifecycle.listen(document, 'input', event => {
+  document.addEventListener('input', event => {
     if (event.target.id === 'insightSearch') renderInsightsHub();
     if (event.target.id === 'poolSearch') scheduleResearchReload('pool');
     if (event.target.id === 'peopleSearch') scheduleResearchReload('people');
@@ -3690,7 +3686,7 @@ import { createAdministrationService } from './services/administration.js';
       loadAiTasks.timer = setTimeout(() => void loadAiTasks({ reset: true }), 250);
     }
   });
-  lifecycle.listen(document, 'change', event => {
+  document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
     if (['poolGroupFilter','poolCrmFilter'].includes(event.target.id)) void loadResearch('pool', { reset: true });
     if (event.target.id === 'peopleLevelFilter') void loadResearch('people', { reset: true });
@@ -3711,22 +3707,23 @@ import { createAdministrationService } from './services/administration.js';
     }
   });
 
-  lifecycle.listen($('#logoutBtn'), 'click', async () => {
-    await sessionService.logout().catch(() => {});
+  $('#logoutBtn').addEventListener('click', async () => {
+    await api('/api/sales-auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
     location.reload();
   });
-  lifecycle.listen(document, 'keydown', event => {
+  document.addEventListener('keydown', event => {
     if (event.key === 'Escape') { closeModal(); closeDrawer(); document.body.classList.remove('sidebar-open'); }
   });
-  lifecycle.listen($('#salesMenuBtn'), 'click', () => document.body.classList.toggle('sidebar-open'));
-  lifecycle.listen($('#salesSidebarMask'), 'click', () => document.body.classList.remove('sidebar-open'));
-  router.start({ refresh: false });
-
-  lifecycle.listen(window, 'pagehide', event => {
-    if (!event.persisted) {
-      router.dispose();
-      lifecycle.dispose();
-    }
+  $('#salesMenuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+  $('#salesSidebarMask').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+  window.addEventListener('hashchange', () => {
+    const view = location.hash.replace(/^#/, '');
+    if (viewMeta[view] && state.data) switchView(view, false);
   });
+  window.addEventListener('popstate', () => {
+    const view = location.hash.replace(/^#/, '');
+    if (viewMeta[view] && state.data) switchView(view, false);
+  });
+
   load();
 })();

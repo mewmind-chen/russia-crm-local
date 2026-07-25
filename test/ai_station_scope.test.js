@@ -170,7 +170,6 @@ test('customer_fit execution uses the existing router contract and persists the 
   const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-EXEC' });
   const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-EXEC` });
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit', contextHash: context.contextHash,
     payload: { contextVersion: 'crm-v1' },
   }, 'fit:CUST-1:v1');
@@ -209,13 +208,7 @@ test('customer_fit execution rejects invented evidence and leaves a retryable jo
   const context = buildCustomerContext(db, accessContext, 'CUST-1');
   const jobs = createAIJobStore(db, { idFactory: () => 'AIJ-INVALID', retryBaseMs: 1 });
   const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-INVALID` });
-  const job = jobs.enqueue({
-    customerId: 'CUST-1',
-    crmAccountId: 'ACC-1',
-    station: 'customer_fit',
-    contextHash: context.contextHash,
-    trigger: { source: 'api', reason: 'test_fixture' },
-  }, 'fit:CUST-1:invalid');
+  const job = jobs.enqueue({ customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit', contextHash: context.contextHash }, 'fit:CUST-1:invalid');
   jobs.claimNext('worker-invalid');
   await assert.rejects(() => executeCustomerFitJob({
     db, jobs, results, jobId: job.id, workerId: 'worker-invalid', accessContext, actor: { id: 'U1', role: 'manager' },
@@ -237,7 +230,6 @@ test('customer_fit execution charges failed fallback and successful engine attem
   let resultSequence = 0;
   const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-FALLBACK-COST-${++resultSequence}` });
   const job = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
     station: 'customer_fit',
@@ -311,7 +303,6 @@ for (const failure of [
     const jobs = createAIJobStore(db, { idFactory: () => `AIJ-COST-${failure.statusCode}`, retryBaseMs: 1 });
     const results = createAIResultStore(db, { idFactory: prefix => `${prefix}-COST-${failure.statusCode}` });
     const job = jobs.enqueue({
-      trigger: { source: 'api', reason: 'test_fixture' },
       customerId: 'CUST-1',
       crmAccountId: 'ACC-1',
       station: 'customer_fit',

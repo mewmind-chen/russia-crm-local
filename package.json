@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "test": "node --test",
-    "frontend:parity": "node scripts/audit-frontend-parity.js",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "crm:setup": "node -e \"require('./lib/sales_crm').installSalesCrm(); console.log('Sales CRM ready')\"",

@@ -58,7 +58,7 @@ test('admin password reset uses blank confirmed new-password fields', () => {
   const js = readAsset('sales-assets', 'app.js');
   assert.match(js, /name="password" type="password" minlength="8" autocomplete="new-password"/);
   assert.match(js, /name="passwordConfirm" type="password" minlength="8" autocomplete="new-password"/);
-  assert.match(js, /administrationService\.resetPassword/);
+  assert.match(js, /\/password-reset/);
 });
 
 test('override editor styles exist and asset versions are refreshed', () => {
@@ -77,8 +77,8 @@ test('identity inspection UI has a persistent banner and explicit return flow', 
   assert.match(html, /id="impersonationBanner"/);
   assert.match(html, /id="stopImpersonationBtn"/);
   assert.match(js, /IMPERSONATION_ENDED/);
-  assert.match(js, /sessionService\.startImpersonation/);
-  assert.match(js, /sessionService\.stopImpersonation/);
+  assert.match(js, /\/api\/sales-crm\/impersonation\/start/);
+  assert.match(js, /\/api\/sales-crm\/impersonation\/stop/);
   assert.match(js, /setInterval/);
 });
 
@@ -120,8 +120,8 @@ test('data maintenance UI is permission gated and requires preview before execut
   assert.match(html, /data-view="maintenance" data-permission="manage_data_maintenance"/);
   assert.match(html, /id="maintenancePreviewPanel"/);
   assert.match(js, /id="maintenanceExecuteBtn"/);
-  assert.match(js, /administrationService\.previewMaintenance/);
-  assert.match(js, /administrationService\.executeMaintenance/);
+  assert.match(js, /\/api\/sales-crm\/data-maintenance\/preview/);
+  assert.match(js, /\/api\/sales-crm\/data-maintenance\/execute/);
   assert.match(js, /state\.maintenancePreview/);
   assert.match(js, /data-view="maintenance"/);
   assert.match(css, /maintenance-warning/);
@@ -138,8 +138,8 @@ test('access governance UI exposes archive restore safe delete export and atomic
   assert.match(js, /data-archive-user/);
   assert.match(js, /data-restore-user/);
   assert.match(js, /data-delete-user/);
-  assert.match(js, /customerService\.bulkAssign/);
-  assert.match(js, /customerService\.exportUrl/);
+  assert.match(js, /\/api\/sales-crm\/accounts\/bulk-assign/);
+  assert.match(js, /\/api\/sales-crm\/export/);
   assert.match(js, /__unassigned__/);
 });
 

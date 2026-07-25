@@ -13,7 +13,6 @@ const fixtures = require('./helpers/permission_fixture');
 function enqueue(jobs, idFactory, input, key) {
   idFactory.next = input.id;
   return jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: input.customerId,
     crmAccountId: input.crmAccountId,
     station: input.station || 'customer_fit',
@@ -23,7 +22,7 @@ function enqueue(jobs, idFactory, input, key) {
   }, key);
 }
 
-test('A4-04 governance is admin-only, manager task audit stays scoped, and sales has no team surfaces', async t => {
+test('A4-04 manager metrics are limited to authorized customers and sales has no team surfaces', async t => {
   const fx = await fixtures.adminFixture({
     managerViewAll: false,
     appOptions: { salesCrm: { aiStationsEnabled: true } },
@@ -59,19 +58,12 @@ test('A4-04 governance is admin-only, manager task audit stays scoped, and sales
   });
 
   const manager = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.cookie });
-  assert.equal(manager.status, 403);
-  const admin = await fx.request('/api/sales-crm/ai/governance', { cookie: fx.adminCookie });
-  assert.equal(admin.status, 200);
-  const adminBody = await admin.json();
-  assert.equal(adminBody.metrics.length, 2);
-  assert.match(JSON.stringify(adminBody), /prompt-v1|rules-v1/);
-  assert.match(JSON.stringify(adminBody), /prompt-secret|rules-secret/);
-
-  const managerTasks = await (await fx.request('/api/sales-crm/ai/tasks', {
-    cookie: fx.cookie,
-  })).json();
-  assert.equal(managerTasks.items.some(item => item.taskId === own.id), true);
-  assert.equal(managerTasks.items.some(item => item.taskId === other.id), false);
+  assert.equal(manager.status, 200);
+  const managerBody = await manager.json();
+  assert.equal(managerBody.metrics.length, 1);
+  assert.equal(managerBody.metrics[0].promptVersion, 'prompt-v1');
+  assert.equal(managerBody.metrics[0].ruleVersion, 'rules-v1');
+  assert.doesNotMatch(JSON.stringify(managerBody), /prompt-secret|rules-secret/);
 
   assert.equal((await fx.request('/api/sales-crm/ai/governance', { cookie: fx.otherCookie })).status, 403);
   const salesBootstrap = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.otherCookie })).json();
@@ -86,10 +78,9 @@ test('A4-04 governance is admin-only, manager task audit stays scoped, and sales
   }, 'a4-04:manager-anomaly');
   assert.equal((await fx.request(`/api/sales-crm/ai/tasks/${managerAnomaly.id}`, {
     cookie: fx.otherCookie,
-  })).status, 403);
-  assert.equal((await fx.request('/api/sales-crm/ai/tasks', {
-    cookie: fx.otherCookie,
-  })).status, 403);
+  })).status, 404);
+  const salesTasks = await (await fx.request('/api/sales-crm/ai/tasks', { cookie: fx.otherCookie })).json();
+  assert.equal(salesTasks.items.some(item => item.taskType === 'manager_anomaly'), false);
 });
 
 test('A4-04 governance versions remain offline and cannot alter runtime station or model policy', () => {
@@ -147,12 +138,10 @@ test('A4-04 old and new model, prompt and rule metrics remain independently comp
     })(),
   });
   const oldJob = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-old', payload: { promptVersion: 'prompt-v1', ruleVersion: 'rules-v1' },
   }, 'metric:old');
   const newJob = jobs.enqueue({
-    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-new', payload: { promptVersion: 'prompt-v2', ruleVersion: 'rules-v2' },
   }, 'metric:new');

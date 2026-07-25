@@ -55,7 +55,6 @@ function fixture() {
 
   function enqueue(overrides = {}) {
     return jobs.enqueue({
-      trigger: { source: 'api', reason: 'test_fixture' },
       customerId: 'CUST-1',
       crmAccountId: 'ACC-1',
       station: 'customer_fit',
