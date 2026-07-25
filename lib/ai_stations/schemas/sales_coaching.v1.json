@@ -1,0 +1,60 @@
+{
+  "$id": "tradepulse://ai/sales_coaching/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "salesUserId",
+    "sampleSize",
+    "sampleStatus",
+    "reasonCodes",
+    "strengths",
+    "gaps",
+    "recommendations",
+    "evidenceIds",
+    "confidence",
+    "reviewRequired"
+  ],
+  "properties": {
+    "version": { "const": "v1" },
+    "salesUserId": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "sampleSize": { "type": "integer", "minimum": 10 },
+    "sampleStatus": { "type": "string", "enum": ["limited", "sufficient"] },
+    "reasonCodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" }
+    },
+    "strengths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "gaps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "recommendations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "evidenceIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "reviewRequired": { "const": true }
+  }
+}

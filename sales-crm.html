@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-16&ux62=1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-17&ux62=1">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -147,7 +147,7 @@
           </div>
           <div class="toolbar ai-task-filters">
             <select id="aiTaskStateFilter"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">执行中</option><option value="retry_wait">等待重试</option><option value="needs_review">待复核</option><option value="succeeded">已完成</option><option value="failed,dead_letter">失败</option><option value="cancelled">已取消</option></select>
-            <select id="aiTaskTypeFilter"><option value="">全部类型</option><option value="customer_fit">客户匹配</option><option value="sales_pack">销售资料包</option><option value="action_proposal">活动提案</option><option value="manager_anomaly">经理异常</option><option value="company_recon">公司 Recon</option><option value="contact_recon">联系人 Recon</option><option value="prospect_discovery">Prospect</option><option value="manager_evaluation">经理评价</option><option value="assistant_chat">对话 AI</option></select>
+            <select id="aiTaskTypeFilter"><option value="">全部类型</option><option value="customer_fit">客户匹配</option><option value="sales_pack">销售资料包</option><option value="action_proposal">活动提案</option><option value="manager_anomaly">经理异常</option><option value="sales_coaching">销售辅导</option><option value="company_recon">公司 Recon</option><option value="contact_recon">联系人 Recon</option><option value="prospect_discovery">Prospect</option><option value="manager_evaluation">经理评价</option><option value="assistant_chat">对话 AI</option></select>
             <input id="aiTaskCustomerFilter" placeholder="客户编码">
             <input id="aiTaskOwnerFilter" placeholder="发起人 ID">
             <input id="aiTaskModelFilter" placeholder="模型">
@@ -311,7 +311,7 @@
         <div id="notificationSummary" class="metric-grid"></div>
         <article class="panel">
           <div class="section-intro notification-intro">
-            <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、AI 资料包、经理异常和投递失败提醒。</p></div>
+            <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、AI 资料包、经理异常、销售辅导和投递失败提醒。</p></div>
             <button id="notificationRefresh" class="button secondary" type="button">刷新</button>
           </div>
           <div class="toolbar">
@@ -346,6 +346,7 @@
           <div><p class="eyebrow">CAPABILITY REVIEW</p><h2>销售能力差异检视</h2><p>按同类客户漏斗拆解优势与短板，作为客户分配、培训和介入依据。</p></div>
           <div class="method-note"><strong>公平口径</strong><span>样本不足时只提示趋势；不以邮件量代替有效推进。</span></div>
         </div>
+        <div id="teamCoachingStatus" class="team-coaching-status" role="status" aria-live="polite">进入页面后读取授权团队的 AI 辅导状态。</div>
         <div id="teamCards" class="team-grid"></div>
         <article id="teamDetail" class="panel team-detail hidden"></article>
       </section>
@@ -441,6 +442,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260725-16&ux62=1"></script>
+  <script src="/sales-assets/app.js?v=20260725-17&ux62=1"></script>
 </body>
 </html>
