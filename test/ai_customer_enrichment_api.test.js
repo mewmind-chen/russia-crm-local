@@ -76,7 +76,7 @@ test('manual enrichment start honors the feature flag and impersonation write bl
     method: 'POST',
   });
   assert.equal(unavailable.status, 409);
-  assert.equal((await unavailable.json()).code, 'AI_ENRICHMENT_DISABLED');
+  assert.equal((await unavailable.json()).code, 'AI_FEATURE_DISABLED');
 
   const impersonated = await fixtures.adminFixture({
     managerViewAll: false,

@@ -1,0 +1,39 @@
+{
+  "$id": "tradepulse://ai/sales_pack/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "summary", "entryPoints", "risks", "draft", "evidenceIds", "confidence", "reviewRequired"],
+  "properties": {
+    "version": { "const": "v1" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "entryPoints": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "risks": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "subject", "body"],
+      "properties": {
+        "channel": { "type": "string", "enum": ["email", "wecom", "linkedin", "phone", "other"] },
+        "subject": { "type": "string", "maxLength": 300 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 8000 }
+      }
+    },
+    "evidenceIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "reviewRequired": { "type": "boolean" }
+  }
+}

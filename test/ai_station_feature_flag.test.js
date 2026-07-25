@@ -27,7 +27,12 @@ test('disabled AI stations stay out of bootstrap and do not install persistence 
 
   const bootstrap = await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie });
   assert.equal(bootstrap.status, 200);
-  assert.deepEqual((await bootstrap.json()).features, { aiStations: false });
+  assert.deepEqual((await bootstrap.json()).features, {
+    aiStations: false,
+    customerEnrichment: false,
+    customerEnrichmentAutoTrigger: false,
+    salesPack: false,
+  });
   assert.equal((await fx.request('/api/sales-crm/ai/customers/RU-9002/results', { cookie: fx.cookie })).status, 404);
   assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name='crm_ai_jobs'").get().count, 0);
 });
