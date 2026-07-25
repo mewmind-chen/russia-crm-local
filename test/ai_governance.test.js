@@ -33,6 +33,7 @@ function seedResult(db, idFactory) {
   const jobs = createAIJobStore(db, { idFactory });
   const results = createAIResultStore(db, { idFactory });
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
     station: 'customer_fit',

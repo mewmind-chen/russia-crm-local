@@ -208,7 +208,7 @@ test('manager anomaly UI remains manager-gated and exposes explicit AI scan cont
   const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
   assert.match(html, /id="runManagerAnomaly"/);
   assert.match(html, /data-permission="view_team"/);
-  assert.match(app, /manager-anomalies\/run/);
+  assert.match(app, /aiService\.runManagerAnomalies/);
   assert.match(app, /AI建议仅供经理复核/);
   assert.doesNotMatch(app, /autoIntervene|autoWriteManagerAction/);
 });

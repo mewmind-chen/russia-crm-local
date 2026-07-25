@@ -51,6 +51,7 @@ async function readinessFixture() {
   const jobs = createAIJobStore(fx.db);
   const results = createAIResultStore(fx.db);
   const fit = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'customer_fit',

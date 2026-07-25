@@ -184,10 +184,10 @@ test('activity modal exposes AI draft generation but keeps the activity API as t
   const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
   assert.match(app, /id="actionProposalInput"/);
-  assert.match(app, /action-proposals/);
+  assert.match(app, /aiService\.createActionProposal/);
   assert.match(app, /proposalJobId/);
   assert.match(app, /确认并记录/);
-  assert.match(app, /\/api\/sales-crm\/activities/);
+  assert.match(app, /activityService\.create/);
   assert.doesNotMatch(app, /autoConfirmActionProposal|autoCreateActivity/);
   assert.match(css, /\.action-proposal-compose/);
   assert.match(css, /@media\(max-width:780px\)\{\.action-proposal-compose/);

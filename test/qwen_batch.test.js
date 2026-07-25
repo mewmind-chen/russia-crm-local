@@ -265,6 +265,7 @@ test('Qwen Batch submit, poll, import and duplicate poll remain idempotent with 
   const pricing = createPricingStore(db, { idFactory, now });
   installRates(pricing);
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
     station: 'customer_fit',
@@ -338,11 +339,13 @@ test('Batch missing usage remains reconcilable and stale context is retained the
   const pricing = createPricingStore(db, { idFactory, now });
   installRates(pricing);
   const missing = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-2', crmAccountId: 'ACC-2', station: 'customer_fit',
     contextHash: 'missing-v1', executionMode: 'batch_eligible', createdBy: 'U-1',
     payload: { evidenceIds: ['EV-2'], batchRequest: { messages: [] } },
   }, 'batch-missing');
   const stale = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-3', crmAccountId: 'ACC-3', station: 'customer_fit',
     contextHash: 'stale-v1', executionMode: 'batch_eligible', createdBy: 'U-1',
     payload: { evidenceIds: ['EV-3'], batchRequest: { messages: [] } },
@@ -400,6 +403,7 @@ test('Batch completion with an omitted result remains partial and keeps its rese
   const pricing = createPricingStore(db, { idFactory, now });
   installRates(pricing);
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-v1', executionMode: 'batch_eligible', createdBy: 'U-1',
     payload: { evidenceIds: ['EV-1'], batchRequest: { messages: [] } },
@@ -431,6 +435,7 @@ test('Batch schema rejection charges actual usage and returns the job to retry',
   const pricing = createPricingStore(db, { idFactory, now });
   installRates(pricing);
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-v1', executionMode: 'batch_eligible', createdBy: 'U-1',
     payload: { evidenceIds: ['EV-1'], batchRequest: { messages: [] } },
@@ -473,6 +478,7 @@ test('forbidden immediate stations cannot be marked batch eligible', () => {
   const db = fixture();
   const jobs = createAIJobStore(db, { idFactory: ids() });
   assert.throws(() => jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1',
     crmAccountId: 'ACC-1',
     station: 'next_action',

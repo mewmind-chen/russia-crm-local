@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TradePulse · 电子元器件外贸 CRM</title>
+  <meta name="description" content="TradePulse 销售经营工作台">
+  <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-modular">
+</head>
+<body data-app="sales-modular">
+  <section id="loginScreen" class="login-screen">
+    <div class="login-brand">
+      <div class="login-mark">TP</div>
+      <p class="eyebrow">TRADEPULSE CRM</p>
+      <h1>客户进展，清晰可见。</h1>
+      <p>统一管理线索、客户动作与团队协作。</p>
+    </div>
+    <form id="loginForm" class="login-card">
+      <div><p class="eyebrow">团队入口</p><h2>登录经营工作台</h2></div>
+      <label>工作邮箱<input name="email" type="email" autocomplete="username" required></label>
+      <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="button primary wide" type="submit">进入系统</button>
+      <p id="loginStatus" class="form-status" role="status" aria-live="polite"></p>
+      <p id="loginError" class="form-error" role="alert"></p>
+    </form>
+  </section>
+  <div id="appMount" hidden></div>
+  <div id="modalPortal"></div>
+  <div id="drawerPortal"></div>
+  <div id="toastPortal" class="toast-portal" aria-live="polite"></div>
+  <script type="module" src="/sales-assets/modular-app.js?v=20260725"></script>
+</body>
+</html>

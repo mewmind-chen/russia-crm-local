@@ -233,7 +233,7 @@ test('deterministic SLA alerts remain available when AI execution fails', () => 
 
 test('customer UI exposes editable next-action adoption and keeps explicit confirmation', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
-  assert.match(app, /next-action\/adopt/);
+  assert.match(app, /aiService\.adoptNextAction/);
   assert.match(app, /采纳下一步建议/);
   assert.match(app, /nextActionSuggestion/);
   assert.doesNotMatch(app, /autoAdoptNextAction|autoWriteNextAction/);

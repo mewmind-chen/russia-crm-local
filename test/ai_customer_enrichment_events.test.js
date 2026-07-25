@@ -23,6 +23,7 @@ function setupLinkedRecon(db, suffix) {
   });
   const jobs = createAIJobStore(db, { idFactory: () => `AIJ-DISPATCH-${suffix}` });
   const dispatch = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'recon_dispatch',
@@ -107,6 +108,7 @@ test('Contact Recon completion records its linked event in the same transaction'
   const linked = setupLinkedRecon(fx.db, 'CONTACT');
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-CONTACT-CONTACT' });
   const dispatch = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station: 'contact_dispatch',

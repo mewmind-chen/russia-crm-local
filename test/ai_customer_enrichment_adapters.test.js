@@ -29,6 +29,7 @@ function setupRun(db) {
 function enqueueClaimed(db, station, id) {
   const jobs = createAIJobStore(db, { idFactory: () => id });
   const job = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002',
     crmAccountId: 'CRM-OWN',
     station,

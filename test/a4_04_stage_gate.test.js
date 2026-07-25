@@ -13,6 +13,7 @@ const fixtures = require('./helpers/permission_fixture');
 function enqueue(jobs, idFactory, input, key) {
   idFactory.next = input.id;
   return jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: input.customerId,
     crmAccountId: input.crmAccountId,
     station: input.station || 'customer_fit',
@@ -138,10 +139,12 @@ test('A4-04 old and new model, prompt and rule metrics remain independently comp
     })(),
   });
   const oldJob = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-old', payload: { promptVersion: 'prompt-v1', ruleVersion: 'rules-v1' },
   }, 'metric:old');
   const newJob = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'CUST-1', crmAccountId: 'ACC-1', station: 'customer_fit',
     contextHash: 'context-new', payload: { promptVersion: 'prompt-v2', ruleVersion: 'rules-v2' },
   }, 'metric:new');

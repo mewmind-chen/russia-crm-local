@@ -53,7 +53,7 @@ test('evaluation labels are scoped profile data with a CRM filter', () => {
 test('customer profiles contain contextual AI Q&A', () => {
   assert.match(appJs, /function customerAiSection\(context\)/);
   assert.match(appJs, /id="drawerAiForm"/);
-  assert.match(appJs, /\/api\/assistant\/chat/);
+  assert.match(appJs, /aiService\.chat/);
 });
 
 test('original workbench supports a profile-only customer page', () => {
@@ -88,12 +88,12 @@ test('mobile customer profile removes hidden toolbar space and fills the viewpor
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
   assert.match(html, /app\.css\?v=20260725-19/);
-  assert.match(html, /app\.js\?v=20260725-19/);
+  assert.match(html, /app\.js\?v=20260725-20/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {
   const handler = appJs.match(/else if \(form\.id === 'customerForm'\)[\s\S]*?else if \(form\.id === 'quoteForm'\)/)?.[0] || '';
-  assert.match(handler, /const result = await api\('\/api\/sales-crm\/accounts'/);
+  assert.match(handler, /const result = await customerService\.create\(payload\)/);
   assert.match(handler, /result\.externalCustomerId/);
   assert.match(handler, /result\.enrichment/);
   assert.match(handler, /openCustomerProfile\(result\.externalCustomerId\)/);
@@ -123,9 +123,9 @@ test('administrators can operate the AI engine runtime and workbench restores se
   const recheck = appJs.match(/async function recheckAssistantRuntime\(\)[\s\S]*?\n  }\n\n  function auditOperator/)?.[0] || '';
 
   assert.match(loadRuntime, /if \(!can\('manage_users'\) \|\| state\.data\?\.impersonation\) return;/);
-  assert.match(loadRuntime, /await api\('\/api\/assistant\/runtime'\)/);
-  assert.match(setMode, /await api\('\/api\/assistant\/runtime', \{ method: 'PATCH', body: JSON\.stringify\(\{ mode \}\) \}\)/);
-  assert.match(recheck, /await api\('\/api\/assistant\/runtime\/recheck', \{ method: 'POST', body: '\{\}' \}\)/);
+  assert.match(loadRuntime, /await administrationService\.assistantRuntime\(\)/);
+  assert.match(setMode, /await administrationService\.updateAssistantRuntime\(\{ mode \}\)/);
+  assert.match(recheck, /await administrationService\.recheckAssistantRuntime\(\)/);
   for (const source of [setMode, recheck]) {
     assert.match(source, /state\.assistantRuntimePending = true;/);
     assert.match(source, /finally \{\s*state\.assistantRuntimePending = false;/);

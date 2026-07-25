@@ -180,6 +180,7 @@ test('retry is scope checked, revives dead letters and rejects a completed job',
 
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-OTHER-SCOPE' });
   const other = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9003', crmAccountId: 'CRM-OTHER', station: 'customer_fit', contextHash: 'a'.repeat(64),
   }, 'other-scope-retry');
   fx.db.prepare("UPDATE crm_ai_jobs SET state='retry_wait' WHERE id=?").run(other.id);
@@ -247,6 +248,7 @@ test('queued cancellation is scope checked, prevents execution and can be retrie
 
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-RUNNING-CANCEL' });
   const active = jobs.enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: 'b'.repeat(64), createdBy: 'U-MGR',
   }, 'cancel:running-api');
@@ -270,10 +272,12 @@ test('cancel and bulk actions use independent permissions and preflight every cu
   });
   t.after(() => fx.close());
   const own = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-OWN' }).enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: 'e'.repeat(64), createdBy: 'U-MGR',
   }, 'bulk:own');
   const other = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-OTHER' }).enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9003', crmAccountId: 'CRM-OTHER', station: 'customer_fit',
     contextHash: 'f'.repeat(64), createdBy: 'U-OTHER',
   }, 'bulk:other');
@@ -306,10 +310,12 @@ test('cancel and bulk actions use independent permissions and preflight every cu
   assert.equal((await cancelled.json()).jobs[0].state, 'cancelled');
 
   const atomicQueued = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-ATOMIC-QUEUED' }).enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: '1'.repeat(64), createdBy: 'U-MGR',
   }, 'bulk:atomic:queued');
   const atomicDone = createAIJobStore(fx.db, { idFactory: () => 'AIJ-BULK-ATOMIC-DONE' }).enqueue({
+    trigger: { source: 'api', reason: 'test_fixture' },
     customerId: 'RU-9002', crmAccountId: 'CRM-OWN', station: 'customer_fit',
     contextHash: '2'.repeat(64), createdBy: 'U-MGR',
   }, 'bulk:atomic:done');
