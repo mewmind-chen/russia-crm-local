@@ -1497,10 +1497,27 @@
         <label>备注<input id="aiFeedbackNote" maxlength="500"></label>
         <div class="form-actions"><button class="button secondary" type="button" data-ai-feedback="${esc(task.taskId)}">保存标签</button></div>
       </div></section>` : '';
+    const trace = task.decisionTrace;
+    const decisionTrace = trace ? `<section><h3>决策版本与证据</h3>
+      <div class="ai-task-detail-grid">
+        <div><span>工作站版本</span><strong>${esc(trace.stationVersion || '—')}</strong></div>
+        <div><span>模型</span><strong>${esc(trace.model || '—')}</strong></div>
+        <div><span>Prompt 版本</span><strong>${esc(trace.promptVersion || '—')}</strong></div>
+        <div><span>Schema 版本</span><strong>${esc(trace.schemaVersion || '—')}</strong></div>
+        <div><span>规则版本</span><strong>${esc(trace.ruleVersion || '—')}</strong></div>
+        <div><span>策略版本</span><strong>${esc(trace.strategyVersion || '未关联')}</strong></div>
+        <div><span>生成时间</span><strong>${trace.generatedAt ? shortDate(trace.generatedAt, true) : '—'}</strong></div>
+        <div><span>有效状态</span><strong>${trace.stale ? '已过期' : '有效'}</strong></div>
+      </div>
+      <div class="ai-task-trace-values"><span>上下文指纹</span><code>${esc(trace.contextHash || '—')}</code></div>
+      <div class="ai-task-trace-values"><span>证据 ID</span><code>${esc((trace.evidenceIds || []).join('、') || '无')}</code></div>
+      ${trace.stale ? `<div class="customer-ai-error"><strong>过期原因</strong><span>${esc(trace.staleReason || '上下文已变化')}</span></div>` : ''}
+    </section>` : '';
     openModal('AI 任务详情', 'AI CONTROL PLANE', `<div class="ai-task-detail">
       <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
       ${task.errorSummary ? `<div class="customer-ai-error"><strong>错误</strong><span>${esc(task.errorSummary)}</span></div>` : ''}
       <section><h3>模型尝试</h3><ul class="ai-task-events">${attempts || '<li>无模型尝试记录</li>'}</ul></section>
+      ${decisionTrace}
       <section><h3>时间线</h3><ul class="ai-task-events">${timeline || '<li>无时间线记录</li>'}</ul></section>
       ${task.result ? `<section><h3>结构化结果</h3><pre>${esc(JSON.stringify(task.result.value || {}, null, 2))}</pre></section>` : ''}
       ${feedback}

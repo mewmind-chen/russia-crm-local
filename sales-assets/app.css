@@ -182,6 +182,8 @@ body.customer-profile-active .top-actions{display:none}
 .ai-task-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ai-task-detail-grid>div{display:grid;gap:4px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fafcfb;min-width:0}
 .ai-task-detail-grid span{font-size:9px;color:var(--muted)}.ai-task-detail-grid strong{font-size:11px;overflow-wrap:anywhere}
+.ai-task-trace-values{display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px;align-items:start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fafcfb}
+.ai-task-trace-values span{font-size:9px;color:var(--muted)}.ai-task-trace-values code{font-size:10px;white-space:normal;overflow-wrap:anywhere}
 .ai-task-events{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
 .ai-task-events li{display:grid;grid-template-columns:minmax(120px,1fr) minmax(100px,1fr) auto;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:10px}
 .ai-task-events li span,.ai-task-events li time,.ai-task-events li small{color:var(--muted)}.ai-task-events li small{grid-column:1/-1}
@@ -189,7 +191,7 @@ body.customer-profile-active .top-actions{display:none}
 .ai-task-detail-actions{display:flex;align-items:end;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
 .ai-task-detail-actions textarea{flex:1 1 100%;min-height:58px;border:1px solid var(--line);border-radius:8px;padding:9px;resize:vertical}
 @media(max-width:1100px){.ai-task-filters{grid-template-columns:repeat(3,minmax(120px,1fr))}}
-@media(max-width:780px){.ai-task-intro{align-items:stretch}.ai-task-filters{grid-template-columns:1fr 1fr;padding:8px}.ai-task-detail-grid{grid-template-columns:1fr}.ai-task-events li{grid-template-columns:1fr}.ai-task-events li small{grid-column:auto}}
+@media(max-width:780px){.ai-task-intro{align-items:stretch}.ai-task-filters{grid-template-columns:1fr 1fr;padding:8px}.ai-task-detail-grid{grid-template-columns:1fr}.ai-task-trace-values{grid-template-columns:1fr}.ai-task-events li{grid-template-columns:1fr}.ai-task-events li small{grid-column:auto}}
 
 /* CRM notification center */
 .notification-button{position:relative;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--ink);font-size:15px;flex:0 0 auto}

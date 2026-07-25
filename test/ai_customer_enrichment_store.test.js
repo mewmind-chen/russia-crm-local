@@ -41,8 +41,8 @@ function input(overrides = {}) {
 test('current schema retains enrichment runtime and proposal tables idempotently', () => {
   const db = fixture();
   installAIStationSchema(db);
-  assert.equal(AI_SCHEMA_VERSION, 15);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 15);
+  assert.equal(AI_SCHEMA_VERSION, 16);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_enrichment_%'").all()
     .map(row => row.name));
   assert.deepEqual(tables, new Set([
