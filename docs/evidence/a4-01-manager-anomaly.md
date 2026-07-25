@@ -43,12 +43,26 @@
 ## 发布状态
 
 - 分支：`codex/a4-01-manager-anomaly`
-- 实现提交：本提交
-- PR 和合并 SHA：待创建及合并
-- 生产备份、`quick_check`、回滚点和 smoke：待发布阶段完成后回填
-- 生产 AI 开关要求：保持全部显式开启
+- 实现提交：`5e7f690`
+- PR：[#79](https://github.com/mewmind-chen/russia-crm-local/pull/79)
+- 合并提交：`a7f2841c8edcbe534e44ce8c3628873b764e224a`
+- 生产 current：`releases/a7f2841c8edc`
+- 生产 previous（回滚点）：`releases/cc4ea9b0d552`
+- 部署前 SQLite online backup：
+  `state/backups/crm-before-a7f2841c8edc-20260725T074542Z-93149.db`
+- 备份 SHA-256：
+  `93eafc498bba9844823b5eb9e0c74eb41a1bd111c46bed1fac413529bcd510ad`
+- 备份权限/大小：`0600` / `44015616` bytes
+- 生产数据库与备份 `quick_check`：`ok`
+- 生产数据库 journal mode：`wal`
+- GitHub CI 和生产隔离验证：`503/503`，全部语法检查通过
+- local/public `healthz`：`200`、`database=ok`、SHA 均为 `a7f2841c8edc...`
+- server、AI Station Worker 和自动部署服务状态正常，部署状态无失败记录
+- 生产四个 AI 开关：`ai_stations=1`、`customer_enrichment=1`、
+  `customer_enrichment_auto_trigger=1`、`sales_pack=1`
+- 生产首页与静态资源已包含通知中心、`manager_anomaly` API 和 `20260725-16` 资源版本
 
 ## 结论
 
-A4-01 开发和本地验收已完成，生产发布门尚未关闭。发布验证完成后将项目进度从
-`31/38` 更新为 `32/38`，下一项为 A4-02 `sales_coaching`；本轮不实现 A4-02。
+A4-01 的经理异常、中文输出、通知中心、权限隔离和生产发布门均已完成。项目进度更新为
+`32/38`，下一项为 A4-02 `sales_coaching`；本轮不实现 A4-02。
