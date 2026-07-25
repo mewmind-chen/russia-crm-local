@@ -171,6 +171,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /ai/jobs/:jobId/review',
     'POST /ai/manager-anomalies/run',
     'POST /ai/proposals/:proposalId/review',
+    'POST /ai/sales-coaching/:salesUserId/run',
     'POST /data-maintenance/execute',
     'POST /data-maintenance/preview',
     'POST /impersonation/start',

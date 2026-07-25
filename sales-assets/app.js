@@ -42,6 +42,9 @@
     managerAnomalies: {
       items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
     },
+    salesCoaching: {
+      items: [], loaded: false, loading: false, pendingUserId: '', error: '', pollCount: 0, timer: null,
+    },
     loginPending: false,
     impersonationTimer: null,
     impersonationRecovery: false,
@@ -168,6 +171,10 @@
     Object.assign(state.managerAnomalies, {
       items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
     });
+    clearTimeout(state.salesCoaching.timer);
+    Object.assign(state.salesCoaching, {
+      items: [], loaded: false, loading: false, pendingUserId: '', error: '', pollCount: 0, timer: null,
+    });
     resetResearchState();
     setTimeout(() => load(), 0);
   }
@@ -192,6 +199,10 @@
     clearTimeout(state.managerAnomalies.timer);
     Object.assign(state.managerAnomalies, {
       items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
+    });
+    clearTimeout(state.salesCoaching.timer);
+    Object.assign(state.salesCoaching, {
+      items: [], loaded: false, loading: false, pendingUserId: '', error: '', pollCount: 0, timer: null,
     });
     resetResearchState();
     closeModal();
@@ -860,6 +871,7 @@
     skipped: ['已跳过', 'gray'],
   };
   const CUSTOMER_AI_MAX_POLLS = 48;
+  const SALES_COACHING_MAX_POLLS = 72;
   const ENRICHMENT_TERMINAL_STATES = new Set([
     'succeeded', 'needs_review', 'cancelled', 'skipped', 'failed', 'dead_letter',
   ]);
@@ -1264,7 +1276,7 @@
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
     sales_pack: '销售资料包', action_proposal: '活动提案', next_action: '下一步建议', prospect_discovery: 'Prospect',
-    manager_evaluation: '经理评价', manager_anomaly: '经理异常', assistant_chat: '对话 AI',
+    manager_evaluation: '经理评价', manager_anomaly: '经理异常', sales_coaching: '销售辅导', assistant_chat: '对话 AI',
   };
 
   function aiTaskFilters() {
@@ -1580,6 +1592,8 @@
         ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
         : item.code === 'MANAGER_ANOMALY_READY'
           ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="alerts">查看异常</button>`
+          : item.code === 'SALES_COACHING_READY'
+            ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="team">查看辅导</button>`
           : '';
       return `<article class="notification-item ${isUnread ? 'unread' : ''}">
         <span class="notification-state" aria-label="${isUnread ? '未读' : '已读'}"></span>
@@ -1759,15 +1773,128 @@
     }).join('') : '<div class="empty">没有符合条件的客户</div>';
   }
 
+  function canViewSalesCoaching() {
+    return customerAIEnabled()
+      && ['admin', 'manager'].includes(state.data?.user?.role)
+      && can('view_team');
+  }
+
+  function coachingFor(userId) {
+    return state.salesCoaching.items.find(item => item.salesUserId === userId) || null;
+  }
+
+  async function loadSalesCoaching({ quiet = false } = {}) {
+    if (!canViewSalesCoaching() || state.salesCoaching.loading) return;
+    state.salesCoaching.loading = true;
+    if (!quiet) renderTeam();
+    try {
+      const payload = await api('/api/sales-crm/ai/sales-coaching');
+      state.salesCoaching.items = payload.items || [];
+      state.salesCoaching.loaded = true;
+      state.salesCoaching.error = '';
+    } catch (error) {
+      state.salesCoaching.error = error.message;
+    } finally {
+      state.salesCoaching.loading = false;
+      renderTeam();
+    }
+  }
+
+  async function runSalesCoaching(userId) {
+    if (!canViewSalesCoaching() || state.salesCoaching.pendingUserId) return;
+    state.salesCoaching.pendingUserId = userId;
+    renderTeam();
+    try {
+      await api(`/api/sales-crm/ai/sales-coaching/${encodeURIComponent(userId)}/run`, {
+        method: 'POST',
+        body: '{}',
+      });
+      toast('销售辅导任务已提交');
+      await loadSalesCoaching({ quiet: true });
+      clearTimeout(state.salesCoaching.timer);
+      state.salesCoaching.pollCount = 0;
+      const poll = async () => {
+        state.salesCoaching.pollCount += 1;
+        await loadSalesCoaching({ quiet: true });
+        const coaching = coachingFor(userId);
+        const pending = ['queued', 'running', 'retry_wait'].includes(coaching?.ai?.job?.state);
+        if (pending && state.salesCoaching.pollCount < SALES_COACHING_MAX_POLLS) {
+          state.salesCoaching.timer = setTimeout(poll, 1800);
+        }
+      };
+      state.salesCoaching.timer = setTimeout(poll, 1000);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      state.salesCoaching.pendingUserId = '';
+      renderTeam();
+    }
+  }
+
+  function salesCoachingBlock(item) {
+    const coaching = coachingFor(item.user.id);
+    const snapshot = coaching?.snapshot || {
+      sampleSize: item.sampleSize,
+      sampleStatus: item.sampleSize < 10 ? 'insufficient' : item.sampleSize < 30 ? 'limited' : 'sufficient',
+    };
+    const job = coaching?.ai?.job;
+    const value = coaching?.ai?.result && !coaching.ai.stale ? coaching.ai.result.value : null;
+    const pending = state.salesCoaching.pendingUserId === item.user.id
+      || ['queued', 'running', 'retry_wait'].includes(job?.state);
+    const sampleLabel = snapshot.sampleStatus === 'insufficient'
+      ? `样本不足（${snapshot.sampleSize}/10）`
+      : snapshot.sampleStatus === 'limited'
+        ? `有限样本（${snapshot.sampleSize}）`
+        : `样本充足（${snapshot.sampleSize}）`;
+    const output = value
+      ? `<div class="coaching-output">
+          <div class="recommendation"><strong>优势</strong><ul>${value.strengths.map(text => `<li>${esc(text)}</li>`).join('')}</ul></div>
+          <div class="recommendation"><strong>差距</strong><ul>${value.gaps.map(text => `<li>${esc(text)}</li>`).join('')}</ul></div>
+          <div class="recommendation"><strong>辅导建议</strong><ul>${value.recommendations.map(text => `<li>${esc(text)}</li>`).join('')}</ul></div>
+        </div>`
+      : snapshot.sampleStatus === 'insufficient'
+        ? '<div class="recommendation"><strong>样本不足</strong><br>暂不生成 AI 辅导结论，继续积累真实客户推进结果。</div>'
+        : coaching?.ai?.stale
+          ? '<div class="recommendation"><strong>数据已变化</strong><br>现有建议已过期，请基于最新聚合结果重新生成。</div>'
+          : pending
+            ? '<div class="recommendation"><strong>正在生成</strong><br>Worker 正在处理聚合后的转化与 SLA 指标。</div>'
+            : '<div class="recommendation"><strong>尚未生成</strong><br>当前已有可评估样本。</div>';
+    const action = canViewSalesCoaching()
+      ? `<div class="coaching-actions">
+          <button class="button primary tiny" type="button" data-run-sales-coaching="${esc(item.user.id)}"
+            ${pending || snapshot.sampleStatus === 'insufficient' ? 'disabled' : ''}>${value || coaching?.ai?.stale ? '重新生成' : '生成 AI 辅导'}</button>
+          <span class="${pending ? 'coaching-pending' : 'subtle'}">${esc(sampleLabel)} · AI 辅导建议仅供经理复核</span>
+        </div>`
+      : '';
+    return `${output}${action}`;
+  }
+
   function renderTeam() {
     if (!can('view_team')) return;
     const rows = state.data.teamReport.filter(item => !$('#ownerFilter').value || item.user.id === $('#ownerFilter').value);
+    const coachingStatus = $('#teamCoachingStatus');
+    if (coachingStatus) {
+      const ready = state.salesCoaching.items.filter(item => item.ai?.result && !item.ai.stale).length;
+      coachingStatus.textContent = !canViewSalesCoaching()
+        ? '销售能力使用确定性聚合指标。'
+        : state.salesCoaching.loading && !state.salesCoaching.loaded
+          ? '正在读取团队辅导状态…'
+          : state.salesCoaching.error
+            ? `团队辅导暂不可用：${state.salesCoaching.error}`
+            : `${rows.length} 位销售 · ${ready} 份 AI 辅导建议 · 样本不足时不调用模型`;
+    }
     $('#teamCards').innerHTML = rows.map(item => {
       const topScores = Object.entries(item.scores).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const coaching = coachingFor(item.user.id);
+      const coachingLabel = coaching?.ai?.result && !coaching.ai.stale
+        ? 'AI辅导已生成'
+        : ['queued', 'running', 'retry_wait'].includes(coaching?.ai?.job?.state)
+          ? 'AI辅导处理中'
+          : item.sampleSize < 10 ? '样本不足' : '待生成AI辅导';
       return `<article class="team-card ${state.teamUserId === item.user.id ? 'selected' : ''}" data-team-user="${item.user.id}">
         <div class="team-card-top"><div class="person"><span class="avatar">${esc(item.user.name.slice(0, 1))}</span><div><strong>${esc(item.user.name)}</strong><small>${esc(item.bestCountries.join(' / ') || '待积累数据')}</small></div></div><div class="score-ring" style="--score:${item.overall}%"><strong>${item.overall}</strong></div></div>
         <div class="capability-bars">${topScores.map(([key, value]) => `<div class="cap-row"><span>${capabilityLabels[key]}</span><div class="cap-track"><i style="width:${value}%"></i></div><b>${value}</b></div>`).join('')}</div>
-        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span></div>
+        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span><span class="pill">${coachingLabel}</span></div>
       </article>`;
     }).join('');
     if (state.teamUserId) renderTeamDetail(state.teamUserId);
@@ -1792,6 +1919,7 @@
         <div class="recommendation"><strong>分配建议</strong><br>优先分配${countries}的客户；适合渠道：${esc(item.bestChannels.join('、') || '继续观察')}。</div>
         <div class="recommendation"><strong>渠道证据</strong><br>${item.channelPerformance.slice(0, 3).map(row => `${esc(row.channel)}：${row.customers}客，询价率${row.rfqRate.toFixed(1)}%`).join('<br>') || '尚未积累足够渠道数据'}</div>
         <div class="recommendation"><strong>下期行动</strong><br>${item.rates.rfq < 30 ? '陪同复盘3场视频会议，强化需求挖掘与BOM引导。' : item.rates.order < 25 ? '重点训练报价跟进和商务谈判。' : '可逐步增加高价值客户并减少早期管理介入。'}</div>
+        ${salesCoachingBlock(item)}
       </div>
     </div>`;
   }
@@ -3181,6 +3309,8 @@
       renderTeam();
       $('#teamDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+    const runCoaching = event.target.closest('[data-run-sales-coaching]');
+    if (runCoaching) await runSalesCoaching(runCoaching.dataset.runSalesCoaching);
     const alertTab = event.target.closest('[data-severity]');
     if (alertTab) {
       state.alertSeverity = alertTab.dataset.severity;
@@ -3316,6 +3446,9 @@
     if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
     if (view === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
       void loadManagerAnomalies();
+    }
+    if (view === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
+      void loadSalesCoaching();
     }
     if (view === 'recycleBin') void loadRecycleBin();
     if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
