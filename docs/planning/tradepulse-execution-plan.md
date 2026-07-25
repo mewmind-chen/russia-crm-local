@@ -2,7 +2,7 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 28/38 个任务已完成；A3-03 `next_action` 已完成开发、验证、合并与生产发布；下一步 A3-04 消息和认领
+**状态：** 29/38 个任务已完成；A3-04 消息和认领已完成开发、验证、合并与生产发布；下一步 A3-05 RFQ、报价和订单边界
 **版本：** v1.8
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
@@ -806,6 +806,15 @@ AI 任务中心显示“活动提案/需要复核”，未点击确认且未写�
 - 渠道失败保留网页通知。
 - claim/return/reject 重复提交保持幂等。
 
+状态（2026-07-25）：已完成通知和认领闭环。新增 `crm_notification_deliveries`，将
+网页和企微投递拆分为独立状态、尝试次数、租约、错误和幂等键；企微不可用或未配置时
+保留网页未读通知。新增 `crm_intake_action_requests`，claim/return/reject 通过服务端
+幂等键安全重放，重复 claim 不重复创建客户。生产部署目标为合并 SHA
+`b6da19e8b018ba7d35629e6c1d32062eadee1664`，回滚点为 `bf15ad7e2de632a02d1858dd22cd72a74f8c3db2`；
+专项/受影响回归 64/64、完整回归 492/492、生产隔离验证 492/492，数据库
+`quick_check=ok`，通知和三类认领 smoke 通过。证据见
+`docs/evidence/a3-04-notifications-claims.md`。本轮完成后停止，下一项为 A3-05。
+
 ### A3-05 RFQ、报价和订单边界
 
 - 复用现有业务对象和阶段推进。
@@ -982,10 +991,10 @@ E0-01 生产基线
 | A3-01 | 已完成 | `sales_pack@v1` 认领后异步幂等入队、Worker 执行、客户详情摘要/切入点/风险/审核草稿、`SALES_PACK_READY` 内部通知和企微禁发完成；管理员面板提供四个持久化 AI 开关，环境变量硬门禁、管理员权限和审计完成；Worker 已纳入 launchd/部署/回滚清单；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；PR #66 合并集成、PR #67 合并 `main` @ `8de1076` 并完成生产 smoke；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`；下一步 A3-02 `action_proposal` |
 | A3-02 | 已完成 | `action_proposal@v1` 自然语言输入、异步队列/Worker、可编辑活动草稿、人工确认后复用现有 activity API、低置信度/缺字段阻断、通用复核防绕过和一次性消费幂等已完成；完整回归 480/480、语法/diff 检查通过；桌面与 390px 浏览器生成/回填及任务中心验收通过且未写活动；证据见 `docs/evidence/a3-02-action-proposal.md`；已合并并完成生产发布；下一步 A3-03 `next_action` |
 | A3-03 | 已完成 | `next_action@v1` 已接入活动/回复/会议/RFQ/报价事件，异步 Worker 生成 `needs_review` 建议；客户页可编辑并经独立采纳接口写入现有 next_action 字段，通用复核不能绕过，失败回退确定性 SLA；schema v11、消费审计、权限/owner scope/幂等和迁移完成；专项 24/24、完整回归 488/488、语法/diff 检查通过，桌面与 390px 验收通过；证据见 `docs/evidence/a3-03-next-action.md`；已合并 `main` 并完成生产 backup/quick_check、回滚确认、部署和 smoke，AI 开关显式开启；下一步 A3-04 消息和认领 |
+| A3-04 | 已完成 | 新增通知 web/wecom 独立投递状态、租约、失败记录和幂等键；企微失败/未配置时保留网页未读通知；claim/return/reject 新增服务端幂等重放，不重复创建客户；专项/受影响回归 64/64、完整回归 492/492、生产隔离验证 492/492，生产 `quick_check=ok`，current 为 `b6da19e8b018`、previous 回滚点为 `bf15ad7e2de6`；PR #73 已合并并发布；证据见 `docs/evidence/a3-04-notifications-claims.md`；下一步 A3-05 RFQ、报价和订单边界 |
 
-当前进度：38 个计划任务中已完成 28 个，剩余 10 个。A3-03 已完成从业务事件到
-人工采纳下一步建议的受控闭环：活动/回复/会议/RFQ/报价统一异步入队，AI 只生成
-结构化建议，授权员工可编辑并经独立采纳接口写入现有字段，确定性 SLA 和权限边界
-持续有效。完整回归 488/488、语法/diff 检查、桌面/390px 验收、生产备份/quick_check、
-回滚确认、部署和 smoke 均通过；证据见 `docs/evidence/a3-03-next-action.md`。
-下一项为阶段 3 A3-04 消息和认领，本轮不实现。
+当前进度：38 个计划任务中已完成 29 个，剩余 9 个。A3-04 已完成从内部通知投递到
+销售认领动作的受控闭环：网页/企微渠道独立投递，渠道降级不丢网页通知，claim/return/
+reject 服务端幂等且 claim 不重复创建客户。完整回归 492/492、生产备份/quick_check、
+回滚确认、部署和 smoke 均通过；证据见 `docs/evidence/a3-04-notifications-claims.md`。
+下一项为阶段 3 A3-05 RFQ、报价和订单边界，本轮不实现。
