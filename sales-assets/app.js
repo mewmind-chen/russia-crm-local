@@ -1177,7 +1177,8 @@
 
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
-    sales_pack: '销售资料包', prospect_discovery: 'Prospect', manager_evaluation: '经理评价', assistant_chat: '对话 AI',
+    sales_pack: '销售资料包', action_proposal: '活动提案', prospect_discovery: 'Prospect',
+    manager_evaluation: '经理评价', assistant_chat: '对话 AI',
   };
 
   function aiTaskFilters() {
@@ -2119,18 +2120,110 @@
   function customerOptions(selected = '') {
     return scopedAccounts().filter(item => !['lost'].includes(item.stage)).map(item => `<option value="${item.id}" ${item.id === selected ? 'selected' : ''}>${esc(item.company_name)} · ${esc(item.owner_name)}</option>`).join('');
   }
+
+  function setActivityType(activityType) {
+    state.activityType = activityType || '';
+    $$('.activity-type').forEach(item =>
+      item.classList.toggle('active', item.dataset.activity === state.activityType));
+    const form = $('#activityForm');
+    if (!form) return;
+    form.elements.activityType.value = state.activityType;
+    $('#rfqFields')?.classList.toggle('hidden', state.activityType !== 'rfq');
+  }
+
+  function setActivityField(form, name, value) {
+    const field = form?.elements?.[name];
+    if (field) field.value = String(value || '');
+  }
+
+  function proposalRequestId() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `action-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function applyActionProposal(task) {
+    const form = $('#activityForm');
+    const value = task?.result?.value;
+    if (!form || !value) throw new Error('活动提案没有可用结果');
+    setActivityType(value.activityType);
+    setActivityField(form, 'channel', value.channel);
+    setActivityField(form, 'outcome', value.outcome);
+    setActivityField(form, 'summary', value.summary);
+    setActivityField(form, 'nextAction', value.nextAction);
+    setActivityField(form, 'nextActionAt', String(value.nextActionAt || '').replace(' ', 'T').slice(0, 16));
+    setActivityField(form, 'proposalJobId', task.taskId);
+    const missingLabels = {
+      activityType: '本次动作', channel: '渠道', outcome: '结果',
+      summary: '简短记录', nextAction: '下一步动作', nextActionAt: '计划时间',
+    };
+    const missing = (value.missingFields || []).map(field => missingLabels[field] || field);
+    const confidence = Math.round(Number(value.confidence || 0) * 100);
+    const status = $('#actionProposalStatus');
+    status.className = `action-proposal-status ${confidence < 70 || missing.length ? 'warning' : 'ready'}`;
+    status.textContent = missing.length
+      ? `AI 草稿置信度 ${confidence}%。确认前请补充：${missing.join('、')}。`
+      : `AI 草稿置信度 ${confidence}%。请核对并修改，确认后才会写入客户时间线。`;
+    $('#activitySubmit').textContent = '确认并记录';
+  }
+
+  async function loadActionProposal(jobId) {
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      const payload = await api(`/api/sales-crm/ai/tasks/${encodeURIComponent(jobId)}`);
+      const task = payload.task;
+      if (task?.result && ['needs_review', 'succeeded'].includes(task.state)) return task;
+      if (['dead_letter', 'failed', 'blocked', 'cancelled'].includes(task?.state)) {
+        throw new Error(task.errorSummary || '活动提案生成失败');
+      }
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+    throw new Error('活动提案仍在处理中，请稍后重试');
+  }
+
+  async function generateActionProposal() {
+    const form = $('#activityForm');
+    const button = $('#actionProposalGenerate');
+    const status = $('#actionProposalStatus');
+    const input = $('#actionProposalInput')?.value.trim() || '';
+    const account = scopedAccounts().find(item => item.id === form?.elements?.customerId?.value);
+    if (!account) return toast('请先选择客户');
+    if (input.length < 3) return toast('请描述本次触达结果');
+    button.disabled = true;
+    status.className = 'action-proposal-status';
+    status.textContent = '正在整理活动字段…';
+    try {
+      const created = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(account.external_customer_id)}/action-proposals`, {
+        method: 'POST',
+        body: JSON.stringify({ input, clientRequestId: proposalRequestId() }),
+      });
+      const task = await loadActionProposal(created.job.id);
+      applyActionProposal(task);
+    } catch (error) {
+      status.className = 'action-proposal-status error';
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function openActivityModal(customerId = '') {
     state.activityType = 'email';
     openModal('记录客户动作', 'QUICK UPDATE · 30秒完成', `
       <form id="activityForm" class="form-grid two">
         <label class="span-2">客户<select name="customerId" required><option value="">请选择客户</option>${customerOptions(customerId)}</select></label>
+        ${customerAIEnabled() && can('use_ai_assistant') ? `<section class="action-proposal-compose span-2">
+          <div><strong>AI 整理触达结果</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
+          <textarea id="actionProposalInput" maxlength="4000" placeholder="例如：客户通过邮件回复，对STM32有兴趣，本周五整理BOM发给我，下周一上午跟进。"></textarea>
+          <button id="actionProposalGenerate" class="button secondary" type="button">整理为活动草稿</button>
+          <p id="actionProposalStatus" class="action-proposal-status" role="status" aria-live="polite"></p>
+        </section>` : ''}
+        <input type="hidden" name="proposalJobId" value="">
         <div class="span-2"><label>本次动作</label><div id="activityTypes" class="activity-types">${[
           ['email', '发送邮件'], ['call', '电话开发'], ['social', '社媒联系'], ['reply', '客户回复'],
           ['meeting', '视频会议'], ['manager_join', '管理者介入'], ['rfq', '收到询价'], ['negotiation', '商务谈判'], ['lost', '暂停/流失'],
         ].map(([key, label], index) => `<button type="button" class="activity-type ${index === 0 ? 'active' : ''}" data-activity="${key}">${label}</button>`).join('')}</div></div>
         <input type="hidden" name="activityType" value="email">
-        <label>渠道<select name="channel"><option>email</option><option>call</option><option>WhatsApp</option><option>Telegram</option><option>LinkedIn</option><option>video</option><option>展会</option><option>business</option></select></label>
-        <label>结果<select name="outcome"><option>已完成</option><option>有兴趣</option><option>需要跟进</option><option>未接通</option><option>暂无回复</option><option>明确拒绝</option></select></label>
+        <label>渠道<select name="channel"><option value="">请选择</option><option>email</option><option>call</option><option>WhatsApp</option><option>Telegram</option><option>LinkedIn</option><option>video</option><option>展会</option><option>business</option><option>other</option></select></label>
+        <label>结果<select name="outcome"><option value="">请选择</option><option>已完成</option><option>有兴趣</option><option>需要跟进</option><option>未接通</option><option>暂无回复</option><option>明确拒绝</option></select></label>
         <label class="span-2">简短记录<textarea name="summary" placeholder="记录客户反馈、需求或当前障碍"></textarea></label>
         <div id="rfqFields" class="span-2 form-grid two hidden">
           <label>询价编号<input name="reference" placeholder="如 RFQ-2026-0719"></label>
@@ -2142,7 +2235,7 @@
         <label>下一步动作<input name="nextAction" placeholder="例如：追踪客户BOM"></label>
         <label>计划时间<input name="nextActionAt" type="datetime-local" value="${dateInput(2)}"></label>
         <label class="span-2 check"><input name="managerRequired" type="checkbox"> 这是重点节点，需要管理者介入</label>
-        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存并更新阶段</button></div>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="activitySubmit" class="button primary">保存并更新阶段</button></div>
       </form>`);
   }
 
@@ -2652,13 +2745,9 @@
     }
     const retryAIJob = event.target.closest('[data-retry-ai-job]');
     if (retryAIJob) void retryCustomerFit(retryAIJob.dataset.retryAiJob);
+    if (event.target.closest('#actionProposalGenerate')) void generateActionProposal();
     const activity = event.target.closest('[data-activity]');
-    if (activity) {
-      state.activityType = activity.dataset.activity;
-      $$('.activity-type').forEach(item => item.classList.toggle('active', item === activity));
-      $('#activityForm [name=activityType]').value = state.activityType;
-      $('#rfqFields').classList.toggle('hidden', state.activityType !== 'rfq');
-    }
+    if (activity) setActivityType(activity.dataset.activity);
     if (event.target.closest('#quickUpdateBtn')) openActivityModal();
     if (event.target.closest('#newCustomerBtn')) openNewCustomerModal();
     if (event.target.closest('#drawerUpdateBtn')) openActivityModal(state.selectedCustomerId);

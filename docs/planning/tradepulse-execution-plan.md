@@ -2,8 +2,8 @@
 
 > 正式版本说明：本文件自 2026-07-24 起纳入正式产品仓库管理。后续进度、SHA、PR 和验收结果必须通过 GitHub PR 更新；`tradepulse-ai-crm` 中的同名文件仅作为历史镜像。
 
-**状态：** 26/38 个任务已完成；阶段 2 已完成；A3-01 `sales_pack` 与管理面板 AI 开关已完成；下一步 A3-02 `action_proposal`
-**版本：** v1.7
+**状态：** 27/38 个任务已完成；A3-02 `action_proposal` 已完成开发与本地验收，正在进入发布门；下一步 A3-03 `next_action`
+**版本：** v1.8
 **日期：** 2026-07-25
 **上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
@@ -769,6 +769,17 @@ AI 开关、API/Worker/合同/权限/UI/部署聚焦测试 50/50，完整回归 
 - 页面回显；员工确认后才调用现有 activity API。
 - 低置信度或字段不完整时保留草稿。
 
+状态（2026-07-25）：已完成开发与本地验收。新增严格 `action_proposal@v1` 合同，
+销售可在“记录客户动作”弹窗输入自然语言，由持久 AI 队列和独立 Worker 异步生成
+activity type、channel、outcome、summary、next action 和时间草稿。结果固定
+`reviewRequired=true`；页面回填后仍需员工核对、修改并点击“确认并记录”，才会调用现有
+`/activities` API。低置信度和缺失字段显示警告，字段未补全时服务端拒绝写入；通用 AI
+任务复核接口不能绕过活动表单，一次性消费记录保证同一提案只生成一条活动。完整回归
+480/480、语法和 `git diff --check` 通过；本地浏览器完成桌面与 390px 生成/回填验收，
+AI 任务中心显示“活动提案/需要复核”，未点击确认且未写入客户活动。证据见
+`docs/evidence/a3-02-action-proposal.md`。当前进入 PR、CI 和生产发布门；完成后停止，
+下一步为 A3-03 `next_action`，本轮不实现。
+
 ### A3-03 `next_action`
 
 - 新活动、回复、会议、RFQ、报价后异步触发。
@@ -957,10 +968,11 @@ E0-01 生产基线
 | A2-05 | 已完成 | 新增 `crm_intake_decisions` 决策历史，保存候选快照、AI 推荐、规则结果、人工最终决定、操作者和时间；bootstrap/入库队列/详情抽屉展示 Fit、readiness、priority、候选排名、阻断原因和三层裁决；销售端按 owner 范围脱敏；PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51) 已合并到 `codex/ai-integration` @ `92e64cc`，CI `test` 通过；专项 7/7、全量 437/437、语法/diff 检查通过；证据见 `docs/evidence/a2-05-intake-review-audit.md`；尚未部署；下一步 A2-06 验收门 |
 | A2-06 | 已完成 | 并发扫描幂等、owner scope/分页、AI 越权阻断、规则阻断、AI 故障回退和三角色权限验收通过；Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、全量 466/466、语法/diff 检查通过；本地 3101 管理员登录、`#intake`/后退和 390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并到 `main`、迁移或部署，生产 AI 开关保持关闭；下一步 A3-01 `sales_pack` |
 | A3-01 | 已完成 | `sales_pack@v1` 认领后异步幂等入队、Worker 执行、客户详情摘要/切入点/风险/审核草稿、`SALES_PACK_READY` 内部通知和企微禁发完成；管理员面板提供四个持久化 AI 开关，环境变量硬门禁、管理员权限和审计完成；Worker 已纳入 launchd/部署/回滚清单；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；PR #66 合并集成、PR #67 合并 `main` @ `8de1076` 并完成生产 smoke；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`；下一步 A3-02 `action_proposal` |
+| A3-02 | 已完成 | `action_proposal@v1` 自然语言输入、异步队列/Worker、可编辑活动草稿、人工确认后复用现有 activity API、低置信度/缺字段阻断、通用复核防绕过和一次性消费幂等已完成；完整回归 480/480、语法/diff 检查通过；桌面与 390px 浏览器生成/回填及任务中心验收通过且未写活动；证据见 `docs/evidence/a3-02-action-proposal.md`；正在进入 PR、CI 和生产发布门；下一步 A3-03 `next_action` |
 
-当前进度：38 个计划任务中已完成 26 个，剩余 12 个。A3-01 已在当前功能分支完成：
-销售认领后的资料包异步生成、客户详情展示、内部通知、Worker 生命周期接入和管理员 AI
-开关均已实现。聚焦 50/50、完整回归 476/476、语法检查和 `git diff --check` 通过。
-已合并到 `main` @ `8de1076` 并完成生产部署；部署前 CI、SQLite online backup、
-`quick_check`、current/previous 回滚点确认和 Worker smoke 均已通过。完成本任务后的下一步是阶段 3 A3-02
-`action_proposal`，随后 A3-03 `next_action`；本轮不实现下一项。
+当前进度：38 个计划任务中已完成 27 个，剩余 11 个。A3-02 已在
+`codex/a3-02-action-proposal` 完成自然语言触达结果到人工确认活动的完整受控流程。
+完整回归 480/480、语法检查、`git diff --check` 和桌面/390px 浏览器验收通过，且未在
+本地验收中确认业务写入。当前进入 PR、CI、生产数据库 online backup/quick_check、
+回滚点确认、部署和生产 smoke 门；完成 A3-02 后停止。下一项为阶段 3 A3-03
+`next_action`，本轮不实现。
