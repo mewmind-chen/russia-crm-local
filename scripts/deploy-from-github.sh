@@ -174,6 +174,7 @@ run_restarts() {
     com.russia-crm.recon-worker
     com.russia-crm.contact-worker-1
     com.russia-crm.contact-worker-2
+    com.russia-crm.ai-station-worker
   )
   for label in "${labels[@]}"; do
     if [[ -n "$RESTART_BIN" ]]; then

@@ -149,8 +149,10 @@ test('identity inspection blocks exactly the Recon and account-security policies
   assert.deepEqual(blockedSales, [
     'DELETE /users/:userId',
     'GET /ai/budgets',
+    'GET /ai/features',
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
+    'PATCH /ai/features/:featureKey',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
     'POST /accounts/:customerId/reassign',
@@ -160,6 +162,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /ai/bulk/retry',
     'POST /ai/customers/:customerId/enrichment/run',
     'POST /ai/customers/:customerId/stations/customer_fit/run',
+    'POST /ai/customers/:customerId/stations/sales_pack/run',
     'POST /ai/enrichment/:runId/cancel',
     'POST /ai/jobs/:jobId/cancel',
     'POST /ai/jobs/:jobId/retry',

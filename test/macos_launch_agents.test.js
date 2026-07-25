@@ -15,6 +15,7 @@ const codeLabels = [
   'com.russia-crm.recon-worker',
   'com.russia-crm.contact-worker-1',
   'com.russia-crm.contact-worker-2',
+  'com.russia-crm.ai-station-worker',
   'com.russia-crm.daily-enqueue',
   'com.russia-crm.daily-report',
   'com.russia-crm.completion-notifier',
@@ -161,6 +162,7 @@ test('renders code services through the stable current symlink', () => {
     'com.russia-crm.recon-worker',
     'com.russia-crm.contact-worker-1',
     'com.russia-crm.contact-worker-2',
+    'com.russia-crm.ai-station-worker',
   ]);
   for (const definition of definitions.filter(item => item.kind === 'code')) {
     const plist = renderPlist(definition);
@@ -305,6 +307,7 @@ test('auto deploy installer bootstraps code services before enabling deployment 
     }
     for (const label of [
       'com.russia-crm.server',
+      'com.russia-crm.ai-station-worker',
       'com.russia-crm.daily-enqueue',
       'com.russia-crm.daily-report',
       'com.russia-crm.completion-notifier',

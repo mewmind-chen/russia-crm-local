@@ -15,6 +15,7 @@ const { resolveCustomerEnrichmentFlags } = require('../lib/ai_stations/enrichmen
 const { dispatchPendingEnrichment } = require('../lib/ai_stations/enrichment/workflow');
 const { consumePendingEnrichmentEvent } = require('../lib/ai_stations/enrichment/events');
 const { resolveAIStationsEnabled } = require('../lib/ai_stations/routes');
+const { featureState, resolveAIHardFlags } = require('../lib/ai_stations/feature_flags');
 const { databasePath } = require('../lib/runtime_paths');
 
 const DEFAULT_EXECUTION_RESOURCES = Object.freeze({
@@ -111,6 +112,7 @@ async function main(options = {}) {
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const budgetConfiguration = budgetConfigurationFromEnvironment(env);
   const enrichmentConfiguration = enrichmentConfigurationFromEnvironment(env);
+  const hardFlags = resolveAIHardFlags({}, env);
   const worker = createAIStationWorker({
     openDb,
     workerId: env.CRM_AI_WORKER_ID,
@@ -127,14 +129,27 @@ async function main(options = {}) {
     budgetPolicies: budgetConfiguration.policies,
     executors: createEnrichmentExecutors(),
     beforeClaim: async ({ db, workerId }) => {
+      const features = featureState(db, hardFlags);
+      if (!features.ai_stations.effectiveEnabled) return null;
       scheduleContactReadinessForCompletedFits(db);
-      if (enrichmentConfiguration.enabled) {
+      if (enrichmentConfiguration.enabled
+          && features.customer_enrichment.effectiveEnabled
+          && features.customer_enrichment_auto_trigger.effectiveEnabled) {
         await dispatchPendingEnrichment(db, undefined, {
           dispatcherId: `${workerId}:customer-enrichment`,
         });
         return consumePendingEnrichmentEvent(db, `${workerId}:customer-enrichment-events`);
       }
       return null;
+    },
+    isJobEnabled: ({ db, job }) => {
+      const features = featureState(db, hardFlags);
+      if (!features.ai_stations.effectiveEnabled) return false;
+      if (job.station === 'sales_pack') return features.sales_pack.effectiveEnabled;
+      if (job.workflowId && String(job.workflowId).startsWith('ENR-')) {
+        return features.customer_enrichment.effectiveEnabled;
+      }
+      return true;
     },
     executorOptions: {
       identityResolver: resolveExplicitWebsiteIdentity,

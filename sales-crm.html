@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260724-11&ux62=1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-12&ux62=1">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -240,7 +240,7 @@
         </div>
         <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
           <div class="customer-ai-station-head">
-            <div><p class="eyebrow">AI CUSTOMER FIT</p><h3>AI 客户匹配</h3></div>
+            <div><p class="eyebrow">AI SALES ASSIST</p><h3>AI 客户分析与销售资料包</h3></div>
             <div id="customerAiStationActions" class="customer-ai-station-actions"></div>
           </div>
           <div id="customerAiStationBody" class="customer-ai-station-body"><span class="subtle">正在读取评分状态…</span></div>
@@ -349,6 +349,9 @@
               </div>
               <p id="assistantRuntimeStatus" class="assistant-runtime-status" role="status" aria-live="polite"></p>
               <div id="assistantRuntimeRows" class="assistant-runtime-rows"></div>
+              <div class="ai-feature-head"><div><strong>AI 功能开关</strong><span>环境变量是硬门禁；此处开关即时生效，无需重启。</span></div></div>
+              <p id="aiFeatureStatus" class="assistant-runtime-status" role="status" aria-live="polite"></p>
+              <div id="aiFeatureRows" class="ai-feature-rows"></div>
             </section>
             <article class="panel"><div id="userTable" class="data-table"></div></article>
         <article class="panel access-panel">
@@ -408,6 +411,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260724-11&ux62=1"></script>
+  <script src="/sales-assets/app.js?v=20260725-12&ux62=1"></script>
 </body>
 </html>
