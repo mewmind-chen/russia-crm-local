@@ -2,6 +2,7 @@
 
 日期：2026-07-25  
 分支：`codex/a3-01-sales-pack`
+发布：PR #66 合并集成；PR #67 合并 `main` @ `8de107697c6bb034a1cb139710fc5f189d4d9d49`
 
 ## 范围
 
@@ -35,9 +36,18 @@ node --check lib/ai_stations/worker.js
 git diff --check
 ```
 
-## 发布边界
+## 生产发布与 smoke
 
-本证据只证明代码和本地隔离运行时通过验收，不代表已进入生产。合并和部署前仍需
-GitHub CI、生产 SQLite online backup、`quick_check`、current/previous 回滚点确认、
-LaunchAgent Worker 状态检查；上线后需验证 `/healthz`、管理员面板开关、Worker、认领入队、
-客户详情资料包和 `SALES_PACK_READY` 通知，并确认企微未自动发送。
+- 生产四个硬门禁均已设为 `true`，数据库运行时四个开关均为 `enabled=1`。
+- 发布前 SQLite online backup：
+  `/Users/ylf/Desktop/projects/tradepulse-production/state/backups/a3-01-predeploy-20260725T004720Z.db`；
+  源库与备份 `PRAGMA quick_check` 均为 `ok`。
+- 生产 `current=8de107697c6b`，`previous=639c640dbc1d`；本地和公网 `/healthz`
+  均返回 `ok` 与 release SHA `8de107697c6bb034a1cb139710fc5f189d4d9d49`。
+- LaunchAgent `com.russia-crm.ai-station-worker` 为 running、keepalive；真实
+  `sales_pack` smoke job 进入 `needs_review`，结果 confidence `0.85`、`review_required=1`，
+  并写入 `SALES_PACK_READY`、`status=unread`、`wecom_status=disabled`。
+- 未登录访问 AI 功能 API 返回 `401 AUTH_REQUIRED`；生产页面包含 `aiFeatureRows` 和
+  版本化 AI 资源。管理员交互面板因现有浏览器会话已过期未代填密码，未绕过登录。
+
+本次完成 A3-01 后停止，下一项为 A3-02 `action_proposal`。

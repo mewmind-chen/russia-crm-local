@@ -758,8 +758,9 @@ AI 故障确定性回退和管理员/经理/销售权限均通过专项验收；
 队列但阻止新入队/新领取。Worker 已加入 launchd、部署和回滚服务清单。A3-01 专项测试、
 AI 开关、API/Worker/合同/权限/UI/部署聚焦测试 50/50，完整回归 476/476，语法和
 `git diff --check` 通过。证据见
-`docs/evidence/a3-01-sales-pack-and-ai-flags.md`。尚未合并 `main` 或部署生产；下一步
-A3-02 `action_proposal`。
+`docs/evidence/a3-01-sales-pack-and-ai-flags.md`。PR [#66](https://github.com/mewmind-chen/russia-crm-local/pull/66)
+已合并集成，发布 PR [#67](https://github.com/mewmind-chen/russia-crm-local/pull/67)
+已合并 `main` @ `8de1076` 并完成生产部署；下一步 A3-02 `action_proposal`。
 
 ### A3-02 `action_proposal`
 
@@ -955,11 +956,11 @@ E0-01 生产基线
 | A2-04 | 已完成 | 新增 `assignment_arbitration` 规则最终裁决：AI 仅作建议，事务内重读有效销售、权限、负荷和配额；一致且高置信可自动分配，AI 不可用确定性回退，冲突、低置信、高价值、风险、重复和跨团队进入经理审批或规则阻止；A2-03 快照 token 服务端 fail-closed 解析；PR [#49](https://github.com/mewmind-chen/russia-crm-local/pull/49) 已合并到 `codex/ai-integration` @ `4e4619e`，CI `test` 通过；聚焦 5/5、全量 435/435、语法/diff 检查通过；证据见 `docs/evidence/a2-04-assignment-arbitration.md`；尚未部署；下一步 A2-05 页面与审计 |
 | A2-05 | 已完成 | 新增 `crm_intake_decisions` 决策历史，保存候选快照、AI 推荐、规则结果、人工最终决定、操作者和时间；bootstrap/入库队列/详情抽屉展示 Fit、readiness、priority、候选排名、阻断原因和三层裁决；销售端按 owner 范围脱敏；PR [#51](https://github.com/mewmind-chen/russia-crm-local/pull/51) 已合并到 `codex/ai-integration` @ `92e64cc`，CI `test` 通过；专项 7/7、全量 437/437、语法/diff 检查通过；证据见 `docs/evidence/a2-05-intake-review-audit.md`；尚未部署；下一步 A2-06 验收门 |
 | A2-06 | 已完成 | 并发扫描幂等、owner scope/分页、AI 越权阻断、规则阻断、AI 故障回退和三角色权限验收通过；Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、全量 466/466、语法/diff 检查通过；本地 3101 管理员登录、`#intake`/后退和 390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并到 `main`、迁移或部署，生产 AI 开关保持关闭；下一步 A3-01 `sales_pack` |
-| A3-01 | 已完成 | `sales_pack@v1` 认领后异步幂等入队、Worker 执行、客户详情摘要/切入点/风险/审核草稿、`SALES_PACK_READY` 内部通知和企微禁发完成；管理员面板提供四个持久化 AI 开关，环境变量硬门禁、管理员权限和审计完成；Worker 已纳入 launchd/部署/回滚清单；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`；尚未合并到 `main` 或部署，下一步 A3-02 `action_proposal` |
+| A3-01 | 已完成 | `sales_pack@v1` 认领后异步幂等入队、Worker 执行、客户详情摘要/切入点/风险/审核草稿、`SALES_PACK_READY` 内部通知和企微禁发完成；管理员面板提供四个持久化 AI 开关，环境变量硬门禁、管理员权限和审计完成；Worker 已纳入 launchd/部署/回滚清单；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；PR #66 合并集成、PR #67 合并 `main` @ `8de1076` 并完成生产 smoke；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`；下一步 A3-02 `action_proposal` |
 
 当前进度：38 个计划任务中已完成 26 个，剩余 12 个。A3-01 已在当前功能分支完成：
 销售认领后的资料包异步生成、客户详情展示、内部通知、Worker 生命周期接入和管理员 AI
 开关均已实现。聚焦 50/50、完整回归 476/476、语法检查和 `git diff --check` 通过。
-尚未合并到 `main` 或部署生产；部署前仍需 CI、SQLite online backup、`quick_check`、
-current/previous 回滚点确认和 Worker smoke。完成本任务后的下一步是阶段 3 A3-02
+已合并到 `main` @ `8de1076` 并完成生产部署；部署前 CI、SQLite online backup、
+`quick_check`、current/previous 回滚点确认和 Worker smoke 均已通过。完成本任务后的下一步是阶段 3 A3-02
 `action_proposal`，随后 A3-03 `next_action`；本轮不实现下一项。
