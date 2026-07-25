@@ -33,18 +33,27 @@
 - 桌面页面显示工作站 `v1`、模型 `qwen3.7-flash`、Prompt `prompt-v1`、Schema `v1`、
   规则 `fit-rules-v3`、策略 `customer-fit-2026.07`、64 位上下文指纹和两个证据 ID。
 - 桌面 modal `scrollWidth=clientWidth=605`，页面无组件横向溢出。
-- 390px 单列追溯布局由 UI 静态回归覆盖；当前内置浏览器不能动态修改 viewport，
-  发布 smoke 需再次在可调整 viewport 的浏览器核对。
+- Chrome `390×844` 实际 viewport 下，文档宽度为 `375/375`，modal
+  `scrollWidth/clientWidth=335/335`，详情区为 `295/295`；版本字段按单列显示，
+  长上下文指纹和证据 ID 未造成横向溢出。
+- 桌面和 390px 页面控制台均无 warning 或 error。
 - 页面验收只使用测试账号和临时数据库，不读取或修改生产数据。
 
 ## 发布状态
 
 - 基线：`origin/main @ d03092ec8b257d24f63d4a0a0e7f7f64dc7e00d0`
 - 功能分支：`codex/a4-04-stage-gate`
-- 当前状态：开发和本地验收完成，待 PR、GitHub CI、合并、生产备份、`quick_check`、
-  部署和 local/public smoke。
+- PR [#87](https://github.com/mewmind-chen/russia-crm-local/pull/87) 通过 GitHub CI
+  并合并，合并 SHA 为 `e1d3e611f5ef4ca3978f6f1c1e601ab337b52915`。
+- 预发布备份 `crm-pre-e1d3e611f5ef-20260725T131513Z.db` 和自动部署备份
+  `crm-before-e1d3e611f5ef-20260725T131709Z-83318.db` 均为 `quick_check=ok`。
+- 生产 `current=e1d3e611f5ef`、`previous=d03092ec8b25`；活动库
+  `quick_check=ok`，schema version 为 16，`decision_trace_json` 列存在。
+- local/public `/healthz` 均报告完整目标 SHA；公网首页 200，未登录 bootstrap 401，
+  公网 HTML、JavaScript 和 CSS 已命中 v19 追溯资源。
+- 现有 AI Station、客户补全、自动触发、Qwen 在线和销售资料包运行时开关保持开启；
+  Qwen Batch 继续因价格/汇率未配置而保持运行时关闭，本任务未放宽该保护。
 
 ## 当前进度与下一项
 
-正式进度仍为 `34/38`，剩余 4 项。A4-04 只有在合并并完成生产发布后才计为完成；
-届时进度为 `35/38`，剩余 3 项，下一项为 `R5-01 影子运行`。
+正式进度为 `35/38`，剩余 3 项。阶段 4 已完成，下一项为 `R5-01 影子运行`。
