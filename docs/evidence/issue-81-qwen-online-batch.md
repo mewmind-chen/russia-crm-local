@@ -40,7 +40,7 @@
 
 - Qwen adapter、路由、模型策略、Schema fallback、Batch 生命周期、成本及 LaunchAgent
   均包含自动化测试。
-- 本地完整回归：`530/530`。
+- 本地完整回归：`531/531`。
 - 全部修改和新增 JavaScript `node --check`：通过。
 - `git diff --check`：通过。
 - 隔离管理员页面显示 Qwen 引擎状态、在线开关和 Batch 开关；390px 页面无页面级横向溢出。
@@ -50,10 +50,18 @@
 - Issue：[#81](https://github.com/mewmind-chen/russia-crm-local/issues/81)
 - 基线：`origin/main @ 2989bce`
 - 功能分支：`codex/issue-81-a4-03-governance`
-- PR、合并 SHA、生产配置、LaunchAgent、provider smoke 和 Issue 关闭：待发布后补充。
+- PR [#84](https://github.com/mewmind-chen/russia-crm-local/pull/84) 合并为 `a1e7043a2165`；
+  生产验收修复 PR [#85](https://github.com/mewmind-chen/russia-crm-local/pull/85) 合并为
+  `296edd268162bacf0728ca1e731053eeb458a034`，Issue #81 已关闭。
+- 生产 Qwen 在线硬门禁和运行时开关已开启。真实最小调用使用 `qwen3.7-plus` 返回简体中文，
+  并包含 provider request ID 与 usage。
+- Batch 硬门禁已开启并安装 `com.russia-crm.qwen-batch-worker`；因价格目录和 CNY→USD
+  汇率尚未配置，数据库运行时开关保持关闭。手动运行返回 `disabled`、未调用 provider、
+  未提交任务且退出码为 0。
+- 最终 `current=296edd268162`、`previous=a1e7043a2165`；活动库和上线备份
+  `quick_check` 均为 `ok`，local/public health 均报告最终 SHA。
 
 ## 结论
 
-Issue #81 的在线和 Batch 代码路径已完成本地验收。正式完成仍取决于 CI、生产备份与
-`quick_check`、回滚确认、部署、LaunchAgent 安装、local/public smoke 和最小 provider
-验证；在这些步骤完成前 Issue 保持开放。
+Issue #81 已完成并关闭。Qwen 在线通道已在生产通过真实 provider smoke；Batch 通道已部署，
+但保持运行时关闭，待管理员补齐有效价格目录和汇率后再通过面板开启。
