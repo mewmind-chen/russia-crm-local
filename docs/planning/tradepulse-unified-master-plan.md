@@ -763,7 +763,7 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 | 阶段 0：环境统一 | 已完成 | 生产 `2b55ed0fb7fc2c455199dd11e269cf93115ac325`；回滚 `f7bb248e91f2bfe7003dfe443e1d04f0ed1887de`；开发分支 `codex/ai-integration` | PR #15 已合并并自动部署；current、previous、state.json 一致；本地/公网健康返回目标 SHA，首页 200，数据库 WAL/quick_check=ok，候选验证 242/242，账号/权限/会话/AI router 摘要未变化；3100 独立开发实例登录、bootstrap、路径隔离和 242/242 测试通过 | `releases/f7bb248e91f2` + E0-08/E0-09 备份 | E0-01 至 E0-10 全部完成；下一步阶段 1 A1-01 `customer_fit`，尚未开始 AI 业务集成 |
 | 阶段 1：评分、Control Plane 与客户补全 | 已完成 | 生产 `92e9f609`；开发集成 `codex/ai-integration` @ `35341e8` | A1-01 至 A1-08 已完成既有门禁。A1-09.1 PR #28 完成最小客户事务和 DAG；A1-09.2 PR [#30](https://github.com/mewmind-chen/russia-crm-local/pull/30) 完成 evidence/provenance、去重和 identity；A1-09.3 PR [#32](https://github.com/mewmind-chen/russia-crm-local/pull/32) 完成 legacy adapter、预算归因、事务 completion event、租约恢复与取消；A1-09.4 PR [#34](https://github.com/mewmind-chen/russia-crm-local/pull/34) 完成字段提案保护、finalize、受保护 API、任务中心投影和客户 UI；A1-09.5 PR [#36](https://github.com/mewmind-chen/russia-crm-local/pull/36) 完成三类 E2E、6 Worker/20 跨客户竞争、租约/故障矩阵和隔离开发真实模型 smoke，最终聚焦 62/62、smoke/identity 14/14、完整回归 408/408、Python 检查、GitHub CI 与独立复审通过。生产 current/health 不变，AI Station、Worker 和 enrichment flags 仍关闭且未部署 | `releases/2b55ed0fb7fc` + 部署前备份 | A1-09 已完成；下一步阶段 2 A2-01 扩展合同 |
 | 阶段 2：判断分发 | 已完成 | 集成基线 `codex/ai-integration` @ `92e64cc`，当前功能分支 `codex/issue-62-ux-alignment` | A2-01 至 A2-05 已合并；A2-06 五项验收门通过，Issue #62 页面与导航体验对齐完成；专项 7/7、受影响回归 18/18、完整回归 466/466、语法/diff 检查及本地管理员/390px smoke 通过；证据见 `docs/evidence/issue-62-a2-06-acceptance.md`；尚未合并 `main`、迁移或部署，生产 current/health、AI Station、Worker 和 flags 未变化 | 工作站 feature flag | A2-06 已完成；下一步阶段 3 A3-01 `sales_pack` |
-| 阶段 3：销售执行 | 进行中 | 当前功能分支 `codex/a3-01-sales-pack` | A3-01 完成销售资料包异步生成、客户详情展示、内部通知、Worker 生命周期和管理员 AI 运行时开关；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；尚未合并 `main` 或部署；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md` | 工作站 feature flag | A3-01 已完成；下一步 A3-02 `action_proposal`；外发仍需人工确认 |
+| 阶段 3：销售执行 | 进行中 | `main` @ `8de1076`；功能分支 `codex/a3-01-sales-pack` | A3-01 完成销售资料包异步生成、客户详情展示、内部通知、Worker 生命周期和管理员 AI 运行时开关；聚焦 50/50、完整回归 476/476、语法/diff 检查通过；PR #66/#67 已合并，生产部署、健康检查、Worker smoke 和内部通知 smoke 通过；证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md` | 工作站 feature flag + previous `639c640` | A3-01 已完成；下一步 A3-02 `action_proposal`；外发仍需人工确认 |
 | 阶段 4：经理与反馈 | 未开始 | 待填写 | 待填写 | 模型/提示词旧版本 | 禁止在线自我修改 |
 | 阶段 5：生产试运行 | 未开始 | 待填写 | 待填写 | previous release + flags | 分批开放 |
 
@@ -772,7 +772,8 @@ Control Plane 不取代现有 AI router：Router 决定一次模型调用使用�
 Worker 生命周期接入和管理员 AI 运行时开关；环境变量仍是不可绕过的硬门禁，关闭运行时开关
 只阻止新入队/新领取并保留已有队列，通知不会自动发送企微。聚焦 50/50、完整回归
 476/476、语法/diff 检查通过，证据见 `docs/evidence/a3-01-sales-pack-and-ai-flags.md`。
-尚未合并 `main`、执行生产
-迁移或部署；部署前需完成 CI、SQLite online backup、`quick_check`、回滚版本与 Worker
-smoke。完成后的下一步是阶段 3 A3-02 `action_proposal`，本轮不实现下一项。
+已合并 `main` @ `8de1076` 并完成生产部署；四个生产硬门禁均为开启，`current=8de1076`、
+`previous=639c640`，健康检查和 `quick_check` 通过，真实 `sales_pack` smoke 进入
+`needs_review` 并写入 `SALES_PACK_READY`（`wecom_status=disabled`）。完成后的下一步是
+阶段 3 A3-02 `action_proposal`，本轮不实现下一项。
 任何范围、目录、数据模型、上线门或时间目标的改变，都必须先修改本文档并重新确认，不能只在临时消息中改变执行方向。
