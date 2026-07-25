@@ -63,7 +63,7 @@ function evidenceInput(run, overrides = {}) {
 test('current AI schema retains evidence and field provenance tables', t => {
   const fx = fixture();
   t.after(() => fx.db.close());
-  assert.equal(AI_SCHEMA_VERSION, 15);
+  assert.equal(AI_SCHEMA_VERSION, 16);
   const tables = new Set(fx.db.prepare(`SELECT name FROM sqlite_master
     WHERE type='table' AND name IN ('crm_ai_enrichment_evidence','crm_ai_field_provenance')`).all()
     .map(row => row.name));

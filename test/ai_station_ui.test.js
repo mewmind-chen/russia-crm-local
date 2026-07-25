@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260725-18/);
-  assert.match(html, /app\.js\?v=20260725-18/);
+  assert.match(html, /app\.css\?v=20260725-19/);
+  assert.match(html, /app\.js\?v=20260725-19/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {
@@ -100,6 +100,16 @@ test('AI task center has permission-scoped filters, pagination, details and oper
   assert.match(app, /保留上次成功加载的历史任务/);
   assert.match(css, /\.ai-task-filters/);
   assert.match(css, /\.ai-task-degraded/);
+});
+
+test('AI task detail exposes decision versions and evidence trace without prompt content', () => {
+  for (const label of [
+    '决策版本与证据', '工作站版本', '模型', 'Prompt 版本', 'Schema 版本',
+    '规则版本', '策略版本', '上下文指纹', '证据 ID', '有效状态',
+  ]) assert.match(app, new RegExp(label));
+  assert.match(app, /task\.decisionTrace/);
+  assert.match(css, /\.ai-task-trace-values/);
+  assert.doesNotMatch(app, /trace\.promptContent|trace\.systemPolicy|trace\.strategyConfig/);
 });
 
 test('notification center exposes unread counts, scoped read actions and customer navigation', () => {

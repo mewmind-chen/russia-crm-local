@@ -168,8 +168,22 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
     }],
   });
   assert.ok(body.task.timeline.some(item => item.kind === 'attempt_finished'));
+  assert.deepEqual(body.task.decisionTrace, {
+    stationVersion: 'v1',
+    model: 'gpt-test',
+    promptVersion: 'v1',
+    schemaVersion: 'v1',
+    ruleVersion: 'v1',
+    strategyVersion: '',
+    contextHash: context.contextHash,
+    evidenceIds: context.evidenceIds,
+    generatedAt: body.task.result.generatedAt,
+    stale: false,
+    staleAt: '',
+    staleReason: '',
+  });
   const serialized = JSON.stringify(body);
-  assert.doesNotMatch(serialized, /worker-secret|fullPrompt|leaseOwner|input_json|idempotency/i);
+  assert.doesNotMatch(serialized, /worker-secret|fullPrompt|leaseOwner|input_json|idempotency|systemPolicy|strategyConfig/i);
 });
 
 test('review action is separately authorized, audited and finalizes a needs-review task', async t => {
