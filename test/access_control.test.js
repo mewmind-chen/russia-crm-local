@@ -160,6 +160,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /accounts/:customerId/trash',
     'POST /ai/bulk/cancel',
     'POST /ai/bulk/retry',
+    'POST /ai/customers/:customerId/action-proposals',
     'POST /ai/customers/:customerId/enrichment/run',
     'POST /ai/customers/:customerId/stations/customer_fit/run',
     'POST /ai/customers/:customerId/stations/sales_pack/run',
