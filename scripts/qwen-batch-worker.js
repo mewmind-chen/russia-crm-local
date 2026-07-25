@@ -194,12 +194,18 @@ async function runOnce(options = {}) {
       WHERE state IN ('submitted','running','importing','cancel_requested') ORDER BY created_at,id`).all();
     const polled = [];
     for (const run of active) polled.push(await coordinator.pollAndImport(run.id));
-    const submitted = options.pollOnly
-      ? null
-      : await coordinator.submitReady({
-        dryRun: Boolean(options.dryRun),
-        ignoreSchedule: Boolean(options.ignoreSchedule),
-      });
+    let submitted = null;
+    if (!options.pollOnly) {
+      try {
+        submitted = await coordinator.submitReady({
+          dryRun: Boolean(options.dryRun),
+          ignoreSchedule: Boolean(options.ignoreSchedule),
+        });
+      } catch (error) {
+        if (error?.code !== 'AI_BATCH_DISABLED') throw error;
+        submitted = { status: 'disabled' };
+      }
+    }
     return { ok: true, polled, submitted, reconciliation: coordinator.reconcile() };
   } finally {
     if (close) db.close();

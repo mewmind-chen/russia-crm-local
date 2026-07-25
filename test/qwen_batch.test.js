@@ -13,7 +13,7 @@ const {
   createQwenBatchProvider,
   withinSchedule,
 } = require('../lib/ai_stations/qwen_batch');
-const { workerIdFromEnvironment } = require('../scripts/qwen-batch-worker');
+const { runOnce, workerIdFromEnvironment } = require('../scripts/qwen-batch-worker');
 
 function fixture() {
   const db = new Database(':memory:');
@@ -73,6 +73,27 @@ test('Batch policy is explicit and schedule uses the configured timezone', () =>
   assert.equal(withinSchedule('2026-07-24T18:20:00.000Z', '02:00', 'Asia/Shanghai'), false);
   assert.equal(workerIdFromEnvironment({}, 'crm host/1'), 'qwen-batch-crm-host-1');
   assert.equal(workerIdFromEnvironment({ CRM_AI_QWEN_BATCH_WORKER_ID: 'batch-production-1' }, 'ignored'), 'batch-production-1');
+});
+
+test('disabled Qwen Batch worker exits cleanly without calling the provider', async () => {
+  const db = fixture();
+  const result = await runOnce({
+    db,
+    env: {
+      CRM_AI_QWEN_BATCH_ENABLED: 'true',
+      CRM_AI_QWEN_BATCH_SCHEDULE: '02:00',
+      CRM_AI_QWEN_BATCH_TIMEZONE: 'Asia/Shanghai',
+    },
+    provider: {
+      submit: async () => assert.fail('disabled Batch must not submit'),
+      poll: async () => assert.fail('empty Batch queue must not poll'),
+    },
+    ignoreSchedule: true,
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.polled, []);
+  assert.deepEqual(result.submitted, { status: 'disabled' });
+  db.close();
 });
 
 test('Qwen Batch provider uploads JSONL, creates a file-backed batch and downloads both result files', async () => {
