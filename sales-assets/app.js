@@ -46,6 +46,9 @@
     assistantRuntime: null,
     assistantRuntimeError: '',
     assistantRuntimePending: false,
+    aiFeatures: null,
+    aiFeaturesError: '',
+    aiFeaturePending: '',
     research: {
       pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
@@ -130,6 +133,9 @@
   }
   function customerAIEnabled() {
     return Boolean(state.data?.features?.aiStations);
+  }
+  function salesPackEnabled() {
+    return Boolean(state.data?.features?.salesPack);
   }
   function roleLabel(role) {
     return ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[role] || role || '—';
@@ -264,6 +270,9 @@
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
       state.assistantRuntimePending = false;
+      state.aiFeatures = null;
+      state.aiFeaturesError = '';
+      state.aiFeaturePending = '';
       resetResearchState();
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
@@ -271,7 +280,10 @@
       populateFilters();
       renderAll();
       renderImpersonationBanner();
-      if (can('manage_users') && !state.data.impersonation) void loadAssistantRuntime();
+      if (can('manage_users') && !state.data.impersonation) {
+        void loadAssistantRuntime();
+        void loadAIFeatures();
+      }
       const requestedView = location.hash.replace(/^#/, '');
       const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
@@ -936,6 +948,34 @@
     </div>${evidence ? `<details class="customer-ai-evidence"><summary>评分证据 · ${payload.evidence.length}</summary><ul>${evidence}</ul></details>` : ''}`;
   }
 
+  function renderSalesPack(payload) {
+    if (!salesPackEnabled() && !payload?.result && !payload?.job) return '';
+    const job = payload?.job;
+    const result = payload?.result;
+    const status = payload?.stale ? ['资料已变化', 'amber'] : (aiJobLabels[job?.state] || ['未生成', 'gray']);
+    if (!result) {
+      return `<section class="sales-pack"><div class="sales-pack-title"><strong>销售资料包</strong><span class="pill ${status[1]}">${esc(status[0])}</span></div>
+        <p class="subtle">${esc(job?.errorSummary || '领取客户后会自动生成，也可手动发起。')}</p></section>`;
+    }
+    const value = result.value || {};
+    const entries = (value.entryPoints || []).map(item => `<li>${esc(item)}</li>`).join('');
+    const risks = (value.risks || []).map(item => `<li>${esc(item)}</li>`).join('');
+    const evidence = (payload.evidence || []).map(item => `<li><strong>${esc(item.sourceTitle || item.field || item.sourceTable)}</strong><p>${esc(item.value)}</p></li>`).join('');
+    return `<section class="sales-pack">
+      <div class="sales-pack-title"><strong>销售资料包</strong><span class="pill ${status[1]}">${esc(status[0])}</span><small>置信度 ${Math.round(Number(value.confidence || 0) * 100)}%</small></div>
+      <p class="sales-pack-summary">${esc(value.summary || '')}</p>
+      <div class="sales-pack-grid">
+        <div><strong>建议切入点</strong><ul>${entries || '<li>暂无</li>'}</ul></div>
+        <div><strong>风险与注意项</strong><ul>${risks || '<li>暂无</li>'}</ul></div>
+      </div>
+      <div class="sales-pack-draft"><div><strong>触达草稿</strong><span>${esc(value.draft?.channel || 'other')} · 仅供人工审核，不会自动发送</span></div>
+        ${value.draft?.subject ? `<label>主题<input readonly value="${esc(value.draft.subject)}"></label>` : ''}
+        <label>正文<textarea readonly rows="6">${esc(value.draft?.body || '')}</textarea></label>
+      </div>
+      ${evidence ? `<details class="customer-ai-evidence"><summary>资料包证据 · ${payload.evidence.length}</summary><ul>${evidence}</ul></details>` : ''}
+    </section>`;
+  }
+
   function renderCustomerAI() {
     if (!customerAIEnabled()) return;
     const body = $('#customerAiStationBody');
@@ -943,14 +983,20 @@
     if (!body || !actions) return;
     const payload = state.customerAi;
     const job = payload?.job;
+    const salesPack = payload?.salesPack;
+    const salesPackJob = salesPack?.job;
     const enrichment = state.customerEnrichment || state.customerEnrichmentLastSuccess;
-    actions.innerHTML = job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">任务详情</button>` : '';
+    actions.innerHTML = [
+      salesPackJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(salesPackJob.id)}">资料包任务</button>` : '',
+      job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">评分任务</button>` : '',
+    ].join('');
     if (state.customerAiLoading && !payload && !enrichment) {
       body.innerHTML = '<span class="subtle">正在读取评分与资料补全状态…</span>';
       return;
     }
     const result = payload?.result;
     const canRun = can('use_ai_assistant') && !state.data?.impersonation;
+    const canRunSalesPack = canRun && salesPackEnabled() && ['view_contacts', 'view_recon'].every(can);
     const canStartEnrichment = canRun && ['run_recon', 'view_recon', 'view_contacts'].every(can);
     const run = enrichment?.run;
     if (canStartEnrichment && (!run || ENRICHMENT_TERMINAL_STATES.has(run.state))) {
@@ -970,16 +1016,22 @@
             : '生成评分';
       actions.insertAdjacentHTML('afterbegin', `<button class="button ${retryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${retryable ? `data-retry-ai-job="${esc(job.id)}"` : 'data-run-customer-fit'}>${label}</button>`);
     }
-    body.innerHTML = `${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
+    const packRetryable = ['retry_wait', 'dead_letter', 'blocked', 'cancelled'].includes(salesPackJob?.state);
+    if (canRunSalesPack && (packRetryable || !salesPack?.result || salesPack?.stale)) {
+      const label = state.customerAiPending ? '处理中…' : packRetryable ? '重试资料包' : salesPack?.result ? '重新生成资料包' : '生成销售资料包';
+      actions.insertAdjacentHTML('afterbegin', `<button class="button ${packRetryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${packRetryable ? `data-retry-ai-job="${esc(salesPackJob.id)}"` : 'data-run-sales-pack'}>${label}</button>`);
+    }
+    body.innerHTML = `${renderSalesPack(salesPack)}${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
   }
 
   function scheduleCustomerAIPoll() {
     clearTimeout(state.customerAiTimer);
     state.customerAiTimer = null;
     const fitPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state);
+    const salesPackPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.salesPack?.job?.state);
     const enrichmentState = (state.customerEnrichment || state.customerEnrichmentLastSuccess)?.run?.state;
     const enrichmentPending = enrichmentState && !ENRICHMENT_TERMINAL_STATES.has(enrichmentState);
-    if ((!fitPending && !enrichmentPending) || !state.customerProfileExternalId
+    if ((!fitPending && !salesPackPending && !enrichmentPending) || !state.customerProfileExternalId
         || state.customerAiPollCount >= CUSTOMER_AI_MAX_POLLS) return;
     state.customerAiPollCount += 1;
     state.customerAiTimer = setTimeout(() => void loadCustomerAI(state.customerProfileExternalId, { quiet: true }), 2500);
@@ -1088,6 +1140,24 @@
     }
   }
 
+  async function runSalesPack() {
+    const customerId = state.customerProfileExternalId;
+    if (!salesPackEnabled() || !customerId || state.customerAiPending) return;
+    state.customerAiPending = true;
+    state.customerAiPollCount = 0;
+    renderCustomerAI();
+    try {
+      await api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/stations/sales_pack/run`, { method: 'POST', body: '{}' });
+      await loadCustomerAI(customerId, { quiet: true });
+    } catch (error) {
+      state.customerAiError = error.message;
+      renderCustomerAI();
+    } finally {
+      state.customerAiPending = false;
+      renderCustomerAI();
+    }
+  }
+
   async function retryCustomerFit(jobId) {
     if (!customerAIEnabled() || !jobId || state.customerAiPending) return;
     state.customerAiPending = true;
@@ -1107,7 +1177,7 @@
 
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
-    prospect_discovery: 'Prospect', manager_evaluation: '经理评价', assistant_chat: '对话 AI',
+    sales_pack: '销售资料包', prospect_discovery: 'Prospect', manager_evaluation: '经理评价', assistant_chat: '对话 AI',
   };
 
   function aiTaskFilters() {
@@ -1629,6 +1699,43 @@
     }).join('');
   }
 
+  const aiFeatureLabels = {
+    ai_stations: 'AI 工作站',
+    customer_enrichment: '客户资料补全',
+    customer_enrichment_auto_trigger: '客户补全自动触发',
+    sales_pack: '销售资料包',
+  };
+
+  function syncBootstrapFeatures(features) {
+    if (!state.data?.features || !features) return;
+    state.data.features.aiStations = Boolean(features.ai_stations?.effectiveEnabled);
+    state.data.features.customerEnrichment = Boolean(features.customer_enrichment?.effectiveEnabled);
+    state.data.features.customerEnrichmentAutoTrigger = Boolean(features.customer_enrichment_auto_trigger?.effectiveEnabled);
+    state.data.features.salesPack = Boolean(features.sales_pack?.effectiveEnabled);
+    $('#customerAiStation')?.classList.toggle('hidden', !customerAIEnabled());
+  }
+
+  function renderAIFeatures() {
+    const rows = $('#aiFeatureRows');
+    const status = $('#aiFeatureStatus');
+    if (!rows || !status) return;
+    const features = state.aiFeatures;
+    status.textContent = state.aiFeaturesError || (!features ? '正在加载功能开关…' : '开关变更会立即影响新任务的入队和领取。');
+    if (!features) {
+      rows.innerHTML = '';
+      return;
+    }
+    rows.innerHTML = Object.keys(aiFeatureLabels).map(key => {
+      const feature = features[key] || {};
+      const pending = state.aiFeaturePending === key;
+      const disabled = pending || !feature.hardEnabled;
+      return `<label class="ai-feature-row">
+        <span><strong>${esc(aiFeatureLabels[key])}</strong><small>${feature.hardEnabled ? (feature.effectiveEnabled ? '运行中' : '已暂停') : `${esc(feature.environmentVariable)} 未开启`}</small></span>
+        <input type="checkbox" data-ai-feature="${esc(key)}" ${feature.runtimeEnabled ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${esc(aiFeatureLabels[key])}">
+      </label>`;
+    }).join('');
+  }
+
   async function loadAssistantRuntime() {
     if (!can('manage_users') || state.data?.impersonation) return;
     state.assistantRuntimeError = '';
@@ -1639,6 +1746,42 @@
       state.assistantRuntimeError = assistantRuntimeError(error.message || '无法加载 AI 引擎状态');
     }
     renderAssistantRuntime();
+  }
+
+  async function loadAIFeatures() {
+    if (!can('manage_users') || state.data?.impersonation) return;
+    state.aiFeaturesError = '';
+    try {
+      const response = await api('/api/sales-crm/ai/features');
+      state.aiFeatures = response.features || {};
+      syncBootstrapFeatures(state.aiFeatures);
+    } catch (error) {
+      state.aiFeatures = null;
+      state.aiFeaturesError = assistantRuntimeError(error.message || '无法加载 AI 功能开关');
+    }
+    renderAIFeatures();
+  }
+
+  async function setAIFeature(key, enabled) {
+    if (state.aiFeaturePending || !can('manage_users')) return;
+    state.aiFeaturePending = key;
+    state.aiFeaturesError = '';
+    renderAIFeatures();
+    try {
+      const response = await api(`/api/sales-crm/ai/features/${encodeURIComponent(key)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      });
+      state.aiFeatures = response.features || state.aiFeatures;
+      syncBootstrapFeatures(state.aiFeatures);
+      toast(`${aiFeatureLabels[key] || key}已${enabled ? '开启' : '关闭'}`);
+    } catch (error) {
+      state.aiFeaturesError = assistantRuntimeError(error.message || '无法更新 AI 功能开关');
+      await loadAIFeatures();
+    } finally {
+      state.aiFeaturePending = '';
+      renderAIFeatures();
+    }
   }
 
   async function setAssistantRuntimeMode(mode) {
@@ -2707,6 +2850,7 @@
     if (event.target.closest('#assistantRuntimeRecheck')) {
       await recheckAssistantRuntime();
     }
+    if (event.target.closest('[data-run-sales-pack]')) await runSalesPack();
     if (event.target.closest('#maintenancePreviewBtn')) {
       try { await previewMaintenance(); } catch (error) { toast(error.message); }
     }
@@ -2738,6 +2882,7 @@
 
   document.addEventListener('change', event => {
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
+    if (event.target.matches('[data-ai-feature]')) void setAIFeature(event.target.dataset.aiFeature, event.target.checked);
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
     if (event.target.matches('[data-select-customer]')) {
       const customerId = event.target.dataset.selectCustomer;

@@ -13,8 +13,25 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260724-11/);
-  assert.match(html, /app\.js\?v=20260724-11/);
+  assert.match(html, /app\.css\?v=20260725-12/);
+  assert.match(html, /app\.js\?v=20260725-12/);
+});
+
+test('sales pack UI exposes evidence-backed drafts without any send action', () => {
+  assert.match(app, /stations\/sales_pack\/run/);
+  for (const field of ['summary', 'entryPoints', 'risks', 'draft', 'salesPack']) {
+    assert.match(app, new RegExp(field));
+  }
+  assert.match(app, /仅供人工审核，不会自动发送/);
+  assert.doesNotMatch(app, /data-send-sales-pack|sendSalesPack|autoSendSalesPack/);
+});
+
+test('administrator AI feature switches expose hard and runtime state', () => {
+  assert.match(html, /id="aiFeatureRows"/);
+  assert.match(app, /\/api\/sales-crm\/ai\/features/);
+  assert.match(app, /hardEnabled/);
+  assert.match(app, /runtimeEnabled/);
+  assert.match(app, /effectiveEnabled/);
 });
 
 test('customer fit UI reads, runs and retries only through Sales CRM APIs', () => {
