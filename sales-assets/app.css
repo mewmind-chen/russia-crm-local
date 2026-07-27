@@ -32,6 +32,7 @@
 .permission-editor legend{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;padding:0 6px}
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .permission-check{display:flex;gap:6px;align-items:center;font-size:11px;color:#435149}
+.permission-check small{display:block;color:var(--muted);font-size:9px;line-height:1.45;margin-top:2px}
 @media(max-width:780px){.permission-override-row{grid-template-columns:1fr}.permission-override-row select{width:100%}.permission-grid{grid-template-columns:1fr 1fr}.assignment-actions{flex-wrap:wrap}.access-panel .panel-head{flex-wrap:wrap}}
 
 /* Identity inspection banner */

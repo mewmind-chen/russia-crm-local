@@ -14,7 +14,7 @@
 | `view_contacts` | 负责人线索 | people/contact state; Sales people; Recon result/report details; contact fields in bootstrap/AI | allowed IDs; false 时移除联系人字段、报告/证据链接及可能嵌入联系人的自由叙述，并禁止 AI 直接抓取 URL | Wu Wei cannot receive contact data; Sales bootstrap cross-permissions; assistant scope suite |
 | `view_recon` | Recon 情报 | result/report/monitor; Sales recon; AI report/vector context | allowed external customer IDs; report details also require `view_contacts` | assistant never retrieves Recon rows |
 | `view_pipeline` | 推进管道 | bootstrap account funnel collections | allowed account IDs | Sales bootstrap collection cropping |
-| `view_alerts` | 异常与介入 | bootstrap alerts | allowed account IDs | bootstrap permission cropping |
+| `view_alerts` | 今日待办 | bootstrap alerts | 销售仅本人负责客户及分配线索；经理/管理员沿用现有团队范围 | bootstrap permission cropping |
 | `view_insights` | 经理评价 | bootstrap evaluations/insights | allowed account IDs | bootstrap permission cropping |
 | `view_team` | 销售能力 | bootstrap team report | approved team aggregate | bootstrap permission cropping |
 | `view_markets` | 市场策略 | bootstrap market report | approved aggregate | bootstrap permission cropping |

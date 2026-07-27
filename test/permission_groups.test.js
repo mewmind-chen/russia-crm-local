@@ -76,3 +76,51 @@ test('reinstall adds new permissions to system groups without replacing existing
   assert.equal(manager.view_dashboard, false);
   db.close();
 });
+
+test('sales default alert migration is recorded once and preserves personal deny', () => {
+  const db = legacyDb();
+  db.exec(`
+    ALTER TABLE sales_users ADD COLUMN permission_group_id TEXT NOT NULL DEFAULT '';
+    CREATE TABLE permission_groups (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT NOT NULL DEFAULT '',
+      role_key TEXT NOT NULL, permissions_json TEXT NOT NULL, system_key TEXT UNIQUE,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE user_permission_overrides (
+      user_id TEXT NOT NULL, permission_key TEXT NOT NULL, effect TEXT NOT NULL,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      PRIMARY KEY(user_id,permission_key)
+    );
+  `);
+  const oldSalesPermissions = { ...ROLE_PERMISSIONS.sales, view_alerts: false };
+  db.prepare(`INSERT INTO permission_groups
+    (id,name,role_key,permissions_json,system_key,created_at,updated_at)
+    VALUES ('PGRP-SALES-DEFAULT','sales default','sales',?,'sales-default','before','before')`)
+    .run(JSON.stringify(oldSalesPermissions));
+  db.prepare('INSERT INTO sales_users VALUES (?,?,1,?,?)')
+    .run('INHERIT', 'sales', '{}', 'PGRP-SALES-DEFAULT');
+  db.prepare('INSERT INTO sales_users VALUES (?,?,1,?,?)')
+    .run('DENIED', 'sales', '{}', 'PGRP-SALES-DEFAULT');
+  db.prepare(`INSERT INTO user_permission_overrides
+    VALUES ('DENIED','view_alerts','deny','before','before')`).run();
+
+  installPermissionGroups(db);
+  assert.equal(effectivePermissionsFor(db, 'INHERIT').view_alerts, true);
+  assert.equal(effectivePermissionsFor(db, 'DENIED').view_alerts, false);
+  const migration = db.prepare(`SELECT group_id,before_json,after_json
+    FROM permission_group_migrations WHERE migration_key=?`)
+    .get('2026-07-27-sales-default-view-alerts');
+  assert.equal(migration.group_id, 'PGRP-SALES-DEFAULT');
+  assert.equal(JSON.parse(migration.before_json).view_alerts, false);
+  assert.equal(JSON.parse(migration.after_json).view_alerts, true);
+
+  const group = db.prepare("SELECT permissions_json FROM permission_groups WHERE system_key='sales-default'").get();
+  const manuallyDisabled = { ...JSON.parse(group.permissions_json), view_alerts: false };
+  db.prepare("UPDATE permission_groups SET permissions_json=? WHERE system_key='sales-default'")
+    .run(JSON.stringify(manuallyDisabled));
+  installPermissionGroups(db);
+  assert.equal(JSON.parse(db.prepare("SELECT permissions_json FROM permission_groups WHERE system_key='sales-default'")
+    .get().permissions_json).view_alerts, false);
+  assert.equal(db.prepare('SELECT COUNT(*) count FROM permission_group_migrations').get().count, 1);
+  db.close();
+});
