@@ -11,10 +11,11 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'
 const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
 const access = fs.readFileSync(path.join(__dirname, '..', 'lib', 'access_control.js'), 'utf8');
 
-test('Issue #62 funnel drill-down and role landing preserve the two explicit metrics', () => {
+test('Issue #62 funnel drill-down remains while unified intake defaults to all', () => {
   assert.match(js, /到达过该阶段的客户数/);
   assert.match(js, /stageReached/);
-  assert.match(js, /salesLanding/);
+  assert.doesNotMatch(js, /salesLanding/);
+  assert.match(js, /canonicalView === 'intake' \? '' : state\.intakeStatus/);
   assert.match(js, /navIntakeLabel/);
 });
 
@@ -42,7 +43,8 @@ test('Issue #62 profile keeps one AI entry and a direct follow-up action', () =>
 });
 
 test('Issue #62 navigation restores browser history and mobile affordances', () => {
-  assert.match(js, /history\.pushState\(null, '', `#\$\{view\}`\)/);
+  assert.match(js, /history\.pushState\(null, '', `#\$\{canonicalView\}`\)/);
+  assert.match(js, /history\.replaceState\(null, '', `#\$\{canonicalView\}`\)/);
   assert.match(js, /window\.scrollTo\?\.\(0, 0\)/);
   assert.match(html, /href="#dashboard"/);
   assert.match(css, /左右滑动查看更多/);

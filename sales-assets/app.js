@@ -429,10 +429,7 @@
       const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
       const firstAllowedView = Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
-      const salesLanding = !requestedView && !can('manage_intake') && Number(state.data.intake?.stats?.assigned || 0) > 0
-        ? 'pending'
-        : firstAllowedView;
-      switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : salesLanding, false);
+      switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
         if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
         else switchView('customers');
@@ -458,6 +455,7 @@
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索分配' : '我的线索';
+    $$('[data-intake-manager-status]').forEach(el => el.classList.toggle('hidden', !can('manage_intake')));
     $('#nav [data-view="aiTasks"]')?.classList.toggle('hidden', !customerAIEnabled() || !can('view_customers'));
     $('#runManagerAnomaly')?.classList.toggle('hidden',
       !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
@@ -544,9 +542,7 @@
       $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
       $('#topNotificationCount').classList.toggle('hidden', unreadNotifications === 0);
     }
-    if ($('#navIntakeCount')) $('#navIntakeCount').textContent = (state.data.intake?.stats.assigned || 0) + (state.data.intake?.stats.pending || 0) + (state.data.intake?.stats.approved || 0);
-    if ($('#navPendingCount')) $('#navPendingCount').textContent = state.data.intake?.stats.assigned || 0;
-    if ($('#navClaimedCount')) $('#navClaimedCount').textContent = state.data.intake?.stats.claimed || 0;
+    if ($('#navIntakeCount')) $('#navIntakeCount').textContent = state.data.intake?.stats.assigned || 0;
     if ($('#navInsightCount')) $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
     if ($('#navPoolCount')) $('#navPoolCount').textContent = state.data.researchTotals?.pool || 0;
     if ($('#navPeopleCount')) $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
@@ -3090,12 +3086,13 @@
 
   function permissionFields(permissions = {}) {
     const definitions = state.data.permissionDefinitions || {};
+    const descriptions = state.data.permissionDescriptions || {};
     const groups = [
       ['可查看模块', Object.keys(definitions).filter(key => key.startsWith('view_') && key !== 'view_all_customers')],
       ['数据范围与操作', Object.keys(definitions).filter(key => !key.startsWith('view_') || key === 'view_all_customers')],
     ];
     return groups.map(([title,keys]) => `<fieldset><legend>${title}</legend><div class="permission-grid">${keys.map(key =>
-      `<label class="permission-check"><input type="checkbox" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''}><span>${esc(definitions[key])}</span></label>`).join('')}</div></fieldset>`).join('');
+      `<label class="permission-check"><input type="checkbox" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''}><span>${esc(definitions[key])}${descriptions[key] ? `<small>${esc(descriptions[key])}</small>` : ''}</span></label>`).join('')}</div></fieldset>`).join('');
   }
 
   function openEditUserModal(userId) {
@@ -3135,8 +3132,9 @@
     return Object.entries(state.data.permissionDefinitions || {}).map(([key, label]) => {
       const inherited = Boolean(state.data.permissionGroups.find(group => group.id === user.permissionGroupId)?.permissions[key]);
       const selected = user.permissionOverrides?.[key] || 'inherit';
+      const description = state.data.permissionDescriptions?.[key] || '';
       return `<div class="permission-override-row">
-        <div><strong>${esc(label)}</strong><small>组默认：${inherited ? '允许' : '拒绝'} · 当前：${user.permissions[key] ? '允许' : '拒绝'}</small></div>
+        <div><strong>${esc(label)}</strong><small>${description ? `${esc(description)}<br>` : ''}组默认：${inherited ? '允许' : '拒绝'} · 当前：${user.permissions[key] ? '允许' : '拒绝'}</small></div>
         <select name="override__${esc(key)}">
           <option value="inherit" ${selected === 'inherit' ? 'selected' : ''}>继承</option>
           <option value="allow" ${selected === 'allow' ? 'selected' : ''}>允许</option>
@@ -3923,45 +3921,40 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
-    if (view === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
-    const permission = viewPermissions[view] || `view_${view}`;
+    const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
+    const canonicalView = legacyIntakeStatus ? 'intake' : view;
+    if (canonicalView === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
+    const permission = viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
-    state.view = view;
-    const sectionView = ['pending', 'claimed'].includes(view) ? 'intake' : view;
-    state.intakeStatus = view === 'pending'
-      ? 'assigned'
-      : view === 'claimed'
-        ? 'claimed'
-        : view === 'intake'
-          ? (can('manage_intake') ? '' : 'assigned')
-          : state.intakeStatus;
-    $$('.view').forEach(item => item.classList.toggle('active', item.id === `${sectionView}View`));
-    $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === view));
-    $('#viewEyebrow').textContent = viewMeta[view][0];
-    $('#viewTitle').textContent = viewMeta[view][1];
-    document.body.classList.toggle('customer-profile-active', view === 'customerProfile');
-    if (sectionView === 'intake') renderIntake();
-    if (sectionView === 'intake' && (state.view === 'intake' || state.view === 'pending' || state.view === 'claimed')) {
+    state.view = canonicalView;
+    state.intakeStatus = legacyIntakeStatus || (canonicalView === 'intake' ? '' : state.intakeStatus);
+    $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
+    $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
+    $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
+    $('#viewTitle').textContent = viewMeta[canonicalView][1];
+    document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
+    if (canonicalView === 'intake') renderIntake();
+    if (canonicalView === 'intake') {
       void loadIntakePage({ reset: true });
     }
-    if (researchConfig[view] && !state.research[view].loaded) void loadResearch(view);
-    if (view === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
-    if (view === 'aiTasks' && !state.aiGovernance.loaded) void loadAiGovernance();
-    if (view === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
+    if (researchConfig[canonicalView] && !state.research[canonicalView].loaded) void loadResearch(canonicalView);
+    if (canonicalView === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
+    if (canonicalView === 'aiTasks' && !state.aiGovernance.loaded) void loadAiGovernance();
+    if (canonicalView === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
       void loadManagerAnomalies();
     }
-    if (view === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
+    if (canonicalView === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
       void loadSalesCoaching();
     }
-    if (view === 'recycleBin') void loadRecycleBin();
-    if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
+    if (canonicalView === 'recycleBin') void loadRecycleBin();
+    if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
     closeCustomerFilterPanel();
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
-    if (location.hash !== `#${view}`) {
-      if (pushHistory) history.pushState(null, '', `#${view}`);
-      else history.replaceState(null, '', `#${view}`);
+    if (location.hash !== `#${canonicalView}`) {
+      if (pushHistory && !legacyIntakeStatus) history.pushState(null, '', `#${canonicalView}`);
+      else history.replaceState(null, '', `#${canonicalView}`);
     }
   }
 

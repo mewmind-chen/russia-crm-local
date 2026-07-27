@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issues-95-96">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issue-99">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -51,14 +51,12 @@
           <button data-view="aiTasks" data-permission="view_customers"><i>✦</i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
-          <button class="nav-shortcut hidden" aria-hidden="true" data-view="pending" data-permission="view_intake"><i>⇣</i><span>待领取</span><b id="navPendingCount">0</b></button>
-          <button class="nav-shortcut hidden" aria-hidden="true" data-view="claimed" data-permission="view_intake"><i>✓</i><span>已领取</span><b id="navClaimedCount">0</b></button>
+          <button data-view="intake" data-permission="view_intake"><i>⇣</i><span id="navIntakeLabel">线索分配</span><b id="navIntakeCount">0</b></button>
           <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
           <button data-view="recycleBin" data-permission="manage_customer_recycle"><i>↺</i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
-          <button data-view="intake" data-permission="view_intake"><i>⚙</i><span id="navIntakeLabel">线索分配</span><b id="navIntakeCount">0</b></button>
           <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
           <button data-view="insights" data-permission="view_insights"><i>✎</i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
@@ -190,8 +188,8 @@
           <div class="toolbar">
             <div class="segmented" id="intakeTabs">
               <button class="active" data-intake-status="">全部</button>
-              <button data-intake-status="pending">待审核</button>
-              <button data-intake-status="approved">待分配</button>
+              <button data-intake-status="pending" data-intake-manager-status>待审核</button>
+              <button data-intake-status="approved" data-intake-manager-status>待分配</button>
               <button data-intake-status="assigned">待领取</button>
               <button data-intake-status="claimed">已领取</button>
               <button data-intake-status="returned">已退回</button>
@@ -503,6 +501,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260727-issues-95-96"></script>
+  <script src="/sales-assets/app.js?v=20260727-issue-99"></script>
 </body>
 </html>

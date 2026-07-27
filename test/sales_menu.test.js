@@ -13,21 +13,45 @@ function sidebarMarkup() {
   return html.match(/<aside class="sidebar"[\s\S]*?<\/aside>/)?.[0] || '';
 }
 
-test('primary navigation follows the customer lifecycle and retains management', () => {
+test('primary navigation has one intake entry in the customer lifecycle', () => {
   const sidebar = sidebarMarkup();
-  for (const label of ['经营驾驶舱', '今日待办', '待领取', '已领取', 'CRM客户全景', '推进管道', '线索分配', '经理评价', '销售能力', '市场策略', '用户与权限']) {
+  for (const label of ['经营驾驶舱', '今日待办', 'CRM客户全景', '推进管道', '线索分配', '经理评价', '销售能力', '市场策略', '用户与权限']) {
     assert.match(sidebar, new RegExp(`>${label}<`), `missing navigation entry: ${label}`);
   }
-  for (const label of ['客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览']) {
+  for (const label of ['待领取', '已领取', '客户开发工作台', '未开发线索池', '联系人速览', 'Recon 结果速览']) {
     assert.doesNotMatch(sidebar, new RegExp(`>${label}<`), `obsolete primary entry remains: ${label}`);
   }
+  assert.equal((sidebar.match(/data-view="intake"/g) || []).length, 1);
+  assert.match(sidebar, /客户流转[\s\S]*data-view="intake"[\s\S]*管理中心/);
+  assert.match(appJs, /navIntakeLabel'\)\.textContent = can\('manage_intake'\) \? '线索分配' : '我的线索'/);
 });
 
-test('pending and claimed routes reuse intake permissions and status filters', () => {
+test('pending and claimed routes select a status in the canonical intake view', () => {
   assert.match(appJs, /const viewPermissions = \{[^}]*pending: 'view_intake'[^}]*claimed: 'view_intake'[^}]*\}/);
   assert.match(appJs, /const requestedPermission = viewPermissions\[requestedView\] \|\| `view_\$\{requestedView\}`/);
-  assert.match(appJs, /state\.intakeStatus = view === 'pending'[\s\S]*?view === 'claimed'[\s\S]*?view === 'intake'[\s\S]*?''/);
+  assert.match(appJs, /legacyIntakeStatus = view === 'pending' \? 'assigned' : view === 'claimed' \? 'claimed' : ''/);
+  assert.match(appJs, /canonicalView = legacyIntakeStatus \? 'intake' : view/);
+  assert.match(appJs, /state\.intakeStatus = legacyIntakeStatus \|\| \(canonicalView === 'intake' \? '' : state\.intakeStatus\)/);
+  assert.match(appJs, /history\.replaceState\(null, '', `#\$\{canonicalView\}`\)/);
   assert.match(appJs, /item\.dataset\.intakeStatus === state\.intakeStatus/);
+});
+
+test('sales intake defaults to all and hides manager-only statuses', () => {
+  assert.doesNotMatch(appJs, /salesLanding/);
+  assert.match(appJs, /canonicalView === 'intake' \? '' : state\.intakeStatus/);
+  assert.match(html, /data-intake-status="pending" data-intake-manager-status/);
+  assert.match(html, /data-intake-status="approved" data-intake-manager-status/);
+  assert.match(appJs, /\$\$\(\'\[data-intake-manager-status\]\'\)[\s\S]*?!can\('manage_intake'\)/);
+});
+
+test('intake badge uses the same assigned count as the pending tab', () => {
+  assert.match(appJs, /navIntakeCount'\)\.textContent = state\.data\.intake\?\.stats\.assigned \|\| 0/);
+  assert.doesNotMatch(`${html}\n${appJs}`, /navPendingCount|navClaimedCount/);
+});
+
+test('today tasks permission uses the matching UI name and scope explanation', () => {
+  assert.match(appJs, /permissionDescriptions/);
+  assert.match(backend, /permissionDescriptions: PERMISSION_DESCRIPTIONS/);
 });
 
 test('dashboard intake alerts open the matching lead profile', () => {
@@ -87,8 +111,8 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260727-issues-95-96/);
-  assert.match(html, /app\.js\?v=20260727-issues-95-96/);
+  assert.match(html, /app\.css\?v=20260727-issue-99/);
+  assert.match(html, /app\.js\?v=20260727-issue-99/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {
