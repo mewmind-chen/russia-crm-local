@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issue-99">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issue-100">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -48,7 +48,7 @@
           <button data-view="dashboard" data-permission="view_dashboard" class="active"><i>◫</i><span>经营驾驶舱</span></button>
           <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
           <button data-view="notifications" data-permission="view_customers"><i>◉</i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
-          <button data-view="aiTasks" data-permission="view_customers"><i>✦</i><span>AI任务中心</span></button>
+          <button data-view="aiTasks" data-permission="view_customers" data-ai-business><i>✦</i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
           <button data-view="intake" data-permission="view_intake"><i>⇣</i><span id="navIntakeLabel">线索分配</span><b id="navIntakeCount">0</b></button>
@@ -248,7 +248,7 @@
               <label>行业<select id="customerIndustryFilter" multiple></select></label>
               <label>来源<select id="customerSourceFilter" multiple></select></label>
               <label>创建人<select id="customerCreatorFilter" multiple></select></label>
-              <label>评价标签<select id="evaluationTagFilter" multiple></select></label>
+              <label data-ai-business>评价标签<select id="evaluationTagFilter" multiple></select></label>
               <label>最近动作<select id="customerLastActionFilter" multiple>
                 <option value="today">今天</option><option value="7d">近7天</option><option value="30d">近30天</option><option value="older">30天前</option><option value="none">从未记录</option>
               </select></label>
@@ -344,7 +344,7 @@
 
       <section id="alertsView" class="view">
         <div class="alert-summary" id="alertSummary"></div>
-        <article class="panel manager-anomaly-panel" data-permission="view_team">
+        <article class="panel manager-anomaly-panel" data-permission="view_team" data-ai-business>
           <div class="panel-head">
             <div><p class="eyebrow">MANAGER ANOMALY</p><h2>经理异常优先队列</h2></div>
             <button id="runManagerAnomaly" data-permission="view_team" class="button primary" type="button">✦ 生成 AI 介入建议</button>
@@ -370,7 +370,7 @@
         <div id="notificationSummary" class="metric-grid"></div>
         <article class="panel">
           <div class="section-intro notification-intro">
-            <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、AI 资料包、经理异常、销售辅导和投递失败提醒。</p></div>
+            <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
             <button id="notificationRefresh" class="button secondary" type="button">刷新</button>
           </div>
           <div class="toolbar">
@@ -387,12 +387,12 @@
       <section id="insightsView" class="view">
         <div id="insightSummary" class="metric-grid"></div>
         <div class="section-intro">
-          <div><p class="eyebrow">MANAGER INTELLIGENCE</p><h2>经理评价中心</h2><p>集中维护企业判断、对接人评价和AI提取的赢单标签。</p></div>
-          <div class="method-note"><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
+          <div><p class="eyebrow">MANAGER INTELLIGENCE</p><h2>经理评价中心</h2><p>集中维护企业判断和对接人评价。<span data-ai-business>AI 标注用于辅助整理历史评价。</span></p></div>
+          <div class="method-note" data-ai-business><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
         </div>
         <article class="panel">
           <div class="toolbar">
-            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索企业、国家、负责人或AI标签"></div>
+            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索企业、国家或负责人"></div>
             <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
             <span id="insightResultCount" class="toolbar-count"></span>
           </div>
@@ -405,7 +405,7 @@
           <div><p class="eyebrow">CAPABILITY REVIEW</p><h2>销售能力差异检视</h2><p>按同类客户漏斗拆解优势与短板，作为客户分配、培训和介入依据。</p></div>
           <div class="method-note"><strong>公平口径</strong><span>样本不足时只提示趋势；不以邮件量代替有效推进。</span></div>
         </div>
-        <div id="teamCoachingStatus" class="team-coaching-status" role="status" aria-live="polite">进入页面后读取授权团队的 AI 辅导状态。</div>
+        <div id="teamCoachingStatus" class="team-coaching-status hidden" data-ai-business role="status" aria-live="polite">进入页面后读取授权团队的 AI 辅导状态。</div>
         <div id="teamCards" class="team-grid"></div>
         <article id="teamDetail" class="panel team-detail hidden"></article>
       </section>
@@ -501,6 +501,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260727-issue-99"></script>
+  <script src="/sales-assets/app.js?v=20260727-issue-100"></script>
 </body>
 </html>

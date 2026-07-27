@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260727-issue-99/);
-  assert.match(html, /app\.js\?v=20260727-issue-99/);
+  assert.match(html, /app\.css\?v=20260727-issue-100/);
+  assert.match(html, /app\.js\?v=20260727-issue-100/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {
@@ -83,7 +83,7 @@ test('customer fit surface has bounded responsive layout and preserves the profi
 });
 
 test('AI task center has permission-scoped filters, pagination, details and operations', () => {
-  assert.match(html, /data-view="aiTasks" data-permission="view_customers"/);
+  assert.match(html, /data-view="aiTasks" data-permission="view_customers" data-ai-business/);
   assert.match(html, /id="aiTasksView"/);
   for (const id of [
     'aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',

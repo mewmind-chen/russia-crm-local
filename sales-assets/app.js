@@ -253,7 +253,39 @@
     return Boolean(state.data?.features?.aiStations);
   }
   function salesPackEnabled() {
-    return Boolean(state.data?.features?.salesPack);
+    return customerAIEnabled() && Boolean(state.data?.features?.salesPack);
+  }
+  const aiPermissionKeys = new Set([
+    'use_ai_assistant', 'cancel_ai_tasks', 'bulk_manage_ai_tasks',
+    'manage_ai_budgets', 'review_ai_tasks',
+  ]);
+  const aiNotificationCodes = new Set([
+    'SALES_PACK_READY', 'SALES_PACK_FAILED', 'MANAGER_ANOMALY_READY',
+    'SALES_COACHING_READY', 'AI_TASK_READY', 'AI_TASK_FAILED',
+  ]);
+  function visiblePermissionDefinitions() {
+    const definitions = state.data?.permissionDefinitions || {};
+    if (customerAIEnabled()) return definitions;
+    const visible = Object.fromEntries(
+      Object.entries(definitions).filter(([key]) => !aiPermissionKeys.has(key)),
+    );
+    if (visible.manage_evaluations) visible.manage_evaluations = '维护经理评价';
+    return visible;
+  }
+  function applyBusinessAIVisibility() {
+    const enabled = customerAIEnabled();
+    $$('[data-ai-business]').forEach(element => {
+      element.classList.toggle('hidden', !enabled || (element.dataset.permission && !can(element.dataset.permission)));
+    });
+    $('#customerAiStation')?.classList.toggle('hidden', !enabled);
+    if (!enabled) {
+      clearTimeout(state.customerAiTimer);
+      clearTimeout(state.managerAnomalies.timer);
+      clearTimeout(state.salesCoaching.timer);
+      state.customerAiTimer = null;
+      state.managerAnomalies.timer = null;
+      state.salesCoaching.timer = null;
+    }
   }
   function roleLabel(role) {
     return ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[role] || role || '—';
@@ -399,11 +431,17 @@
       Object.assign(meta, { page: 0, total: Number(state.data?.researchTotals?.[kind] || 0), hasMore: false, loading: false, loaded: false, reloadPending: false });
     }
   }
+  function firstAllowedBusinessView() {
+    return Object.keys(viewMeta).find(view =>
+      !['aiTasks', 'customerProfile'].includes(view)
+      && can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
+  }
 
   async function load({ fromLogin = false } = {}) {
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
       restoreCustomerFilters();
+      if (!customerAIEnabled()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
       state.assistantRuntimePending = false;
@@ -428,7 +466,9 @@
       const requestedView = location.hash.replace(/^#/, '');
       const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
       const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
-      const firstAllowedView = Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
+      const firstAllowedView = customerAIEnabled() && can('view_customers')
+        ? Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
+        : firstAllowedBusinessView();
       switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
         if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
@@ -456,7 +496,7 @@
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索分配' : '我的线索';
     $$('[data-intake-manager-status]').forEach(el => el.classList.toggle('hidden', !can('manage_intake')));
-    $('#nav [data-view="aiTasks"]')?.classList.toggle('hidden', !customerAIEnabled() || !can('view_customers'));
+    applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
       !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
     if (state.data.impersonation) {
@@ -491,7 +531,9 @@
     const creatorLabels = Object.fromEntries(state.data.users.map(user => [user.id, user.name]));
     const creators = customerFilterValues(state.data.accounts, 'created_by');
     $('#customerCreatorFilter').innerHTML = multiOptions(creators, creatorLabels);
-    const tags = [...new Set((state.data.customerEvaluationTags || []).flatMap(item => item.labels || []))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'));
+    const tags = customerAIEnabled()
+      ? [...new Set((state.data.customerEvaluationTags || []).flatMap(item => item.labels || []))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'))
+      : [];
     const tagFilter = $('#evaluationTagFilter');
     tagFilter.innerHTML = tags.map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
     tagFilter.disabled = !tags.length;
@@ -536,7 +578,8 @@
     if ($('#navCustomerCount')) $('#navCustomerCount').textContent = state.data.accounts.length;
     if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.length;
     const unreadNotifications = (state.data.notifications || [])
-      .filter(item => item.user_id === state.data.user.id && item.status === 'unread').length;
+      .filter(item => (customerAIEnabled() || !aiNotificationCodes.has(String(item.code || '').toUpperCase()))
+        && item.user_id === state.data.user.id && item.status === 'unread').length;
     if ($('#navNotificationCount')) $('#navNotificationCount').textContent = unreadNotifications;
     if ($('#topNotificationCount')) {
       $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
@@ -889,14 +932,18 @@
     ];
     $('#intakeSummary').innerHTML = summary.map(([label, value, note]) => `<article class="metric ${label.includes('超期') && value ? 'alert' : ''}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     const items = intake.items || [];
+    const showAI = customerAIEnabled();
+    const intakeHeaders = showAI
+      ? ['未开发线索', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作']
+      : ['未开发线索', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'];
     $('#intakeTable').innerHTML = table(
-      ['未开发线索', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'],
+      intakeHeaders,
       items.map(item => {
         let actions = '';
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
         else if (!salesView && ['pending', 'approved', 'returned'].includes(item.status)) {
-          const suggested = item.suggested_owner_id && item.suggested_owner_name
+          const suggested = showAI && item.suggested_owner_id && item.suggested_owner_name
             ? `<button class="button primary tiny" data-intake-action="assign" data-item-id="${item.id}" data-owner-id="${item.suggested_owner_id}">按建议分配</button>`
             : '';
           actions = `<div class="assignment-actions">${suggested}<button class="button secondary tiny" data-intake-assign="${item.id}">指定销售</button></div>`;
@@ -911,15 +958,20 @@
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
           ...evidence.map((url, index) => `<a class="text-button" href="${esc(url)}" target="_blank" rel="noopener">证据${index + 1}</a>`),
         ].filter(Boolean).join(' · ');
-        const row = [
+        const businessColumns = [
           `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc(item.country || '—')} · ${esc(item.customer_type || item.industry || '—')}</span><span>${sources}</span></div>`,
-          `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
-          `<div class="ranked-candidates">${layers.ai}</div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span></div>`,
-          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || item.suggested_owner_name || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || signals.riskStatus || '')}</span></div>`,
+          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
           `<div class="assignment-cell"><span class="pill ${statusClass}">${intakeStatusLabel(item.status)}</span><span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
           actions,
         ];
+        const aiColumns = [
+          `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
+          `<div class="ranked-candidates">${layers.ai}</div>`,
+        ];
+        const row = showAI
+          ? [businessColumns[0], ...aiColumns, ...businessColumns.slice(1)]
+          : businessColumns;
         row._attrs = item.crm_customer_id
           ? `data-customer="${esc(item.crm_customer_id)}"`
           : `data-intake-profile="${esc(item.id)}"`;
@@ -1286,7 +1338,7 @@
   }
 
   async function cancelCustomerEnrichment(runId) {
-    if (!runId || state.customerEnrichmentPending) return;
+    if (!customerAIEnabled() || !runId || state.customerEnrichmentPending) return;
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
@@ -1303,7 +1355,7 @@
   }
 
   async function reviewCustomerEnrichmentProposal(proposalId, decision) {
-    if (!proposalId || !['accepted', 'rejected'].includes(decision) || state.customerEnrichmentPending) return;
+    if (!customerAIEnabled() || !proposalId || !['accepted', 'rejected'].includes(decision) || state.customerEnrichmentPending) return;
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
@@ -1373,7 +1425,7 @@
   }
 
   async function adoptNextAction(jobId) {
-    if (!jobId || state.customerAiPending) return;
+    if (!customerAIEnabled() || !jobId || state.customerAiPending) return;
     const nextAction = $('#nextActionSuggestion')?.value.trim() || '';
     const nextActionAt = apiTime($('#nextActionSuggestionAt')?.value || '');
     if (!nextAction || !nextActionAt) return toast('请填写下一步动作和计划时间');
@@ -1485,7 +1537,8 @@
   }
 
   function canGovernAI() {
-    return ['admin', 'manager'].includes(state.data?.user?.role)
+    return customerAIEnabled()
+      && ['admin', 'manager'].includes(state.data?.user?.role)
       && can('view_team') && can('review_ai_tasks') && !state.data?.impersonation;
   }
 
@@ -1648,6 +1701,7 @@
   }
 
   async function openAiTask(taskId) {
+    if (!customerAIEnabled()) return;
     try {
       const payload = await api(`/api/sales-crm/ai/tasks/${encodeURIComponent(taskId)}`);
       renderAiTaskDetail(payload.task);
@@ -1655,6 +1709,7 @@
   }
 
   async function actOnAiTask(action, jobId) {
+    if (!customerAIEnabled()) return;
     try {
       if (['approved', 'rejected'].includes(action)) {
         await api(`/api/sales-crm/ai/jobs/${encodeURIComponent(jobId)}/review`, {
@@ -1700,7 +1755,7 @@
     });
   }
   function customerSearchText(account) {
-    const labels = labelsForAccount(account.id);
+    const labels = customerAIEnabled() ? labelsForAccount(account.id) : [];
     const contactText = can('view_contacts')
       ? (state.data.insights?.contacts || [])
         .filter(contact => (contact.customerId || contact.customer_id) === account.id)
@@ -1722,7 +1777,7 @@
     start.setHours(0, 0, 0, 0);
     const tomorrow = start.getTime() + 86400000;
     const accounts = scopedAccounts().filter(account => {
-      const labels = labelsForAccount(account.id);
+      const labels = customerAIEnabled() ? labelsForAccount(account.id) : [];
       const text = customerSearchText(account);
       const reached = !state.stageReached
         || (!['lost', 'disqualified'].includes(account.stage) && stageOrder[account.stage] >= stageOrder[state.stageReached]);
@@ -1742,7 +1797,7 @@
         && (!filters.industries.length || filters.industries.includes(account.industry))
         && (!filters.sources.length || filters.sources.includes(account.source))
         && (!filters.creators.length || filters.creators.includes(account.created_by))
-        && (!filters.evaluationTags.length || filters.evaluationTags.some(tag => labels.includes(tag)))
+        && (!customerAIEnabled() || !filters.evaluationTags.length || filters.evaluationTags.some(tag => labels.includes(tag)))
         && matchesTimeBuckets(account.last_activity_at, filters.lastActionBuckets, 'last')
         && matchesTimeBuckets(account.next_action_at, filters.nextStepBuckets, 'next')
         && (!filters.createdFrom || created >= filters.createdFrom)
@@ -1774,7 +1829,8 @@
       countries: ['国家', {}], owners: ['负责人', { __unassigned__: '未分配', ...userLabels }],
       stages: ['阶段', stageLabels], priorities: ['优先级', {}], customerTypes: ['客户类型', {}],
       industries: ['行业', {}], sources: ['来源', {}], creators: ['创建人', userLabels],
-      evaluationTags: ['评价标签', {}], lastActionBuckets: ['最近动作', { today: '今天', '7d': '近7天', '30d': '近30天', older: '30天前', none: '无' }],
+      ...(customerAIEnabled() ? { evaluationTags: ['评价标签', {}] } : {}),
+      lastActionBuckets: ['最近动作', { today: '今天', '7d': '近7天', '30d': '近30天', older: '30天前', none: '无' }],
       nextStepBuckets: ['下一步', { overdue: '已超期', today: '今天', '7d': '未来7天', later: '7天以后', none: '未填写' }],
     };
     for (const [key, [label, labels]] of Object.entries(groups)) {
@@ -1791,7 +1847,7 @@
     const filters = state.customerFilters;
     return [
       'countries', 'owners', 'stages', 'priorities', 'customerTypes', 'industries', 'sources',
-      'creators', 'evaluationTags', 'lastActionBuckets', 'nextStepBuckets',
+      'creators', ...(customerAIEnabled() ? ['evaluationTags'] : []), 'lastActionBuckets', 'nextStepBuckets',
     ].reduce((count, key) => count + filters[key].length, 0)
       + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
@@ -1829,7 +1885,7 @@
         ].filter(Boolean).join('');
         return [
           canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(account.company_name)}">` : '',
-          `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
+          `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${customerAIEnabled() && labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
           esc(account.owner_name || '未分配'),
@@ -1957,7 +2013,8 @@
   function renderNotifications() {
     const root = $('#notificationList');
     if (!root) return;
-    const all = state.data.notifications || [];
+    const all = (state.data.notifications || []).filter(item =>
+      customerAIEnabled() || !aiNotificationCodes.has(String(item.code || '').toUpperCase()));
     const own = all.filter(item => item.user_id === state.data.user.id);
     const unread = own.filter(item => item.status === 'unread');
     const failed = own.filter(item => item.wecom_delivery_status === 'failed' || item.wecom_status === 'failed');
@@ -2018,7 +2075,8 @@
   }
 
   function canViewManagerAnomalies() {
-    return ['admin', 'manager'].includes(state.data?.user?.role)
+    return customerAIEnabled()
+      && ['admin', 'manager'].includes(state.data?.user?.role)
       && can('view_alerts') && can('view_team');
   }
 
@@ -2136,18 +2194,22 @@
     const contactEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'contact').map(item => item.customerId));
     const aiCompleted = insightData.evaluations.filter(item => item.aiStatus === 'completed').length;
     const accounts = scopedAccounts().filter(item => !['won', 'repeat', 'lost', 'disqualified'].includes(item.stage));
-    $('#insightSummary').innerHTML = [
+    const insightMetrics = [
       ['活跃客户', accounts.length, '当前管理范围'],
       ['已有企业评价', companyEvaluated.size, `${percent(companyEvaluated.size, accounts.length)} 覆盖率`],
       ['已有联系人评价', contactEvaluated.size, '逐人记录判断'],
-      ['AI标注完成', aiCompleted, '人工原文与AI分离'],
+      ...(customerAIEnabled() ? [['AI标注完成', aiCompleted, '人工原文与AI分离']] : []),
       ['待评价企业', Math.max(0, accounts.length - companyEvaluated.size), '建议优先覆盖A类客户'],
-    ].map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    ];
+    $('#insightSummary').innerHTML = insightMetrics
+      .map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     const search = ($('#insightSearch')?.value || '').trim().toLowerCase();
     const coverage = $('#insightCoverageFilter')?.value || '';
     const rows = accounts.filter(account => {
       const evaluations = insightData.evaluations.filter(item => item.customerId === account.id);
-      const labels = evaluations.flatMap(item => item.aiLabels.map(label => label.name));
+      const labels = customerAIEnabled()
+        ? evaluations.flatMap(item => item.aiLabels.map(label => label.name))
+        : [];
       const text = [account.company_name, account.country, account.owner_name, ...labels].join(' ').toLowerCase();
       const covered = !coverage || (coverage === 'none' && !evaluations.length) || (coverage === 'company' && companyEvaluated.has(account.id)) || (coverage === 'contact' && contactEvaluated.has(account.id));
       return (!search || text.includes(search)) && covered;
@@ -2158,11 +2220,11 @@
       const companyEval = evaluations.find(item => item.subjectType === 'company');
       const contactCount = insightData.contacts.filter(item => item.customerId === account.id).length;
       const contactEvalCount = evaluations.filter(item => item.subjectType === 'contact').length;
-      const labels = evaluations.flatMap(item => item.aiLabels).slice(0, 5);
+      const labels = customerAIEnabled() ? evaluations.flatMap(item => item.aiLabels).slice(0, 5) : [];
       return `<article class="insight-hub-card">
         <div><span class="status-pill">${esc(stageLabel(account.stage))}</span><h3>${esc(account.company_name)}</h3><p>${esc(account.country)} · ${esc(account.owner_name)}</p></div>
         <div class="insight-preview ${companyEval ? '' : 'empty-preview'}">${companyEval ? `<strong>经理评价：</strong>${esc(companyEval.evaluationText)}` : '尚未填写企业经营评价'}</div>
-        <div><div class="ai-tag-row">${labels.length ? labels.map(label => `<span class="ai-tag">AI · ${esc(label.name)}</span>`).join('') : '<span class="subtle">暂无AI标签</span>'}</div><p style="margin-top:6px">${contactCount} 位对接人 · ${contactEvalCount} 条联系人评价</p></div>
+        <div>${customerAIEnabled() ? `<div class="ai-tag-row">${labels.length ? labels.map(label => `<span class="ai-tag">AI · ${esc(label.name)}</span>`).join('') : '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${contactCount} 位对接人 · ${contactEvalCount} 条联系人评价</p></div>
         <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${account.id}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${account.id}">${companyEval ? '追加评价' : '写企业评价'}</button></div>
       </article>`;
     }).join('') : '<div class="empty">没有符合条件的客户</div>';
@@ -2269,10 +2331,9 @@
     const rows = state.data.teamReport.filter(item => !$('#ownerFilter').value || item.user.id === $('#ownerFilter').value);
     const coachingStatus = $('#teamCoachingStatus');
     if (coachingStatus) {
+      coachingStatus.classList.toggle('hidden', !canViewSalesCoaching());
       const ready = state.salesCoaching.items.filter(item => item.ai?.result && !item.ai.stale).length;
-      coachingStatus.textContent = !canViewSalesCoaching()
-        ? '销售能力使用确定性聚合指标。'
-        : state.salesCoaching.loading && !state.salesCoaching.loaded
+      coachingStatus.textContent = state.salesCoaching.loading && !state.salesCoaching.loaded
           ? '正在读取团队辅导状态…'
           : state.salesCoaching.error
             ? `团队辅导暂不可用：${state.salesCoaching.error}`
@@ -2280,7 +2341,7 @@
     }
     $('#teamCards').innerHTML = rows.map(item => {
       const topScores = Object.entries(item.scores).sort((a, b) => b[1] - a[1]).slice(0, 4);
-      const coaching = coachingFor(item.user.id);
+      const coaching = customerAIEnabled() ? coachingFor(item.user.id) : null;
       const coachingLabel = coaching?.ai?.result && !coaching.ai.stale
         ? 'AI辅导已生成'
         : ['queued', 'running', 'retry_wait'].includes(coaching?.ai?.job?.state)
@@ -2289,7 +2350,7 @@
       return `<article class="team-card ${state.teamUserId === item.user.id ? 'selected' : ''}" data-team-user="${item.user.id}">
         <div class="team-card-top"><div class="person"><span class="avatar">${esc(item.user.name.slice(0, 1))}</span><div><strong>${esc(item.user.name)}</strong><small>${esc(item.bestCountries.join(' / ') || '待积累数据')}</small></div></div><div class="score-ring" style="--score:${item.overall}%"><strong>${item.overall}</strong></div></div>
         <div class="capability-bars">${topScores.map(([key, value]) => `<div class="cap-row"><span>${capabilityLabels[key]}</span><div class="cap-track"><i style="width:${value}%"></i></div><b>${value}</b></div>`).join('')}</div>
-        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span><span class="pill">${coachingLabel}</span></div>
+        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span>${customerAIEnabled() ? `<span class="pill">${coachingLabel}</span>` : ''}</div>
       </article>`;
     }).join('');
     if (state.teamUserId) renderTeamDetail(state.teamUserId);
@@ -2314,7 +2375,7 @@
         <div class="recommendation"><strong>分配建议</strong><br>优先分配${countries}的客户；适合渠道：${esc(item.bestChannels.join('、') || '继续观察')}。</div>
         <div class="recommendation"><strong>渠道证据</strong><br>${item.channelPerformance.slice(0, 3).map(row => `${esc(row.channel)}：${row.customers}客，询价率${row.rfqRate.toFixed(1)}%`).join('<br>') || '尚未积累足够渠道数据'}</div>
         <div class="recommendation"><strong>下期行动</strong><br>${item.rates.rfq < 30 ? '陪同复盘3场视频会议，强化需求挖掘与BOM引导。' : item.rates.order < 25 ? '重点训练报价跟进和商务谈判。' : '可逐步增加高价值客户并减少早期管理介入。'}</div>
-        ${salesCoachingBlock(item)}
+        ${customerAIEnabled() ? salesCoachingBlock(item) : ''}
       </div>
     </div>`;
   }
@@ -2500,7 +2561,15 @@
     state.data.features.customerEnrichment = Boolean(features.customer_enrichment?.effectiveEnabled);
     state.data.features.customerEnrichmentAutoTrigger = Boolean(features.customer_enrichment_auto_trigger?.effectiveEnabled);
     state.data.features.salesPack = Boolean(features.sales_pack?.effectiveEnabled);
-    $('#customerAiStation')?.classList.toggle('hidden', !customerAIEnabled());
+    if (!customerAIEnabled()) state.customerFilters.evaluationTags = [];
+    applyUser();
+    populateFilters();
+    renderAll();
+    if ($('#customerDrawer')?.classList.contains('open')) {
+      if (state.selectedCustomerId) renderDrawer();
+      else closeDrawer();
+    }
+    if (state.view === 'aiTasks' && !customerAIEnabled()) switchView(firstAllowedBusinessView(), false);
   }
 
   function renderAIFeatures() {
@@ -2739,7 +2808,7 @@
   }
 
   function customerAiSection(context) {
-    if (!can('use_ai_assistant')) return '';
+    if (!customerAIEnabled() || !can('use_ai_assistant')) return '';
     return `<section class="customer-ai">
       <div class="insight-head"><div><p class="eyebrow">CUSTOMER AI</p><h3>AI 问答</h3></div><span class="ai-badge">当前客户 · ${esc(context.companyName || '未命名客户')}</span></div>
       <div class="customer-ai-body">
@@ -2758,6 +2827,7 @@
     const signals = intakeSignals(item);
     const layers = intakeDecisionLayers(item);
     state.selectedCustomerId = '';
+    const showAI = customerAIEnabled();
     state.drawerAiContext = {
       companyName: item.company_name || '',
       intakeItemId: item.id,
@@ -2766,7 +2836,7 @@
         `地区：${item.country || '未标注'}`,
         `行业/类型：${[item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注'}`,
         `产品重点：${item.product_focus || '未标注'}`,
-        `Fit：${signals.fitScore} / ${signals.fitGrade}；readiness：${signals.readiness}；优先级：${signals.priority}`,
+        ...(showAI ? [`Fit：${signals.fitScore} / ${signals.fitGrade}；readiness：${signals.readiness}；优先级：${signals.priority}`] : []),
         `联系人等级：${item.contact_level || 'L0'}；分配状态：${intakeStatusLabel(item.status)}`,
         `分配依据：${item.decision_reason || '暂无'}`,
       ].join('\n'),
@@ -2780,11 +2850,15 @@
     $('#drawerContent').innerHTML = `
       <div class="next-step"><div><span class="eyebrow">ASSIGNMENT STATUS</span><p>${esc(item.status === 'assigned' ? '公司已分配，领取后进入 CRM 并开始跟进。' : '查看客户资料与匹配依据。')}</p></div><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span></div>
       <div class="account-facts">
-        ${[['建议负责人', item.assigned_owner_name || item.suggested_owner_name], ['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority], ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${[
+          ['负责人', item.assigned_owner_name || (showAI ? item.suggested_owner_name : '')],
+          ...(showAI ? [['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority]] : []),
+          ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)],
+        ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
       <section class="decision-review">
-        <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>分配三层裁决</h3></div><span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span></div>
-        <div class="decision-review-grid">${layers.ai}${layers.rule}${layers.manual}</div>
+        <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>${showAI ? '分配三层裁决' : '分配裁决'}</h3></div>${showAI ? `<span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span>` : ''}</div>
+        <div class="decision-review-grid ${showAI ? '' : 'without-ai'}">${showAI ? layers.ai : ''}${layers.rule}${layers.manual}</div>
         <div class="decision-audit"><span class="eyebrow">AUDIT TRAIL</span>${intakeAuditMarkup(item)}</div>
       </section>
       <section class="master-profile">
@@ -2811,7 +2885,7 @@
   }
 
   function evaluationCard(item) {
-    const ai = item.aiStatus === 'completed' ? `
+    const ai = !customerAIEnabled() ? '' : item.aiStatus === 'completed' ? `
       <div class="ai-analysis">
         <div class="ai-analysis-head"><span class="ai-badge">AI 标注</span><span>${esc(item.aiModel || 'AI')} · 基于经理评价自动提取 · 非人工结论</span></div>
         ${item.aiSummary ? `<div class="evaluation-text">${esc(item.aiSummary)}</div>` : ''}
@@ -2844,12 +2918,22 @@
     const companyEvaluations = evaluations.filter(item => item.subjectType === 'company');
     const canEvaluate = can('manage_evaluations');
     const alert = alertFor(account.id);
+    const accountFacts = [
+      ['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'],
+      ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source],
+      ['产品重点', account.product_focus],
+      ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
+      ['最近动作', relative(account.last_activity_at)],
+      ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
+      ['官网', account.website], ['客户编号', account.external_customer_id],
+      ['客户分组', account.current_pool], ['联系人质量', account.best_contact_level],
+    ];
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${alert ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div><time>${shortDate(account.next_action_at, true)}</time></div>
       <div class="account-facts">
-        ${[['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'], ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source], ['产品重点', account.product_focus], ['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签'], ['最近动作', relative(account.last_activity_at)], ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')], ['官网', account.website], ['客户编号', account.external_customer_id], ['客户分组', account.current_pool], ['联系人质量', account.best_contact_level]].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${accountFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
@@ -2968,6 +3052,7 @@
   }
 
   async function generateActionProposal() {
+    if (!customerAIEnabled() || !can('use_ai_assistant')) return;
     const form = $('#activityForm');
     const button = $('#actionProposalGenerate');
     const status = $('#actionProposalStatus');
@@ -3085,7 +3170,7 @@
   }
 
   function permissionFields(permissions = {}) {
-    const definitions = state.data.permissionDefinitions || {};
+    const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
     const groups = [
       ['可查看模块', Object.keys(definitions).filter(key => key.startsWith('view_') && key !== 'view_all_customers')],
@@ -3129,7 +3214,7 @@
   }
 
   function permissionOverrideFields(user) {
-    return Object.entries(state.data.permissionDefinitions || {}).map(([key, label]) => {
+    return Object.entries(visiblePermissionDefinitions()).map(([key, label]) => {
       const inherited = Boolean(state.data.permissionGroups.find(group => group.id === user.permissionGroupId)?.permissions[key]);
       const selected = user.permissionOverrides?.[key] || 'inherit';
       const description = state.data.permissionDescriptions?.[key] || '';
@@ -3212,11 +3297,18 @@
   function openIntakeAssignModal(itemId) {
     const item = state.data.intake.items.find(row => row.id === itemId);
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
+    const suggestedOwnerId = customerAIEnabled() ? item.suggested_owner_id : '';
+    const selectedOwnerId = item.assigned_owner_id || suggestedOwnerId;
+    const assignmentContext = customerAIEnabled()
+      ? `建议：${item.suggested_owner_name || '暂无'}`
+      : item.assigned_owner_name
+        ? `当前负责人：${item.assigned_owner_name}`
+        : '请人工选择负责人';
     openModal(item.crm_customer_id ? '重新分配客户' : '指定销售负责人', 'CUSTOMER ASSIGNMENT', `<form id="intakeAssignForm" class="form-grid">
       <input type="hidden" name="itemId" value="${esc(itemId)}">
-      <div class="recommendation"><strong>${esc(item.company_name)}</strong><br>${esc(item.country)} · ${esc(item.contact_level)} · 建议：${esc(item.suggested_owner_name || '暂无')}</div>
-      <label>销售负责人<select name="ownerId">${sales.map(user => `<option value="${user.id}" ${user.id === (item.assigned_owner_id || item.suggested_owner_id) ? 'selected' : ''}>${esc(user.name)} · ${esc(user.countries.join('/'))}</option>`).join('')}</select></label>
-      <label>分配说明<input name="reason" value="${esc(item.decision_reason || '管理者指定分配')}"></label>
+      <div class="recommendation"><strong>${esc(item.company_name)}</strong><br>${esc(item.country)} · ${esc(item.contact_level)} · ${esc(assignmentContext)}</div>
+      <label>销售负责人<select name="ownerId">${sales.map(user => `<option value="${user.id}" ${user.id === selectedOwnerId ? 'selected' : ''}>${esc(user.name)} · ${esc(user.countries.join('/'))}</option>`).join('')}</select></label>
+      <label>分配说明<input name="reason" value="${esc(customerAIEnabled() ? item.decision_reason || '管理者指定分配' : '管理者指定分配')}"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">确认分配</button></div>
     </form>`);
   }
@@ -3251,14 +3343,15 @@
     const contact = contactId ? state.data.insights.contacts.find(item => item.id === contactId) : null;
     const subjectName = subjectType === 'contact' ? contact?.name : account.company_name;
     const subjectTitle = subjectType === 'contact' ? contact?.title : '';
-    openModal(subjectType === 'contact' ? `评价对接人：${subjectName}` : `评价企业：${account.company_name}`, 'MANAGER EVALUATION + AI LABELS', `<form id="evaluationForm" class="form-grid">
+    const showAI = customerAIEnabled();
+    openModal(subjectType === 'contact' ? `评价对接人：${subjectName}` : `评价企业：${account.company_name}`, showAI ? 'MANAGER EVALUATION + AI LABELS' : 'MANAGER EVALUATION', `<form id="evaluationForm" class="form-grid">
       <input type="hidden" name="customerId" value="${esc(account.id)}"><input type="hidden" name="subjectType" value="${esc(subjectType)}">
       <input type="hidden" name="subjectId" value="${esc(contactId)}"><input type="hidden" name="subjectName" value="${esc(subjectName || '')}">
       <input type="hidden" name="subjectTitle" value="${esc(subjectTitle || '')}">
       <div class="recommendation"><strong>${esc(subjectName || '')}</strong>${subjectTitle ? `<br>${esc(subjectTitle)}` : ''}</div>
       <label>销售经理评价<textarea name="evaluationText" required minlength="8" placeholder="${subjectType === 'company' ? '例如：公司规模很大但采购流程不规范，因此决策快、价格敏感度较低；质检实验室完整，赢单关键是提供可追溯质检服务。' : '例如：采购主管拥有供应商初筛权，重视响应速度和资料完整度；沟通直接，但最终价格需要老板确认。'}"></textarea></label>
-      <div class="recommendation"><strong>AI如何处理</strong><br>系统会基于这段经理原文提取标签、风险、赢单关键和建议。所有生成内容均明确显示“AI标注”，不会覆盖经理原文。</div>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存并生成AI标注</button></div>
+      ${showAI ? '<div class="recommendation"><strong>AI如何处理</strong><br>系统会基于这段经理原文提取标签、风险、赢单关键和建议。所有生成内容均明确显示“AI标注”，不会覆盖经理原文。</div>' : ''}
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${showAI ? '保存并生成AI标注' : '保存评价'}</button></div>
     </form>`);
   }
 
@@ -3294,10 +3387,12 @@
   function splitTags(value) {
     return String(value || '').split(/[,，]/).map(item => item.trim()).filter(Boolean);
   }
-  function permissionsFromPayload(payload) {
-    const permissions = {};
+  function permissionsFromPayload(payload, fallback = {}) {
+    const permissions = { ...fallback };
     Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-      permissions[key] = Boolean(payload[`permission__${key}`]);
+      if (Object.hasOwn(payload, `permission__${key}`)) {
+        permissions[key] = Boolean(payload[`permission__${key}`]);
+      }
       delete payload[`permission__${key}`];
     });
     return permissions;
@@ -3394,10 +3489,14 @@
       } else if (form.id === 'permissionGroupForm') {
         const payload = formPayload(form);
         const groupId = payload.groupId;
+        const existingGroup = groupId
+          ? (state.data.permissionGroups || []).find(group => group.id === groupId)
+          : null;
+        const permissionFallback = existingGroup?.permissions || state.data.rolePermissions?.[payload.role] || {};
         const body = {
           name: String(payload.name || '').trim(),
           description: String(payload.description || ''),
-          permissions: permissionsFromPayload(payload),
+          permissions: permissionsFromPayload(payload, permissionFallback),
         };
         if (groupId) {
           await api(`/api/sales-crm/permission-groups/${encodeURIComponent(groupId)}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -3409,9 +3508,14 @@
       } else if (form.id === 'permissionOverrideForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
-        const overrides = {};
+        const user = state.data.users.find(item => item.id === userId);
+        const overrides = { ...(user?.permissionOverrides || {}) };
         Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-          overrides[key] = ['inherit', 'allow', 'deny'].includes(payload[`override__${key}`]) ? payload[`override__${key}`] : 'inherit';
+          if (Object.hasOwn(payload, `override__${key}`)) {
+            overrides[key] = ['inherit', 'allow', 'deny'].includes(payload[`override__${key}`])
+              ? payload[`override__${key}`]
+              : 'inherit';
+          }
         });
         await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, { method: 'PUT', body: JSON.stringify(overrides) });
         await refresh('个人权限已更新');
@@ -3474,10 +3578,13 @@
       } else if (form.id === 'evaluationForm') {
         const button = form.querySelector('button[type=submit]');
         button.disabled = true;
-        button.textContent = 'AI分析中…';
+        button.textContent = customerAIEnabled() ? 'AI分析中…' : '保存中…';
         const result = await api('/api/sales-crm/evaluations', { method: 'POST', body: JSON.stringify(formPayload(form)) });
-        await refresh(result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成');
+        await refresh(customerAIEnabled()
+          ? (result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成')
+          : '经理评价已保存');
       } else if (form.id === 'drawerAiForm') {
+        if (!customerAIEnabled()) return;
         const message = String(new FormData(form).get('message') || '').trim();
         if (!message) return;
         const context = state.drawerAiContext || {};
@@ -3668,7 +3775,7 @@
     if (evaluateContact) openEvaluationModal('contact', evaluateContact.dataset.evaluateContact);
     if (event.target.closest('[data-add-contact]')) openContactModal();
     const retryEvaluation = event.target.closest('[data-retry-evaluation]');
-    if (retryEvaluation) {
+    if (retryEvaluation && customerAIEnabled()) {
       try {
         toast('正在重新生成AI标注…');
         const result = await api(`/api/sales-crm/evaluations/${encodeURIComponent(retryEvaluation.dataset.retryEvaluation)}/retry`, { method: 'POST', body: '{}' });
@@ -3921,9 +4028,12 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
+    if (view === 'aiTasks' && !customerAIEnabled()) {
+      view = firstAllowedBusinessView();
+      toast('AI 功能已关闭，已返回业务首页');
+    }
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
     const canonicalView = legacyIntakeStatus ? 'intake' : view;
-    if (canonicalView === 'aiTasks' && !customerAIEnabled()) return toast('AI 控制平面尚未启用');
     const permission = viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
     state.view = canonicalView;
