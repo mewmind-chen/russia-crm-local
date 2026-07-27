@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issues-93-94">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issues-95-96">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -358,10 +358,11 @@
           <div class="toolbar">
             <div class="segmented" id="alertTabs">
               <button class="active" data-severity="">全部异常</button>
-              <button data-severity="critical">立即处理</button>
-              <button data-severity="warning">需要关注</button>
+              <button data-severity="immediate">立即处理</button>
+              <button data-severity="today">今天完成</button>
+              <button data-severity="attention">需要关注</button>
             </div>
-            <span class="toolbar-count">系统按动作时效自动判断，无需人工上报</span>
+            <span class="toolbar-count">同一对象只显示一行，其他原因保留为标签</span>
           </div>
           <div id="alertTable" class="data-table"></div>
         </article>
@@ -502,6 +503,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260727-issues-93-94"></script>
+  <script src="/sales-assets/app.js?v=20260727-issues-95-96"></script>
 </body>
 </html>

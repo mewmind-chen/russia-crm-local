@@ -507,6 +507,23 @@
       (!countries.length || countries.includes(account.country))
       && (!owners.length || owners.includes(account.owner_id || '__unassigned__')));
   }
+  function alertReasons(alert) {
+    return Array.isArray(alert?.reasons) && alert.reasons.length ? alert.reasons : [alert];
+  }
+  function alertHasCode(alert, code) {
+    return alertReasons(alert).some(reason => reason?.code === code);
+  }
+  function scopedAlerts() {
+    const accounts = scopedAccounts();
+    const ids = new Set(accounts.map(item => item.id));
+    const owners = state.customerFilters.owners;
+    const countries = state.customerFilters.countries;
+    return state.data.alerts.filter(item => {
+      if (!item.intakeItemId) return ids.has(item.customerId);
+      return (!owners.length || owners.includes(item.ownerId || '__unassigned__'))
+        && (!countries.length || countries.includes(item.country || ''));
+    });
+  }
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
   }
@@ -519,7 +536,7 @@
 
   function renderAll() {
     if ($('#navCustomerCount')) $('#navCustomerCount').textContent = state.data.accounts.length;
-    if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.filter(item => item.severity === 'critical').length;
+    if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.length;
     const unreadNotifications = (state.data.notifications || [])
       .filter(item => item.user_id === state.data.user.id && item.status === 'unread').length;
     if ($('#navNotificationCount')) $('#navNotificationCount').textContent = unreadNotifications;
@@ -567,8 +584,8 @@
     return {
       accounts: accounts.length, contacted: atLeast('contacted'), replies: atLeast('replied'), meetings: atLeast('meeting'),
       rfqs: rfqs.length, quotes: quotes.length, orders: orders.length,
-      overdue: alerts.filter(item => item.code === 'OVERDUE').length,
-      managerNeeded: alerts.filter(item => item.code === 'MANAGER_NEEDED').length,
+      overdue: alerts.filter(item => alertHasCode(item, 'OVERDUE')).length,
+      managerNeeded: alerts.filter(item => alertHasCode(item, 'MANAGER_NEEDED')).length,
       revenue: orders.reduce((sum, item) => sum + Number(item.amount), 0),
     };
   }
@@ -599,10 +616,9 @@
         <span class="funnel-count">${item.count}</span><span class="funnel-rate">${percent(item.count, previous)}</span>
       </div>`;
     }).join('');
-    const ids = new Set(accounts.map(item => item.id));
-    const attention = state.data.alerts.filter(item => item.intakeItemId || ids.has(item.customerId)).slice(0, 5);
+    const attention = scopedAlerts().slice(0, 5);
     $('#attentionList').innerHTML = attention.length ? attention.map(item => `<div class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
-      <i class="severity-dot ${item.severity}"></i><div><strong>${esc(item.companyName)}</strong><span>${esc(item.title)} · ${esc(item.detail)}</span></div><b>${item.severity === 'critical' ? '立即' : '关注'}</b>
+      <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(item.companyName)}</strong><span>${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
     </div>`).join('') : '<div class="empty">当前没有需要处理的异常</div>';
     renderCountrySnapshot(accounts);
     const activities = filteredActivities(accounts).slice(0, 8);
@@ -1822,7 +1838,7 @@
           `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
           esc(account.owner_name || '未分配'),
           `<span>${relative(account.last_activity_at)}</span>`,
-          `<div class="company-cell"><strong class="${alert?.code === 'OVERDUE' ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${shortDate(account.next_action_at, true)}</span></div>`,
+          `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${shortDate(account.next_action_at, true)}</span></div>`,
           `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span> · ${money(account.potential_value)}`,
           `${alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>'}${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
         ];
@@ -1897,29 +1913,34 @@
   }
 
   function renderAlerts() {
-    const ids = new Set(scopedAccounts().map(item => item.id));
-    const all = state.data.alerts.filter(item => item.intakeItemId || ids.has(item.customerId));
+    const all = scopedAlerts();
+    const reasonCount = all.reduce((sum, item) => sum + Number(item.reasonCount || 1), 0);
     const counts = {
-      critical: all.filter(item => item.severity === 'critical').length,
-      manager: all.filter(item => item.code === 'MANAGER_NEEDED').length,
-      overdue: all.filter(item => item.code === 'OVERDUE').length,
-      stalled: all.filter(item => ['MEETING_NO_RFQ', 'QUOTE_IDLE', 'STALE'].includes(item.code)).length,
+      immediate: all.filter(item => item.urgency === 'immediate').length,
+      today: all.filter(item => item.urgency === 'today').length,
+      attention: all.filter(item => item.urgency === 'attention').length,
     };
     $('#alertSummary').innerHTML = [
-      ['立即处理', counts.critical, '影响客户转化的严重异常'],
-      ['等待介入', counts.manager, '需要管理者参与的重点客户'],
-      ['任务超期', counts.overdue, '销售未按计划完成下一步'],
-      ['阶段停滞', counts.stalled, '会议、询价或报价后未推进'],
+      ['待处理对象', all.length, `${reasonCount} 个异常原因，已按客户或线索去重`],
+      ['立即处理', counts.immediate, '询价、经理介入或领取时限事项'],
+      ['今天完成', counts.today, '超期、缺少下一步或未首次触达'],
+      ['需要关注', counts.attention, '存在阶段停滞风险'],
     ].map(([label, value, text]) => `<article class="alert-kpi"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></article>`).join('');
-    const rows = all.filter(item => !state.alertSeverity || item.severity === state.alertSeverity);
+    const rows = all.filter(item => !state.alertSeverity || item.urgency === state.alertSeverity);
     $('#alertTable').innerHTML = table(
-      ['等级', '客户', '异常类型', '系统判断', '负责人', '建议动作'],
+      ['等级', '客户', '主要原因 / 其他原因', '计划时间', '负责人', '唯一建议动作'],
       rows.map(item => {
         const account = state.data.accounts.find(row => row.id === item.customerId);
+        const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
+        const other = (item.otherReasons || []).map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('');
+        const due = item.dueAt
+          ? `${shortDate(item.dueAt, true)}${item.maxOverdueHours ? ` · 已超期 ${Math.floor(item.maxOverdueHours)} 小时` : ''}`
+          : '未设置计划时间';
         const row = [
-          `<span class="pill ${item.severity === 'critical' ? 'red' : 'amber'}">${item.severity === 'critical' ? '立即' : '关注'}</span>`,
+          `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
           `<div class="company-cell"><strong>${esc(item.companyName)}</strong><span>${item.intakeItemId ? '未开发线索 · 待领取' : `${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
-          `<strong>${esc(item.title)}</strong>`, esc(item.detail), esc(account?.owner_name || userById(item.ownerId)?.name || ''), item.intakeItemId
+          `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
+          esc(due), esc(account?.owner_name || userById(item.ownerId)?.name || ''), item.intakeItemId
             ? `<button class="text-button" data-intake-profile="${esc(item.intakeItemId)}">${esc(item.action)} →</button>`
             : `<button class="text-button" data-open-customer="${item.customerId}">${esc(item.action)} →</button>`,
         ];
@@ -2016,7 +2037,10 @@
         && (!$('#ownerFilter')?.value
           || ($('#ownerFilter').value === '__unassigned__'
             ? !item.ownerId : item.ownerId === $('#ownerFilter').value))
-        && (!state.alertSeverity || item.severity === state.alertSeverity);
+        && (!state.alertSeverity
+          || (state.alertSeverity === 'immediate' ? item.severity === 'critical'
+            : state.alertSeverity === 'attention' ? item.severity !== 'critical'
+              : false));
     });
     const ready = rows.filter(item => item.ai?.result && !item.ai.stale).length;
     const pending = rows.filter(item =>
