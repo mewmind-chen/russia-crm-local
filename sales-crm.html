@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260725-19&ux62=1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260727-issues-93-94">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -209,16 +209,63 @@
       </section>
 
       <section id="customersView" class="view">
-        <article class="panel">
-          <div class="toolbar">
-            <div class="search-box">⌕ <input id="customerSearch" placeholder="搜索公司、国家、行业、产品或评价标签"></div>
-            <select id="stageFilter"><option value="">全部阶段</option></select>
-            <select id="priorityFilter"><option value="">全部优先级</option><option>A</option><option>B</option><option>C</option></select>
-            <select id="evaluationTagFilter"><option value="">全部评价标签</option></select>
-            <label class="check"><input id="onlyOverdue" type="checkbox"> 仅看超期</label>
-            <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出数据</button>
+        <article class="panel customer-portfolio-panel">
+          <div class="toolbar customer-filter-toolbar">
+            <div class="search-box customer-search-box">⌕
+              <input id="customerSearch" placeholder="搜索公司、客户编号、国家、行业、产品、网站或评价标签" autocomplete="off">
+              <button id="customerSearchClear" class="icon-button customer-search-clear hidden" type="button" aria-label="清空搜索">×</button>
+            </div>
+            <select id="customerSort" aria-label="客户排序">
+              <option value="next_urgent">下一步最紧急</option>
+              <option value="last_activity">最近有动作</option>
+              <option value="newest">最新创建</option>
+              <option value="potential_desc">潜在金额最高</option>
+              <option value="company">公司名称</option>
+            </select>
+            <button id="customerFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">更多筛选</button>
+            <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出当前结果</button>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
+          <div id="customerQuickViews" class="customer-quick-views" aria-label="客户快捷视图">
+            <button type="button" class="active" data-customer-quick="all">全部</button>
+            <button type="button" data-customer-quick="mine">我负责的</button>
+            <button type="button" data-customer-quick="unassigned">未分配</button>
+            <button type="button" data-customer-quick="today">今天跟进</button>
+            <button type="button" data-customer-quick="overdue">已超期</button>
+            <button type="button" data-customer-quick="no_next">无下一步</button>
+            <button type="button" data-customer-quick="disqualified">确认不对口</button>
+          </div>
+          <div id="customerActiveFilters" class="customer-active-filters hidden"></div>
+          <section id="customerFilterPanel" class="customer-filter-panel hidden" aria-label="更多客户筛选">
+            <div class="customer-filter-panel-head">
+              <div><strong>更多筛选</strong><span>同一条件内多选为“或”，不同条件之间为“且”</span></div>
+              <button class="icon-button" type="button" data-close-customer-filters aria-label="关闭筛选">×</button>
+            </div>
+            <div class="customer-filter-grid">
+              <label>国家<select id="customerCountryFilter" multiple></select></label>
+              <label>负责人<select id="customerOwnerFilter" multiple></select></label>
+              <label>阶段<select id="stageFilter" multiple></select></label>
+              <label>优先级<select id="priorityFilter" multiple><option>A</option><option>B</option><option>C</option></select></label>
+              <label>客户类型<select id="customerTypeFilter" multiple></select></label>
+              <label>行业<select id="customerIndustryFilter" multiple></select></label>
+              <label>来源<select id="customerSourceFilter" multiple></select></label>
+              <label>创建人<select id="customerCreatorFilter" multiple></select></label>
+              <label>评价标签<select id="evaluationTagFilter" multiple></select></label>
+              <label>最近动作<select id="customerLastActionFilter" multiple>
+                <option value="today">今天</option><option value="7d">近7天</option><option value="30d">近30天</option><option value="older">30天前</option><option value="none">从未记录</option>
+              </select></label>
+              <label>下一步时间<select id="customerNextStepFilter" multiple>
+                <option value="overdue">已超期</option><option value="today">今天</option><option value="7d">未来7天</option><option value="later">7天以后</option><option value="none">未填写</option>
+              </select></label>
+              <label>创建日期从<input id="customerCreatedFrom" type="date"></label>
+              <label>创建日期至<input id="customerCreatedTo" type="date"></label>
+            </div>
+            <div class="customer-filter-actions">
+              <button id="customerFilterReset" class="button secondary" type="button">清空全部</button>
+              <button id="customerFilterApply" class="button primary" type="button">查看结果</button>
+            </div>
+          </section>
+          <div id="customerFilterBackdrop" class="customer-filter-backdrop hidden" data-close-customer-filters></div>
           <div id="customerBulkBar" class="customer-bulk-bar hidden">
             <span id="customerSelectionCount">已选择 0 个客户</span>
             <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前结果</button>
@@ -455,6 +502,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260725-19&ux62=1"></script>
+  <script src="/sales-assets/app.js?v=20260727-issues-93-94"></script>
 </body>
 </html>

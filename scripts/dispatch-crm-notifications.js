@@ -11,15 +11,17 @@ const {
   finishDelivery,
   installNotificationDeliverySchema,
 } = require('../lib/crm_notifications');
+const { FOLLOW_UP_TERMINAL_STAGES } = require('../lib/customer_stages');
 const db = new Database(path.join(__dirname, '..', 'data', 'crm.db'));
 db.pragma('journal_mode = WAL');
 installNotificationDeliverySchema(db);
 const now = new Date();
 const nowText = now.toISOString().slice(0, 19).replace('T', ' ');
 const day = nowText.slice(0, 10);
+const terminalStages = [...FOLLOW_UP_TERMINAL_STAGES];
 const rows = db.prepare(`SELECT a.id customer_id,a.company_name,a.owner_id,a.stage,a.assignment_status,
   a.claim_due_at,a.claimed_at,a.last_activity_at,a.next_action,a.next_action_at
-  FROM crm_accounts a WHERE a.stage NOT IN ('won','repeat','lost')`).all();
+  FROM crm_accounts a WHERE a.stage NOT IN (${terminalStages.map(() => '?').join(',')})`).all(...terminalStages);
 const hours = value => value ? (now - new Date(String(value).replace(' ', 'T') + 'Z')) / 3600000 : Infinity;
 const candidates = [];
 for (const row of rows) {

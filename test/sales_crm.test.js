@@ -17,7 +17,7 @@ const {
 test('sales CRM has a complete electronic-components export funnel', () => {
   assert.deepEqual(STAGES.map(item => item[0]), [
     'new', 'qualified', 'contacted', 'replied', 'connected', 'meeting',
-    'manager', 'rfq', 'quoted', 'negotiating', 'won', 'repeat', 'lost',
+    'manager', 'rfq', 'quoted', 'negotiating', 'won', 'repeat', 'disqualified', 'lost',
   ]);
   assert.equal(ACTIVITY_STAGE.meeting, 'meeting');
   assert.equal(ACTIVITY_STAGE.manager_join, 'manager');

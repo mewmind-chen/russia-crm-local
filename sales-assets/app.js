@@ -15,6 +15,13 @@
     intakeHasMore: false,
     intakeLoading: false,
     intakeSearchTimer: null,
+    customerSearchTimer: null,
+    customerFilters: {
+      search: '', quickView: 'all', sort: 'next_urgent',
+      countries: [], owners: [], stages: [], priorities: [], customerTypes: [],
+      industries: [], sources: [], creators: [], evaluationTags: [],
+      lastActionBuckets: [], nextStepBuckets: [], createdFrom: '', createdTo: '',
+    },
     stageReached: '',
     teamUserId: '',
     activityType: 'email',
@@ -143,6 +150,104 @@
   }
   function can(permission) {
     return Boolean(state.data?.user?.permissions?.[permission]);
+  }
+  function defaultCustomerFilters() {
+    return {
+      search: '', quickView: 'all', sort: 'next_urgent',
+      countries: [], owners: [], stages: [], priorities: [], customerTypes: [],
+      industries: [], sources: [], creators: [], evaluationTags: [],
+      lastActionBuckets: [], nextStepBuckets: [], createdFrom: '', createdTo: '',
+    };
+  }
+  function customerFilterStorageKey() {
+    return `tradepulse.customerFilters.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function restoreCustomerFilters() {
+    const defaults = defaultCustomerFilters();
+    try {
+      const saved = JSON.parse(localStorage.getItem(customerFilterStorageKey()) || '{}');
+      for (const key of Object.keys(defaults)) {
+        if (Array.isArray(defaults[key])) defaults[key] = Array.isArray(saved[key]) ? saved[key].map(String) : [];
+        else if (saved[key] !== undefined) defaults[key] = String(saved[key] || '');
+      }
+    } catch (_error) {}
+    state.customerFilters = defaults;
+  }
+  function saveCustomerFilters() {
+    try { localStorage.setItem(customerFilterStorageKey(), JSON.stringify(state.customerFilters)); } catch (_error) {}
+  }
+  function selectedValues(select) {
+    return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
+  }
+  function setSelectedValues(select, values) {
+    if (!select) return;
+    const selected = new Set(values || []);
+    [...select.options].forEach(option => { option.selected = selected.has(option.value); });
+  }
+  function customerFilterValues(rows, key) {
+    return [...new Set(rows.map(row => row[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'));
+  }
+  function multiOptions(values, labels = {}) {
+    return values.map(value => `<option value="${esc(value)}">${esc(labels[value] || value)}</option>`).join('');
+  }
+  function syncCustomerFilterControls() {
+    const filters = state.customerFilters;
+    if ($('#customerSearch')) $('#customerSearch').value = filters.search;
+    $('#customerSearchClear')?.classList.toggle('hidden', !filters.search);
+    if ($('#customerSort')) $('#customerSort').value = filters.sort;
+    if ($('#customerCreatedFrom')) $('#customerCreatedFrom').value = filters.createdFrom;
+    if ($('#customerCreatedTo')) $('#customerCreatedTo').value = filters.createdTo;
+    const mappings = {
+      customerCountryFilter: 'countries', customerOwnerFilter: 'owners', stageFilter: 'stages',
+      priorityFilter: 'priorities', customerTypeFilter: 'customerTypes',
+      customerIndustryFilter: 'industries', customerSourceFilter: 'sources',
+      customerCreatorFilter: 'creators', evaluationTagFilter: 'evaluationTags',
+      customerLastActionFilter: 'lastActionBuckets', customerNextStepFilter: 'nextStepBuckets',
+    };
+    for (const [id, key] of Object.entries(mappings)) setSelectedValues($(`#${id}`), filters[key]);
+    if ($('#countryFilter')) $('#countryFilter').value = filters.countries.length === 1 ? filters.countries[0] : '';
+    if ($('#ownerFilter')) $('#ownerFilter').value = filters.owners.length === 1 ? filters.owners[0] : '';
+    $$('#customerQuickViews [data-customer-quick]').forEach(button =>
+      button.classList.toggle('active', button.dataset.customerQuick === filters.quickView));
+  }
+  function readCustomerFilterControls() {
+    const filters = state.customerFilters;
+    filters.search = ($('#customerSearch')?.value || '').trim();
+    filters.sort = $('#customerSort')?.value || 'next_urgent';
+    filters.createdFrom = $('#customerCreatedFrom')?.value || '';
+    filters.createdTo = $('#customerCreatedTo')?.value || '';
+    Object.assign(filters, {
+      countries: selectedValues($('#customerCountryFilter')),
+      owners: selectedValues($('#customerOwnerFilter')),
+      stages: selectedValues($('#stageFilter')),
+      priorities: selectedValues($('#priorityFilter')),
+      customerTypes: selectedValues($('#customerTypeFilter')),
+      industries: selectedValues($('#customerIndustryFilter')),
+      sources: selectedValues($('#customerSourceFilter')),
+      creators: selectedValues($('#customerCreatorFilter')),
+      evaluationTags: selectedValues($('#evaluationTagFilter')),
+      lastActionBuckets: selectedValues($('#customerLastActionFilter')),
+      nextStepBuckets: selectedValues($('#customerNextStepFilter')),
+    });
+  }
+  function applyCustomerFilters({ close = false } = {}) {
+    readCustomerFilterControls();
+    saveCustomerFilters();
+    syncCustomerFilterControls();
+    renderCustomers();
+    if (close) closeCustomerFilterPanel();
+  }
+  function openCustomerFilterPanel() {
+    $('#customerFilterPanel')?.classList.remove('hidden');
+    $('#customerFilterBackdrop')?.classList.remove('hidden');
+    $('#customerFilterToggle')?.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('customer-filters-open');
+  }
+  function closeCustomerFilterPanel() {
+    $('#customerFilterPanel')?.classList.add('hidden');
+    $('#customerFilterBackdrop')?.classList.add('hidden');
+    $('#customerFilterToggle')?.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('customer-filters-open');
   }
   function customerAIEnabled() {
     return Boolean(state.data?.features?.aiStations);
@@ -298,6 +403,7 @@
   async function load({ fromLogin = false } = {}) {
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      restoreCustomerFilters();
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
       state.assistantRuntimePending = false;
@@ -367,35 +473,39 @@
   }
 
   function populateFilters() {
-    const country = $('#countryFilter').value;
-    const owner = $('#ownerFilter').value;
     const countries = [...new Set(state.data.accounts.map(item => item.country).filter(Boolean))].sort();
     $('#countryFilter').innerHTML = '<option value="">全部国家</option>' + countries.map(item => `<option>${esc(item)}</option>`).join('');
-    $('#countryFilter').value = country;
     const activeSales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     $('#ownerFilter').innerHTML = '<option value="">全部负责人</option><option value="__unassigned__">不分配</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
-    $('#ownerFilter').value = [...$('#ownerFilter').options].some(option => option.value === owner) ? owner : '';
     const bulkOwner = $('#bulkCustomerOwner');
     if (bulkOwner) {
       const selected = bulkOwner.value;
       bulkOwner.innerHTML = '<option value="">请选择销售</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
       bulkOwner.value = [...bulkOwner.options].some(option => option.value === selected) ? selected : '';
     }
-    $('#stageFilter').innerHTML = '<option value="">全部阶段</option>' + state.data.stages.map(stage => `<option value="${stage.key}">${esc(stage.label)}</option>`).join('');
+    $('#customerCountryFilter').innerHTML = multiOptions(countries);
+    $('#customerOwnerFilter').innerHTML = '<option value="__unassigned__">未分配</option>'
+      + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+    $('#stageFilter').innerHTML = state.data.stages.map(stage => `<option value="${stage.key}">${esc(stage.label)}</option>`).join('');
+    $('#customerTypeFilter').innerHTML = multiOptions(customerFilterValues(state.data.accounts, 'customer_type'));
+    $('#customerIndustryFilter').innerHTML = multiOptions(customerFilterValues(state.data.accounts, 'industry'));
+    $('#customerSourceFilter').innerHTML = multiOptions(customerFilterValues(state.data.accounts, 'source'));
+    const creatorLabels = Object.fromEntries(state.data.users.map(user => [user.id, user.name]));
+    const creators = customerFilterValues(state.data.accounts, 'created_by');
+    $('#customerCreatorFilter').innerHTML = multiOptions(creators, creatorLabels);
     const tags = [...new Set((state.data.customerEvaluationTags || []).flatMap(item => item.labels || []))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'));
     const tagFilter = $('#evaluationTagFilter');
-    tagFilter.innerHTML = tags.length
-      ? '<option value="">全部评价标签</option>' + tags.map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('')
-      : '<option value="">暂无评价标签</option>';
+    tagFilter.innerHTML = tags.map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
     tagFilter.disabled = !tags.length;
+    syncCustomerFilterControls();
   }
 
   function scopedAccounts() {
-    const country = $('#countryFilter')?.value || '';
-    const owner = $('#ownerFilter')?.value || '';
+    const countries = state.customerFilters.countries;
+    const owners = state.customerFilters.owners;
     return state.data.accounts.filter(account =>
-      (!country || account.country === country)
-      && (!owner || (owner === '__unassigned__' ? !account.owner_id : account.owner_id === owner)));
+      (!countries.length || countries.includes(account.country))
+      && (!owners.length || owners.includes(account.owner_id || '__unassigned__')));
   }
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
@@ -448,7 +558,7 @@
     const ids = new Set(accounts.map(item => item.id));
     const atLeast = stage => {
       const order = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
-      return accounts.filter(item => item.stage !== 'lost' && order[item.stage] >= order[stage]).length;
+      return accounts.filter(item => !['lost', 'disqualified'].includes(item.stage) && order[item.stage] >= order[stage]).length;
     };
     const rfqs = state.data.rfqs.filter(item => ids.has(item.customer_id));
     const quotes = state.data.quotes.filter(item => ids.has(item.customer_id));
@@ -477,9 +587,9 @@
     ];
     $('#summaryCards').innerHTML = cards.map(([label, value, note, cls]) => `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     const stageOrder = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
-    const funnelStages = state.data.stages.filter(item => !['new', 'lost'].includes(item.key));
+    const funnelStages = state.data.stages.filter(item => !['new', 'lost', 'disqualified'].includes(item.key));
     const funnel = funnelStages.map(stage => ({
-      ...stage, count: accounts.filter(account => account.stage !== 'lost' && stageOrder[account.stage] >= stageOrder[stage.key]).length,
+      ...stage, count: accounts.filter(account => !['lost', 'disqualified'].includes(account.stage) && stageOrder[account.stage] >= stageOrder[stage.key]).length,
     }));
     const max = Math.max(1, funnel[0]?.count || 1);
     $('#funnelChart').innerHTML = funnel.map((item, index) => {
@@ -1548,21 +1658,130 @@
     } catch (error) { toast(error.message); }
   }
 
-  function filteredCustomerAccounts() {
-    const search = ($('#customerSearch')?.value || '').trim().toLowerCase();
-    const stage = $('#stageFilter')?.value || '';
-    const priority = $('#priorityFilter')?.value || '';
-    const evaluationTag = $('#evaluationTagFilter')?.value || '';
-    const onlyOverdue = $('#onlyOverdue')?.checked;
-    const stageOrder = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
-    return scopedAccounts().filter(account => {
-      const labels = labelsForAccount(account.id);
-      const text = [account.company_name, account.country, account.industry, account.product_focus, account.customer_type, ...labels].join(' ').toLowerCase();
-      const reached = !state.stageReached || (account.stage !== 'lost' && stageOrder[account.stage] >= stageOrder[state.stageReached]);
-      return (!search || text.includes(search)) && (!stage || account.stage === stage) && reached
-        && (!priority || account.priority === priority) && (!evaluationTag || labels.includes(evaluationTag))
-        && (!onlyOverdue || state.data.alerts.some(alert => alert.customerId === account.id && alert.code === 'OVERDUE'));
+  function crmTime(value) {
+    if (!value) return 0;
+    const time = new Date(String(value).replace(' ', 'T') + (String(value).includes('Z') ? '' : 'Z')).getTime();
+    return Number.isNaN(time) ? 0 : time;
+  }
+  function matchesTimeBuckets(value, buckets, kind) {
+    if (!buckets.length) return true;
+    const time = crmTime(value);
+    const now = Date.now();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const tomorrow = start.getTime() + 86400000;
+    return buckets.some(bucket => {
+      if (bucket === 'none') return !time;
+      if (!time) return false;
+      if (kind === 'last') {
+        if (bucket === 'today') return time >= start.getTime();
+        if (bucket === '7d') return time >= now - 7 * 86400000;
+        if (bucket === '30d') return time >= now - 30 * 86400000;
+        if (bucket === 'older') return time < now - 30 * 86400000;
+      } else {
+        if (bucket === 'overdue') return time < now;
+        if (bucket === 'today') return time >= start.getTime() && time < tomorrow;
+        if (bucket === '7d') return time >= tomorrow && time < now + 7 * 86400000;
+        if (bucket === 'later') return time >= now + 7 * 86400000;
+      }
+      return false;
     });
+  }
+  function customerSearchText(account) {
+    const labels = labelsForAccount(account.id);
+    const contactText = can('view_contacts')
+      ? (state.data.insights?.contacts || [])
+        .filter(contact => (contact.customerId || contact.customer_id) === account.id)
+        .flatMap(contact => [contact.name, contact.title, contact.phone, contact.email, contact.social])
+      : [];
+    return [
+      account.company_name, account.id, account.external_customer_id, account.country, account.city,
+      account.industry, account.product_focus, account.customer_type, account.source, account.website,
+      account.owner_name, account.creator_name, ...labels, ...contactText,
+    ].join(' ').toLowerCase();
+  }
+  function filteredCustomerAccounts() {
+    const filters = state.customerFilters;
+    const keywords = filters.search.toLowerCase().split(/\s+/).filter(Boolean);
+    const stageOrder = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
+    const terminalStages = new Set(['won', 'repeat', 'lost', 'disqualified']);
+    const now = Date.now();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const tomorrow = start.getTime() + 86400000;
+    const accounts = scopedAccounts().filter(account => {
+      const labels = labelsForAccount(account.id);
+      const text = customerSearchText(account);
+      const reached = !state.stageReached
+        || (!['lost', 'disqualified'].includes(account.stage) && stageOrder[account.stage] >= stageOrder[state.stageReached]);
+      const nextAt = crmTime(account.next_action_at);
+      const quickMatches = filters.quickView === 'all'
+        || (filters.quickView === 'mine' && account.owner_id === state.data.user.id)
+        || (filters.quickView === 'unassigned' && !account.owner_id)
+        || (filters.quickView === 'today' && nextAt >= start.getTime() && nextAt < tomorrow)
+        || (filters.quickView === 'overdue' && !terminalStages.has(account.stage) && nextAt && nextAt < now)
+        || (filters.quickView === 'no_next' && !terminalStages.has(account.stage) && !account.next_action)
+        || (filters.quickView === 'disqualified' && account.stage === 'disqualified');
+      const created = String(account.created_at || '').slice(0, 10);
+      return keywords.every(keyword => text.includes(keyword)) && reached && quickMatches
+        && (!filters.stages.length || filters.stages.includes(account.stage))
+        && (!filters.priorities.length || filters.priorities.includes(account.priority))
+        && (!filters.customerTypes.length || filters.customerTypes.includes(account.customer_type))
+        && (!filters.industries.length || filters.industries.includes(account.industry))
+        && (!filters.sources.length || filters.sources.includes(account.source))
+        && (!filters.creators.length || filters.creators.includes(account.created_by))
+        && (!filters.evaluationTags.length || filters.evaluationTags.some(tag => labels.includes(tag)))
+        && matchesTimeBuckets(account.last_activity_at, filters.lastActionBuckets, 'last')
+        && matchesTimeBuckets(account.next_action_at, filters.nextStepBuckets, 'next')
+        && (!filters.createdFrom || created >= filters.createdFrom)
+        && (!filters.createdTo || created <= filters.createdTo);
+    });
+    const compareText = (left, right) => String(left || '').localeCompare(String(right || ''), 'zh-CN');
+    return accounts.sort((left, right) => {
+      if (filters.sort === 'last_activity') return crmTime(right.last_activity_at) - crmTime(left.last_activity_at) || compareText(left.id, right.id);
+      if (filters.sort === 'newest') return crmTime(right.created_at) - crmTime(left.created_at) || compareText(left.id, right.id);
+      if (filters.sort === 'potential_desc') return Number(right.potential_value || 0) - Number(left.potential_value || 0) || compareText(left.id, right.id);
+      if (filters.sort === 'company') return compareText(left.company_name, right.company_name) || compareText(left.id, right.id);
+      const leftNext = crmTime(left.next_action_at) || Number.MAX_SAFE_INTEGER;
+      const rightNext = crmTime(right.next_action_at) || Number.MAX_SAFE_INTEGER;
+      return leftNext - rightNext || compareText(left.id, right.id);
+    });
+  }
+
+  function renderCustomerActiveFilters() {
+    const root = $('#customerActiveFilters');
+    if (!root) return;
+    const filters = state.customerFilters;
+    const stageLabels = Object.fromEntries(state.data.stages.map(item => [item.key, item.label]));
+    const userLabels = Object.fromEntries(state.data.users.map(item => [item.id, item.name]));
+    const quickLabels = { mine: '我负责的', unassigned: '未分配', today: '今天跟进', overdue: '已超期', no_next: '无下一步', disqualified: '确认不对口' };
+    const chips = [];
+    if (filters.search) chips.push(['search', '', `搜索：${filters.search}`]);
+    if (filters.quickView !== 'all') chips.push(['quickView', '', quickLabels[filters.quickView] || filters.quickView]);
+    const groups = {
+      countries: ['国家', {}], owners: ['负责人', { __unassigned__: '未分配', ...userLabels }],
+      stages: ['阶段', stageLabels], priorities: ['优先级', {}], customerTypes: ['客户类型', {}],
+      industries: ['行业', {}], sources: ['来源', {}], creators: ['创建人', userLabels],
+      evaluationTags: ['评价标签', {}], lastActionBuckets: ['最近动作', { today: '今天', '7d': '近7天', '30d': '近30天', older: '30天前', none: '无' }],
+      nextStepBuckets: ['下一步', { overdue: '已超期', today: '今天', '7d': '未来7天', later: '7天以后', none: '未填写' }],
+    };
+    for (const [key, [label, labels]] of Object.entries(groups)) {
+      filters[key].forEach(value => chips.push([key, value, `${label}：${labels[value] || value}`]));
+    }
+    if (filters.createdFrom) chips.push(['createdFrom', '', `创建自：${filters.createdFrom}`]);
+    if (filters.createdTo) chips.push(['createdTo', '', `创建至：${filters.createdTo}`]);
+    root.classList.toggle('hidden', !chips.length);
+    root.innerHTML = chips.map(([key, value, label]) =>
+      `<button type="button" data-remove-customer-filter="${esc(key)}" data-filter-value="${esc(value)}">${esc(label)} ×</button>`).join('')
+      + (chips.length ? '<button type="button" class="clear-all" data-clear-customer-filters>清空全部</button>' : '');
+  }
+  function advancedCustomerFilterCount() {
+    const filters = state.customerFilters;
+    return [
+      'countries', 'owners', 'stages', 'priorities', 'customerTypes', 'industries', 'sources',
+      'creators', 'evaluationTags', 'lastActionBuckets', 'nextStepBuckets',
+    ].reduce((count, key) => count + filters[key].length, 0)
+      + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
 
   function renderCustomers() {
@@ -1575,7 +1794,13 @@
     if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
     if ($('#bulkReturnCustomers')) $('#bulkReturnCustomers').disabled = !state.selectedCustomerIds.size;
     const reachedNote = state.stageReached ? ` · 漏斗累计达到“${stageLabel(state.stageReached)}”` : '';
-    $('#customerResultCount').textContent = `${accounts.length} 个客户${reachedNote}`;
+    $('#customerResultCount').textContent = `当前 ${accounts.length} / 授权 ${state.data.accounts.length}${reachedNote}`;
+    const filterCount = advancedCustomerFilterCount();
+    if ($('#customerFilterToggle')) $('#customerFilterToggle').textContent = filterCount ? `筛选 ${filterCount}` : '更多筛选';
+    if ($('#customerFilterApply')) $('#customerFilterApply').textContent = `查看结果（${accounts.length}）`;
+    if ($('#customerExportBtn')) $('#customerExportBtn').disabled = accounts.length === 0;
+    if ($('#selectFilteredCustomers')) $('#selectFilteredCustomers').disabled = accounts.length === 0;
+    renderCustomerActiveFilters();
     $('#customerTable').innerHTML = table(
       [canBulkAssign ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
       accounts.map(account => {
@@ -1890,7 +2115,7 @@
     const companyEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'company').map(item => item.customerId));
     const contactEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'contact').map(item => item.customerId));
     const aiCompleted = insightData.evaluations.filter(item => item.aiStatus === 'completed').length;
-    const accounts = scopedAccounts().filter(item => item.stage !== 'lost');
+    const accounts = scopedAccounts().filter(item => !['won', 'repeat', 'lost', 'disqualified'].includes(item.stage));
     $('#insightSummary').innerHTML = [
       ['活跃客户', accounts.length, '当前管理范围'],
       ['已有企业评价', companyEvaluated.size, `${percent(companyEvaluated.size, accounts.length)} 覆盖率`],
@@ -2116,10 +2341,10 @@
       const key = account[field] || '未标注';
       const item = groups[key] ||= { name: key, accounts: 0, contacted: 0, replied: 0, rfq: 0, won: 0, revenue: 0 };
       item.accounts += 1;
-      if (account.stage !== 'lost' && order[account.stage] >= order.contacted) item.contacted += 1;
-      if (account.stage !== 'lost' && order[account.stage] >= order.replied) item.replied += 1;
-      if (account.stage !== 'lost' && order[account.stage] >= order.rfq) item.rfq += 1;
-      if (account.stage !== 'lost' && order[account.stage] >= order.won) item.won += 1;
+      if (!['lost', 'disqualified'].includes(account.stage) && order[account.stage] >= order.contacted) item.contacted += 1;
+      if (!['lost', 'disqualified'].includes(account.stage) && order[account.stage] >= order.replied) item.replied += 1;
+      if (!['lost', 'disqualified'].includes(account.stage) && order[account.stage] >= order.rfq) item.rfq += 1;
+      if (!['lost', 'disqualified'].includes(account.stage) && order[account.stage] >= order.won) item.won += 1;
       item.revenue += orders.filter(row => row.customer_id === account.id).reduce((sum, row) => sum + Number(row.amount || 0), 0);
     });
     return Object.values(groups).map(item => ({
@@ -2922,11 +3147,14 @@
   function openEditAccountModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    const currentOwner = account.owner_id && !sales.some(user => user.id === account.owner_id)
+      ? state.data.users.find(user => user.id === account.owner_id)
+      : null;
     const canAssign = can('edit_customer') && can('view_all_customers') && can('manage_intake');
     openModal('调整客户信息', 'ACCOUNT CONTROL', `<form id="editAccountForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
-      <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}><option value="" ${account.owner_id ? '' : 'selected'}>不分配</option>${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
+      <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}><option value="" ${account.owner_id ? '' : 'selected'}>不分配</option>${currentOwner ? `<option value="${esc(currentOwner.id)}" selected>${esc(currentOwner.name)}（当前负责人）</option>` : ''}${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
@@ -3280,7 +3508,48 @@
     if (stageJump) {
       switchView('customers');
       state.stageReached = stageJump.dataset.stageJump;
-      $('#stageFilter').value = '';
+      state.customerFilters.stages = [];
+      setSelectedValues($('#stageFilter'), []);
+      renderCustomers();
+    }
+    const quickView = event.target.closest('[data-customer-quick]');
+    if (quickView) {
+      state.customerFilters.quickView = quickView.dataset.customerQuick || 'all';
+      saveCustomerFilters();
+      syncCustomerFilterControls();
+      renderCustomers();
+    }
+    if (event.target.closest('#customerSearchClear')) {
+      $('#customerSearch').value = '';
+      state.customerFilters.search = '';
+      saveCustomerFilters();
+      syncCustomerFilterControls();
+      renderCustomers();
+    }
+    if (event.target.closest('#customerFilterToggle')) {
+      if ($('#customerFilterPanel').classList.contains('hidden')) openCustomerFilterPanel();
+      else closeCustomerFilterPanel();
+    }
+    if (event.target.closest('[data-close-customer-filters]')) closeCustomerFilterPanel();
+    if (event.target.closest('#customerFilterApply')) applyCustomerFilters({ close: true });
+    if (event.target.closest('#customerFilterReset') || event.target.closest('[data-clear-customer-filters]')) {
+      state.customerFilters = defaultCustomerFilters();
+      state.stageReached = '';
+      saveCustomerFilters();
+      syncCustomerFilterControls();
+      renderCustomers();
+    }
+    const removeFilter = event.target.closest('[data-remove-customer-filter]');
+    if (removeFilter) {
+      const key = removeFilter.dataset.removeCustomerFilter;
+      const value = removeFilter.dataset.filterValue;
+      if (Array.isArray(state.customerFilters[key])) {
+        state.customerFilters[key] = state.customerFilters[key].filter(item => item !== value);
+      } else {
+        state.customerFilters[key] = key === 'quickView' ? 'all' : '';
+      }
+      saveCustomerFilters();
+      syncCustomerFilterControls();
       renderCustomers();
     }
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
@@ -3387,13 +3656,26 @@
     if (event.target.closest('#newUserBtn')) openUserModal();
     if (event.target.closest('#customerExportBtn')) {
       const link = document.createElement('a');
+      const filters = state.customerFilters;
       const params = new URLSearchParams({
         format: 'csv',
-        search: $('#customerSearch')?.value || '',
-        stage: $('#stageFilter')?.value || '',
-        priority: $('#priorityFilter')?.value || '',
-        evaluationTag: $('#evaluationTagFilter')?.value || '',
-        onlyOverdue: $('#onlyOverdue')?.checked ? '1' : '',
+        search: filters.search,
+        quickView: filters.quickView,
+        sort: filters.sort,
+        countries: filters.countries.join(','),
+        owners: filters.owners.join(','),
+        stages: filters.stages.join(','),
+        priorities: filters.priorities.join(','),
+        customerTypes: filters.customerTypes.join(','),
+        industries: filters.industries.join(','),
+        sources: filters.sources.join(','),
+        creators: filters.creators.join(','),
+        evaluationTags: filters.evaluationTags.join(','),
+        lastActionBuckets: filters.lastActionBuckets.join(','),
+        nextStepBuckets: filters.nextStepBuckets.join(','),
+        createdFrom: filters.createdFrom,
+        createdTo: filters.createdTo,
+        stageReached: state.stageReached,
       });
       link.href = `/api/sales-crm/export?${params}`;
       link.download = '';
@@ -3402,7 +3684,9 @@
       link.remove();
     }
     if (event.target.closest('#selectFilteredCustomers')) {
-      state.selectedCustomerIds = new Set(filteredCustomerAccounts().map(account => account.id));
+      const matches = filteredCustomerAccounts();
+      state.selectedCustomerIds = new Set(matches.slice(0, 500).map(account => account.id));
+      if (matches.length > 500) toast('一次最多选择500个客户，已选择当前排序前500个');
       renderCustomers();
     }
     if (event.target.closest('#clearCustomerSelection')) {
@@ -3648,6 +3932,7 @@
     if (view === 'recycleBin') void loadRecycleBin();
     if (view === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
+    closeCustomerFilterPanel();
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
     if (location.hash !== `#${view}`) {
@@ -3658,18 +3943,41 @@
 
   ['countryFilter', 'ownerFilter', 'periodFilter'].forEach(id => document.addEventListener('change', event => {
     if (event.target.id === id) {
+      if (event.target.id === 'countryFilter') state.customerFilters.countries = event.target.value ? [event.target.value] : [];
+      if (event.target.id === 'ownerFilter') state.customerFilters.owners = event.target.value ? [event.target.value] : [];
+      if (['countryFilter', 'ownerFilter'].includes(event.target.id)) {
+        saveCustomerFilters();
+        syncCustomerFilterControls();
+      }
       renderAll();
       if (['countryFilter', 'ownerFilter'].includes(event.target.id) && ['intake', 'pending', 'claimed'].includes(state.view)) {
         void loadIntakePage({ reset: true });
       }
     }
   }));
-  ['customerSearch', 'stageFilter', 'priorityFilter', 'evaluationTagFilter', 'onlyOverdue'].forEach(id => document.addEventListener(id === 'customerSearch' ? 'input' : 'change', event => {
-    if (event.target.id === id) {
-      if (event.target.id === 'stageFilter') state.stageReached = '';
+  document.addEventListener('input', event => {
+    if (event.target.id === 'customerSearch') {
+      clearTimeout(state.customerSearchTimer);
+      state.customerSearchTimer = setTimeout(() => {
+        state.customerFilters.search = event.target.value.trim();
+        saveCustomerFilters();
+        syncCustomerFilterControls();
+        renderCustomers();
+      }, 250);
+    }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.id === 'customerSort') {
+      state.customerFilters.sort = event.target.value;
+      saveCustomerFilters();
       renderCustomers();
     }
-  }));
+    if (event.target.id === 'stageFilter') state.stageReached = '';
+    if (event.target.closest('#customerFilterPanel')) {
+      readCustomerFilterControls();
+      if ($('#customerFilterApply')) $('#customerFilterApply').textContent = `查看结果（${filteredCustomerAccounts().length}）`;
+    }
+  });
   document.addEventListener('input', event => {
     if (event.target.id === 'insightSearch') renderInsightsHub();
     if (event.target.id === 'poolSearch') scheduleResearchReload('pool');
@@ -3712,7 +4020,7 @@
     location.reload();
   });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { closeModal(); closeDrawer(); document.body.classList.remove('sidebar-open'); }
+    if (event.key === 'Escape') { closeModal(); closeDrawer(); closeCustomerFilterPanel(); document.body.classList.remove('sidebar-open'); }
   });
   $('#salesMenuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#salesSidebarMask').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
