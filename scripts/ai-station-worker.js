@@ -129,9 +129,9 @@ async function main(options = {}) {
     },
     budgetPolicies: budgetConfiguration.policies,
     executors: createEnrichmentExecutors(),
+    isWorkerEnabled: ({ db }) => featureState(db, hardFlags).ai_stations.effectiveEnabled,
     beforeClaim: async ({ db, workerId }) => {
       const features = featureState(db, hardFlags);
-      if (!features.ai_stations.effectiveEnabled) return null;
       scheduleContactReadinessForCompletedFits(db);
       if (enrichmentConfiguration.enabled
           && features.customer_enrichment.effectiveEnabled

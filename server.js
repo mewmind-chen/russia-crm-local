@@ -29,11 +29,23 @@ const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
+const {
+  isFeatureEnabled,
+  resolveAIHardFlags,
+} = require('./lib/ai_stations/feature_flags');
 const { createAITaskCenterStore } = require('./lib/ai_stations/task_center');
 const { createAssistantConversationStore } = require('./lib/assistant_conversations');
 
 function createApp(options = {}) {
 const paths = runtimePaths();
+const aiHardFlags = resolveAIHardFlags({
+  ai_stations: options.salesCrm?.aiStationsEnabled,
+  customer_enrichment: options.salesCrm?.customerEnrichmentEnabled,
+  customer_enrichment_auto_trigger: options.salesCrm?.customerEnrichmentAutoTriggerEnabled,
+  sales_pack: options.salesCrm?.salesPackEnabled,
+  qwen_online: options.salesCrm?.qwenOnlineEnabled,
+  qwen_batch: options.salesCrm?.qwenBatchEnabled,
+});
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.disable('x-powered-by');
@@ -68,6 +80,10 @@ app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')))
 registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   const permissions = req.accessContext.permissions;
+  const value = getDb();
+  let aiEnabled = false;
+  try { aiEnabled = isFeatureEnabled(value, 'ai_stations', aiHardFlags); }
+  finally { value.close(); }
   const modules = [
     ['intake', 'view_intake'],
     ['customers', 'view_customers'],
@@ -76,7 +92,7 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     ['recon', 'view_recon'],
     ['prospect', 'use_prospect_agent'],
     ['assistant', 'use_ai_assistant'],
-  ].filter(([, permission]) => permissions[permission])
+  ].filter(([key, permission]) => permissions[permission] && (key !== 'assistant' || aiEnabled))
     .map(([key]) => key);
   res.json({
     ok: true,
@@ -84,6 +100,7 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     permissions,
     canViewAllCustomers: req.accessContext.canViewAllCustomers,
     modules,
+    features: { aiStations: aiEnabled },
   });
 });
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
@@ -821,6 +838,26 @@ app.get('/api/customers/:customerId/people', (req, res) => {
 });
 
 // --- /api/assistant ---
+
+app.use('/api/assistant', (req, res, next) => {
+  const isRuntimeControlRoute = req.path === '/runtime' || req.path === '/runtime/recheck';
+  const isRealAdmin = req.realUser?.role === 'admin'
+    && req.salesUser?.role === 'admin'
+    && !req.impersonation
+    && hasPermission(req.salesUser, 'manage_users');
+  if (isRuntimeControlRoute && isRealAdmin) return next();
+  const value = getDb();
+  try {
+    if (isFeatureEnabled(value, 'ai_stations', aiHardFlags)) return next();
+    return res.status(409).json({
+      ok: false,
+      error: 'AI feature is disabled',
+      code: 'AI_FEATURE_DISABLED',
+    });
+  } finally {
+    value.close();
+  }
+});
 
 const runtimeHandlers = createAssistantRuntimeHandlers({
   hasPermission,

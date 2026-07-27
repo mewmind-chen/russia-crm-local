@@ -127,7 +127,7 @@ test('today task UI exposes three levels, one action, reason tags, and cache-bus
   assert.match(html, /data-severity="immediate">立即处理/);
   assert.match(html, /data-severity="today">今天完成/);
   assert.match(html, /data-severity="attention">需要关注/);
-  assert.match(html, /20260727-issue-99/);
+  assert.match(html, /20260727-issue-100/);
   assert.match(js, /同一对象只显示一行|reasonCount|otherReasons/);
   assert.match(js, /唯一建议动作/);
   assert.match(css, /\.alert-reasons/);

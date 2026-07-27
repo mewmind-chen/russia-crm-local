@@ -76,6 +76,7 @@ test('evaluation labels are scoped profile data with a CRM filter', () => {
 
 test('customer profiles contain contextual AI Q&A', () => {
   assert.match(appJs, /function customerAiSection\(context\)/);
+  assert.match(appJs, /if \(!customerAIEnabled\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
   assert.match(appJs, /id="drawerAiForm"/);
   assert.match(appJs, /\/api\/assistant\/chat/);
 });
@@ -111,8 +112,8 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260727-issue-99/);
-  assert.match(html, /app\.js\?v=20260727-issue-99/);
+  assert.match(html, /app\.css\?v=20260727-issue-100/);
+  assert.match(html, /app\.js\?v=20260727-issue-100/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {

@@ -9,6 +9,7 @@ const Database = require('better-sqlite3');
 const { ROLE_PERMISSIONS } = require('../lib/access_control');
 const { createAIJobStore } = require('../lib/ai_stations/jobs');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
+const { featureState } = require('../lib/ai_stations/feature_flags');
 
 const contextHash = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -129,6 +130,29 @@ test('worker asynchronously claims a queued job and executes it with a freshly h
   assert.equal(observed.actor.permissions.includes('use_ai_assistant'), true);
   assert.equal(observed.accessContext.externalCustomerIds.has('CUST-1'), true);
   assert.equal(fx.jobs.getJob(queued.id).state, 'succeeded');
+});
+
+test('worker does not claim queued jobs after the runtime AI station switch is disabled', async t => {
+  const fx = fixture();
+  t.after(() => fx.close());
+  const queued = fx.enqueue();
+  const hardFlags = { ai_stations: true };
+  featureState(fx.db, hardFlags);
+  fx.db.prepare("UPDATE crm_ai_feature_flags SET enabled=0 WHERE feature_key='ai_stations'").run();
+  const worker = createAIStationWorker({
+    workerId: 'worker-runtime-disabled',
+    openDb: fx.openDb,
+    isWorkerEnabled: ({ db }) => featureState(db, hardFlags).ai_stations.effectiveEnabled,
+    beforeClaim: async () => assert.fail('disabled worker must not dispatch prerequisite work'),
+    executeCustomerFitJob: async () => assert.fail('disabled worker must not execute a job'),
+  });
+
+  const outcome = await worker.runOnce();
+
+  assert.equal(outcome.status, 'idle');
+  assert.equal(outcome.disabled, true);
+  assert.equal(fx.jobs.getJob(queued.id).state, 'queued');
+  assert.equal(fx.jobs.getJob(queued.id).attempts, 0);
 });
 
 test('worker blocks a claimed job when the actor AI permission was revoked after enqueue', async t => {
