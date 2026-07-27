@@ -110,6 +110,29 @@ body.customer-profile-active .top-actions{display:none}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:780px){.customer-bulk-bar{align-items:stretch}.customer-bulk-bar>span{flex-basis:100%}.customer-bulk-bar select{flex:1 1 100%;width:100%}.customer-bulk-bar .button{flex:1 1 auto}}
 
+/* Issue #94: layered customer search, quick views and advanced facets */
+.customer-portfolio-panel{position:relative}
+.customer-filter-toolbar{flex-wrap:wrap}
+.customer-search-box{flex:1 1 360px;max-width:620px}
+.customer-search-clear{width:24px;height:24px;flex:0 0 24px;font-size:15px}
+.customer-quick-views{display:flex;gap:7px;align-items:center;overflow-x:auto;padding:10px 16px;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.customer-quick-views button{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);padding:7px 11px;font-size:11px;white-space:nowrap}
+.customer-quick-views button.active{border-color:var(--green);background:#e7f3ee;color:var(--green);font-weight:750}
+.customer-active-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 16px;border-bottom:1px solid var(--line);background:#fafcfb}
+.customer-active-filters button{border:0;border-radius:999px;background:#e9efec;color:#3e574c;padding:5px 9px;font-size:10px}
+.customer-active-filters .clear-all{margin-left:auto;background:transparent;color:var(--red);font-weight:750}
+.customer-filter-panel{position:absolute;right:16px;top:62px;z-index:31;width:min(760px,calc(100% - 32px));max-height:min(720px,calc(100vh - 150px));overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 22px 60px rgba(13,42,32,.2)}
+.customer-filter-panel-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-bottom:1px solid var(--line);background:#fff}
+.customer-filter-panel-head>div{display:grid;gap:3px}.customer-filter-panel-head strong{font-size:14px}.customer-filter-panel-head span{font-size:10px;color:var(--muted)}
+.customer-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;padding:16px}
+.customer-filter-grid label{display:grid;gap:6px;min-width:0;color:#425149;font-size:10px;font-weight:750}
+.customer-filter-grid select,.customer-filter-grid input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fafcfb;color:var(--ink);padding:8px}
+.customer-filter-grid select[multiple]{height:92px;padding:4px}.customer-filter-grid select[multiple] option{padding:5px 7px;border-radius:5px}
+.customer-filter-actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:9px;padding:12px 16px;border-top:1px solid var(--line);background:#fff}
+.customer-filter-backdrop{display:none}
+@media(max-width:780px){.customer-filter-toolbar{overflow:visible;padding:10px}.customer-search-box{flex:1 1 100%;min-width:0;max-width:none}.customer-filter-toolbar>select{flex:1 1 150px}.customer-filter-toolbar .toolbar-count{order:5;width:100%;margin-left:0}.customer-quick-views{padding:9px 10px}.customer-active-filters{padding:8px 10px}.customer-filter-panel{position:fixed;left:0;right:0;top:auto;bottom:0;width:100%;max-height:86dvh;box-sizing:border-box;border-radius:16px 16px 0 0;z-index:72}.customer-filter-grid{grid-template-columns:1fr 1fr;padding:12px;gap:10px}.customer-filter-backdrop{position:fixed;inset:0;display:block;z-index:71;background:rgba(4,21,15,.42)}body.customer-filters-open{overflow:hidden}.customer-filter-actions .button{flex:1}.customer-filter-panel-head{padding:12px}}
+@media(max-width:480px){.customer-filter-grid{grid-template-columns:1fr}.customer-filter-grid select[multiple]{height:82px}}
+
 /* Administrator data maintenance */
 .assistant-runtime-panel{margin:0 0 18px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .assistant-runtime-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}
