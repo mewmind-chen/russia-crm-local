@@ -48,7 +48,10 @@ test('AI schema upgrades an existing v10 database with the next-action consumpti
     VALUES (10,'2026-07-25T00:00:00.000Z');
   `);
   installAIStationSchema(db);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
+  const jobColumns = new Set(db.prepare('PRAGMA table_info(crm_ai_jobs)').all().map(row => row.name));
+  assert.equal(jobColumns.has('trigger_source'), true);
+  assert.equal(jobColumns.has('trigger_reason'), true);
   assert.ok(db.prepare(`SELECT 1 found FROM sqlite_master
     WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
   db.close();
@@ -85,7 +88,7 @@ test('AI schema migration is serialized across concurrent processes', async t =>
   });
   await Promise.all([install(), install()]);
   const verified = new Database(dbPath, { readonly: true });
-  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(verified.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
   assert.ok(verified.prepare(`SELECT 1 found FROM sqlite_master
     WHERE type='table' AND name='crm_ai_next_action_consumptions'`).get());
   assert.equal(verified.prepare("SELECT COUNT(*) count FROM sqlite_master WHERE type='table' AND name LIKE 'crm_ai_%'").get().count, 33);
@@ -108,7 +111,7 @@ test('AI schema upgrades v14 batch runs with provider file audit columns', () =>
   for (const column of ['provider_input_file_id', 'provider_output_file_id', 'provider_error_file_id']) {
     assert.equal(columns.has(column), true);
   }
-  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 16);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM crm_ai_schema_migrations').get().version, 17);
   assert.equal(new Set(db.prepare('PRAGMA table_info(crm_ai_jobs)').all().map(row => row.name))
     .has('decision_trace_json'), true);
   db.close();
