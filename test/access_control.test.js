@@ -179,6 +179,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
     'PATCH /ai/features/:featureKey',
+    'PATCH /filter-permissions/definitions/:filterKey',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
     'POST /accounts/:customerId/reassign',
@@ -215,6 +216,8 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /users/:userId/password-reset',
     'POST /users/:userId/restore',
     'PUT /ai/budgets/:scopeType/:scopeId',
+    'PUT /filter-permissions/groups/:groupId',
+    'PUT /filter-permissions/users/:userId',
     'PUT /users/:userId/permission-overrides',
   ]);
   assert.equal(typeof assertPolicyAllowed, 'function');

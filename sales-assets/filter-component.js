@@ -1,0 +1,574 @@
+(function initTradePulseFilterComponent(root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.TradePulseFilterComponent = factory();
+}(typeof globalThis !== 'undefined' ? globalThis : this, function createModule() {
+  'use strict';
+
+  const STORAGE_PREFIX = 'tradepulse.authorizedFilters';
+  const FIELD_TYPES = new Set([
+    'search', 'text', 'facet', 'tag', 'select', 'boolean', 'date', 'date_range',
+  ]);
+  const TYPE_OPERATORS = Object.freeze({
+    search: new Set(['contains']),
+    text: new Set(['contains', 'eq']),
+    facet: new Set(['in']),
+    tag: new Set(['in']),
+    select: new Set(['eq', 'in']),
+    boolean: new Set(['eq']),
+    date: new Set(['eq', 'gte', 'lte']),
+    date_range: new Set(['between']),
+  });
+  const DEFAULT_OPERATORS = Object.freeze({
+    search: 'contains',
+    text: 'contains',
+    facet: 'in',
+    tag: 'in',
+    select: 'eq',
+    boolean: 'eq',
+    date: 'eq',
+    date_range: 'between',
+  });
+
+  function clone(value) {
+    if (value === undefined) return undefined;
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    })[character]);
+  }
+
+  function uniqueStrings(values) {
+    const seen = new Set();
+    return (Array.isArray(values) ? values : [values])
+      .map(value => String(value ?? '').trim())
+      .filter(value => {
+        if (!value || seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      });
+  }
+
+  function normalizeOption(option) {
+    const object = option && typeof option === 'object' ? option : { value: option, label: option };
+    const value = String(object.value ?? object.id ?? '').trim();
+    if (!value) return null;
+    const count = Number(object.count);
+    return {
+      value,
+      label: String(object.label ?? object.name ?? value).trim() || value,
+      ...(Number.isFinite(count) ? { count } : {}),
+    };
+  }
+
+  function normalizeField(rawField) {
+    if (!rawField || typeof rawField !== 'object') return null;
+    const key = String(rawField.key || '').trim();
+    if (!key) return null;
+    const type = FIELD_TYPES.has(rawField.type) ? rawField.type : 'select';
+    const allowedOperators = TYPE_OPERATORS[type];
+    const requestedOperator = String(rawField.operator || '').trim();
+    const operator = allowedOperators.has(requestedOperator)
+      ? requestedOperator
+      : DEFAULT_OPERATORS[type];
+    const optionMap = new Map();
+    (Array.isArray(rawField.options) ? rawField.options : []).forEach(rawOption => {
+      const option = normalizeOption(rawOption);
+      if (option && !optionMap.has(option.value)) optionMap.set(option.value, option);
+    });
+    const defaultPlacement = type === 'search' ? 'search'
+      : type === 'facet' ? 'facet'
+        : type === 'tag' ? 'tag'
+          : 'more';
+    const placement = ['search', 'facet', 'tag', 'more'].includes(rawField.placement)
+      ? rawField.placement
+      : defaultPlacement;
+    return {
+      key,
+      label: String(rawField.label || key).trim(),
+      type,
+      operator,
+      placement,
+      multi: Boolean(rawField.multi || ['facet', 'tag'].includes(type) || operator === 'in'),
+      placeholder: String(rawField.placeholder || '').trim(),
+      helpText: String(rawField.helpText || '').trim(),
+      sensitive: Boolean(rawField.sensitive),
+      options: [...optionMap.values()],
+    };
+  }
+
+  function normalizeSchema(rawSchema = {}) {
+    const fieldMap = new Map();
+    (Array.isArray(rawSchema.fields) ? rawSchema.fields : []).forEach(rawField => {
+      const field = normalizeField(rawField);
+      if (field && !fieldMap.has(field.key)) fieldMap.set(field.key, field);
+    });
+    return {
+      schemaVersion: String(rawSchema.schemaVersion || ''),
+      permissionVersion: String(rawSchema.permissionVersion || ''),
+      fields: [...fieldMap.values()],
+    };
+  }
+
+  function fieldMapFor(schema) {
+    return new Map(schema.fields.map(field => [field.key, field]));
+  }
+
+  function optionValueAllowed(field, value) {
+    if (!['facet', 'tag', 'select'].includes(field.type)) return true;
+    return field.options.some(option => option.value === value);
+  }
+
+  function normalizeFieldValue(field, rawValue) {
+    if (rawValue === undefined || rawValue === null || rawValue === '') return undefined;
+    if (field.type === 'search' || field.type === 'text' || field.type === 'date') {
+      const value = String(rawValue).trim();
+      return value || undefined;
+    }
+    if (field.type === 'boolean') {
+      if (rawValue === true || rawValue === 'true' || rawValue === '1') return true;
+      return undefined;
+    }
+    if (field.type === 'date_range') {
+      if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return undefined;
+      const from = String(rawValue.from || '').trim();
+      const to = String(rawValue.to || '').trim();
+      return from || to ? { ...(from ? { from } : {}), ...(to ? { to } : {}) } : undefined;
+    }
+    if (field.multi) {
+      const values = uniqueStrings(rawValue).filter(value => optionValueAllowed(field, value));
+      return values.length ? values : undefined;
+    }
+    const value = String(Array.isArray(rawValue) ? rawValue[0] || '' : rawValue).trim();
+    return value && optionValueAllowed(field, value) ? value : undefined;
+  }
+
+  function sanitizeValues(rawValues, schema) {
+    const result = {};
+    const source = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
+      ? rawValues
+      : {};
+    schema.fields.forEach(field => {
+      const value = normalizeFieldValue(field, source[field.key]);
+      if (value !== undefined) result[field.key] = value;
+    });
+    return result;
+  }
+
+  function removeValue(field, current, targetValue) {
+    if (current === undefined) return undefined;
+    if (!field.multi) {
+      if (current && typeof current === 'object') return undefined;
+      return String(current) === String(targetValue) ? undefined : current;
+    }
+    const next = current.filter(value => String(value) !== String(targetValue));
+    return next.length ? next : undefined;
+  }
+
+  function createFilterController(options = {}) {
+    const pageKey = String(options.pageKey || '').trim();
+    if (!pageKey) throw new Error('pageKey is required');
+    const storage = options.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
+    const storageKey = `${options.storagePrefix || STORAGE_PREFIX}.${pageKey}`;
+    let currentSchema = normalizeSchema(options.schema);
+    const onApply = typeof options.onApply === 'function' ? options.onApply : null;
+    const onPermissionChange = typeof options.onPermissionChange === 'function'
+      ? options.onPermissionChange
+      : null;
+    let restored = {};
+    if (storage) {
+      try {
+        restored = JSON.parse(storage.getItem(storageKey) || '{}');
+      } catch (_error) {
+        restored = {};
+      }
+    }
+    const state = {
+      pageKey,
+      schemaVersion: currentSchema.schemaVersion,
+      permissionVersion: currentSchema.permissionVersion,
+      draft: sanitizeValues(restored.draft, currentSchema),
+      applied: sanitizeValues(restored.applied, currentSchema),
+    };
+
+    function persist() {
+      if (!storage) return;
+      try {
+        storage.setItem(storageKey, JSON.stringify(state));
+      } catch (_error) {}
+    }
+
+    function getField(fieldKey) {
+      return fieldMapFor(currentSchema).get(String(fieldKey || ''));
+    }
+
+    function serialize(source = 'applied') {
+      const values = sanitizeValues(state[source], currentSchema);
+      const filters = currentSchema.fields.flatMap(field => (
+        Object.hasOwn(values, field.key)
+          ? [{ field: field.key, operator: field.operator, value: clone(values[field.key]) }]
+          : []
+      ));
+      return {
+        pageKey,
+        schemaVersion: currentSchema.schemaVersion,
+        permissionVersion: currentSchema.permissionVersion,
+        filters,
+      };
+    }
+
+    function emitApply() {
+      const payload = serialize('applied');
+      if (onApply) onApply(clone(payload));
+      return payload;
+    }
+
+    const controller = {
+      pageKey,
+      storageKey,
+
+      getSchema() {
+        return clone(currentSchema);
+      },
+
+      getState() {
+        return clone(state);
+      },
+
+      setDraft(fieldKey, rawValue) {
+        const field = getField(fieldKey);
+        if (!field) return false;
+        const value = normalizeFieldValue(field, rawValue);
+        if (value === undefined) delete state.draft[field.key];
+        else state.draft[field.key] = value;
+        state.draft = sanitizeValues(state.draft, currentSchema);
+        persist();
+        return true;
+      },
+
+      toggleValue(fieldKey, rawValue) {
+        const field = getField(fieldKey);
+        const value = String(rawValue ?? '').trim();
+        if (!field || !field.multi || !value || !optionValueAllowed(field, value)) return false;
+        const current = Array.isArray(state.draft[field.key]) ? state.draft[field.key] : [];
+        state.draft[field.key] = current.includes(value)
+          ? current.filter(item => item !== value)
+          : [...current, value];
+        if (!state.draft[field.key].length) delete state.draft[field.key];
+        persist();
+        return true;
+      },
+
+      clearField(fieldKey, settings = {}) {
+        const field = getField(fieldKey);
+        if (!field) return false;
+        delete state.draft[field.key];
+        if (!settings.draftOnly) delete state.applied[field.key];
+        persist();
+        if (settings.apply) emitApply();
+        return true;
+      },
+
+      remove(fieldKey, targetValue, settings = {}) {
+        const field = getField(fieldKey);
+        if (!field) return false;
+        const draftValue = removeValue(field, state.draft[field.key], targetValue);
+        const appliedValue = removeValue(field, state.applied[field.key], targetValue);
+        if (draftValue === undefined) delete state.draft[field.key];
+        else state.draft[field.key] = draftValue;
+        if (appliedValue === undefined) delete state.applied[field.key];
+        else state.applied[field.key] = appliedValue;
+        persist();
+        if (settings.apply !== false) emitApply();
+        return true;
+      },
+
+      clearAll(settings = {}) {
+        state.draft = {};
+        state.applied = {};
+        persist();
+        if (settings.apply !== false) emitApply();
+        return serialize('applied');
+      },
+
+      apply() {
+        state.draft = sanitizeValues(state.draft, currentSchema);
+        state.applied = clone(state.draft);
+        persist();
+        return emitApply();
+      },
+
+      serialize,
+
+      updateSchema(nextSchema) {
+        const previousPermissionVersion = currentSchema.permissionVersion;
+        const previousSchemaVersion = currentSchema.schemaVersion;
+        currentSchema = normalizeSchema(nextSchema);
+        state.schemaVersion = currentSchema.schemaVersion;
+        state.permissionVersion = currentSchema.permissionVersion;
+        state.draft = sanitizeValues(state.draft, currentSchema);
+        state.applied = sanitizeValues(state.applied, currentSchema);
+        persist();
+        if (previousPermissionVersion
+          && previousPermissionVersion !== currentSchema.permissionVersion
+          && onPermissionChange) {
+          onPermissionChange({
+            pageKey,
+            previousPermissionVersion,
+            permissionVersion: currentSchema.permissionVersion,
+            previousSchemaVersion,
+            schemaVersion: currentSchema.schemaVersion,
+            state: clone(state),
+          });
+        }
+        return controller.getState();
+      },
+    };
+
+    persist();
+    return controller;
+  }
+
+  function selectedValuesFor(state, field, source = 'draft') {
+    const value = state?.[source]?.[field.key];
+    if (field.multi) return Array.isArray(value) ? value.map(String) : [];
+    return value === undefined ? [] : [String(value)];
+  }
+
+  function renderOption(field, option, selected) {
+    const count = option.count === undefined ? '' : `<small>${escapeHtml(option.count)}</small>`;
+    return `<button class="tp-filter-option" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-value="${escapeHtml(option.value)}" aria-pressed="${selected ? 'true' : 'false'}"><span>${escapeHtml(option.label)}</span>${count}</button>`;
+  }
+
+  function renderFacetRow(field, state) {
+    const selected = selectedValuesFor(state, field);
+    const options = field.options.map(option => renderOption(
+      field,
+      option,
+      selected.includes(option.value),
+    )).join('');
+    const count = field.options.length;
+    return `<div class="tp-filter-facet-row" data-filter-kind="${escapeHtml(field.type)}">
+      <div class="tp-filter-facet-label"><strong>${escapeHtml(field.label)}</strong><small>${count} 个可用选项</small></div>
+      <div class="tp-filter-facet-options">
+        <button class="tp-filter-option tp-filter-all" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-all="true" aria-pressed="${selected.length ? 'false' : 'true'}">全部</button>
+        ${options}
+      </div>
+    </div>`;
+  }
+
+  function renderSearchField(field, state) {
+    const value = String(state?.draft?.[field.key] || '');
+    return `<label class="tp-filter-search">
+      <span>${escapeHtml(field.label)}</span>
+      <input type="search" data-filter-search="${escapeHtml(field.key)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || `搜索${field.label}`)}" autocomplete="off">
+    </label>`;
+  }
+
+  function renderMoreField(field, state) {
+    const selected = selectedValuesFor(state, field);
+    if (field.type === 'boolean') {
+      const checked = state?.draft?.[field.key] === true;
+      return `<label class="tp-filter-boolean"><input type="checkbox" data-filter-basic="${escapeHtml(field.key)}" ${checked ? 'checked' : ''}><span>${escapeHtml(field.label)}</span></label>`;
+    }
+    if (field.type === 'date_range') {
+      const value = state?.draft?.[field.key] || {};
+      return `<fieldset class="tp-filter-date-range"><legend>${escapeHtml(field.label)}</legend><input type="date" data-filter-basic="${escapeHtml(field.key)}" data-range-edge="from" value="${escapeHtml(value.from || '')}"><span>至</span><input type="date" data-filter-basic="${escapeHtml(field.key)}" data-range-edge="to" value="${escapeHtml(value.to || '')}"></fieldset>`;
+    }
+    if (field.type === 'date' || field.type === 'text') {
+      const inputType = field.type === 'date' ? 'date' : 'text';
+      return `<label class="tp-filter-basic-field"><span>${escapeHtml(field.label)}</span><input type="${inputType}" data-filter-basic="${escapeHtml(field.key)}" value="${escapeHtml(state?.draft?.[field.key] || '')}"></label>`;
+    }
+    return `<label class="tp-filter-basic-field"><span>${escapeHtml(field.label)}</span><select data-filter-basic="${escapeHtml(field.key)}" ${field.multi ? 'multiple' : ''}>
+      ${field.multi ? '' : '<option value="">全部</option>'}
+      ${field.options.map(option => `<option value="${escapeHtml(option.value)}" ${selected.includes(option.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+    </select></label>`;
+  }
+
+  function chipLabel(field, rawValue) {
+    const option = field.options.find(item => item.value === String(rawValue));
+    return option?.label || String(rawValue);
+  }
+
+  function renderAppliedChips(schema, state) {
+    const chips = [];
+    schema.fields.forEach(field => {
+      const rawValue = state?.applied?.[field.key];
+      if (rawValue === undefined) return;
+      const values = field.multi ? rawValue : [rawValue];
+      values.forEach(value => {
+        const display = value && typeof value === 'object'
+          ? [value.from, value.to].filter(Boolean).join(' — ')
+          : chipLabel(field, value);
+        const removalValue = value && typeof value === 'object' ? '' : value;
+        chips.push(`<button class="tp-filter-chip" type="button" data-filter-remove="${escapeHtml(field.key)}" data-filter-value="${escapeHtml(removalValue)}">${escapeHtml(field.label)}：${escapeHtml(display)} <span aria-hidden="true">×</span></button>`);
+      });
+    });
+    return chips.length
+      ? `<div class="tp-filter-chip-list">${chips.join('')}</div>`
+      : '<p class="tp-filter-empty-copy">暂无条件，显示当前权限范围内全部数据</p>';
+  }
+
+  function renderResultMeta(resultMeta = {}) {
+    if (resultMeta.loading) return '<span class="tp-filter-result-count">正在读取结果…</span>';
+    if (Number.isFinite(Number(resultMeta.total))) {
+      const total = Number(resultMeta.total);
+      const shown = Number(resultMeta.shown);
+      return `<span class="tp-filter-result-count">${escapeHtml(total)} 条结果${Number.isFinite(shown) && shown !== total ? ` · 已显示 ${escapeHtml(shown)}` : ''}</span>`;
+    }
+    return '<span class="tp-filter-result-count">等待应用筛选</span>';
+  }
+
+  function renderFilterComponent(model = {}) {
+    const status = model.status || 'ready';
+    const schema = normalizeSchema(model.schema);
+    const error = String(model.error || '').trim();
+    if (status === 'loading') {
+      return '<section class="tp-filter-component tp-filter-state" data-filter-status="loading" aria-live="polite">正在加载可用筛选项…</section>';
+    }
+    if (status === 'error') {
+      return `<section class="tp-filter-component tp-filter-state tp-filter-error" data-filter-status="error" role="alert">${escapeHtml(error || '筛选项读取失败，请重试')}</section>`;
+    }
+    if (!schema.fields.length) {
+      return '<section class="tp-filter-component tp-filter-state" data-filter-status="empty">当前没有可用筛选项</section>';
+    }
+    const state = {
+      draft: sanitizeValues(model.state?.draft, schema),
+      applied: sanitizeValues(model.state?.applied, schema),
+    };
+    const searchFields = schema.fields.filter(field => field.placement === 'search');
+    const facets = schema.fields.filter(field => ['facet', 'tag'].includes(field.placement));
+    const moreFields = schema.fields.filter(field => field.placement === 'more');
+    const tagCount = schema.fields.filter(field => field.placement === 'tag').length;
+    const tagOptionCount = schema.fields
+      .filter(field => field.placement === 'tag')
+      .reduce((sum, field) => sum + field.options.length, 0);
+    return `<section class="tp-filter-component" data-filter-status="ready" data-schema-version="${escapeHtml(schema.schemaVersion)}" data-permission-version="${escapeHtml(schema.permissionVersion)}">
+      ${searchFields.length ? `<div class="tp-filter-search-row">${searchFields.map(field => renderSearchField(field, state)).join('')}<button class="tp-filter-apply tp-filter-apply-inline" type="button" data-filter-apply>应用筛选</button></div>` : ''}
+      ${moreFields.length ? `<div class="tp-filter-basic-grid">${moreFields.map(field => renderMoreField(field, state)).join('')}</div>` : ''}
+      ${facets.length ? `<div class="tp-filter-facets">
+        ${tagCount ? `<div class="tp-filter-facet-summary"><div><strong>客户标签</strong><small>${tagCount} 个分类 · ${tagOptionCount} 个可用标签</small></div><span>同类型内任一匹配 · 不同类型同时满足</span></div>` : ''}
+        ${facets.map(field => renderFacetRow(field, state)).join('')}
+      </div>` : ''}
+      <div class="tp-filter-actions"><button class="tp-filter-clear" type="button" data-filter-clear>清空条件</button><button class="tp-filter-apply" type="button" data-filter-apply>应用筛选</button></div>
+      <div class="tp-filter-applied">
+        <div class="tp-filter-applied-head"><strong>已启用条件</strong>${renderResultMeta(model.resultMeta)}</div>
+        ${renderAppliedChips(schema, state)}
+      </div>
+    </section>`;
+  }
+
+  function mountFilterComponent(rootElement, options = {}) {
+    if (!rootElement || typeof rootElement.addEventListener !== 'function') {
+      throw new Error('A valid root element is required');
+    }
+    const controller = options.controller || createFilterController(options);
+    let status = options.status || 'ready';
+    let error = options.error || '';
+    let resultMeta = options.resultMeta || {};
+
+    function render() {
+      rootElement.innerHTML = renderFilterComponent({
+        schema: controller.getSchema(),
+        state: controller.getState(),
+        status,
+        error,
+        resultMeta,
+      });
+    }
+
+    function handleClick(event) {
+      const all = event.target.closest('[data-filter-all]');
+      if (all && rootElement.contains(all)) {
+        controller.clearField(all.dataset.filterField, { draftOnly: true });
+        render();
+        return;
+      }
+      const option = event.target.closest('.tp-filter-option[data-filter-value]');
+      if (option && rootElement.contains(option)) {
+        controller.toggleValue(option.dataset.filterField, option.dataset.filterValue);
+        render();
+        return;
+      }
+      const remove = event.target.closest('[data-filter-remove]');
+      if (remove && rootElement.contains(remove)) {
+        controller.remove(remove.dataset.filterRemove, remove.dataset.filterValue);
+        render();
+        return;
+      }
+      if (event.target.closest('[data-filter-clear]')) {
+        controller.clearAll();
+        render();
+        return;
+      }
+      if (event.target.closest('[data-filter-apply]')) {
+        controller.apply();
+        render();
+      }
+    }
+
+    function handleInput(event) {
+      const search = event.target.closest('[data-filter-search]');
+      if (search && rootElement.contains(search)) controller.setDraft(search.dataset.filterSearch, search.value);
+    }
+
+    function handleChange(event) {
+      const input = event.target.closest('[data-filter-basic]');
+      if (!input || !rootElement.contains(input)) return;
+      const fieldKey = input.dataset.filterBasic;
+      if (input.dataset.rangeEdge) {
+        const current = controller.getState().draft[fieldKey] || {};
+        controller.setDraft(fieldKey, { ...current, [input.dataset.rangeEdge]: input.value });
+      } else if (input.type === 'checkbox') {
+        controller.setDraft(fieldKey, input.checked);
+      } else if (input.multiple) {
+        controller.setDraft(fieldKey, [...input.selectedOptions].map(option => option.value));
+      } else {
+        controller.setDraft(fieldKey, input.value);
+      }
+    }
+
+    rootElement.addEventListener('click', handleClick);
+    rootElement.addEventListener('input', handleInput);
+    rootElement.addEventListener('change', handleChange);
+    render();
+
+    return {
+      controller,
+      render,
+      setStatus(nextStatus, nextError = '') {
+        status = nextStatus || 'ready';
+        error = nextError;
+        render();
+      },
+      setResultMeta(nextResultMeta = {}) {
+        resultMeta = nextResultMeta;
+        render();
+      },
+      updateSchema(nextSchema) {
+        controller.updateSchema(nextSchema);
+        render();
+      },
+      destroy() {
+        rootElement.removeEventListener('click', handleClick);
+        rootElement.removeEventListener('input', handleInput);
+        rootElement.removeEventListener('change', handleChange);
+        rootElement.innerHTML = '';
+      },
+    };
+  }
+
+  return Object.freeze({
+    STORAGE_PREFIX,
+    normalizeSchema,
+    createFilterController,
+    renderFilterComponent,
+    mountFilterComponent,
+  });
+}));

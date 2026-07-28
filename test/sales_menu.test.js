@@ -68,12 +68,12 @@ test('customer and intake rows expose profile click targets', () => {
   assert.match(appJs, /function openIntakeProfile\(itemId\)/);
 });
 
-test('evaluation labels are scoped profile data with a CRM filter', () => {
-  assert.match(html, /id="evaluationTagFilter"/);
-  assert.match(appJs, /function labelsForAccount\(customerId\)/);
-  assert.match(appJs, /customerEvaluationTags/);
-  assert.match(backend, /customerEvaluationTags/);
-  assert.match(appJs, /\['评价标签', labelsForAccount\(account\.id\)/);
+test('customer filters are server-authorized and do not expose a static evaluation field', () => {
+  assert.match(html, /id="customerAuthorizedFilters"/);
+  assert.doesNotMatch(html, /id="evaluationTagFilter"/);
+  assert.match(appJs, /\/filter-schema\/\$\{pageKey\}/);
+  assert.match(appJs, /TradePulseFilterComponent\.mountFilterComponent/);
+  assert.match(backend, /canViewInsights/);
 });
 
 test('customer profiles contain contextual AI Q&A', () => {
