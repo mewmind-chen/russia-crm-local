@@ -194,6 +194,12 @@
   function multiOptions(values, labels = {}) {
     return values.map(value => `<option value="${esc(value)}">${esc(labels[value] || value)}</option>`).join('');
   }
+  function selectedOptions(values, currentValue, emptyLabel = '') {
+    const current = String(currentValue || '');
+    const options = [...new Set([...(values || []), ...(current ? [current] : [])])];
+    return `${emptyLabel ? `<option value="">${esc(emptyLabel)}</option>` : ''}${options.map(value =>
+      `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(value)}</option>`).join('')}`;
+  }
   function syncCustomerFilterControls() {
     const filters = state.customerFilters;
     if ($('#customerSearch')) $('#customerSearch').value = filters.search;
@@ -1090,6 +1096,15 @@
     }
   }
 
+  function customerProfileFrameUrl(externalCustomerId) {
+    return `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+  }
+
+  function reloadCustomerProfileFrame() {
+    if (state.view !== 'customerProfile' || !state.customerProfileExternalId) return;
+    $('#customerProfileFrame').src = customerProfileFrameUrl(state.customerProfileExternalId);
+  }
+
   function openCustomerProfile(externalCustomerId) {
     if (!externalCustomerId) return toast('缺少客户编码，无法打开完整资料');
     const account = state.data.accounts.find(item => item.external_customer_id === externalCustomerId);
@@ -1104,9 +1119,10 @@
     closeDrawer();
     switchView('customerProfile');
     $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
-    $('#customerProfileEdit').classList.toggle('hidden', !can('edit_customer'));
+    $('#customerProfileStageEdit').classList.toggle('hidden', !can('edit_customer'));
+    $('#customerProfileDataEdit').classList.toggle('hidden', !can('edit_customer'));
     const frame = $('#customerProfileFrame');
-    frame.src = `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+    frame.src = customerProfileFrameUrl(externalCustomerId);
     const url = new URL(location.href);
     url.searchParams.set('customer', externalCustomerId);
     url.hash = 'customerProfile';
@@ -3066,7 +3082,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
         ${quotes.length && can('record_order') ? '<button class="button secondary" data-add-order>＋ 记录订单</button>' : ''}
-        ${can('edit_customer') ? '<button class="button secondary" data-edit-account>调整客户信息</button>' : ''}
+        ${can('edit_customer') ? '<button class="button secondary" data-edit-stage-rating>调整阶段和评级</button><button class="button secondary" data-edit-customer-profile>编辑客户资料</button>' : ''}
         ${canReturnCustomer(account)
           ? '<button class="button danger" data-return-customer="' + esc(account.id) + '">退回线索池</button>' : ''}
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
@@ -3364,14 +3380,14 @@
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">重置密码</button></div>
     </form>`);
   }
-  function openEditAccountModal(customerId) {
+  function openStageRatingModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     const currentOwner = account.owner_id && !sales.some(user => user.id === account.owner_id)
       ? state.data.users.find(user => user.id === account.owner_id)
       : null;
     const canAssign = can('edit_customer') && can('view_all_customers') && can('manage_intake');
-    openModal('调整客户信息', 'ACCOUNT CONTROL', `<form id="editAccountForm" class="form-grid two">
+    openModal('调整阶段和评级', 'STAGE & RATING', `<form id="stageRatingForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}><option value="" ${account.owner_id ? '' : 'selected'}>不分配</option>${currentOwner ? `<option value="${esc(currentOwner.id)}" selected>${esc(currentOwner.name)}（当前负责人）</option>` : ''}${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
@@ -3380,6 +3396,22 @@
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
       <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" value="${esc(String(account.next_action_at || '').replace(' ', 'T').slice(0, 16))}"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存调整</button></div>
+    </form>`);
+  }
+
+  function openCustomerProfileEditModal(customerId) {
+    const account = state.data.accounts.find(item => item.id === customerId);
+    const options = state.data.customerOptions || {};
+    openModal('编辑客户资料', 'CUSTOMER PROFILE', `<form id="customerProfileForm" class="form-grid two">
+      <input type="hidden" name="customerId" value="${esc(customerId)}">
+      <label>国家 / 地区<input name="country" value="${esc(account.country)}"></label>
+      <label>城市<input name="city" value="${esc(account.city)}"></label>
+      <label class="span-2">官网<input name="website" type="url" value="${esc(account.website)}" placeholder="https://example.com"></label>
+      <label>行业<input name="industry" value="${esc(account.industry)}"></label>
+      <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, account.customer_type, '请选择客户类型')}</select></label>
+      <label>来源<select name="source">${selectedOptions(options.sources, account.source, '请选择客户来源')}</select></label>
+      <label class="span-2">重点产品<input name="productFocus" value="${esc(account.product_focus)}"></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存资料</button></div>
     </form>`);
   }
 
@@ -3641,13 +3673,21 @@
         });
         form.reset();
         await refresh('密码已重置，该账号的现有登录态已失效');
-      } else if (form.id === 'editAccountForm') {
+      } else if (form.id === 'stageRatingForm') {
         const payload = formPayload(form);
         const customerId = payload.customerId;
         delete payload.customerId;
         payload.nextActionAt = apiTime(payload.nextActionAt);
         await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        await refresh('客户信息已调整');
+        await refresh('阶段和评级已调整');
+        reloadCustomerProfileFrame();
+      } else if (form.id === 'customerProfileForm') {
+        const payload = formPayload(form);
+        const customerId = payload.customerId;
+        delete payload.customerId;
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        await refresh('客户资料已更新');
+        reloadCustomerProfileFrame();
       } else if (form.id === 'passwordForm') {
         const payload = formPayload(form);
         if (payload.newPassword !== payload.confirmPassword) throw new Error('两次输入的新密码不一致');
@@ -3798,7 +3838,8 @@
     if (event.target.closest('[data-close-modal]')) closeModal();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileActivity')) openActivityModal(state.selectedCustomerId);
-    if (event.target.closest('#customerProfileEdit')) openEditAccountModal(state.selectedCustomerId);
+    if (event.target.closest('#customerProfileStageEdit')) openStageRatingModal(state.selectedCustomerId);
+    if (event.target.closest('#customerProfileDataEdit')) openCustomerProfileEditModal(state.selectedCustomerId);
     const notificationRead = event.target.closest('[data-notification-read]');
     if (notificationRead) {
       try { await markNotificationRead(notificationRead.dataset.notificationRead); }
@@ -3877,7 +3918,8 @@
     if (event.target.closest('#drawerUpdateBtn')) openActivityModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-quote]')) openQuoteModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-order]')) openOrderModal(state.selectedCustomerId);
-    if (event.target.closest('[data-edit-account]')) openEditAccountModal(state.selectedCustomerId);
+    if (event.target.closest('[data-edit-stage-rating]')) openStageRatingModal(state.selectedCustomerId);
+    if (event.target.closest('[data-edit-customer-profile]')) openCustomerProfileEditModal(state.selectedCustomerId);
     const evaluateCompanyId = event.target.closest('[data-evaluate-company-id]');
     if (evaluateCompanyId) {
       state.selectedCustomerId = evaluateCompanyId.dataset.evaluateCompanyId;
