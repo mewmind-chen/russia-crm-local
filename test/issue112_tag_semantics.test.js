@@ -34,6 +34,15 @@ test('manual duplicates stay selected in the editor but are suppressed from summ
   assert.match(crmJs, /tag\.source !== 'manual' \|\| !structuredNames\.has/);
 });
 
+test('preset customer labels remain editable except system customer type and risk categories', () => {
+  assert.match(legacyHtml, /function isProtectedCustomerTag\(tag\)/);
+  assert.match(legacyHtml, /\['客户类型','需确认属性'\]\.includes\(tag\.category\)/);
+  assert.match(legacyHtml, /manualCatalog=\(state\.tags\|\|\[\]\)\.filter\(tag=>!\(tag\.isPreset&&\['客户类型','需确认属性'\]\.includes\(tag\.category\)\)\)/);
+  assert.match(legacyHtml, /else manual\.push\(tag\)/);
+  assert.match(legacyHtml, /filter\(isProtectedCustomerTag\)/);
+  assert.match(legacyHtml, /if\(!target\|\|isProtectedCustomerTag\(target\)\)return/);
+});
+
 test('AI tags remain source-distinct and disappear when the AI feature is disabled', () => {
   assert.match(legacyHtml, /\.\.\.\(legacyAIEnabled\(\)\?groups\.ai\.map/);
   assert.match(crmJs, /const ai = customerAIEnabled\(\) && account\?\.id/);
@@ -58,9 +67,9 @@ test('server refreshes preserve read-only AI tags and new manual tags do not sub
   assert.match(legacyHtml, /\.filter\(tag=>!tag\.readOnly\)\.map\(t=>String\(t\.id\)\)/);
 });
 
-test('CRM assets use an issue 112 cache version and profile header has a synchronized tag target', () => {
-  assert.match(crmHtml, /app\.css\?v=20260728-issue-112/);
-  assert.match(crmHtml, /app\.js\?v=20260728-issue-112/);
+test('CRM assets use the current tag cache version and profile header has a synchronized tag target', () => {
+  assert.match(crmHtml, /app\.css\?v=20260728-issue-120/);
+  assert.match(crmHtml, /app\.js\?v=20260728-issue-120/);
   assert.match(crmHtml, /id="customerProfileTags"/);
   assert.match(crmJs, /\$\('#customerProfileTags'\)\.innerHTML = sourceTagMarkup\(account\)/);
 });

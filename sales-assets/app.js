@@ -149,8 +149,10 @@
     const structuredNames = new Set(structured.map(tag => normalizeTagText(tag.name)));
     const customerTags = Array.isArray(account?.customerTags) ? account.customerTags : [];
     const tagged = customerTags.map(tag => ({
-      source: tag.isPreset ? (tag.category === '需确认属性' ? 'risk' : 'structured') : 'manual',
-      prefix: tag.isPreset ? (tag.category === '需确认属性' ? '风险' : tag.category) : '人工',
+      source: tag.isPreset && tag.category === '需确认属性'
+        ? 'risk' : tag.isPreset && tag.category === '客户类型' ? 'structured' : 'manual',
+      prefix: tag.isPreset && tag.category === '需确认属性'
+        ? '风险' : tag.isPreset && tag.category === '客户类型' ? tag.category : '人工',
       name: tag.name,
     })).filter(tag => tag.source !== 'manual' || !structuredNames.has(normalizeTagText(tag.name)));
     const ai = customerAIEnabled() && account?.id

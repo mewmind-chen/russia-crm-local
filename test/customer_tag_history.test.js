@@ -197,6 +197,32 @@ test('manual removal rejects preset tags and rolls back when history cannot be w
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 0);
 });
 
+test('preset customer labels remain editable while system customer type and risk labels stay protected', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const customerType = tagByName(fx, '客户类型', '贸易公司');
+  const product = tagByName(fx, '客户经营产品', '电子设备');
+  const demand = tagByName(fx, '需求/采购产品', '功率器件');
+  const risk = tagByName(fx, '需确认属性', '军工');
+  fx.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
+    VALUES ('RU-9001',?,'2026-07-01 08:00:00'),('RU-9001',?,'2026-07-02 08:00:00'),
+           ('RU-9001',?,'2026-07-03 08:00:00'),('RU-9001',?,'2026-07-04 08:00:00')`)
+    .run(customerType.id, product.id, demand.id, risk.id);
+
+  const removed = await removeTag(fx, 'RU-9001', product.id);
+  assert.equal(removed.status, 200);
+  assert.equal(bindings(fx, 'RU-9001').some(row => row.tagId === product.id), false);
+
+  const saved = await setTags(fx, 'RU-9001', []);
+  assert.equal(saved.status, 200);
+  assert.deepEqual(
+    bindings(fx, 'RU-9001').map(row => row.tagId),
+    [customerType.id, risk.id].sort((a, b) => a - b),
+  );
+  assert.equal((await removeTag(fx, 'RU-9001', customerType.id)).status, 400);
+  assert.equal((await removeTag(fx, 'RU-9001', risk.id)).status, 400);
+});
+
 test('manual removal requires edit permission and is blocked while impersonating', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
