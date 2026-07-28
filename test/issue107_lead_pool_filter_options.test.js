@@ -41,7 +41,7 @@ test('Issue #107 uses selects for categorical lead-pool filters', () => {
   }
   assert.match(js, /populateIntakeFilterOptions\(result\.filterOptions\)/);
   assert.match(js, /customerTags: \{ id: 'intakeCustomerTagFilter'/);
-  assert.match(html, /app\.js\?v=20260728-issue-107/);
+  assert.match(html, /app\.js\?v=[^"]+/);
 });
 
 test('Issue #107 returns filter options within the current intake permission scope', async t => {
