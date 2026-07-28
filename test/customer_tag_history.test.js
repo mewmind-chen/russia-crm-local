@@ -174,7 +174,7 @@ test('manual tag removal uses tag ID, writes actor history, and preserves other 
   );
 });
 
-test('manual removal rejects preset tags and rolls back when history cannot be written', async t => {
+test('tag removal accepts preset tags and rolls back when history cannot be written', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const preset = tagByName(fx, '客户类型', '贸易公司');
@@ -184,8 +184,8 @@ test('manual removal rejects preset tags and rolls back when history cannot be w
     .run(preset.id, manual.id);
 
   const presetResponse = await removeTag(fx, 'RU-9001', preset.id);
-  assert.equal(presetResponse.status, 400);
-  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [preset.id, manual.id].sort((a, b) => a - b));
+  assert.equal(presetResponse.status, 200);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [manual.id]);
 
   fx.db.exec(`CREATE TRIGGER fail_removed_tag_history
     BEFORE INSERT ON customer_tag_history
@@ -193,11 +193,11 @@ test('manual removal rejects preset tags and rolls back when history cannot be w
     BEGIN SELECT RAISE(ABORT,'forced tag removal history failure'); END`);
   const failed = await removeTag(fx, 'RU-9001', manual.id);
   assert.equal(failed.status, 400);
-  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [preset.id, manual.id].sort((a, b) => a - b));
-  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 0);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [manual.id]);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 1);
 });
 
-test('preset customer labels remain editable while system customer type and risk labels stay protected', async t => {
+test('all persisted customer labels can be removed regardless of category or preset status', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const customerType = tagByName(fx, '客户类型', '贸易公司');
@@ -209,18 +209,12 @@ test('preset customer labels remain editable while system customer type and risk
            ('RU-9001',?,'2026-07-03 08:00:00'),('RU-9001',?,'2026-07-04 08:00:00')`)
     .run(customerType.id, product.id, demand.id, risk.id);
 
-  const removed = await removeTag(fx, 'RU-9001', product.id);
-  assert.equal(removed.status, 200);
-  assert.equal(bindings(fx, 'RU-9001').some(row => row.tagId === product.id), false);
+  assert.equal((await removeTag(fx, 'RU-9001', customerType.id)).status, 200);
+  assert.equal((await removeTag(fx, 'RU-9001', risk.id)).status, 200);
 
   const saved = await setTags(fx, 'RU-9001', []);
   assert.equal(saved.status, 200);
-  assert.deepEqual(
-    bindings(fx, 'RU-9001').map(row => row.tagId),
-    [customerType.id, risk.id].sort((a, b) => a - b),
-  );
-  assert.equal((await removeTag(fx, 'RU-9001', customerType.id)).status, 400);
-  assert.equal((await removeTag(fx, 'RU-9001', risk.id)).status, 400);
+  assert.deepEqual(bindings(fx, 'RU-9001'), []);
 });
 
 test('manual removal requires edit permission and is blocked while impersonating', async t => {
@@ -246,11 +240,10 @@ test('manual removal requires edit permission and is blocked while impersonating
   assert.deepEqual(bindings(admin, 'RU-9001').map(row => row.tagId), [adminTag.id]);
 });
 
-test('customer type updates structured fields and only its preset binding', async t => {
+test('customer type updates structured fields without changing independent label bindings', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const oldPreset = tagByName(fx, '客户类型', '贸易公司');
-  const newPreset = tagByName(fx, '客户类型', '系统集成商');
   const sameNameManual = addManualTag(fx, '系统集成商');
   fx.db.prepare("UPDATE crm_accounts SET customer_type='贸易公司' WHERE id='CRM-WU'").run();
   fx.db.prepare("UPDATE customer_pool SET customer_type='贸易公司' WHERE customer_id='RU-9001'").run();
@@ -268,27 +261,20 @@ test('customer type updates structured fields and only its preset binding', asyn
   assert.equal(fx.db.prepare("SELECT customer_type FROM customer_pool WHERE customer_id='RU-9001'").get().customer_type, '系统集成商');
   assert.equal(fx.db.prepare("SELECT customer_type FROM customers WHERE customer_id='RU-9001'").get().customer_type, '系统集成商');
   const rows = bindings(fx, 'RU-9001');
-  assert.equal(rows.some(row => row.tagId === oldPreset.id), false);
-  assert.equal(rows.some(row => row.tagId === newPreset.id && row.isPreset === 1), true);
+  assert.equal(rows.some(row => row.tagId === oldPreset.id), true);
   assert.equal(rows.some(row => row.tagId === sameNameManual.id && row.isPreset === 0), true);
-  assert.deepEqual(
-    fx.db.prepare(`SELECT action,actor_id actorId FROM customer_tag_history
-      WHERE customer_id='RU-9001' ORDER BY id`).all(),
-    [
-      { action: 'removed', actorId: 'U-WU' },
-      { action: 'added', actorId: 'U-WU' },
-    ],
-  );
+  assert.deepEqual(fx.db.prepare(`SELECT action,actor_id actorId FROM customer_tag_history
+    WHERE customer_id='RU-9001' ORDER BY id`).all(), []);
   const audit = fx.db.prepare(`SELECT user_id userId,detail_json detailJson FROM crm_audit_log
     WHERE action='customer_type_changed' AND entity_id='CRM-WU'`).get();
   assert.equal(audit.userId, 'U-WU');
   assert.deepEqual(JSON.parse(audit.detailJson), {
     oldCustomerType: '贸易公司',
     newCustomerType: '系统集成商',
-    tagId: newPreset.id,
+    tagId: null,
   });
 
-  const createdAt = rows.find(row => row.tagId === newPreset.id).createdAt;
+  const createdAt = rows.find(row => row.tagId === oldPreset.id).createdAt;
   const historyCount = fx.db.prepare(
     "SELECT COUNT(*) count FROM customer_tag_history WHERE customer_id='RU-9001'"
   ).get().count;
@@ -298,7 +284,7 @@ test('customer type updates structured fields and only its preset binding', asyn
     body: { customerType: '系统集成商' },
   });
   assert.equal(repeated.status, 200);
-  assert.equal(bindings(fx, 'RU-9001').find(row => row.tagId === newPreset.id).createdAt, createdAt);
+  assert.equal(bindings(fx, 'RU-9001').find(row => row.tagId === oldPreset.id).createdAt, createdAt);
   assert.equal(
     fx.db.prepare("SELECT COUNT(*) count FROM customer_tag_history WHERE customer_id='RU-9001'").get().count,
     historyCount,
@@ -342,11 +328,10 @@ test('profile edits accept unchanged legacy customer types and allow clearing th
   assert.equal(fx.db.prepare("SELECT customer_type FROM customers WHERE customer_id='RU-9001'").get().customer_type, '');
 });
 
-test('customer type synchronization does not fabricate a missing legacy follow-up row', async t => {
+test('customer type updates do not fabricate a missing legacy follow-up row or change labels', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const oldPreset = tagByName(fx, '客户类型', '贸易公司');
-  const newPreset = tagByName(fx, '客户类型', '系统集成商');
   fx.db.prepare("UPDATE crm_accounts SET customer_type='贸易公司' WHERE id='CRM-WU'").run();
   fx.db.prepare("UPDATE customer_pool SET customer_type='贸易公司' WHERE customer_id='RU-9001'").run();
   fx.db.prepare("DELETE FROM customers WHERE customer_id='RU-9001'").run();
@@ -363,11 +348,11 @@ test('customer type synchronization does not fabricate a missing legacy follow-u
   assert.equal(fx.db.prepare("SELECT customer_type FROM customer_pool WHERE customer_id='RU-9001'").get().customer_type, '系统集成商');
   assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM customers WHERE customer_id='RU-9001'").get().count, 0);
   const rows = bindings(fx, 'RU-9001');
-  assert.equal(rows.some(row => row.tagId === oldPreset.id), false);
-  assert.equal(rows.some(row => row.tagId === newPreset.id), true);
+  assert.equal(rows.some(row => row.tagId === oldPreset.id), true);
+  assert.equal(rows.length, 1);
 });
 
-test('customer type update rolls back fields, bindings, history, and audit together', async t => {
+test('customer type update rolls back fields and audit without changing independent labels', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const oldPreset = tagByName(fx, '客户类型', '贸易公司');
