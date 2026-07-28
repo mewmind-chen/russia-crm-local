@@ -26,6 +26,14 @@ async function setTags(fx, customerId, tagIds, cookie = fx.cookie) {
   });
 }
 
+async function removeTag(fx, customerId, tagId, cookie = fx.cookie) {
+  return fx.request('/api/app', {
+    cookie,
+    method: 'POST',
+    body: { action: 'removeCustomerTag', customerId, tagId },
+  });
+}
+
 test('tag updates are differential, idempotent, and record the real actor', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
@@ -131,18 +139,85 @@ test('tag writes require edit permission and reject malformed or oversized sets'
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 0);
 });
 
-test('impersonated tag edits retain the authenticated real actor', async t => {
+test('impersonated tag edits are blocked without changing bindings or history', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   const tag = addManualTag(fx, '身份审计');
   const session = await fx.startImpersonation('U-WU');
   const response = await setTags(fx, 'RU-9001', [tag.id], session.cookie || fx.adminCookie);
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 403);
+  assert.deepEqual(bindings(fx, 'RU-9001'), []);
   assert.equal(
-    fx.db.prepare(`SELECT actor_id actorId FROM customer_tag_history
-      WHERE customer_id='RU-9001' ORDER BY id DESC LIMIT 1`).get().actorId,
-    'USR-ADMIN',
+    fx.db.prepare("SELECT COUNT(*) count FROM customer_tag_history WHERE customer_id='RU-9001'").get().count,
+    0,
   );
+});
+
+test('manual tag removal uses tag ID, writes actor history, and preserves other bindings', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const first = addManualTag(fx, '同名标签', '客户标签');
+  const second = addManualTag(fx, '同名标签', '其他');
+  fx.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
+    VALUES ('RU-9001',?,'2026-07-01 08:00:00'),('RU-9001',?,'2026-07-02 08:00:00')`)
+    .run(first.id, second.id);
+
+  const response = await removeTag(fx, 'RU-9001', first.id);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.removedTagId, first.id);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [second.id]);
+  assert.deepEqual(
+    fx.db.prepare(`SELECT tag_id tagId,tag_name tagName,action,actor_id actorId
+      FROM customer_tag_history WHERE customer_id='RU-9001' ORDER BY id`).all(),
+    [{ tagId: first.id, tagName: '同名标签', action: 'removed', actorId: 'U-WU' }],
+  );
+});
+
+test('manual removal rejects preset tags and rolls back when history cannot be written', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const preset = tagByName(fx, '客户类型', '贸易公司');
+  const manual = addManualTag(fx, '事务回滚');
+  fx.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
+    VALUES ('RU-9001',?,'2026-07-01 08:00:00'),('RU-9001',?,'2026-07-02 08:00:00')`)
+    .run(preset.id, manual.id);
+
+  const presetResponse = await removeTag(fx, 'RU-9001', preset.id);
+  assert.equal(presetResponse.status, 400);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [preset.id, manual.id].sort((a, b) => a - b));
+
+  fx.db.exec(`CREATE TRIGGER fail_removed_tag_history
+    BEFORE INSERT ON customer_tag_history
+    WHEN NEW.action='removed'
+    BEGIN SELECT RAISE(ABORT,'forced tag removal history failure'); END`);
+  const failed = await removeTag(fx, 'RU-9001', manual.id);
+  assert.equal(failed.status, 400);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [preset.id, manual.id].sort((a, b) => a - b));
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 0);
+});
+
+test('manual removal requires edit permission and is blocked while impersonating', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  const tag = addManualTag(fx, '权限删除');
+  fx.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
+    VALUES ('RU-9001',?,'2026-07-01 08:00:00')`).run(tag.id);
+  fx.setUserPermissions('U-WU', { edit_customer: false });
+  assert.equal((await removeTag(fx, 'RU-9001', tag.id)).status, 403);
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [tag.id]);
+
+  const admin = await fixtures.adminFixture();
+  t.after(() => admin.close());
+  const adminTag = addManualTag(admin, '身份检查删除');
+  admin.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
+    VALUES ('RU-9001',?,'2026-07-01 08:00:00')`).run(adminTag.id);
+  const session = await admin.startImpersonation('U-WU');
+  assert.equal(
+    (await removeTag(admin, 'RU-9001', adminTag.id, session.cookie || admin.adminCookie)).status,
+    403,
+  );
+  assert.deepEqual(bindings(admin, 'RU-9001').map(row => row.tagId), [adminTag.id]);
 });
 
 test('customer type updates structured fields and only its preset binding', async t => {

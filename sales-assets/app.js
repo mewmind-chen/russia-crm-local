@@ -129,6 +129,42 @@
       ? [officialName, customerCode].filter(Boolean).join(' · ')
       : customerCode;
   }
+  function normalizeTagText(value) {
+    return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
+  }
+  function uniqueSourceTags(tags) {
+    const seen = new Set();
+    return tags.filter(tag => {
+      const key = `${tag.source}:${normalizeTagText(tag.name)}`;
+      if (!tag.name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  function accountSourceTags(account) {
+    const structured = [
+      account?.customer_type ? { source: 'structured', prefix: '客户类型', name: account.customer_type } : null,
+      account?.industry ? { source: 'structured', prefix: '行业', name: account.industry } : null,
+    ].filter(Boolean);
+    const structuredNames = new Set(structured.map(tag => normalizeTagText(tag.name)));
+    const customerTags = Array.isArray(account?.customerTags) ? account.customerTags : [];
+    const tagged = customerTags.map(tag => ({
+      source: tag.isPreset ? (tag.category === '需确认属性' ? 'risk' : 'structured') : 'manual',
+      prefix: tag.isPreset ? (tag.category === '需确认属性' ? '风险' : tag.category) : '人工',
+      name: tag.name,
+    })).filter(tag => tag.source !== 'manual' || !structuredNames.has(normalizeTagText(tag.name)));
+    const ai = customerAIEnabled() && account?.id
+      ? labelsForAccount(account.id).map(name => ({ source: 'ai', prefix: 'AI', name }))
+      : [];
+    return uniqueSourceTags([...structured, ...tagged, ...ai]);
+  }
+  function sourceTagMarkup(account, limit = 5) {
+    const tags = accountSourceTags(account);
+    const shown = tags.slice(0, limit);
+    return shown.length
+      ? `<div class="source-tag-row">${shown.map(tag => `<span class="source-tag ${esc(tag.source)}" title="${esc(tag.source === 'structured' ? '来自客户资料字段' : tag.source === 'manual' ? '由员工维护' : tag.source === 'ai' ? 'AI评价，只读' : '风险或状态，只读')}">${esc(tag.prefix)} · ${esc(tag.name)}</span>`).join('')}${tags.length > shown.length ? `<span class="source-tag manual">+${tags.length - shown.length}</span>` : ''}</div>`
+      : '';
+  }
   function jsonList(value) {
     try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; } catch (_e) { return []; }
   }
@@ -1065,9 +1101,10 @@
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
           ...evidence.map((url, index) => `<a class="text-button" href="${esc(url)}" target="_blank" rel="noopener">证据${index + 1}</a>`),
         ].filter(Boolean).join(' · ');
-        const customerTags = (Array.isArray(item.customerTags) ? item.customerTags.map(tag => tag.name || tag.id || tag) : [])
-          .concat(Array.isArray(item.customer_tags) ? item.customer_tags
-            : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'));
+        const customerTags = (Array.isArray(item.customerTags) ? item.customerTags : [])
+          .concat((Array.isArray(item.customer_tags) ? item.customer_tags
+            : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'))
+            .map(tag => typeof tag === 'object' ? tag : { name: tag, category: '客户标签', isPreset: false }));
         const website = /^https?:\/\//i.test(item.website || '')
           ? `<a class="text-button" href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.website)}</a>`
           : esc(item.website || '无官网');
@@ -1075,7 +1112,7 @@
           ? '具名联系人与联系方式完备'
           : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const businessColumns = [
-          `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span><span>${esc(item.product_focus || item.potential_demand || '产品与潜在需求未标注')}</span>${customerTags.length ? `<div class="tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag)}</span>`).join('')}</div>` : ''}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span><span>${esc(item.product_focus || item.potential_demand || '产品与潜在需求未标注')}</span>${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
           `<div class="assignment-cell"><span class="pill ${statusClass}">${intakeStatusLabel(item.status)}</span><span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
@@ -1149,6 +1186,7 @@
     if (!account) return;
     $('#customerProfileTitle').textContent = accountDisplayName(account) || '客户资料';
     $('#customerProfileIdentity').textContent = accountIdentity(account);
+    $('#customerProfileTags').innerHTML = sourceTagMarkup(account);
     $('#customerProfileStageEdit').classList.toggle('hidden', !can('edit_customer'));
     $('#customerProfileDataEdit').classList.toggle('hidden', !can('edit_customer'));
     $('#customerProfileNickname').classList.toggle('hidden', !can('edit_customer'));
@@ -2034,7 +2072,7 @@
         ].filter(Boolean).join('');
         return [
           canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          `<div class="company-cell"><strong>${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${customerAIEnabled() && labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
+          `<div class="company-cell"><strong>${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
           esc(account.owner_name || '未分配'),
@@ -3087,6 +3125,7 @@
     $('#drawerContent').innerHTML = `
       ${alert ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div><time>${shortDate(account.next_action_at, true)}</time></div>
+      ${sourceTagMarkup(account)}
       <div class="account-facts">
         ${accountFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
@@ -4382,6 +4421,23 @@
   });
   $('#salesMenuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#salesSidebarMask').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+  window.addEventListener('message', event => {
+    const profileFrame = $('#customerProfileFrame');
+    if (event.source !== profileFrame?.contentWindow || event.origin !== location.origin
+      || event.data?.type !== 'tradepulse:customer-tags-updated' || !state.data) return;
+    const customerId = String(event.data.customerId || '');
+    const tags = Array.isArray(event.data.tags) ? event.data.tags : [];
+    state.data.accounts.filter(account => String(account.external_customer_id || '') === customerId)
+      .forEach(account => { account.customerTags = tags; });
+    (state.data.intake?.items || []).filter(item => String(item.external_customer_id || '') === customerId)
+      .forEach(item => { item.customerTags = tags; });
+    renderCustomers();
+    renderIntake();
+    if (state.selectedCustomerId) {
+      renderCustomerProfileHeader();
+      if ($('#customerDrawer').classList.contains('open')) renderDrawer();
+    }
+  });
   window.addEventListener('hashchange', () => {
     const view = location.hash.replace(/^#/, '');
     if (viewMeta[view] && state.data) switchView(view, false);

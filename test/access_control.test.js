@@ -116,7 +116,7 @@ test('every browser API has an explicit permission policy or separate token boun
     'POST /assistant/chat',
   ];
   const appActions = [
-    'updateCustomer', 'createTag', 'setCustomerTags', 'createReconJob',
+    'updateCustomer', 'createTag', 'setCustomerTags', 'removeCustomerTag', 'createReconJob',
     'retryReconJob', 'createContactReconJob',
   ];
   const prospectActions = ['createTask', 'rerunTask', 'promoteCandidate'];
@@ -152,7 +152,13 @@ test('identity inspection blocks exactly the Recon and account-security policies
   const { LEGACY_ACTION_POLICIES, SALES_ROUTE_POLICIES, policyForLegacyRequest, assertPolicyAllowed } = accessControl();
   const blockedApp = Object.entries(LEGACY_ACTION_POLICIES.app)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action).sort();
-  assert.deepEqual(blockedApp, ['createContactReconJob', 'createReconJob', 'retryReconJob']);
+  assert.deepEqual(blockedApp, [
+    'createContactReconJob',
+    'createReconJob',
+    'removeCustomerTag',
+    'retryReconJob',
+    'setCustomerTags',
+  ]);
   const blockedProspect = Object.entries(LEGACY_ACTION_POLICIES['prospect-agent'])
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action);
   assert.deepEqual(blockedProspect, []);
