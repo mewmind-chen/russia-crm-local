@@ -29,7 +29,7 @@ test('primary navigation has one intake entry in the customer lifecycle', () => 
 
 test('intake, pending and claimed routes select the canonical pool view', () => {
   assert.match(appJs, /const viewPermissions = \{[^}]*pending: 'view_intake'[^}]*claimed: 'view_intake'[^}]*\}/);
-  assert.match(appJs, /const requestedPermission = viewPermissions\[requestedView\] \|\| `view_\$\{requestedView\}`/);
+  assert.match(appJs, /requestedView === 'customerProfile' && requestedIntakeItemId[\s\S]*?'view_intake'/);
   assert.match(appJs, /legacyIntakeStatus = view === 'pending' \? 'assigned' : view === 'claimed' \? 'claimed' : ''/);
   assert.match(appJs, /intakeAlias = \['intake', 'pending', 'claimed'\]\.includes\(view\)/);
   assert.match(appJs, /canonicalView = intakeAlias \? 'pool' : view/);
@@ -63,7 +63,7 @@ test('dashboard intake alerts open the matching lead profile', () => {
 
 test('customer and intake rows expose profile click targets', () => {
   assert.match(appJs, /row\._attrs = `data-customer="\$\{esc\(accounts\[index\]\.id\)\}"`/);
-  assert.match(appJs, /row\._attrs = item\.crm_customer_id/);
+  assert.match(appJs, /row\._attrs = `data-intake-profile/);
   assert.match(appJs, /data-intake-profile/);
   assert.match(appJs, /function openIntakeProfile\(itemId\)/);
 });

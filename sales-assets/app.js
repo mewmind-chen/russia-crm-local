@@ -33,6 +33,9 @@
     drawerAiContext: null,
     customerProfileReturnView: 'customers',
     customerProfileExternalId: '',
+    customerProfileIntakeItemId: '',
+    customerProfileReadOnly: false,
+    customerProfileLead: null,
     customerAi: null,
     customerAiError: '',
     customerAiLoading: false,
@@ -513,14 +516,20 @@
         void loadAIFeatures();
       }
       const requestedView = location.hash.replace(/^#/, '');
-      const requestedCustomerId = new URLSearchParams(location.search).get('customer') || '';
-      const requestedPermission = viewPermissions[requestedView] || `view_${requestedView}`;
+      const requestedParams = new URLSearchParams(location.search);
+      const requestedCustomerId = requestedParams.get('customer') || '';
+      const requestedIntakeItemId = requestedParams.get('intake') || '';
+      const requestedPermission = requestedView === 'customerProfile' && requestedIntakeItemId
+        ? 'view_intake'
+        : viewPermissions[requestedView] || `view_${requestedView}`;
+      state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
       const firstAllowedView = customerAIEnabled() && can('view_customers')
         ? Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
         : firstAllowedBusinessView();
       switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
-        if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
+        if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId);
+        else if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
         else switchView('customers');
       }
       return true;
@@ -1118,9 +1127,7 @@
         const row = showAI
           ? [businessColumns[0], ...aiColumns, ...businessColumns.slice(1)]
           : businessColumns;
-        row._attrs = item.crm_customer_id
-          ? `data-customer="${esc(item.crm_customer_id)}"`
-          : `data-intake-profile="${esc(item.id)}"`;
+        row._attrs = `data-intake-profile="${esc(item.id)}"`;
         return row;
       }),
     );
@@ -1140,13 +1147,17 @@
     }
   }
 
-  function customerProfileFrameUrl(externalCustomerId) {
-    return `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}`;
+  function customerProfileFrameUrl(externalCustomerId, intakeItemId = '') {
+    const intakeParam = intakeItemId ? `&intake=${encodeURIComponent(intakeItemId)}` : '';
+    return `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}${intakeParam}`;
   }
 
   function reloadCustomerProfileFrame() {
     if (state.view !== 'customerProfile' || !state.customerProfileExternalId) return;
-    $('#customerProfileFrame').src = customerProfileFrameUrl(state.customerProfileExternalId);
+    $('#customerProfileFrame').src = customerProfileFrameUrl(
+      state.customerProfileExternalId,
+      state.customerProfileIntakeItemId,
+    );
   }
 
   function openCustomerProfile(externalCustomerId) {
@@ -1155,6 +1166,9 @@
     if (!account) return toast('未找到对应客户资料');
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
     state.customerProfileExternalId = externalCustomerId;
+    state.customerProfileIntakeItemId = '';
+    state.customerProfileReadOnly = false;
+    state.customerProfileLead = null;
     state.selectedCustomerId = account.id;
     state.customerAiPollCount = 0;
     state.customerEnrichment = null;
@@ -1167,6 +1181,7 @@
     frame.src = customerProfileFrameUrl(externalCustomerId);
     const url = new URL(location.href);
     url.searchParams.set('customer', externalCustomerId);
+    url.searchParams.delete('intake');
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     const station = $('#customerAiStation');
@@ -1174,15 +1189,81 @@
     if (customerAIEnabled()) void loadCustomerAI(externalCustomerId);
   }
 
+  async function openIntakeMasterProfile(itemId, fallbackExternalId = '') {
+    let item = state.data.intake?.items?.find(row => String(row.id) === String(itemId))
+      || (fallbackExternalId ? {
+        id: itemId,
+        external_customer_id: fallbackExternalId,
+        company_name: fallbackExternalId,
+        customerTags: [],
+      } : null);
+    if (!item) {
+      try {
+        const profile = await api(`/api/sales-crm/intake/${encodeURIComponent(itemId)}/profile`);
+        const pool = profile.customerPool?.[0];
+        item = pool ? {
+          id: itemId,
+          external_customer_id: pool.customerId,
+          company_name: pool.companyName,
+          customer_type: pool.customerType,
+          industry: pool.industry,
+          customerTags: pool.tags || [],
+        } : null;
+      } catch (error) {
+        if (state.view === 'customerProfile' && !state.customerProfileExternalId) {
+          switchView(firstAllowedBusinessView(), false);
+        }
+        return toast(error.message || '当前线索不在可见范围内，无法打开完整资料');
+      }
+    }
+    if (!item) return toast('该线索未关联可用的客户主档');
+    const externalCustomerId = String(item.external_customer_id || fallbackExternalId || '').trim();
+    if (!externalCustomerId) return toast('该线索未关联客户主档，暂时无法查看完整资料');
+    const account = state.data.accounts.find(row => row.external_customer_id === externalCustomerId);
+    if (account) return openCustomerProfile(externalCustomerId);
+    if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
+    state.customerProfileExternalId = externalCustomerId;
+    state.customerProfileIntakeItemId = String(item.id || itemId);
+    state.customerProfileReadOnly = true;
+    state.customerProfileLead = item;
+    state.selectedCustomerId = '';
+    state.customerAiPollCount = 0;
+    state.customerAi = null;
+    state.customerAiError = '';
+    state.customerEnrichment = null;
+    state.customerEnrichmentLastSuccess = null;
+    state.customerEnrichmentError = '';
+    closeDrawer();
+    switchView('customerProfile');
+    renderCustomerProfileHeader();
+    $('#customerProfileFrame').src = customerProfileFrameUrl(externalCustomerId, state.customerProfileIntakeItemId);
+    const url = new URL(location.href);
+    url.searchParams.set('customer', externalCustomerId);
+    url.searchParams.set('intake', state.customerProfileIntakeItemId);
+    url.hash = 'customerProfile';
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    $('#customerAiStation')?.classList.add('hidden');
+  }
+
   function renderCustomerProfileHeader() {
     const account = state.data?.accounts?.find(item => item.id === state.selectedCustomerId);
-    if (!account) return;
-    $('#customerProfileTitle').textContent = accountDisplayName(account) || '客户资料';
-    $('#customerProfileIdentity').textContent = accountIdentity(account);
-    $('#customerProfileTags').innerHTML = sourceTagMarkup(account);
-    $('#customerProfileStageEdit').classList.toggle('hidden', !can('edit_customer'));
-    $('#customerProfileDataEdit').classList.toggle('hidden', !can('edit_customer'));
-    $('#customerProfileNickname').classList.toggle('hidden', !can('edit_customer'));
+    const lead = state.customerProfileLead;
+    if (!account && !lead) return;
+    const readOnly = state.customerProfileReadOnly || !account;
+    $('#customerProfileTitle').textContent = accountDisplayName(account) || lead?.company_name || '客户资料';
+    $('#customerProfileIdentity').textContent = account
+      ? accountIdentity(account)
+      : `${state.customerProfileExternalId} · 未进入或无权访问 CRM · 只读主档`;
+    $('#customerProfileTags').innerHTML = sourceTagMarkup(account || {
+      customer_type: lead?.customer_type,
+      industry: lead?.industry,
+      customerTags: lead?.customerTags || [],
+    });
+    $('#customerProfileActivity').classList.toggle('hidden', readOnly || !can('record_activity'));
+    $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
+    $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
+    $('#customerProfileNickname').classList.toggle('hidden', readOnly || !can('edit_customer'));
+    $('#customerAiStation')?.classList.toggle('hidden', readOnly || !customerAIEnabled());
   }
 
   function returnFromCustomerProfile() {
@@ -1195,8 +1276,12 @@
     state.customerEnrichmentLastSuccess = null;
     state.customerEnrichmentError = '';
     state.customerProfileExternalId = '';
+    state.customerProfileIntakeItemId = '';
+    state.customerProfileReadOnly = false;
+    state.customerProfileLead = null;
     const url = new URL(location.href);
     url.searchParams.delete('customer');
+    url.searchParams.delete('intake');
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     switchView(state.customerProfileReturnView || 'customers');
   }
@@ -3047,7 +3132,7 @@
         <div class="decision-audit"><span class="eyebrow">AUDIT TRAIL</span>${intakeAuditMarkup(item)}</div>
       </section>
       <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER PROFILE</p><h3>客户资料</h3></div>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div>
+        <div class="insight-head"><div><p class="eyebrow">CUSTOMER PROFILE</p><h3>客户资料</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
         <div class="master-profile-grid">
           <div><span>企业与地区</span><p>${esc([item.company_name, item.country].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
@@ -3858,6 +3943,8 @@
     if (customer && (!event.target.closest('button,a,input,select,textarea') || customer.matches('button[data-open-customer]'))) openCustomer(customer.dataset.openCustomer || customer.dataset.customer);
     const intakeProfile = event.target.closest('[data-intake-profile]');
     if (intakeProfile && (!event.target.closest('button,a,input,select,textarea') || intakeProfile.matches('button[data-intake-profile]'))) openIntakeProfile(intakeProfile.dataset.intakeProfile);
+    const intakeMaster = event.target.closest('[data-open-intake-master]');
+    if (intakeMaster) openIntakeMasterProfile(intakeMaster.dataset.openIntakeMaster);
     const master = event.target.closest('[data-open-master]');
     if (master && (!event.target.closest('button,a,input,select,textarea') || master.matches('button[data-open-master]'))) {
       openCustomerProfile(master.dataset.openMaster);
@@ -3913,10 +4000,22 @@
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
     if (event.target.closest('[data-close-modal]')) closeModal();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
-    if (event.target.closest('#customerProfileActivity')) openActivityModal(state.selectedCustomerId);
-    if (event.target.closest('#customerProfileStageEdit')) openStageRatingModal(state.selectedCustomerId);
-    if (event.target.closest('#customerProfileDataEdit')) openCustomerProfileEditModal(state.selectedCustomerId);
-    if (event.target.closest('#customerProfileNickname')) openNicknameModal(state.selectedCustomerId);
+    if (event.target.closest('#customerProfileActivity')) {
+      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能记录跟进');
+      else openActivityModal(state.selectedCustomerId);
+    }
+    if (event.target.closest('#customerProfileStageEdit')) {
+      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能调整阶段');
+      else openStageRatingModal(state.selectedCustomerId);
+    }
+    if (event.target.closest('#customerProfileDataEdit')) {
+      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑资料');
+      else openCustomerProfileEditModal(state.selectedCustomerId);
+    }
+    if (event.target.closest('#customerProfileNickname')) {
+      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能设置昵称');
+      else openNicknameModal(state.selectedCustomerId);
+    }
     if (event.target.closest('[data-clear-nickname]')) {
       const input = $('#nicknameForm input[name="nickname"]');
       if (input) { input.value = ''; input.focus(); }
@@ -4302,7 +4401,9 @@
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
     const intakeAlias = ['intake', 'pending', 'claimed'].includes(view);
     const canonicalView = intakeAlias ? 'pool' : view;
-    const permission = viewPermissions[view] || `view_${canonicalView}`;
+    const permission = canonicalView === 'customerProfile' && state.customerProfileReadOnly
+      ? 'view_intake'
+      : viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
     state.view = canonicalView;
     state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
