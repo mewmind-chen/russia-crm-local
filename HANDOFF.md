@@ -24,7 +24,7 @@ Issue 指定的完整列表范围包括：线索池、负责人线索、Recon �
 - 开发分支：`codex/issue-116-filter-permissions`
 - 隔离 worktree：`/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-116-filter-permissions`
 - 基线：`origin/main@13c11329b09beeb3e5a693235f4ef98b87b8594e`
-- 发布方式：草稿 PR；首次推送后补充 PR URL
+- 发布方式：Draft PR [#126](https://github.com/mewmind-chen/russia-crm-local/pull/126)
 - 生产状态：未合并、未部署、未上线
 
 不要在 `/Users/ylf/Desktop/projects/russia-crm-local` 继续本 Issue；该主工作区存在用户自己的未提交改动。后续工作应继续使用上述隔离 worktree。
