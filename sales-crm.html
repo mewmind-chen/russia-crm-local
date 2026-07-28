@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-103">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-114">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -317,8 +317,11 @@
         <div class="customer-profile-toolbar">
           <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
           <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2></div>
-          <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
-          <button id="customerProfileEdit" class="button secondary hidden" type="button">调整客户信息</button>
+          <div class="customer-profile-actions">
+            <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
+            <button id="customerProfileStageEdit" class="button secondary hidden" type="button">调整阶段和评级</button>
+            <button id="customerProfileDataEdit" class="button secondary hidden" type="button">编辑客户资料</button>
+          </div>
         </div>
         <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
           <div class="customer-ai-station-head">
@@ -507,6 +510,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260728-issue-107"></script>
+  <script src="/sales-assets/app.js?v=20260728-issue-114"></script>
 </body>
 </html>
