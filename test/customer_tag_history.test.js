@@ -107,8 +107,8 @@ test('tag history query applies view permission and customer row scope', async t
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO customer_tag_history
     (customer_id,tag_id,tag_name,tag_category,action,actor_id,created_at)
-    VALUES ('RU-9002',1,'可见','客户标签','added','U-MGR','2026-07-28 08:00:00'),
-           ('RU-9003',1,'不可见','客户标签','added','U-OTHER','2026-07-28 08:00:00')`).run();
+    VALUES ('RU-9002',1,'可见','客户类型','added','U-MGR','2026-07-28 08:00:00'),
+           ('RU-9003',1,'不可见','客户类型','added','U-OTHER','2026-07-28 08:00:00')`).run();
 
   const allowed = await fx.request('/api/sales-crm/profile/RU-9002/tag-history', { cookie: fx.cookie });
   assert.equal(allowed.status, 200);

@@ -10,6 +10,8 @@ const projectRoot = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(projectRoot, 'sales-crm.html'), 'utf8');
 const js = fs.readFileSync(path.join(projectRoot, 'sales-assets', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(projectRoot, 'sales-assets', 'app.css'), 'utf8');
+const filterJs = fs.readFileSync(path.join(projectRoot, 'sales-assets', 'filter-component.js'), 'utf8');
+const filterCss = fs.readFileSync(path.join(projectRoot, 'sales-assets', 'filter-component.css'), 'utf8');
 
 function ids(payload) {
   return payload.customers.map(row => row.id).sort();
@@ -43,7 +45,7 @@ test('customer export applies multi-keyword, multi-select, quick-view and sortin
     '/api/sales-crm/export?search=wu%20俄罗斯&countries=俄罗斯,德国&owners=U-WU,U-MGR'
       + '&stages=qualified&priorities=A,B&customerTypes=原厂,终端制造商'
       + '&industries=工业控制,汽车电子&sources=展会,官网&creators=USR-ADMIN,U-WU'
-      + '&evaluationTags=高匹配&sort=potential_desc',
+      + '&sort=potential_desc',
     { cookie: fx.adminCookie },
   );
   assert.deepEqual(ids(combined), ['CRM-WU']);
@@ -105,26 +107,24 @@ test('contact keyword matching follows contact permission and customer scope', a
   assert.deepEqual(scoped.customers, []);
 });
 
-test('single-file customer UI exposes the three filter layers and account-scoped persistence', () => {
-  for (const contract of [
-    'customerSearchClear',
-    'customerQuickViews',
-    'customerFilterToggle',
-    'customerSort',
-    'customerActiveFilters',
-    'customerFilterPanel',
-    'customerFilterReset',
-    'customerFilterApply',
-  ]) {
-    assert.match(html, new RegExp(`id="${contract}"`), contract);
-  }
-  assert.match(html, /搜索公司、客户编号、国家、行业、产品、网站或评价标签/);
-  assert.match(js, /tradepulse\.customerFilters\./);
-  assert.match(js, /customerSearchTimer/);
-  assert.match(js, /250/);
-  assert.match(js, /split\(\/\\s\+\/\)/);
-  assert.match(js, /selectedCustomerIds = new Set\(\[\.\.\.state\.selectedCustomerIds\]\.filter/);
-  assert.match(css, /\.customer-quick-views/);
-  assert.match(css, /\.customer-filter-panel/);
-  assert.match(css, /@media\(max-width:780px\).*customer-filter-panel/s);
+test('customer UI renders only the authorized shared filter schema and server results', () => {
+  assert.match(html, /id="customerAuthorizedFilters"/);
+  assert.match(html, /filter-component\.js\?v=/);
+  assert.doesNotMatch(html, /id="customerSearchClear"|id="customerFilterPanel"/);
+  assert.match(js, /api\(`\/filter-schema\/\$\{pageKey\}`\)/);
+  assert.match(js, /api\(`\/accounts\?\$\{params\}`\)/);
+  assert.match(js, /TradePulseFilterComponent\.mountFilterComponent/);
+  assert.match(filterJs, /tradepulse\.authorizedFilters/);
+  assert.match(filterJs, /permissionVersion/);
+  assert.match(filterJs, /selectedCustomerIds|setResultMeta/);
+  assert.match(filterCss, /@media\s*\(max-width:\s*(?:600|780)px\)/);
+  assert.match(css, /\.filter-permission-admin/);
+});
+
+test('customer UI can continue paginated results and ignores stale filter responses', () => {
+  assert.match(html, /id="customerLoadMore"/);
+  assert.match(js, /state\.customerList\.hasMore/);
+  assert.match(js, /loadCustomerPage\(\{\s*reset:\s*false\s*\}\)/);
+  assert.match(js, /const requestEpoch = \+\+state\.customerRequestEpoch/);
+  assert.match(js, /requestEpoch !== state\.customerRequestEpoch/);
 });

@@ -709,17 +709,20 @@ app.get('/api/recon/results/:jobId', (req, res) => {
   }
 });
 
-app.get('/api/quality/issues', (_req, res) => {
+app.get('/api/quality/issues', (req, res) => {
   const db = getDb();
   try {
-    const value = sql => Number(Object.values(db.prepare(sql).get())[0] || 0);
+    const allowedIds = [...req.accessContext.externalCustomerIds];
+    const placeholders = allowedIds.length ? allowedIds.map(() => '?').join(',') : "''";
+    const value = (sql, params = allowedIds) =>
+      Number(Object.values(db.prepare(sql).get(...params))[0] || 0);
     res.json({ ok: true, issues: [
-      { code: 'invalid_email', severity: 'error', count: value("SELECT COUNT(*) n FROM customer_pool WHERE trim(email) != '' AND email NOT LIKE '%@%'") },
-      { code: 'missing_owner', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(owner) = ''") },
-      { code: 'missing_next_action', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_action) = ''") },
-      { code: 'missing_next_follow_date', severity: 'error', count: value("SELECT COUNT(*) n FROM customers WHERE status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_follow_date) = ''") },
-      { code: 'evidence_count_mismatch', severity: 'error', count: value("SELECT COUNT(*) n FROM recon_results r WHERE CAST(r.evidence_count AS INTEGER) != (SELECT COUNT(*) FROM recon_evidence e WHERE e.job_id=r.job_id)") },
-      { code: 'missing_sanction_checked_at', severity: 'warning', count: value("SELECT COUNT(*) n FROM recon_results WHERE trim(sanction_checked_at) = ''") },
+      { code: 'invalid_email', severity: 'error', count: value(`SELECT COUNT(*) n FROM customer_pool WHERE customer_id IN (${placeholders}) AND trim(email) != '' AND email NOT LIKE '%@%'`) },
+      { code: 'missing_owner', severity: 'error', count: value(`SELECT COUNT(*) n FROM customers WHERE customer_id IN (${placeholders}) AND status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(owner) = ''`) },
+      { code: 'missing_next_action', severity: 'error', count: value(`SELECT COUNT(*) n FROM customers WHERE customer_id IN (${placeholders}) AND status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_action) = ''`) },
+      { code: 'missing_next_follow_date', severity: 'error', count: value(`SELECT COUNT(*) n FROM customers WHERE customer_id IN (${placeholders}) AND status NOT IN ('放弃跟进','风险过高','联系方式无效') AND trim(next_follow_date) = ''`) },
+      { code: 'evidence_count_mismatch', severity: 'error', count: value(`SELECT COUNT(*) n FROM recon_results r WHERE r.customer_id IN (${placeholders}) AND CAST(r.evidence_count AS INTEGER) != (SELECT COUNT(*) FROM recon_evidence e WHERE e.job_id=r.job_id)`) },
+      { code: 'missing_sanction_checked_at', severity: 'warning', count: value(`SELECT COUNT(*) n FROM recon_results WHERE customer_id IN (${placeholders}) AND trim(sanction_checked_at) = ''`) },
     ] });
   } finally {
     db.close();

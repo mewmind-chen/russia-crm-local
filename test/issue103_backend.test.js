@@ -29,7 +29,7 @@ function seedLeadPool(fx) {
     'duplicate', now, now,
   );
   const tagId = fx.db.prepare(`INSERT INTO tags(name,category,color,is_preset,created_at)
-    VALUES ('重点客户','customer','#2563eb',0,?)`).run(now).lastInsertRowid;
+    VALUES ('重点客户','客户类型','#2563eb',0,?)`).run(now).lastInsertRowid;
   fx.db.prepare(`INSERT INTO customer_tags(customer_id,tag_id,created_at)
     VALUES ('LEAD-103-PENDING',?,?)`).run(tagId, now);
 }

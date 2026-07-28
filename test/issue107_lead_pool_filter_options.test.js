@@ -21,8 +21,8 @@ function seedFilterOptions(fx) {
       '工业自动化','系统集成商','assigned','U-WU',?,?)`).run(now, now);
   const insertTag = fx.db.prepare(`INSERT INTO tags(name,category,color,is_preset,created_at)
     VALUES (?,?,'#2563eb',0,?)`);
-  const otherTag = insertTag.run('重点客户','customer',now).lastInsertRowid;
-  const wuTag = insertTag.run('展会线索','customer',now).lastInsertRowid;
+  const otherTag = insertTag.run('重点客户','客户类型',now).lastInsertRowid;
+  const wuTag = insertTag.run('展会线索','客户类型',now).lastInsertRowid;
   const addTag = fx.db.prepare(`INSERT INTO customer_tags(customer_id,tag_id,created_at)
     VALUES (?,?,?)`);
   addTag.run('BR-9004', otherTag, now);
