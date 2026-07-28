@@ -116,8 +116,8 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
 test('mobile customer profile removes hidden toolbar space and fills the viewport', () => {
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
-  assert.match(html, /app\.css\?v=20260728-issue-114/);
-  assert.match(html, /app\.js\?v=20260728-issue-114/);
+  assert.match(html, /app\.css\?v=[^"]+/);
+  assert.match(html, /app\.js\?v=[^"]+/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {

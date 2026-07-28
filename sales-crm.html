@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-114">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-109">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
 </head>
 <body data-app="sales">
@@ -316,9 +316,10 @@
       <section id="customerProfileView" class="view customer-profile-view">
         <div class="customer-profile-toolbar">
           <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
-          <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2></div>
+          <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2><p id="customerProfileIdentity" class="subtle"></p></div>
           <div class="customer-profile-actions">
             <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
+            <button id="customerProfileNickname" class="button secondary hidden" type="button">客户昵称</button>
             <button id="customerProfileStageEdit" class="button secondary hidden" type="button">调整阶段和评级</button>
             <button id="customerProfileDataEdit" class="button secondary hidden" type="button">编辑客户资料</button>
           </div>
@@ -497,6 +498,7 @@
     <div class="drawer-head">
       <button class="icon-button" data-close-drawer>×</button>
       <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
+      <button id="drawerNicknameBtn" class="button secondary hidden" type="button">客户昵称</button>
       <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录动作</button>
     </div>
     <div id="drawerContent" class="drawer-content"></div>
@@ -510,6 +512,6 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
-  <script src="/sales-assets/app.js?v=20260728-issue-114"></script>
+  <script src="/sales-assets/app.js?v=20260728-issue-109"></script>
 </body>
 </html>

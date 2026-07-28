@@ -119,6 +119,16 @@
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
   }
+  function accountDisplayName(account) {
+    return String(account?.nickname || account?.company_name || account?.companyName || '').trim();
+  }
+  function accountIdentity(account) {
+    const officialName = String(account?.company_name || account?.companyName || '').trim();
+    const customerCode = String(account?.external_customer_id || account?.externalCustomerId || '').trim();
+    return account?.nickname
+      ? [officialName, customerCode].filter(Boolean).join(' · ')
+      : customerCode;
+  }
   function jsonList(value) {
     try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; } catch (_e) { return []; }
   }
@@ -626,6 +636,7 @@
     renderMaintenance();
     renderAiGovernance();
     if (state.selectedCustomerId && state.data.accounts.some(item => item.id === state.selectedCustomerId)) renderDrawer();
+    if (state.view === 'customerProfile') renderCustomerProfileHeader();
   }
 
   function computeSummary(accounts) {
@@ -674,15 +685,18 @@
       </div>`;
     }).join('');
     const attention = scopedAlerts().slice(0, 5);
-    $('#attentionList').innerHTML = attention.length ? attention.map(item => `<div class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
-      <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(item.companyName)}</strong><span>${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
-    </div>`).join('') : '<div class="empty">当前没有需要处理的异常</div>';
+    $('#attentionList').innerHTML = attention.length ? attention.map(item => {
+      const account = state.data.accounts.find(row => row.id === item.customerId);
+      return `<div class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
+        <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(account ? accountDisplayName(account) : item.companyName)}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
+      </div>`;
+    }).join('') : '<div class="empty">当前没有需要处理的异常</div>';
     renderCountrySnapshot(accounts);
     const activities = filteredActivities(accounts).slice(0, 8);
     $('#activityFeed').innerHTML = activities.length ? activities.map(activity => {
       const account = state.data.accounts.find(item => item.id === activity.customer_id);
       const meta = activityMeta[activity.activity_type] || [activity.activity_type, '记'];
-      return `<div class="feed-item" data-open-customer="${activity.customer_id}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(account?.company_name || '')} · ${esc(meta[0])}</strong><span>${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')} · ${relative(activity.occurred_at)}</span></div></div>`;
+      return `<div class="feed-item" data-open-customer="${activity.customer_id}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(accountDisplayName(account))} · ${esc(meta[0])}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')} · ${relative(activity.occurred_at)}</span></div></div>`;
     }).join('') : '<div class="empty">当前周期没有有效动作</div>';
   }
   function percent(numerator, denominator) {
@@ -1118,9 +1132,7 @@
     state.customerEnrichmentError = '';
     closeDrawer();
     switchView('customerProfile');
-    $('#customerProfileTitle').textContent = account?.company_name || '客户资料';
-    $('#customerProfileStageEdit').classList.toggle('hidden', !can('edit_customer'));
-    $('#customerProfileDataEdit').classList.toggle('hidden', !can('edit_customer'));
+    renderCustomerProfileHeader();
     const frame = $('#customerProfileFrame');
     frame.src = customerProfileFrameUrl(externalCustomerId);
     const url = new URL(location.href);
@@ -1130,6 +1142,16 @@
     const station = $('#customerAiStation');
     station?.classList.toggle('hidden', !customerAIEnabled());
     if (customerAIEnabled()) void loadCustomerAI(externalCustomerId);
+  }
+
+  function renderCustomerProfileHeader() {
+    const account = state.data?.accounts?.find(item => item.id === state.selectedCustomerId);
+    if (!account) return;
+    $('#customerProfileTitle').textContent = accountDisplayName(account) || '客户资料';
+    $('#customerProfileIdentity').textContent = accountIdentity(account);
+    $('#customerProfileStageEdit').classList.toggle('hidden', !can('edit_customer'));
+    $('#customerProfileDataEdit').classList.toggle('hidden', !can('edit_customer'));
+    $('#customerProfileNickname').classList.toggle('hidden', !can('edit_customer'));
   }
 
   function returnFromCustomerProfile() {
@@ -1874,7 +1896,7 @@
         .flatMap(contact => [contact.name, contact.title, contact.phone, contact.email, contact.social])
       : [];
     return [
-      account.company_name, account.id, account.external_customer_id, account.country, account.city,
+      account.nickname, account.company_name, account.id, account.external_customer_id, account.country, account.city,
       account.industry, account.product_focus, account.customer_type, account.source, account.website,
       account.owner_name, account.creator_name, ...labels, ...contactText,
     ].join(' ').toLowerCase();
@@ -1920,7 +1942,7 @@
       if (filters.sort === 'last_activity') return crmTime(right.last_activity_at) - crmTime(left.last_activity_at) || compareText(left.id, right.id);
       if (filters.sort === 'newest') return crmTime(right.created_at) - crmTime(left.created_at) || compareText(left.id, right.id);
       if (filters.sort === 'potential_desc') return Number(right.potential_value || 0) - Number(left.potential_value || 0) || compareText(left.id, right.id);
-      if (filters.sort === 'company') return compareText(left.company_name, right.company_name) || compareText(left.id, right.id);
+      if (filters.sort === 'company') return compareText(accountDisplayName(left), accountDisplayName(right)) || compareText(left.id, right.id);
       const leftNext = crmTime(left.next_action_at) || Number.MAX_SAFE_INTEGER;
       const rightNext = crmTime(right.next_action_at) || Number.MAX_SAFE_INTEGER;
       return leftNext - rightNext || compareText(left.id, right.id);
@@ -2011,8 +2033,8 @@
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
         ].filter(Boolean).join('');
         return [
-          canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(account.company_name)}">` : '',
-          `<div class="company-cell"><strong>${esc(account.company_name)}</strong><span>${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${customerAIEnabled() && labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
+          canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
+          `<div class="company-cell"><strong>${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${customerAIEnabled() && labelsForAccount(account.id).length ? `<div class="tag-row">${labelsForAccount(account.id).map(label => `<span class="ai-tag">AI · ${esc(label)}</span>`).join('')}</div>` : ''}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
           esc(account.owner_name || '未分配'),
@@ -2056,7 +2078,7 @@
     root.innerHTML = table(
       ['客户', '原负责人', '原因', '回收时间', '操作'],
       rows.map(row => [
-        `<div class="company-cell"><strong>${esc(row.companyName)}</strong><span>${esc(row.externalCustomerId)} · ${esc(row.country || '—')}</span></div>`,
+        `<div class="company-cell"><strong>${esc(accountDisplayName(row))}</strong><span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}</span></div>`,
         esc(row.previousOwnerName || '未分配'),
         esc(row.reason || '—'),
         shortDate(row.recycledAt, true),
@@ -2082,7 +2104,8 @@
         const alert = alertFor(account.id);
         const cls = alert?.severity === 'critical' ? 'alert' : account.manager_required ? 'warning' : '';
         return `<article class="pipeline-card ${cls}" data-open-customer="${account.id}">
-          <div><span class="priority ${account.priority}">${account.priority}</span><h4>${esc(account.company_name)}</h4></div>
+          <div><span class="priority ${account.priority}">${account.priority}</span><h4>${esc(accountDisplayName(account))}</h4></div>
+          <p>${esc(accountIdentity(account))}</p>
           <p>${esc(account.country)} · ${esc(account.industry || account.product_focus || '未标注')}</p>
           <p>${esc(account.next_action || '未填写下一步')}</p>
           <div class="pipeline-card-foot"><span>${esc(account.owner_name)}</span><span>${relative(account.last_activity_at)}</span></div>
@@ -2117,7 +2140,7 @@
           : '未设置计划时间';
         const row = [
           `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
-          `<div class="company-cell"><strong>${esc(item.companyName)}</strong><span>${item.intakeItemId ? '未开发线索 · 待领取' : `${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
+          `<div class="company-cell"><strong>${esc(account ? accountDisplayName(account) : item.companyName)}</strong><span>${item.intakeItemId ? '未开发线索 · 待领取' : `${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
           `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
           esc(due), esc(account?.owner_name || userById(item.ownerId)?.name || ''), item.intakeItemId
             ? `<button class="text-button" data-intake-profile="${esc(item.intakeItemId)}">${esc(item.action)} →</button>`
@@ -2174,7 +2197,8 @@
       return `<article class="notification-item ${isUnread ? 'unread' : ''}">
         <span class="notification-state" aria-label="${isUnread ? '未读' : '已读'}"></span>
         <div class="notification-copy">
-          <div class="notification-title"><span class="pill ${severity}">${esc(item.title)}</span><strong>${esc(account?.company_name || '')}</strong></div>
+          <div class="notification-title"><span class="pill ${severity}">${esc(item.title)}</span><strong>${esc(accountDisplayName(account))}</strong></div>
+          ${accountIdentity(account) ? `<small>${esc(accountIdentity(account))}</small>` : ''}
           <p>${esc(item.detail || '暂无详细说明')}</p>
           <small>${esc(recipient)} · ${shortDate(item.created_at, true)}${channelFailed ? ' · 企微失败，网页可用' : ''}</small>
         </div>
@@ -2242,12 +2266,13 @@
     root.innerHTML = table(
       ['优先级', '客户 / 负责人', '规则异常', 'AI 中文解释', '介入建议', '经理操作'],
       rows.map(item => {
+        const account = state.data.accounts.find(row => row.id === item.customerId);
         const value = item.ai?.stale ? null : item.ai?.result?.value;
         const job = item.ai?.job;
         const jobStatus = aiJobLabels[job?.state]?.[0] || (job ? '等待处理' : '尚未生成');
         return [
           `<div class="manager-priority"><strong>${Number(value?.priorityScore || (item.severity === 'critical' ? 80 : 50))}</strong><span class="pill ${item.severity === 'critical' ? 'red' : 'amber'}">${item.severity === 'critical' ? '立即' : '关注'}</span></div>`,
-          `<div class="company-cell"><strong>${esc(item.companyName)}</strong><span>${esc(item.ownerName || userById(item.ownerId)?.name || '未分配')}</span></div>`,
+          `<div class="company-cell"><strong>${esc(account ? accountDisplayName(account) : item.companyName)}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(item.ownerName || userById(item.ownerId)?.name || '未分配')}</span></div>`,
           `<div class="manager-anomaly-copy"><strong>${esc(item.title)}</strong><span>${esc(item.detail)}</span></div>`,
           value
             ? `<div class="manager-ai-copy"><span class="pill">AI 中文</span><p>${esc(value.explanation)}</p></div>`
@@ -2337,7 +2362,7 @@
       const labels = customerAIEnabled()
         ? evaluations.flatMap(item => item.aiLabels.map(label => label.name))
         : [];
-      const text = [account.company_name, account.country, account.owner_name, ...labels].join(' ').toLowerCase();
+      const text = [account.nickname, account.company_name, account.country, account.owner_name, ...labels].join(' ').toLowerCase();
       const covered = !coverage || (coverage === 'none' && !evaluations.length) || (coverage === 'company' && companyEvaluated.has(account.id)) || (coverage === 'contact' && contactEvaluated.has(account.id));
       return (!search || text.includes(search)) && covered;
     });
@@ -2349,7 +2374,7 @@
       const contactEvalCount = evaluations.filter(item => item.subjectType === 'contact').length;
       const labels = customerAIEnabled() ? evaluations.flatMap(item => item.aiLabels).slice(0, 5) : [];
       return `<article class="insight-hub-card">
-        <div><span class="status-pill">${esc(stageLabel(account.stage))}</span><h3>${esc(account.company_name)}</h3><p>${esc(account.country)} · ${esc(account.owner_name)}</p></div>
+        <div><span class="status-pill">${esc(stageLabel(account.stage))}</span><h3>${esc(accountDisplayName(account))}</h3><p>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.country)} · ${esc(account.owner_name)}</p></div>
         <div class="insight-preview ${companyEval ? '' : 'empty-preview'}">${companyEval ? `<strong>经理评价：</strong>${esc(companyEval.evaluationText)}` : '尚未填写企业经营评价'}</div>
         <div>${customerAIEnabled() ? `<div class="ai-tag-row">${labels.length ? labels.map(label => `<span class="ai-tag">AI · ${esc(label.name)}</span>`).join('') : '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${contactCount} 位对接人 · ${contactEvalCount} 条联系人评价</p></div>
         <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${account.id}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${account.id}">${companyEval ? '追加评价' : '写企业评价'}</button></div>
@@ -2929,6 +2954,7 @@
     state.drawerAiContext = null;
     renderDrawer();
     $('#drawerUpdateBtn').classList.toggle('hidden', !can('record_activity'));
+    $('#drawerNicknameBtn').classList.toggle('hidden', !can('edit_customer'));
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
@@ -3034,8 +3060,8 @@
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
     if (!account) return;
     $('#drawerStage').textContent = stageLabel(account.stage);
-    $('#drawerCompany').textContent = account.company_name;
-    $('#drawerMeta').textContent = [account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
+    $('#drawerCompany').textContent = accountDisplayName(account);
+    $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
     const activities = state.data.activities.filter(item => item.customer_id === account.id);
     const rfqs = state.data.rfqs.filter(item => item.customer_id === account.id);
     const quotes = state.data.quotes.filter(item => item.customer_id === account.id);
@@ -3119,7 +3145,7 @@
     $('#modal').setAttribute('aria-hidden', 'true');
   }
   function customerOptions(selected = '') {
-    return scopedAccounts().filter(item => !['lost'].includes(item.stage)).map(item => `<option value="${item.id}" ${item.id === selected ? 'selected' : ''}>${esc(item.company_name)} · ${esc(item.owner_name)}</option>`).join('');
+    return scopedAccounts().filter(item => !['lost'].includes(item.stage)).map(item => `<option value="${item.id}" ${item.id === selected ? 'selected' : ''}>${esc(accountDisplayName(item))} · ${esc(accountIdentity(item))} · ${esc(item.owner_name)}</option>`).join('');
   }
 
   function setActivityType(activityType) {
@@ -3415,6 +3441,17 @@
     </form>`);
   }
 
+  function openNicknameModal(customerId) {
+    const account = state.data.accounts.find(item => item.id === customerId);
+    if (!account || !can('edit_customer')) return;
+    openModal(`${account.nickname ? '修改' : '设置'}客户昵称`, 'CUSTOMER NICKNAME', `<form id="nicknameForm" class="form-grid">
+      <input type="hidden" name="customerId" value="${esc(customerId)}">
+      <div class="recommendation"><strong>${esc(account.company_name)}</strong><br>${esc(account.external_customer_id)}。昵称仅用于 CRM 内部展示，不影响正式名称、去重、AI、Recon、制裁核查或外部报告。</div>
+      <label>客户昵称<input name="nickname" value="${esc(account.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符"></label>
+      <div class="form-actions">${account.nickname ? '<button type="button" class="button secondary" data-clear-nickname>清除昵称</button>' : ''}<button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存昵称</button></div>
+    </form>`);
+  }
+
   function openPasswordModal() {
     openModal('修改登录密码', 'ACCOUNT SECURITY', `<form id="passwordForm" class="form-grid">
       <label>当前密码<input name="oldPassword" type="password" autocomplete="current-password" required></label>
@@ -3486,10 +3523,10 @@
   function openEvaluationModal(subjectType, contactId = '') {
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
     const contact = contactId ? state.data.insights.contacts.find(item => item.id === contactId) : null;
-    const subjectName = subjectType === 'contact' ? contact?.name : account.company_name;
+    const subjectName = subjectType === 'contact' ? contact?.name : accountDisplayName(account);
     const subjectTitle = subjectType === 'contact' ? contact?.title : '';
     const showAI = customerAIEnabled();
-    openModal(subjectType === 'contact' ? `评价对接人：${subjectName}` : `评价企业：${account.company_name}`, showAI ? 'MANAGER EVALUATION + AI LABELS' : 'MANAGER EVALUATION', `<form id="evaluationForm" class="form-grid">
+    openModal(subjectType === 'contact' ? `评价对接人：${subjectName}` : `评价企业：${accountDisplayName(account)}`, showAI ? 'MANAGER EVALUATION + AI LABELS' : 'MANAGER EVALUATION', `<form id="evaluationForm" class="form-grid">
       <input type="hidden" name="customerId" value="${esc(account.id)}"><input type="hidden" name="subjectType" value="${esc(subjectType)}">
       <input type="hidden" name="subjectId" value="${esc(contactId)}"><input type="hidden" name="subjectName" value="${esc(subjectName || '')}">
       <input type="hidden" name="subjectTitle" value="${esc(subjectTitle || '')}">
@@ -3502,7 +3539,7 @@
 
   function openContactModal() {
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-    openModal(`新增对接人 · ${account.company_name}`, 'CONTACT PROFILE', `<form id="contactForm" class="form-grid two">
+    openModal(`新增对接人 · ${accountDisplayName(account)}`, 'CONTACT PROFILE', `<form id="contactForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(account.id)}">
       <label>姓名<input name="name" required></label><label>职位抬头<input name="title" placeholder="老板、采购主管、采购经理"></label>
       <label>部门<input name="department" placeholder="采购部、供应链、研发"></label><label>电话<input name="phone"></label>
@@ -3688,6 +3725,13 @@
         await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         await refresh('客户资料已更新');
         reloadCustomerProfileFrame();
+      } else if (form.id === 'nicknameForm') {
+        const payload = formPayload(form);
+        const customerId = payload.customerId;
+        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, {
+          method: 'PATCH', body: JSON.stringify({ nickname: payload.nickname }),
+        });
+        await refresh(payload.nickname ? '客户昵称已保存' : '客户昵称已清除');
       } else if (form.id === 'passwordForm') {
         const payload = formPayload(form);
         if (payload.newPassword !== payload.confirmPassword) throw new Error('两次输入的新密码不一致');
@@ -3840,6 +3884,11 @@
     if (event.target.closest('#customerProfileActivity')) openActivityModal(state.selectedCustomerId);
     if (event.target.closest('#customerProfileStageEdit')) openStageRatingModal(state.selectedCustomerId);
     if (event.target.closest('#customerProfileDataEdit')) openCustomerProfileEditModal(state.selectedCustomerId);
+    if (event.target.closest('#customerProfileNickname')) openNicknameModal(state.selectedCustomerId);
+    if (event.target.closest('[data-clear-nickname]')) {
+      const input = $('#nicknameForm input[name="nickname"]');
+      if (input) { input.value = ''; input.focus(); }
+    }
     const notificationRead = event.target.closest('[data-notification-read]');
     if (notificationRead) {
       try { await markNotificationRead(notificationRead.dataset.notificationRead); }
@@ -3916,6 +3965,7 @@
     if (event.target.closest('#quickUpdateBtn')) openActivityModal();
     if (event.target.closest('#newCustomerBtn')) openNewCustomerModal();
     if (event.target.closest('#drawerUpdateBtn')) openActivityModal(state.selectedCustomerId);
+    if (event.target.closest('#drawerNicknameBtn')) openNicknameModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-quote]')) openQuoteModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-order]')) openOrderModal(state.selectedCustomerId);
     if (event.target.closest('[data-edit-stage-rating]')) openStageRatingModal(state.selectedCustomerId);
