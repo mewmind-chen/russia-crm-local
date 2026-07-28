@@ -13,8 +13,8 @@ test('customer profile contains the real customer fit station surface', () => {
   assert.match(html, /id="customerAiStation" class="customer-ai-station hidden"/);
   assert.match(html, /id="customerAiStationBody"/);
   assert.match(html, /id="customerAiStationActions"/);
-  assert.match(html, /app\.css\?v=20260727-issue-100/);
-  assert.match(html, /app\.js\?v=20260727-issue-100/);
+  assert.match(html, /app\.css\?v=20260728-issue-103/);
+  assert.match(html, /app\.js\?v=20260728-issue-103/);
 });
 
 test('sales pack UI exposes evidence-backed drafts without any send action', () => {

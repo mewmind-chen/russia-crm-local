@@ -11,11 +11,11 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'
 const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
 const access = fs.readFileSync(path.join(__dirname, '..', 'lib', 'access_control.js'), 'utf8');
 
-test('Issue #62 funnel drill-down remains while unified intake defaults to all', () => {
+test('Issue #62 funnel drill-down remains while unified pool defaults to all', () => {
   assert.match(js, /到达过该阶段的客户数/);
   assert.match(js, /stageReached/);
   assert.doesNotMatch(js, /salesLanding/);
-  assert.match(js, /canonicalView === 'intake' \? '' : state\.intakeStatus/);
+  assert.match(js, /canonicalView === 'pool' \? '' : state\.intakeStatus/);
   assert.match(js, /navIntakeLabel/);
 });
 

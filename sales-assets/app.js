@@ -15,6 +15,11 @@
     intakeHasMore: false,
     intakeLoading: false,
     intakeSearchTimer: null,
+    intakeFilters: {
+      customerTag: '', country: '', industry: '', customerType: '', contactLevel: '',
+      owner: '', sourceBatch: '', updatedFrom: '', updatedTo: '',
+      hasWebsite: '', hasNamedContact: '', unassignedOnly: false,
+    },
     customerSearchTimer: null,
     customerFilters: {
       search: '', quickView: 'all', sort: 'next_urgent',
@@ -68,7 +73,6 @@
     aiFeaturesError: '',
     aiFeaturePending: '',
     research: {
-      pool: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
       recon: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
     },
@@ -76,13 +80,13 @@
 
   const viewMeta = {
     dashboard: ['MANAGEMENT OVERVIEW', '经营驾驶舱'],
-    intake: ['DAILY LEAD DELIVERY', '未开发线索分配'],
+    intake: ['LEAD POOL', '线索池'],
     pending: ['CUSTOMER INTAKE', '待领取'],
     claimed: ['CUSTOMER INTAKE', '已领取'],
     customers: ['CRM CUSTOMER PORTFOLIO', 'CRM客户全景'],
     recycleBin: ['CUSTOMER RECYCLE BIN', '客户回收站'],
     customerProfile: ['CUSTOMER PROFILE', '客户资料'],
-    pool: ['UNDEVELOPED LEAD POOL', '未开发线索池'],
+    pool: ['LEAD POOL', '线索池'],
     contacts: ['CONTACT EVIDENCE', '负责人线索'],
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
     pipeline: ['PIPELINE CONTROL', '推进管道'],
@@ -96,7 +100,7 @@
     maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
   const viewPermissions = {
-    pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
+    intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'manage_customer_recycle',
     notifications: 'view_customers',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
@@ -494,8 +498,7 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
-    if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索分配' : '我的线索';
-    $$('[data-intake-manager-status]').forEach(el => el.classList.toggle('hidden', !can('manage_intake')));
+    if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
       !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
@@ -537,6 +540,17 @@
     const tagFilter = $('#evaluationTagFilter');
     tagFilter.innerHTML = tags.map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
     tagFilter.disabled = !tags.length;
+    const intakeOwner = $('#intakeOwnerFilter');
+    if (intakeOwner) {
+      intakeOwner.innerHTML = '<option value="">全部销售</option><option value="__unassigned__">未分配</option>'
+        + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
+    }
+    const intakeBatch = $('#intakeSourceBatchFilter');
+    if (intakeBatch) {
+      intakeBatch.innerHTML = '<option value="">全部批次</option>' + (state.data.intake?.batches || []).map(batch =>
+        `<option value="${esc(batch.id)}">${esc(batch.batch_date || batch.id)} · ${esc(batch.source || batch.id)}</option>`).join('');
+    }
+    syncIntakeFilterControls();
     syncCustomerFilterControls();
   }
 
@@ -587,7 +601,6 @@
     }
     if ($('#navIntakeCount')) $('#navIntakeCount').textContent = state.data.intake?.stats.assigned || 0;
     if ($('#navInsightCount')) $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
-    if ($('#navPoolCount')) $('#navPoolCount').textContent = state.data.researchTotals?.pool || 0;
     if ($('#navPeopleCount')) $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
     if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
     if ($('#lastRefresh')) $('#lastRefresh').textContent = `更新于 ${shortDate(state.data.generatedAt, true)}`;
@@ -595,7 +608,6 @@
     renderIntake();
     renderCustomers();
     if (state.view === 'recycleBin') void loadRecycleBin();
-    renderUnifiedPool();
     renderUnifiedPeople();
     renderUnifiedRecon();
     renderPipeline();
@@ -692,17 +704,11 @@
   }
 
   const researchConfig = {
-    pool: { dataKey: 'customerPool', render: renderUnifiedPool, button: '#poolLoadMore' },
     people: { dataKey: 'people', render: renderUnifiedPeople, button: '#peopleLoadMore' },
     recon: { dataKey: 'reconResults', render: renderUnifiedRecon, button: '#reconLoadMore' },
   };
 
   function researchQuery(kind) {
-    if (kind === 'pool') return {
-      search: $('#poolSearch')?.value || '',
-      group: $('#poolGroupFilter')?.value || '',
-      crm: $('#poolCrmFilter')?.value || '',
-    };
     if (kind === 'people') return { search: $('#peopleSearch')?.value || '', level: $('#peopleLevelFilter')?.value || '' };
     return { search: $('#reconSearch')?.value || '' };
   }
@@ -763,26 +769,6 @@
     scheduleResearchReload.timers[kind] = setTimeout(() => loadResearch(kind, { reset: true }), 300);
   }
 
-  function renderUnifiedPool() {
-    const root = $('#unifiedPoolTable');
-    if (!root) return;
-    const loading = researchLoading('pool');
-    if (loading) { root.innerHTML = loading; $('#poolResultCount').textContent = ''; return; }
-    const rows = state.data.customerPool || [];
-    $('#poolResultCount').textContent = `已显示 ${rows.length} / ${state.research.pool.total} 条未开发线索`;
-    root.innerHTML = table(['线索企业','国家/行业','分组','联系人质量','线索状态','分配销售','资料'], rows.map(item => [
-      `<div class="company-cell"><strong>${esc(item.company_name || '未命名客户')}</strong><span>${esc(item.customer_id)} · ${esc(item.website || '无官网')}</span></div>`,
-      `${esc(item.country || '未标注')}<br><span class="subtle">${esc(item.industry || '未标注')}</span>`,
-      `<span class="pill ${item.current_pool === 'A' ? '' : 'gray'}">${esc(item.current_pool || '未分池')}</span>`,
-      `<span class="pill ${item.best_contact_level === 'L3' ? '' : 'gray'}">${esc(item.best_contact_level || 'L0')}</span>`,
-      item.in_crm
-        ? `<button class="text-button" data-open-customer="${esc(item.crm_account_id)}">已进入CRM</button>`
-        : `<span class="pill ${item.screening_risk_level === 'blocked' ? 'red' : 'gray'}">${esc(item.screening_risk_level === 'blocked' ? '风险冻结' : (({ pending: '待审核', approved: '待分配', assigned: '已分配待领取', returned: '已退回', rejected: '不对口' })[item.intake_status] || '待同步'))}</span>`,
-      esc(item.owner_name || item.lead_owner_name || '未分配'),
-      `<button class="text-button" data-open-master="${esc(item.customer_id)}">完整资料 →</button>`,
-    ]));
-  }
-
   function renderUnifiedPeople() {
     const root = $('#unifiedPeopleTable');
     if (!root) return;
@@ -818,7 +804,63 @@
   }
 
   function intakeStatusLabel(status) {
-    return ({ pending: '待审核', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '重复客户' })[status] || status;
+    return ({ pending: '待分配', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '重复客户' })[status] || status;
+  }
+
+  const intakeFilterControls = {
+    customerTag: 'intakeCustomerTagFilter',
+    country: 'intakeCountryFilter',
+    industry: 'intakeIndustryFilter',
+    customerType: 'intakeCustomerTypeFilter',
+    contactLevel: 'intakeContactLevelFilter',
+    owner: 'intakeOwnerFilter',
+    sourceBatch: 'intakeSourceBatchFilter',
+    updatedFrom: 'intakeUpdatedFromFilter',
+    updatedTo: 'intakeUpdatedToFilter',
+    hasWebsite: 'intakeHasWebsiteFilter',
+    hasNamedContact: 'intakeHasNamedContactFilter',
+    unassignedOnly: 'intakeUnassignedOnlyFilter',
+  };
+
+  function syncIntakeFilterControls() {
+    Object.entries(intakeFilterControls).forEach(([key, id]) => {
+      const input = $(`#${id}`);
+      if (!input) return;
+      if (input.type === 'checkbox') input.checked = Boolean(state.intakeFilters[key]);
+      else input.value = state.intakeFilters[key] ?? '';
+    });
+  }
+
+  function readIntakeFilterControls() {
+    Object.entries(intakeFilterControls).forEach(([key, id]) => {
+      const input = $(`#${id}`);
+      if (!input) return;
+      state.intakeFilters[key] = input.type === 'checkbox' ? input.checked : input.value.trim();
+    });
+  }
+
+  function activeIntakeFilterCount() {
+    return Object.values(state.intakeFilters).filter(Boolean).length;
+  }
+
+  function renderIntakeActiveFilters() {
+    const root = $('#intakeActiveFilters');
+    if (!root) return;
+    const labels = {
+      customerTag: '客户标签', country: '国家 / 地区', industry: '行业', customerType: '客户类型',
+      contactLevel: '联系人等级', owner: '分配销售', sourceBatch: '来源批次',
+      updatedFrom: '更新从', updatedTo: '更新至', hasWebsite: '官网',
+      hasNamedContact: '具名联系人', unassignedOnly: '仅看未分配',
+    };
+    const chips = Object.entries(state.intakeFilters).filter(([, value]) => Boolean(value)).map(([key, value]) => {
+      let display = value;
+      const control = $(`#${intakeFilterControls[key]}`);
+      if (control?.tagName === 'SELECT') display = control.selectedOptions[0]?.textContent || value;
+      if (value === true) display = '';
+      return `<button type="button" data-remove-intake-filter="${esc(key)}">${esc(labels[key])}${display ? `：${esc(display)}` : ''} ×</button>`;
+    });
+    root.classList.toggle('hidden', !chips.length);
+    root.innerHTML = chips.join('') + (chips.length ? '<button type="button" class="clear-all" id="intakeClearFilters">清空全部</button>' : '');
   }
 
   function intakeSignals(item) {
@@ -847,7 +889,7 @@
       : `<span class="subtle">${esc(ai.available === false ? `AI未提供排名${ai.reasonCode ? ` · ${ai.reasonCode}` : ''}` : '暂无候选排名')}</span>`;
     return {
       ai: `<div class="decision-layer"><span>AI 推荐</span><strong>${ranking}</strong><small>${ai.confidence == null ? '—' : `置信度 ${(Number(ai.confidence) * 100).toFixed(0)}%`}${ai.reviewRequired ? ' · 建议复核' : ''}</small></div>`,
-      rule: `<div class="decision-layer"><span>规则裁决</span><strong>${esc(rule.disposition === 'manager_review' ? '经理审批' : rule.disposition === 'blocked' ? '规则阻止' : rule.disposition === 'assign' ? '可分配' : '待裁决')}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`,
+      rule: `<div class="decision-layer"><span>规则裁决</span><strong>${esc(rule.disposition === 'manager_review' ? '待分配' : rule.disposition === 'blocked' ? '规则阻止' : rule.disposition === 'assign' ? '可分配' : '待裁决')}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`,
       manual: `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待经理处理'))}</small></div>`,
     };
   }
@@ -880,12 +922,11 @@
         pageSize: String(state.intakePageSize),
       });
       const search = ($('#intakeSearch')?.value || '').trim();
-      const country = $('#countryFilter')?.value || '';
-      const owner = $('#ownerFilter')?.value || '';
       if (search) params.set('search', search);
-      if (country) params.set('country', country);
-      if (owner) params.set('owner', owner);
       if (state.intakeStatus) params.set('status', state.intakeStatus);
+      Object.entries(state.intakeFilters).forEach(([key, value]) => {
+        if (value !== '' && value !== false) params.set(key, value === true ? '1' : String(value));
+      });
       const result = await api(`/api/sales-crm/intake?${params}`, { timeoutMs: 12000 });
       const previousItems = reset ? [] : (state.data.intake?.items || []);
       state.data.intake = { ...result, items: [...previousItems, ...(result.items || [])] };
@@ -903,39 +944,57 @@
   function renderIntake() {
     const intake = state.data.intake;
     if (!intake) return;
-    $$('#intakeTabs button').forEach(item => item.classList.toggle('active', item.dataset.intakeStatus === state.intakeStatus));
     const salesView = !can('manage_intake');
-    $('#intakeHeading').textContent = salesView ? '我的每日未开发线索' : '未开发线索每日分配中心';
+    const stats = intake.stats;
+    const tabCounts = {
+      '': Number(stats.pending || 0) + Number(stats.approved || 0) + Number(stats.assigned || 0)
+        + Number(stats.claimed || 0) + Number(stats.returned || 0) + Number(stats.rejected || 0),
+      unassigned: Number(stats.pending || 0) + Number(stats.approved || 0),
+      assigned: Number(stats.assigned || 0),
+      claimed: Number(stats.claimed || 0),
+      returned: Number(stats.returned || 0),
+      rejected: Number(stats.rejected || 0),
+    };
+    const tabLabels = { '': '全部', unassigned: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口' };
+    $$('#intakeTabs button').forEach(item => {
+      const status = item.dataset.intakeStatus;
+      item.classList.toggle('active', status === state.intakeStatus);
+      item.textContent = `${tabLabels[status]} ${tabCounts[status] || 0}`;
+    });
+    $('#intakeHeading').textContent = salesView ? '我的线索' : '线索池';
     $('#intakeSubheading').textContent = salesView
-      ? '这里都是公司分配给你的未开发线索；领取后才进入你的 CRM 客户，并开始计算首次触达时限。'
-      : `线索池与 CRM 严格分开；当前筛选共 ${intake.total ?? intake.items.length} 条线索，风险项待审核，其余按配额自动推送；销售领取后才创建 CRM 客户。`;
+      ? `集中查看分配给你的线索；当前筛选共 ${intake.total ?? intake.items.length} 条，领取后进入 CRM 跟进。`
+      : `当前筛选共 ${intake.total ?? intake.items.length} 条线索，可在同一页面查看资料并完成分配、领取、退回和重新分配。`;
     $('#intakeManagerActions').classList.toggle('hidden', salesView || Boolean(state.data.impersonation));
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
-    $('#intakeModeLabel').innerHTML = `<span class="intake-mode">${intake.settings.enabled ? '自动入库已启用' : '自动入库已停用'} · ${intake.settings.approvalMode === 'automatic' ? '自动分配' : '管理者审核'} · 每人每天 ${intake.settings.dailyPerSales} 个</span>`;
-    const stats = intake.stats;
+    const filterCount = activeIntakeFilterCount();
+    $('#intakeFilterToggle').textContent = filterCount ? `详细筛选 ${filterCount}` : '详细筛选';
+    $('#intakeModeLabel').innerHTML = `<span class="intake-mode">${intake.settings.enabled ? '自动同步已启用' : '自动同步已停用'} · 每人每天 ${intake.settings.dailyPerSales} 个</span>`;
+    renderIntakeActiveFilters();
     const summary = salesView ? [
-      ['今日收到线索', stats.todayImported, '尚未计入CRM'],
+      ['今日收到线索', stats.todayImported, '领取前保留在线索池'],
       ['待领取', stats.assigned, `领取时限 ${intake.settings.claimSlaHours} 小时`],
       ['已领取', stats.claimed, '已转入个人CRM'],
       ['已完成触达', stats.contacted, '邮件、电话或社媒'],
       ['已退回', stats.returned, '必须说明原因'],
       ['领取超期', stats.overdueClaim, '管理者将收到预警'],
     ] : [
-      ['今日同步线索', stats.todayImported, '仍属于未开发线索池'],
-      ['待审核 / 分配', stats.pending + stats.approved, '管理者确认或等待配额'],
+      ['今日同步线索', stats.todayImported, '仍属于线索池'],
+      ['待分配', stats.pending + stats.approved, '可直接指定销售或按规则分配'],
       ['待销售领取', stats.assigned, `时限 ${intake.settings.claimSlaHours} 小时`],
       ['销售已领取 / CRM', stats.claimed, `领取后进入CRM，首次触达 ${intake.settings.contactSlaHours} 小时`],
       ['已完成触达', stats.contacted, '已进入开发漏斗'],
-      ['闲置资源', stats.idle, '待审核、待配额或退回'],
+      ['闲置资源', stats.idle, '待分配或退回'],
       ['退回待处理', stats.returned, '需要重新分配'],
+      ['不对口', stats.rejected, '保留判断依据'],
       ['领取超期', stats.overdueClaim, '系统异常预警'],
     ];
     $('#intakeSummary').innerHTML = summary.map(([label, value, note]) => `<article class="metric ${label.includes('超期') && value ? 'alert' : ''}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
     const items = intake.items || [];
     const showAI = customerAIEnabled();
     const intakeHeaders = showAI
-      ? ['未开发线索', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作']
-      : ['未开发线索', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'];
+      ? ['线索资料 / 客户标签', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作']
+      : ['线索资料 / 客户标签', '联系质量 / 联系人', '规则裁决 / 阻断原因', '状态 / 时限', '操作'];
     $('#intakeTable').innerHTML = table(
       intakeHeaders,
       items.map(item => {
@@ -958,9 +1017,18 @@
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
           ...evidence.map((url, index) => `<a class="text-button" href="${esc(url)}" target="_blank" rel="noopener">证据${index + 1}</a>`),
         ].filter(Boolean).join(' · ');
+        const customerTags = (Array.isArray(item.customerTags) ? item.customerTags.map(tag => tag.name || tag.id || tag) : [])
+          .concat(Array.isArray(item.customer_tags) ? item.customer_tags
+            : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'));
+        const website = /^https?:\/\//i.test(item.website || '')
+          ? `<a class="text-button" href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.website)}</a>`
+          : esc(item.website || '无官网');
+        const contactCompleteness = item.contact_name && item.contact_methods
+          ? '具名联系人与联系方式完备'
+          : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const businessColumns = [
-          `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc(item.country || '—')} · ${esc(item.customer_type || item.industry || '—')}</span><span>${sources}</span></div>`,
-          `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span></div>`,
+          `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span><span>${esc(item.product_focus || item.potential_demand || '产品与潜在需求未标注')}</span>${customerTags.length ? `<div class="tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag)}</span>`).join('')}</div>` : ''}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
           `<div class="assignment-cell"><span class="pill ${statusClass}">${intakeStatusLabel(item.status)}</span><span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
           actions,
@@ -1852,6 +1920,19 @@
       + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
 
+  function canReturnCustomer(account) {
+    if (!account || state.data.impersonation || !account.owner_id) return false;
+    if (!['assigned', 'claimed'].includes(String(account.assignment_status || ''))) return false;
+    return (state.data.user.role === 'sales' && account.owner_id === state.data.user.id)
+      || can('manage_customer_recycle');
+  }
+
+  function selectedCustomersReturnEligible() {
+    if (!state.selectedCustomerIds.size) return false;
+    return [...state.selectedCustomerIds].every(customerId =>
+      canReturnCustomer(state.data.accounts.find(account => account.id === customerId)));
+  }
+
   function renderCustomers() {
     const accounts = filteredCustomerAccounts();
     const visibleIds = new Set(accounts.map(account => account.id));
@@ -1860,7 +1941,12 @@
     $('#customerBulkBar')?.classList.toggle('hidden', !canBulkAssign);
     if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${state.selectedCustomerIds.size} 个客户`;
     if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
-    if ($('#bulkReturnCustomers')) $('#bulkReturnCustomers').disabled = !state.selectedCustomerIds.size;
+    if ($('#bulkReturnCustomers')) {
+      const returnEligible = selectedCustomersReturnEligible();
+      $('#bulkReturnCustomers').disabled = !returnEligible;
+      $('#bulkReturnCustomers').title = state.selectedCustomerIds.size && !returnEligible
+        ? '仅负责人明确且状态为已分配或已领取的客户可退回' : '';
+    }
     const reachedNote = state.stageReached ? ` · 漏斗累计达到“${stageLabel(state.stageReached)}”` : '';
     $('#customerResultCount').textContent = `当前 ${accounts.length} / 授权 ${state.data.accounts.length}${reachedNote}`;
     const filterCount = advancedCustomerFilterCount();
@@ -1873,10 +1959,7 @@
       [canBulkAssign ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
       accounts.map(account => {
         const alert = alertFor(account.id);
-        const canReturn = !state.data.impersonation && (
-          (state.data.user.role === 'sales' && account.owner_id === state.data.user.id)
-          || can('manage_customer_recycle')
-        );
+        const canReturn = canReturnCustomer(account);
         const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
           && !account.intake_item_id && account.source_file === 'CRM手工新增';
         const lifecycleActions = [
@@ -2854,6 +2937,7 @@
           ['负责人', item.assigned_owner_name || (showAI ? item.suggested_owner_name : '')],
           ...(showAI ? [['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority]] : []),
           ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)],
+          ...(item.status === 'returned' ? [['退回原因', item.return_reason || '未填写']] : []),
         ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
       <section class="decision-review">
@@ -2868,6 +2952,7 @@
           <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>联系人</span><p>${esc([item.contact_name, item.contact_title, item.contact_methods].filter(Boolean).join(' · ') || '暂无具名联系人')}</p></div>
           <div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>
+          ${item.status === 'returned' ? `<div><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
           <div><span>筛选证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : '暂无关联证据'}</p></div>
         </div>
       </section>
@@ -2954,7 +3039,7 @@
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
         ${quotes.length && can('record_order') ? '<button class="button secondary" data-add-order>＋ 记录订单</button>' : ''}
         ${can('edit_customer') ? '<button class="button secondary" data-edit-account>调整客户信息</button>' : ''}
-        ${!state.data.impersonation && ((state.data.user.role === 'sales' && account.owner_id === state.data.user.id) || can('manage_customer_recycle'))
+        ${canReturnCustomer(account)
           ? '<button class="button danger" data-return-customer="' + esc(account.id) + '">退回线索池</button>' : ''}
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
           ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
@@ -3838,11 +3923,16 @@
       } catch (error) { toast(error.message); }
     }
     const returnCustomer = event.target.closest('[data-return-customer]');
-    if (returnCustomer) openRecycleReasonModal(returnCustomer.dataset.returnCustomer, 'return');
+    if (returnCustomer) {
+      const account = state.data.accounts.find(item => item.id === returnCustomer.dataset.returnCustomer);
+      if (!canReturnCustomer(account)) return toast('仅负责人明确且状态为已分配或已领取的客户可退回');
+      openRecycleReasonModal(returnCustomer.dataset.returnCustomer, 'return');
+    }
     const trashCustomer = event.target.closest('[data-trash-customer]');
     if (trashCustomer) openRecycleReasonModal(trashCustomer.dataset.trashCustomer, 'trash');
     if (event.target.closest('#bulkReturnCustomers')) {
       if (!state.selectedCustomerIds.size) return toast('请先选择客户');
+      if (!selectedCustomersReturnEligible()) return toast('所选客户中包含未分配、已退回或状态不允许退回的客户');
       openRecycleReasonModal('', 'bulk');
     }
     const recycleTab = event.target.closest('[data-recycle-kind]');
@@ -3895,6 +3985,31 @@
       state.intakeStatus = intakeTab.dataset.intakeStatus;
       $$('#intakeTabs button').forEach(item => item.classList.toggle('active', item === intakeTab));
       void loadIntakePage({ reset: true });
+    }
+    if (event.target.closest('#intakeFilterToggle')) {
+      const panel = $('#intakeFilterPanel');
+      panel.classList.toggle('hidden');
+      $('#intakeFilterToggle').setAttribute('aria-expanded', String(!panel.classList.contains('hidden')));
+    }
+    if (event.target.closest('#intakeFilterApply')) {
+      readIntakeFilterControls();
+      $('#intakeFilterPanel').classList.add('hidden');
+      $('#intakeFilterToggle').setAttribute('aria-expanded', 'false');
+      void loadIntakePage({ reset: true });
+    }
+    if (event.target.closest('#intakeFilterReset') || event.target.closest('#intakeClearFilters')) {
+      Object.keys(state.intakeFilters).forEach(key => { state.intakeFilters[key] = key === 'unassignedOnly' ? false : ''; });
+      syncIntakeFilterControls();
+      void loadIntakePage({ reset: true });
+    }
+    const removeIntakeFilter = event.target.closest('[data-remove-intake-filter]');
+    if (removeIntakeFilter) {
+      const key = removeIntakeFilter.dataset.removeIntakeFilter;
+      if (Object.hasOwn(state.intakeFilters, key)) {
+        state.intakeFilters[key] = key === 'unassignedOnly' ? false : '';
+        syncIntakeFilterControls();
+        void loadIntakePage({ reset: true });
+      }
     }
     const assignIntake = event.target.closest('[data-intake-assign]');
     if (assignIntake) openIntakeAssignModal(assignIntake.dataset.intakeAssign);
@@ -4033,18 +4148,19 @@
       toast('AI 功能已关闭，已返回业务首页');
     }
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
-    const canonicalView = legacyIntakeStatus ? 'intake' : view;
+    const intakeAlias = ['intake', 'pending', 'claimed'].includes(view);
+    const canonicalView = intakeAlias ? 'pool' : view;
     const permission = viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
     state.view = canonicalView;
-    state.intakeStatus = legacyIntakeStatus || (canonicalView === 'intake' ? '' : state.intakeStatus);
+    state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
     $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
     $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
     $('#viewTitle').textContent = viewMeta[canonicalView][1];
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
-    if (canonicalView === 'intake') renderIntake();
-    if (canonicalView === 'intake') {
+    if (canonicalView === 'pool') renderIntake();
+    if (canonicalView === 'pool') {
       void loadIntakePage({ reset: true });
     }
     if (researchConfig[canonicalView] && !state.research[canonicalView].loaded) void loadResearch(canonicalView);
@@ -4063,7 +4179,7 @@
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
     if (location.hash !== `#${canonicalView}`) {
-      if (pushHistory && !legacyIntakeStatus) history.pushState(null, '', `#${canonicalView}`);
+      if (pushHistory && !intakeAlias) history.pushState(null, '', `#${canonicalView}`);
       else history.replaceState(null, '', `#${canonicalView}`);
     }
   }
@@ -4077,9 +4193,6 @@
         syncCustomerFilterControls();
       }
       renderAll();
-      if (['countryFilter', 'ownerFilter'].includes(event.target.id) && ['intake', 'pending', 'claimed'].includes(state.view)) {
-        void loadIntakePage({ reset: true });
-      }
     }
   }));
   document.addEventListener('input', event => {
@@ -4107,13 +4220,12 @@
   });
   document.addEventListener('input', event => {
     if (event.target.id === 'insightSearch') renderInsightsHub();
-    if (event.target.id === 'poolSearch') scheduleResearchReload('pool');
     if (event.target.id === 'peopleSearch') scheduleResearchReload('people');
     if (event.target.id === 'reconSearch') scheduleResearchReload('recon');
     if (event.target.id === 'intakeSearch') {
       clearTimeout(state.intakeSearchTimer);
       state.intakeSearchTimer = setTimeout(() => {
-        if (state.view === 'intake' || ['pending', 'claimed'].includes(state.view)) void loadIntakePage({ reset: true });
+        if (state.view === 'pool') void loadIntakePage({ reset: true });
       }, 300);
     }
     if (['aiTaskCustomerFilter', 'aiTaskOwnerFilter', 'aiTaskModelFilter'].includes(event.target.id)) {
@@ -4123,7 +4235,6 @@
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
-    if (['poolGroupFilter','poolCrmFilter'].includes(event.target.id)) void loadResearch('pool', { reset: true });
     if (event.target.id === 'peopleLevelFilter') void loadResearch('people', { reset: true });
     if (event.target.matches('select[data-role-source]')) {
       const groupSelect = event.target.closest('form')?.querySelector('select[data-role-group]');

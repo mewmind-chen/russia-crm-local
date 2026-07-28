@@ -231,3 +231,18 @@ body.customer-profile-active .top-actions{display:none}
 .notification-copy p{margin:0;color:var(--ink);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.notification-copy small{color:var(--muted);font-size:10px}
 .notification-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}.notification-read{width:30px;height:30px;font-size:14px}
 @media(max-width:780px){.notification-button{margin-left:auto}.workspace-chip{display:none}.notification-intro{align-items:flex-start}.notification-intro .button{align-self:flex-start}.notification-item{grid-template-columns:8px minmax(0,1fr);padding:12px}.notification-actions{grid-column:2;justify-content:flex-start}.notification-copy p{font-size:11px}}
+
+/* Unified lead pool */
+.intake-toolbar{flex-wrap:wrap}
+.intake-toolbar .segmented{max-width:100%;overflow-x:auto}
+.intake-toolbar .segmented button{white-space:nowrap}
+.intake-filter-panel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:14px 18px;border-top:1px solid var(--line);background:#fafcfb}
+.intake-filter-panel label{display:grid;gap:6px;min-width:0;color:#425149;font-size:10px;font-weight:750}
+.intake-filter-panel input,.intake-filter-panel select{width:100%;height:36px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);padding:0 9px}
+.intake-filter-panel .intake-checkbox-filter{display:flex;align-items:center;gap:8px;align-self:end;height:36px}
+.intake-filter-panel .intake-checkbox-filter input{width:16px;height:16px}
+.intake-filter-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px}
+#intakeActiveFilters{border-top:1px solid var(--line)}
+@media(max-width:980px){.intake-filter-panel{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:780px){.intake-toolbar{overflow:visible}.intake-toolbar .segmented{order:1;flex:1 1 100%}.intake-toolbar .search-box{order:2;flex:1 1 calc(100% - 110px);min-width:0}.intake-toolbar #intakeFilterToggle{order:3}.intake-toolbar #intakeModeLabel{order:4;width:100%;margin-left:0}.intake-filter-panel{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.intake-filter-actions .button{flex:1}}
+@media(max-width:480px){.intake-filter-panel{grid-template-columns:1fr}.intake-toolbar .search-box{flex-basis:100%}.intake-toolbar #intakeFilterToggle{width:100%}}
