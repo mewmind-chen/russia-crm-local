@@ -17,8 +17,8 @@ test('customer profile and stage-rating actions have separate permission-scoped 
   assert.match(html, /id="customerProfileStageEdit"[\s\S]*?>调整阶段和评级</);
   assert.match(html, /id="customerProfileDataEdit"[\s\S]*?>编辑客户资料</);
   assert.match(app, /can\('edit_customer'\) \? '<button class="button secondary" data-edit-stage-rating>调整阶段和评级<\/button><button class="button secondary" data-edit-customer-profile>编辑客户资料<\/button>' : ''/);
-  assert.match(app, /#customerProfileStageEdit'\)\.classList\.toggle\('hidden', !can\('edit_customer'\)\)/);
-  assert.match(app, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', !can\('edit_customer'\)\)/);
+  assert.match(app, /#customerProfileStageEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
+  assert.match(app, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
 });
 
 test('stage and profile forms write disjoint responsibilities and refresh the embedded profile', () => {

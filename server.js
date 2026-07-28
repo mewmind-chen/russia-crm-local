@@ -106,8 +106,14 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
 });
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
   const profileMode = String(req.query.profile || '') === '1';
-  const permission = profileMode ? 'view_customers' : 'view_development';
-  if (!hasPermission(req.salesUser, permission)) return res.status(403).send(profileMode ? '当前账号没有客户资料权限' : '当前账号没有客户开发工作台权限');
+  const intakeProfileMode = profileMode && Boolean(String(req.query.intake || '').trim());
+  const permission = profileMode ? (intakeProfileMode ? 'view_intake' : 'view_customers') : 'view_development';
+  if (!hasPermission(req.salesUser, permission)) {
+    const message = intakeProfileMode
+      ? '当前账号没有线索主档权限'
+      : profileMode ? '当前账号没有客户资料权限' : '当前账号没有客户开发工作台权限';
+    return res.status(403).send(message);
+  }
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.sendFile(path.join(__dirname, 'Index.html'));
 });
