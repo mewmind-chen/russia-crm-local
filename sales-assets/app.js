@@ -822,6 +822,33 @@
     unassignedOnly: 'intakeUnassignedOnlyFilter',
   };
 
+  const intakeFilterOptionControls = {
+    customerTags: { id: 'intakeCustomerTagFilter', emptyLabel: '全部客户标签' },
+    countries: { id: 'intakeCountryFilter', emptyLabel: '全部国家 / 地区' },
+    industries: { id: 'intakeIndustryFilter', emptyLabel: '全部行业' },
+    customerTypes: { id: 'intakeCustomerTypeFilter', emptyLabel: '全部客户类型' },
+  };
+
+  function populateIntakeFilterOptions(filterOptions = {}) {
+    Object.entries(intakeFilterOptionControls).forEach(([key, config]) => {
+      const select = $(`#${config.id}`);
+      if (!select) return;
+      const selected = select.value || state.intakeFilters[
+        ({ customerTags: 'customerTag', countries: 'country', industries: 'industry', customerTypes: 'customerType' })[key]
+      ] || '';
+      const options = (filterOptions[key] || []).map(item => {
+        const value = typeof item === 'object' ? item.id : item;
+        const label = typeof item === 'object' ? item.name : item;
+        return `<option value="${esc(value)}">${esc(label)}</option>`;
+      }).join('');
+      select.innerHTML = `<option value="">${esc(config.emptyLabel)}</option>${options}`;
+      if (selected && ![...select.options].some(option => option.value === String(selected))) {
+        select.insertAdjacentHTML('beforeend', `<option value="${esc(selected)}">${esc(selected)}</option>`);
+      }
+      select.value = selected;
+    });
+  }
+
   function syncIntakeFilterControls() {
     Object.entries(intakeFilterControls).forEach(([key, id]) => {
       const input = $(`#${id}`);
@@ -930,6 +957,7 @@
       const result = await api(`/api/sales-crm/intake?${params}`, { timeoutMs: 12000 });
       const previousItems = reset ? [] : (state.data.intake?.items || []);
       state.data.intake = { ...result, items: [...previousItems, ...(result.items || [])] };
+      populateIntakeFilterOptions(result.filterOptions);
       state.intakePage = result.page;
       state.intakeTotal = result.total;
       state.intakeHasMore = result.hasMore;
