@@ -735,7 +735,10 @@ app.post('/api/app', (req, res) => {
     }
     if (action === 'setCustomerTags') {
       assertRequestCustomer(req, req.body.customerId);
-      const r = setCustomerTags(req.body.customerId, req.body.tagIds);
+      const identity = auditIdentity(req);
+      const r = setCustomerTags(req.body.customerId, req.body.tagIds, {
+        actorId: identity.realUserId,
+      });
       return res.json({ ok: true, action, ...r });
     }
     if (action === 'createReconJob') {
