@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-116">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-116-research">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260728-issue-116">
 </head>
@@ -53,6 +53,8 @@
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
           <button data-view="pool" data-permission="view_intake"><i>⇣</i><span id="navIntakeLabel">线索池</span><b id="navIntakeCount">0</b></button>
+          <button data-view="contacts" data-permission="view_contacts"><i>♙</i><span>负责人线索</span></button>
+          <button data-view="recon" data-permission="view_recon"><i>⌕</i><span>Recon 情报</span></button>
           <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
           <button data-view="recycleBin" data-permission="manage_customer_recycle"><i>↺</i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
@@ -186,7 +188,15 @@
           </div>
         </div>
         <article class="panel">
-          <div class="toolbar intake-toolbar">
+          <div class="toolbar">
+            <div class="segmented" id="intakeAuthorizedPageTabs">
+              <button class="active" type="button" data-authorized-intake-page="intake">线索池</button>
+              <button type="button" data-authorized-intake-page="lead_flow">线索流转</button>
+            </div>
+            <span id="intakeAuthorizedResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="intakeAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+          <div class="toolbar intake-toolbar hidden">
             <div class="segmented" id="intakeTabs">
               <button class="active" data-intake-status="">全部</button>
               <button data-intake-status="unassigned">待分配</button>
@@ -219,7 +229,7 @@
           </section>
           <div id="intakeActiveFilters" class="customer-active-filters hidden"></div>
           <div id="intakeTable" class="data-table"></div>
-          <div id="intakePagination" class="load-more-row hidden"></div>
+          <div id="intakePagination" class="load-more-row"><button id="intakeAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="intake">继续加载</button></div>
         </article>
         <article id="intakeBatchPanel" class="panel intake-batches">
           <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div></div>
@@ -260,8 +270,9 @@
         <div class="section-intro">
           <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>退回和手工删除均为软回收，客户主档与经营历史完整保留。</p></div>
         </div>
+        <div id="recycleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
-          <div class="toolbar">
+          <div class="toolbar hidden">
             <div class="segmented" id="recycleTabs">
               <button class="active" data-recycle-kind="sales_return">待重新分配</button>
               <button data-recycle-kind="manual_delete">手工删除</button>
@@ -269,7 +280,9 @@
             <input id="recycleSearch" placeholder="搜索客户">
             <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
           </div>
+          <div class="toolbar"><span id="recycleAuthorizedResultCount" class="toolbar-count"></span></div>
           <div id="recycleTable" class="data-table"></div>
+          <div class="load-more-row"><button id="recycleAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="recycle_bin">继续加载</button></div>
         </article>
       </section>
 
@@ -296,12 +309,14 @@
 
       <section id="contactsView" class="view">
         <div class="section-intro"><div><p class="eyebrow">CONTACT EVIDENCE</p><h2>负责人线索</h2><p>候选联系人、任职证据和直接联系方式集中管理，确认后进入正式对接人。</p></div></div>
-        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="peopleSearch" placeholder="搜索公司、姓名、职位或联系方式"></div><select id="peopleLevelFilter"><option value="">全部等级</option><option>L3</option><option>L2</option><option>L1</option><option>L0</option></select><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div class="load-more-row"><button id="peopleLoadMore" class="button secondary hidden" type="button" data-load-research="people">继续加载</button></div></article>
+        <div id="peopleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <article class="panel"><div class="toolbar"><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div class="load-more-row"><button id="peopleLoadMore" class="button secondary hidden" type="button" data-load-research="contacts">继续加载</button></div></article>
       </section>
 
       <section id="reconView" class="view">
         <div class="section-intro"><div><p class="eyebrow">RECON INTELLIGENCE</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
-        <article class="panel"><div class="toolbar"><div class="search-box">⌕ <input id="reconSearch" placeholder="搜索客户、行业、需求或联系人"></div><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div class="load-more-row"><button id="reconLoadMore" class="button secondary hidden" type="button" data-load-research="recon">继续加载</button></div></article>
+        <div id="reconAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <article class="panel"><div class="toolbar"><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div class="load-more-row"><button id="reconLoadMore" class="button secondary hidden" type="button" data-load-research="recon">继续加载</button></div></article>
       </section>
 
       <section id="pipelineView" class="view">
@@ -309,11 +324,15 @@
           <div><h2>从资源到复购的完整推进</h2><p>阶段由销售动作自动推进，管理者可直接发现堵点。</p></div>
           <div class="legend"><span><i class="dot critical"></i>超期</span><span><i class="dot warning"></i>需介入</span><span><i class="dot good"></i>正常</span></div>
         </div>
+        <div id="pipelineAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <div class="toolbar"><span id="pipelineAuthorizedResultCount" class="toolbar-count"></span></div>
         <div id="pipelineBoard" class="pipeline-board"></div>
+        <div class="load-more-row"><button id="pipelineAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="pipeline">继续加载</button></div>
       </section>
 
       <section id="alertsView" class="view">
         <div class="alert-summary" id="alertSummary"></div>
+        <div id="alertsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel manager-anomaly-panel" data-permission="view_team" data-ai-business>
           <div class="panel-head">
             <div><p class="eyebrow">MANAGER ANOMALY</p><h2>经理异常优先队列</h2></div>
@@ -331,8 +350,10 @@
               <button data-severity="attention">需要关注</button>
             </div>
             <span class="toolbar-count">同一对象只显示一行，其他原因保留为标签</span>
+            <span id="alertsAuthorizedResultCount" class="toolbar-count"></span>
           </div>
           <div id="alertTable" class="data-table"></div>
+          <div class="load-more-row"><button id="alertsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="alerts">继续加载</button></div>
         </article>
       </section>
 
@@ -360,13 +381,16 @@
           <div><p class="eyebrow">MANAGER INTELLIGENCE</p><h2>经理评价中心</h2><p>集中维护企业判断和对接人评价。<span data-ai-business>AI 标注用于辅助整理历史评价。</span></p></div>
           <div class="method-note" data-ai-business><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
         </div>
+        <div id="insightsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
-          <div class="toolbar">
+          <div class="toolbar hidden">
             <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索企业、国家或负责人"></div>
             <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
             <span id="insightResultCount" class="toolbar-count"></span>
           </div>
+          <div class="toolbar"><span id="insightsAuthorizedResultCount" class="toolbar-count"></span></div>
           <div id="insightCompanyList" class="insight-hub-list"></div>
+          <div class="load-more-row"><button id="insightsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="insights">继续加载</button></div>
         </article>
       </section>
 
@@ -428,7 +452,10 @@
         <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
           <div class="panel-head">
             <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组定义基线；个人例外只能追加授权或恢复组默认。</p></div>
-            <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
+            <div class="top-actions">
+              <button id="newFilterDefinitionBtn" class="button secondary" type="button" disabled>新增筛选定义</button>
+              <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
+            </div>
           </div>
           <div class="filter-permission-controls">
             <label>配置范围<select id="filterPermissionScope"><option value="group">权限组</option><option value="user">个人例外</option></select></label>
@@ -490,6 +517,6 @@
   </div>
   <div id="toast" class="toast"></div>
   <script src="/sales-assets/filter-component.js?v=20260728-issue-116"></script>
-  <script src="/sales-assets/app.js?v=20260728-issue-116"></script>
+  <script src="/sales-assets/app.js?v=20260728-issue-116-research-admin"></script>
 </body>
 </html>

@@ -322,3 +322,18 @@ test('mount API is exported and component CSS covers desktop facets and 390px mo
   assert.match(css, /grid-template-columns:\s*1fr/);
   assert.match(css, /flex-wrap:\s*wrap/);
 });
+
+test('customer filter initialization ignores stale concurrent schema responses', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+  const initializeSource = appSource.slice(
+    appSource.indexOf('async function initializeCustomerFilters'),
+    appSource.indexOf('function setLoginState'),
+  );
+
+  assert.match(initializeSource, /const initializeEpoch = \+\+state\.customerInitializeEpoch/);
+  assert.match(
+    initializeSource,
+    /if \(initializeEpoch !== state\.customerInitializeEpoch\) return;/,
+  );
+  assert.match(appSource, /state\.customerInitializeEpoch \+= 1;/);
+});

@@ -1,6 +1,81 @@
 # Issue #116 开发交接
 
-更新时间：2026-07-28
+更新时间：2026-07-29
+
+## 2026-07-29 合并前验收更新
+
+本节优先于所有下方阶段记录。
+
+- Issue 明确要求的 9 个业务列表均已接入统一服务端授权 schema、统一组件、分页、总数、
+  权限版本和独立状态：线索池、负责人线索、Recon 情报、线索流转、CRM 客户全景、
+  客户回收站、推进管道、今日待办、经理评价。
+- 管理端已完成新增/编辑/启停/隐藏/排序/展示方式/运算符、权限组基线、个人追加授权、
+  恢复组默认、身份预览、保存反馈和审计。
+- 三角色、字段权限冲突、未授权伪造、敏感字段脱敏、权限版本失效、标签 OR/AND、
+  分页/总数和页面状态隔离已有自动化覆盖。
+- 浏览器验收使用隔离测试数据库完成：管理端身份预览显示 Anna 当前可见 32 项；
+  客户全景动态显示 7 类 / 7 个测试标签；应用“俄罗斯”后出现已启用条件且服务端仍返回
+  1 条匹配结果；390 × 844 下 document/body scrollWidth 均为 375，筛选容器
+  width/scrollWidth 均为 345；控制台无 error/warning。
+- 浏览器验收额外发现并修复了 `#customers` 深链接并发初始化竞态，避免重复监听器让一次
+  筛选点击被处理两次；已增加回归测试。
+- 合并门本地结果：`npm ci` 成功，`npm test` 695/695，通过全部 Node/Zsh/Bash/Python
+  语法检查和 `git diff --check`。
+- 正式验收记录见 `docs/evidence/issue-116-filter-permissions-acceptance.md`。
+
+当前状态：功能和本地验收完成；允许在完整发布门禁和远端 CI 通过后将 PR #126
+转为 Ready、合并 `main` 并按不可变发布流程部署。
+
+## 2026-07-28 续作更新
+
+本节优先于下方旧“当前进度/页面覆盖矩阵”。下方内容保留作为阶段历史。
+
+### 本轮已完成
+
+- 管理端已支持从服务端注册源新增筛选定义，以及独立的“不显示”配置语义。
+- 联系人与 Recon 已接入统一授权组件、服务端分页、总数、权限版本和请求竞态保护。
+- 新增并接入统一业务列表入口：
+  `GET /api/sales-crm/lists/:pageKey`。
+- `intake`、`lead_flow`、`pipeline`、`alerts`、`insights`、`recycle_bin`
+  均在入口先执行权限版本检查与 `validateFilterQuery()`，再分发到只接受已验证 AST
+  的页面适配器。
+- 六页 schema 的选项已按各自真实数据 scope 分发，不再错误复用客户账号选项查询。
+- 线索三个真假条件通过固定 `true/false` facet 契约接入，兼容 SQLite 既有字段类型约束。
+- 回收站新增授权 AST、分页、总数、数据范围、筛选选项和统一组件挂载。
+- 既有数据库升级改为显式的 `filter_catalog_migrations` 幂等迁移：
+  补齐新增页面覆盖和默认组授权，支持部分迁移库，重复安装不再增版本。
+- 前端六页均维护独立的 rows/page/pageSize/total/authorizedTotal/hasMore、
+  permissionVersion、requestEpoch、initializeEpoch 和组件 mount/controller 状态；
+  线索池与线索流转共用业务页面，通过独立页签切换各自 schema 和本地状态键。
+- 权限定义或授权变化会同时销毁客户、联系人、Recon 和六个业务列表的旧组件状态。
+
+### 本轮验证
+
+```text
+node --check lib/sales_crm.js
+node --check lib/filter_authorization.js
+node --check lib/business_page_filters.js
+node --check lib/intake_flow_filters.js
+node --check sales-assets/app.js
+结果：全部通过
+
+npm test
+结果：694/694 通过，0 失败，耗时约 35.2 秒
+
+真实浏览器（本地隔离数据库、管理员）：
+- 推进管道、今日待办、经理评价、客户回收站、线索池、线索流转
+  均成功挂载授权筛选并请求 /lists/:pageKey。
+- 浏览器控制台无 error。
+- 390 × 844：document scrollWidth 375，筛选容器宽/scrollWidth 369，无横向溢出。
+```
+
+### 仍需完成
+
+- 使用有真实业务数据的管理员、经理、销售三种身份验证筛选结果、权限撤销和敏感字段脱敏；
+  本轮浏览器数据库为空，只验证了挂载、请求、空状态和响应式布局。
+- 补齐逐页导出/统计与授权列表完全同口径的验收。
+- 对照设计参考补齐管理端完整效果预览区，并完成最终桌面/移动截图归档。
+- 全部 P0/P1 验收完成前，PR #126 继续保持 Draft，不合并、不部署。
 
 状态：阶段性实现完成，Issue 仍为 OPEN；当前分支不应合并或部署到生产
 Issue：[增加客户筛选字段权限配置：管理员分配，销售按授权使用](https://github.com/mewmind-chen/russia-crm-local/issues/116)

@@ -3,6 +3,11 @@
 
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
+  const emptyAuthorizedListState = () => ({
+    rows: [], page: 0, pageSize: 50, total: 0, authorizedTotal: 0,
+    hasMore: false, loading: false, loaded: false, error: '',
+    requestEpoch: 0, initializeEpoch: 0, filterMount: null, filterController: null,
+  });
   const state = {
     data: null,
     view: 'dashboard',
@@ -14,6 +19,7 @@
     intakeTotal: 0,
     intakeHasMore: false,
     intakeLoading: false,
+    intakeAuthorizedPage: 'intake',
     intakeSearchTimer: null,
     intakeFilters: {
       customerTag: '', country: '', industry: '', customerType: '', contactLevel: '',
@@ -22,6 +28,7 @@
     },
     customerSearchTimer: null,
     customerRequestEpoch: 0,
+    customerInitializeEpoch: 0,
     customerList: {
       rows: [], page: 1, pageSize: 50, total: 0, authorizedTotal: 0,
       hasMore: false, loading: false, loaded: false,
@@ -54,6 +61,9 @@
     notificationStatus: 'unread',
     recycleKind: 'sales_return',
     recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
+    authorizedBusinessLists: Object.fromEntries([
+      'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
+    ].map(pageKey => [pageKey, emptyAuthorizedListState()])),
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -84,8 +94,16 @@
     aiFeaturesError: '',
     aiFeaturePending: '',
     research: {
-      people: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
-      recon: { page: 0, total: 0, hasMore: false, loading: false, loaded: false, reloadPending: false },
+      contacts: {
+        page: 0, total: 0, hasMore: false, loading: false, loaded: false,
+        error: '', initializing: false, requestEpoch: 0, initializeEpoch: 0,
+        filterMount: null, filterController: null,
+      },
+      recon: {
+        page: 0, total: 0, hasMore: false, loading: false, loaded: false,
+        error: '', initializing: false, requestEpoch: 0, initializeEpoch: 0,
+        filterMount: null, filterController: null,
+      },
     },
   };
 
@@ -567,11 +585,13 @@
     const root = $('#customerAuthorizedFilters');
     if (!root || !window.TradePulseFilterComponent) return;
     if (state.customerFilterMount && !force) return;
+    const initializeEpoch = ++state.customerInitializeEpoch;
     state.customerFilterMount?.destroy();
     root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
     try {
       const pageKey = 'customers';
       const result = await api(`/filter-schema/${pageKey}`);
+      if (initializeEpoch !== state.customerInitializeEpoch) return;
       const controller = window.TradePulseFilterComponent.createFilterController({
         pageKey,
         schema: result.schema,
@@ -590,6 +610,7 @@
       });
       await loadCustomerPage({ reset: true });
     } catch (error) {
+      if (initializeEpoch !== state.customerInitializeEpoch) return;
       root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({
         status: 'error',
         error: error.message,
@@ -612,9 +633,212 @@
 
   function resetResearchState() {
     for (const [kind, meta] of Object.entries(state.research)) {
-      Object.assign(meta, { page: 0, total: Number(state.data?.researchTotals?.[kind] || 0), hasMore: false, loading: false, loaded: false, reloadPending: false });
+      const config = researchConfig[kind];
+      meta.filterMount?.destroy();
+      Object.assign(meta, {
+        page: 0,
+        total: Number(state.data?.researchTotals?.[config?.totalsKey || kind] || 0),
+        hasMore: false,
+        loading: false,
+        loaded: false,
+        error: '',
+        initializing: false,
+        requestEpoch: Number(meta.requestEpoch || 0) + 1,
+        initializeEpoch: Number(meta.initializeEpoch || 0) + 1,
+        filterMount: null,
+        filterController: null,
+      });
     }
   }
+
+  const authorizedBusinessConfig = {
+    intake: {
+      root: '#intakeAuthorizedFilters', button: '#intakeAuthorizedLoadMore',
+      count: '#intakeAuthorizedResultCount', render: renderIntake,
+    },
+    lead_flow: {
+      root: '#intakeAuthorizedFilters', button: '#intakeAuthorizedLoadMore',
+      count: '#intakeAuthorizedResultCount', render: renderIntake,
+    },
+    pipeline: {
+      root: '#pipelineAuthorizedFilters', button: '#pipelineAuthorizedLoadMore',
+      count: '#pipelineAuthorizedResultCount', render: renderPipeline,
+    },
+    alerts: {
+      root: '#alertsAuthorizedFilters', button: '#alertsAuthorizedLoadMore',
+      count: '#alertsAuthorizedResultCount', render: renderAlerts,
+    },
+    insights: {
+      root: '#insightsAuthorizedFilters', button: '#insightsAuthorizedLoadMore',
+      count: '#insightsAuthorizedResultCount', render: renderInsightsHub,
+    },
+    recycle_bin: {
+      root: '#recycleAuthorizedFilters', button: '#recycleAuthorizedLoadMore',
+      count: '#recycleAuthorizedResultCount', render: renderRecycleBin,
+    },
+  };
+
+  function resetAuthorizedBusinessLists() {
+    for (const [pageKey, meta] of Object.entries(state.authorizedBusinessLists)) {
+      meta.filterMount?.destroy();
+      state.authorizedBusinessLists[pageKey] = {
+        ...emptyAuthorizedListState(),
+        requestEpoch: Number(meta.requestEpoch || 0) + 1,
+        initializeEpoch: Number(meta.initializeEpoch || 0) + 1,
+      };
+    }
+  }
+
+  function applyAuthorizedBusinessRows(pageKey, meta) {
+    if (['intake', 'lead_flow'].includes(pageKey)) {
+      state.data.intake = {
+        ...(state.data.intake || {}),
+        items: meta.rows,
+        page: meta.page,
+        pageSize: meta.pageSize,
+        total: meta.total,
+        hasMore: meta.hasMore,
+      };
+      state.intakePage = meta.page;
+      state.intakeTotal = meta.total;
+      state.intakeHasMore = meta.hasMore;
+    } else if (pageKey === 'recycle_bin') {
+      state.recycleBin = {
+        ...state.recycleBin,
+        rows: meta.rows,
+        page: meta.page,
+        pageSize: meta.pageSize,
+        total: meta.total,
+        hasMore: meta.hasMore,
+        loading: meta.loading,
+      };
+    }
+  }
+
+  function updateAuthorizedBusinessMeta(pageKey) {
+    const config = authorizedBusinessConfig[pageKey];
+    const meta = state.authorizedBusinessLists[pageKey];
+    const button = config ? $(config.button) : null;
+    const count = config ? $(config.count) : null;
+    if (button) {
+      button.dataset.loadBusinessPage = pageKey;
+      button.classList.toggle('hidden', !meta.loaded || !meta.hasMore);
+      button.disabled = meta.loading;
+      button.textContent = meta.loading
+        ? '正在加载…'
+        : `继续加载（已显示 ${meta.rows.length} / ${meta.total}）`;
+    }
+    if (count) {
+      count.textContent = meta.loading && !meta.loaded
+        ? '正在读取授权结果…'
+        : `已显示 ${meta.rows.length} / ${meta.total} 条`;
+    }
+  }
+
+  async function loadAuthorizedBusinessPage(pageKey, { reset = false } = {}) {
+    const config = authorizedBusinessConfig[pageKey];
+    const meta = state.authorizedBusinessLists[pageKey];
+    if (!config || !meta?.filterController || (meta.loading && !reset)) return;
+    if (reset) {
+      meta.rows = [];
+      Object.assign(meta, { page: 0, total: 0, authorizedTotal: 0, hasMore: false, loaded: false });
+    }
+    const requestEpoch = ++meta.requestEpoch;
+    meta.loading = true;
+    meta.error = '';
+    applyAuthorizedBusinessRows(pageKey, meta);
+    meta.filterMount?.setResultMeta({ loading: true, total: meta.total, shown: meta.rows.length });
+    config.render();
+    updateAuthorizedBusinessMeta(pageKey);
+    try {
+      const payload = meta.filterController.serialize('applied');
+      const params = new URLSearchParams({
+        page: String(meta.page + 1),
+        pageSize: String(meta.pageSize),
+        permissionVersion: String(payload.permissionVersion || ''),
+        filters: JSON.stringify(componentPayloadToRaw(payload)),
+      });
+      const result = await api(`/api/sales-crm/lists/${pageKey}?${params}`, { timeoutMs: 12000 });
+      if (requestEpoch !== meta.requestEpoch) return;
+      meta.rows = reset ? result.rows : [...meta.rows, ...result.rows];
+      Object.assign(meta, {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        authorizedTotal: Number(result.authorizedTotal ?? result.total),
+        hasMore: result.hasMore,
+        loaded: true,
+        error: '',
+      });
+      if (result.schema
+          && String(result.schema.permissionVersion) !== String(payload.permissionVersion)) {
+        meta.filterController.updateSchema(result.schema);
+      }
+    } catch (error) {
+      if (requestEpoch !== meta.requestEpoch) return;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        meta.loading = false;
+        await initializeAuthorizedBusinessFilters(pageKey, { force: true });
+        return;
+      }
+      meta.error = error.message || '数据读取失败';
+      toast(error.message);
+    } finally {
+      if (requestEpoch === meta.requestEpoch) {
+        meta.loading = false;
+        applyAuthorizedBusinessRows(pageKey, meta);
+        meta.filterMount?.setResultMeta({ total: meta.total, shown: meta.rows.length });
+        config.render();
+        updateAuthorizedBusinessMeta(pageKey);
+      }
+    }
+  }
+
+  async function initializeAuthorizedBusinessFilters(pageKey, { force = false } = {}) {
+    const config = authorizedBusinessConfig[pageKey];
+    const meta = state.authorizedBusinessLists[pageKey];
+    const root = config ? $(config.root) : null;
+    if (!config || !meta || !root || !window.TradePulseFilterComponent) return;
+    if (meta.filterMount && !force) return;
+    const initializeEpoch = ++meta.initializeEpoch;
+    if (['intake', 'lead_flow'].includes(pageKey)) {
+      const otherKey = pageKey === 'intake' ? 'lead_flow' : 'intake';
+      const other = state.authorizedBusinessLists[otherKey];
+      other.requestEpoch += 1;
+      other.filterMount?.destroy();
+      other.filterMount = null;
+      other.filterController = null;
+    }
+    meta.requestEpoch += 1;
+    meta.filterMount?.destroy();
+    meta.filterMount = null;
+    meta.filterController = null;
+    root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+    try {
+      const result = await api(`/filter-schema/${pageKey}`);
+      if (initializeEpoch !== meta.initializeEpoch) return;
+      invalidateStaleResearchFilterState(pageKey, result.schema);
+      const controller = window.TradePulseFilterComponent.createFilterController({
+        pageKey,
+        schema: result.schema,
+        onApply: () => void loadAuthorizedBusinessPage(pageKey, { reset: true }),
+      });
+      meta.filterController = controller;
+      meta.filterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
+        controller,
+        resultMeta: { total: meta.total, shown: meta.rows.length },
+      });
+      await loadAuthorizedBusinessPage(pageKey, { reset: true });
+    } catch (error) {
+      if (initializeEpoch !== meta.initializeEpoch) return;
+      meta.error = error.message || '筛选项读取失败';
+      root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({
+        status: 'error',
+        error: error.message,
+      });
+    }
+  }
+
   function firstAllowedBusinessView() {
     return Object.keys(viewMeta).find(view =>
       !['aiTasks', 'customerProfile'].includes(view)
@@ -625,6 +849,7 @@
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
       state.customerRequestEpoch += 1;
+      state.customerInitializeEpoch += 1;
       state.customerFilterMount?.destroy();
       state.customerFilterMount = null;
       state.customerFilterController = null;
@@ -646,6 +871,7 @@
         items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
       });
       resetResearchState();
+      resetAuthorizedBusinessLists();
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
       applyUser();
@@ -808,7 +1034,6 @@
     renderDashboard();
     renderIntake();
     renderCustomers();
-    if (state.view === 'recycleBin') void loadRecycleBin();
     renderUnifiedPeople();
     renderUnifiedRecon();
     renderPipeline();
@@ -909,14 +1134,25 @@
   }
 
   const researchConfig = {
-    people: { dataKey: 'people', render: renderUnifiedPeople, button: '#peopleLoadMore' },
-    recon: { dataKey: 'reconResults', render: renderUnifiedRecon, button: '#reconLoadMore' },
+    contacts: {
+      pageKey: 'contacts',
+      endpointKind: 'people',
+      totalsKey: 'people',
+      dataKey: 'people',
+      root: '#peopleAuthorizedFilters',
+      render: renderUnifiedPeople,
+      button: '#peopleLoadMore',
+    },
+    recon: {
+      pageKey: 'recon',
+      endpointKind: 'recon',
+      totalsKey: 'recon',
+      dataKey: 'reconResults',
+      root: '#reconAuthorizedFilters',
+      render: renderUnifiedRecon,
+      button: '#reconLoadMore',
+    },
   };
-
-  function researchQuery(kind) {
-    if (kind === 'people') return { search: $('#peopleSearch')?.value || '', level: $('#peopleLevelFilter')?.value || '' };
-    return { search: $('#reconSearch')?.value || '' };
-  }
 
   function updateResearchButton(kind) {
     const meta = state.research[kind];
@@ -924,63 +1160,166 @@
     if (!button) return;
     button.classList.toggle('hidden', !meta.loaded || !meta.hasMore);
     button.disabled = meta.loading;
-    button.textContent = meta.loading ? '正在加载…' : `继续加载（已显示 ${state.data[researchConfig[kind].dataKey].length} / ${meta.total}）`;
+    button.textContent = meta.loading
+      ? '正在加载…'
+      : `${meta.error ? '重试' : '继续加载'}（已显示 ${state.data[researchConfig[kind].dataKey].length} / ${meta.total}）`;
   }
 
   async function loadResearch(kind, { reset = false } = {}) {
     const config = researchConfig[kind];
     const meta = state.research[kind];
-    if (!config) return;
-    if (meta.loading) {
-      if (reset) meta.reloadPending = true;
-      return;
-    }
+    if (!config || !meta?.filterController) return;
+    if (meta.loading && !reset) return;
     if (reset) {
       state.data[config.dataKey] = [];
       Object.assign(meta, { page: 0, total: 0, hasMore: false, loaded: false });
     }
+    const requestEpoch = ++meta.requestEpoch;
     meta.loading = true;
+    meta.error = '';
+    meta.filterMount?.setResultMeta({
+      loading: true,
+      total: meta.total,
+      shown: state.data[config.dataKey].length,
+    });
     config.render();
     updateResearchButton(kind);
     try {
-      const params = new URLSearchParams({ page: String(meta.page + 1), pageSize: '100' });
-      Object.entries(researchQuery(kind)).forEach(([key, value]) => { if (value) params.set(key, value); });
-      const result = await api(`/api/sales-crm/research/${kind}?${params}`, { timeoutMs: 12000 });
+      const payload = meta.filterController.serialize('applied');
+      const params = new URLSearchParams({
+        page: String(meta.page + 1),
+        pageSize: '100',
+        permissionVersion: String(payload.permissionVersion || ''),
+        filters: JSON.stringify(componentPayloadToRaw(payload)),
+      });
+      const result = await api(
+        `/api/sales-crm/research/${config.endpointKind}?${params}`,
+        { timeoutMs: 12000 },
+      );
+      if (requestEpoch !== meta.requestEpoch) return;
       state.data[config.dataKey] = reset ? result.rows : [...state.data[config.dataKey], ...result.rows];
-      Object.assign(meta, { page: result.page, total: result.total, hasMore: result.hasMore, loaded: true });
+      Object.assign(meta, {
+        page: result.page,
+        total: result.total,
+        hasMore: result.hasMore,
+        loaded: true,
+        error: '',
+      });
+      if (result.schema
+          && String(result.schema.permissionVersion) !== String(payload.permissionVersion)) {
+        meta.filterController.updateSchema(result.schema);
+      }
+      meta.filterMount?.setResultMeta({
+        total: result.total,
+        shown: state.data[config.dataKey].length,
+      });
     } catch (error) {
+      if (requestEpoch !== meta.requestEpoch) return;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        meta.loading = false;
+        await initializeResearchFilters(kind, { force: true });
+        return;
+      }
+      meta.error = error.message || '数据读取失败';
       toast(error.message);
     } finally {
-      meta.loading = false;
-      config.render();
-      updateResearchButton(kind);
-      if (meta.reloadPending) {
-        meta.reloadPending = false;
-        void loadResearch(kind, { reset: true });
+      if (requestEpoch === meta.requestEpoch) {
+        meta.loading = false;
+        meta.filterMount?.setResultMeta({
+          total: meta.total,
+          shown: state.data[config.dataKey].length,
+        });
+        config.render();
+        updateResearchButton(kind);
       }
+    }
+  }
+
+  function invalidateStaleResearchFilterState(pageKey, schema = {}) {
+    const storagePrefix = window.TradePulseFilterComponent?.STORAGE_PREFIX;
+    if (!storagePrefix) return;
+    const storageKey = `${storagePrefix}.${pageKey}`;
+    try {
+      const storage = window.localStorage;
+      if (!storage) return;
+      const saved = JSON.parse(storage.getItem(storageKey) || '{}');
+      if (Object.keys(saved).length
+          && String(saved.permissionVersion || '') !== String(schema.permissionVersion || '')) {
+        storage.removeItem(storageKey);
+      }
+    } catch (_error) {
+      try { window.localStorage?.removeItem(storageKey); } catch (_storageError) {}
+    }
+  }
+
+  async function initializeResearchFilters(kind, { force = false } = {}) {
+    const config = researchConfig[kind];
+    const meta = state.research[kind];
+    const root = config ? $(config.root) : null;
+    if (!config || !meta || !root || !window.TradePulseFilterComponent) return;
+    if (meta.filterMount && !force) return;
+    if (meta.initializing && !force) return;
+    const initializeEpoch = ++meta.initializeEpoch;
+    meta.requestEpoch += 1;
+    meta.loading = false;
+    meta.error = '';
+    meta.initializing = true;
+    meta.filterMount?.destroy();
+    meta.filterMount = null;
+    meta.filterController = null;
+    state.data[config.dataKey] = [];
+    Object.assign(meta, { page: 0, total: 0, hasMore: false, loaded: false });
+    config.render();
+    updateResearchButton(kind);
+    root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+    try {
+      const result = await api(`/filter-schema/${config.pageKey}`);
+      if (initializeEpoch !== meta.initializeEpoch) return;
+      invalidateStaleResearchFilterState(config.pageKey, result.schema);
+      const controller = window.TradePulseFilterComponent.createFilterController({
+        pageKey: config.pageKey,
+        schema: result.schema,
+        onApply: () => void loadResearch(kind, { reset: true }),
+      });
+      meta.filterController = controller;
+      meta.filterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
+        controller,
+        resultMeta: {
+          total: meta.total,
+          shown: state.data[config.dataKey].length,
+        },
+      });
+      meta.initializing = false;
+      await loadResearch(kind, { reset: true });
+    } catch (error) {
+      if (initializeEpoch !== meta.initializeEpoch) return;
+      meta.error = error.message || '筛选项读取失败';
+      root.innerHTML = `${window.TradePulseFilterComponent.renderFilterComponent({
+        status: 'error',
+        error: error.message,
+      })}<div class="research-filter-retry"><button class="button secondary" type="button" data-retry-research-schema="${esc(kind)}">重新加载筛选项</button></div>`;
+    } finally {
+      if (initializeEpoch === meta.initializeEpoch) meta.initializing = false;
     }
   }
 
   function researchLoading(kind) {
     const meta = state.research[kind];
     if (meta.loading && !meta.loaded) return '<div class="empty">正在加载数据…</div>';
+    if (meta.error && !meta.loaded) {
+      return `<div class="empty research-error-state" role="alert"><p>数据读取失败，请重试</p><button class="button secondary" type="button" data-retry-research="${esc(kind)}">重新加载</button></div>`;
+    }
     if (!meta.loaded) return '<div class="empty">进入本模块后加载数据</div>';
     return '';
-  }
-
-  function scheduleResearchReload(kind) {
-    clearTimeout(scheduleResearchReload.timers?.[kind]);
-    scheduleResearchReload.timers ||= {};
-    scheduleResearchReload.timers[kind] = setTimeout(() => loadResearch(kind, { reset: true }), 300);
   }
 
   function renderUnifiedPeople() {
     const root = $('#unifiedPeopleTable');
     if (!root) return;
-    const loading = researchLoading('people');
+    const loading = researchLoading('contacts');
     if (loading) { root.innerHTML = loading; $('#peopleResultCount').textContent = ''; return; }
     const rows = state.data.people || [];
-    $('#peopleResultCount').textContent = `已显示 ${rows.length} / ${state.research.people.total} 条线索`;
+    $('#peopleResultCount').textContent = `已显示 ${rows.length} / ${state.research.contacts.total} 条线索`;
     root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','证据状态'], rows.map(item => [
       `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
       `<strong>${esc(item.name || item.full_name || item.full_name_local || '未识别')}</strong>`,
@@ -1177,6 +1516,9 @@
   function renderIntake() {
     const intake = state.data.intake;
     if (!intake) return;
+    $$('[data-authorized-intake-page]').forEach(button => {
+      button.classList.toggle('active', button.dataset.authorizedIntakePage === state.intakeAuthorizedPage);
+    });
     const salesView = !can('manage_intake');
     const stats = intake.stats;
     const tabCounts = {
@@ -1287,10 +1629,9 @@
     );
     const pager = $('#intakePagination');
     if (pager) {
-      pager.classList.toggle('hidden', !state.intakeHasMore && !state.intakeLoading);
-      pager.innerHTML = state.intakeLoading
-        ? '<span class="subtle">正在加载线索…</span>'
-        : `<button class="button secondary tiny" type="button" id="intakeLoadMore" ${state.intakeHasMore ? '' : 'disabled'}>继续加载（已显示 ${items.length} / ${intake.total ?? items.length}）</button>`;
+      const meta = state.authorizedBusinessLists[state.intakeAuthorizedPage];
+      pager.classList.remove('hidden');
+      pager.innerHTML = `<button id="intakeAuthorizedLoadMore" class="button secondary ${meta?.hasMore ? '' : 'hidden'}" type="button" data-load-business-page="${esc(state.intakeAuthorizedPage)}" ${meta?.loading ? 'disabled' : ''}>${meta?.loading ? '正在加载…' : `继续加载（已显示 ${items.length} / ${meta?.total ?? items.length}）`}</button>`;
     }
   }
 
@@ -2369,7 +2710,8 @@
   }
 
   function renderPipeline() {
-    const accounts = scopedAccounts();
+    const meta = state.authorizedBusinessLists.pipeline;
+    const accounts = meta.loaded ? meta.rows : [];
     const stages = state.data.stages.filter(item => !['new'].includes(item.key));
     $('#pipelineBoard').innerHTML = stages.map(stage => {
       const rows = accounts.filter(account => account.stage === stage.key);
@@ -2388,7 +2730,8 @@
   }
 
   function renderAlerts() {
-    const all = scopedAlerts();
+    const meta = state.authorizedBusinessLists.alerts;
+    const all = meta.loaded ? meta.rows : [];
     const reasonCount = all.reduce((sum, item) => sum + Number(item.reasonCount || 1), 0);
     const counts = {
       immediate: all.filter(item => item.urgency === 'immediate').length,
@@ -2614,6 +2957,27 @@
 
   function renderInsightsHub() {
     if (!can('view_insights')) return;
+    const authorizedMeta = state.authorizedBusinessLists.insights;
+    if (authorizedMeta.loaded || authorizedMeta.loading) {
+      const rows = authorizedMeta.rows || [];
+      const evaluated = rows.filter(item => item.evaluationStatus === 'evaluated').length;
+      $('#insightSummary').innerHTML = [
+        ['授权客户', authorizedMeta.authorizedTotal, '当前数据权限范围'],
+        ['当前结果', authorizedMeta.total, '已应用服务端授权筛选'],
+        ['已有评价', evaluated, `${percent(evaluated, rows.length)} 当前页覆盖率`],
+        ['待评价企业', rows.filter(item => item.evaluationStatus !== 'evaluated').length, '当前已加载结果'],
+      ].map(([label, value, note]) =>
+        `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+      $('#insightResultCount').textContent = `已显示 ${rows.length} / ${authorizedMeta.total} 家企业`;
+      $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
+        <article class="insight-hub-card">
+          <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(item.companyName || item.nickname || item.customerId)}</h3><p>${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
+          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>经理评价：</strong>${esc(item.evaluationText || item.aiSummary || '已有评价')}` : '尚未填写企业经营评价'}</div>
+          <div><div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div><p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
+          <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>
+        </article>`).join('') : '<div class="empty">没有符合条件的客户</div>';
+      return;
+    }
     const insightData = state.data.insights || { contacts: [], evaluations: [] };
     const companyEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'company').map(item => item.customerId));
     const contactEvaluated = new Set(insightData.evaluations.filter(item => item.subjectType === 'contact').map(item => item.customerId));
@@ -3236,6 +3600,28 @@
     return (definition.requiredPermissions || []).every(key => Boolean(permissions[key]));
   }
 
+  const filterDisplayModeLabels = {
+    horizontal: '横向筛选',
+    more: '更多筛选',
+    date_range: '日期范围',
+    hidden: '不显示',
+  };
+
+  function filterDisplayModeOptions(selected) {
+    return Object.entries(filterDisplayModeLabels).map(([mode, label]) =>
+      `<option value="${mode}" ${selected === mode ? 'selected' : ''}>${label}</option>`).join('');
+  }
+
+  function syncNewFilterDefinitionButton(admin = state.filterPermissionAdmin) {
+    const button = $('#newFilterDefinitionBtn');
+    if (!button) return;
+    const available = admin?.availableSources || [];
+    button.disabled = !admin || Boolean(state.data.impersonation) || !available.length;
+    button.title = available.length
+      ? `还有 ${available.length} 个可新增筛选数据源`
+      : '暂无可新增的数据源';
+  }
+
   function syncFilterPermissionTargets() {
     const admin = state.filterPermissionAdmin;
     const target = $('#filterPermissionTarget');
@@ -3267,6 +3653,7 @@
     const root = $('#filterPermissionTable');
     const status = $('#filterPermissionStatus');
     if (!root || !status) return;
+    syncNewFilterDefinitionButton(admin);
     if (!admin) {
       root.innerHTML = '';
       status.textContent = '正在加载筛选权限配置…';
@@ -3293,11 +3680,6 @@
     const definitions = [...admin.definitions].sort((left, right) =>
       Number(left.sortOrder || 0) - Number(right.sortOrder || 0)
         || String(left.label).localeCompare(String(right.label), 'zh-CN'));
-    const displayModeLabels = {
-      horizontal: '横向筛选',
-      more: '更多筛选',
-      date_range: '日期范围',
-    };
     root.innerHTML = `<div class="filter-permission-list">
       <div class="filter-permission-row filter-permission-header" aria-hidden="true">
         <strong>筛选项目</strong><strong>销售可使用</strong><strong>页面显示</strong>
@@ -3321,7 +3703,7 @@
               ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
             <span>${definition.enabled ? '允许使用' : '已全局停用'}</span>
           </label>
-          <div><span class="pill gray">${esc(displayModeLabels[definition.displayMode] || definition.displayMode)}</span></div>
+          <div><span class="pill gray">${esc(filterDisplayModeLabels[definition.displayMode] || definition.displayMode)}</span></div>
           <div class="filter-permission-badges">
             <span class="pill ${definition.sensitive ? 'amber' : 'gray'}">${definition.sensitive ? '敏感字段' : '普通字段'}</span>
             ${scope === 'user' && isInherited ? '<span class="pill">组继承</span>' : ''}
@@ -3369,6 +3751,15 @@
       .map(input => input.dataset.filterGrant);
   }
 
+  function invalidateAuthorizedFilterMounts() {
+    state.customerRequestEpoch += 1;
+    state.customerFilterMount?.destroy();
+    state.customerFilterMount = null;
+    state.customerFilterController = null;
+    resetResearchState();
+    resetAuthorizedBusinessLists();
+  }
+
   async function saveFilterPermissions({ restore = false } = {}) {
     const admin = state.filterPermissionAdmin;
     const target = filterPermissionTarget();
@@ -3391,10 +3782,7 @@
     try {
       await api(path, { method: 'PUT', body: JSON.stringify(body) });
       await loadFilterPermissionAdmin({ force: true });
-      state.customerRequestEpoch += 1;
-      state.customerFilterMount?.destroy();
-      state.customerFilterMount = null;
-      state.customerFilterController = null;
+      invalidateAuthorizedFilterMounts();
       toast(restore ? '已恢复组默认筛选权限' : '筛选权限已保存');
     } finally {
       if (button) {
@@ -3419,10 +3807,7 @@
         }),
       });
       await loadFilterPermissionAdmin({ force: true });
-      state.customerRequestEpoch += 1;
-      state.customerFilterMount?.destroy();
-      state.customerFilterMount = null;
-      state.customerFilterController = null;
+      invalidateAuthorizedFilterMounts();
       toast(enabled ? '筛选项已全局启用' : '筛选项已全局停用');
     } finally {
       button.disabled = false;
@@ -3453,8 +3838,7 @@
             `<option value="${type}" ${definition.type === type ? 'selected' : ''}>${type}</option>`).join('')}
         </select></label>
         <label>展示方式<select name="displayMode">
-          ${['horizontal', 'more', 'date_range'].map(mode =>
-            `<option value="${mode}" ${definition.displayMode === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+          ${filterDisplayModeOptions(definition.displayMode)}
         </select></label>
         <label>展示顺序<input name="sortOrder" type="number" min="-100000" max="100000" value="${esc(definition.sortOrder)}" required></label>
         <label class="span-2">可用运算符<input name="operators" value="${esc((definition.operators || []).join(','))}" required></label>
@@ -3464,6 +3848,53 @@
           <button class="button primary" type="submit">保存定义</button>
         </div>
       </form>`);
+  }
+
+  function syncFilterDefinitionSourceFields() {
+    const form = $('#filterDefinitionCreateForm');
+    const source = state.filterPermissionAdmin?.availableSources
+      ?.find(item => item.key === form?.elements?.sourceKey?.value);
+    if (!form || !source) return;
+    form.elements.label.value = source.label || source.key;
+    form.elements.displayMode.value = source.displayMode || 'horizontal';
+    form.elements.sortOrder.value = Number(source.sortOrder || 0);
+    form.elements.enabled.checked = true;
+    form.elements.sensitive.checked = Boolean(source.sensitive);
+    form.elements.sensitive.disabled = Boolean(source.sensitive);
+    form.querySelector('[data-source-type]').value = source.type || '';
+    form.querySelector('[data-source-operators]').value = (source.operators || []).join(', ');
+    form.querySelector('[data-source-pages]').value = (source.pages || []).join(', ');
+    form.querySelector('[data-source-permissions]').value = (source.requiredPermissions || []).join(', ') || '无额外要求';
+  }
+
+  function openFilterDefinitionCreator() {
+    const sources = state.filterPermissionAdmin?.availableSources || [];
+    if (!sources.length) {
+      toast('暂无可新增的数据源');
+      return;
+    }
+    openModal('新增筛选定义', 'AUTHORIZED FILTER DEFINITION', `
+      <form id="filterDefinitionCreateForm" class="form-grid">
+        <label class="span-2">服务端数据源<select id="filterDefinitionSource" name="sourceKey" required>
+          ${sources.map(source => `<option value="${esc(source.key)}">${esc(source.label)} · ${esc(source.key)}</option>`).join('')}
+        </select></label>
+        <label>显示名称<input name="label" maxlength="80" required></label>
+        <label>字段类型<input data-source-type readonly></label>
+        <label>展示方式<select name="displayMode">${filterDisplayModeOptions(sources[0].displayMode)}</select></label>
+        <label>展示顺序<input name="sortOrder" type="number" min="-100000" max="100000" required></label>
+        <label>可用运算符<input data-source-operators readonly></label>
+        <label>适用页面<input data-source-pages readonly></label>
+        <label class="span-2">最低字段权限<input data-source-permissions readonly></label>
+        <label class="check"><input name="enabled" type="checkbox" checked>创建后全局启用</label>
+        <label class="check"><input name="sensitive" type="checkbox">标记为敏感字段</label>
+        <label class="span-2">变更备注<input name="note" maxlength="200" placeholder="记录新增原因"></label>
+        <p id="filterDefinitionCreateStatus" class="form-error span-2" role="alert" aria-live="polite"></p>
+        <div class="form-actions span-2">
+          <button type="button" class="button secondary" data-close-modal>取消</button>
+          <button id="createFilterDefinitionSubmit" class="button primary" type="submit">新增定义</button>
+        </div>
+      </form>`);
+    syncFilterDefinitionSourceFields();
   }
 
   function openCustomer(customerId) {
@@ -4248,11 +4679,50 @@
         });
         closeModal();
         await loadFilterPermissionAdmin({ force: true });
-        state.customerRequestEpoch += 1;
-        state.customerFilterMount?.destroy();
-        state.customerFilterMount = null;
-        state.customerFilterController = null;
+        invalidateAuthorizedFilterMounts();
         toast('筛选定义已保存');
+      } else if (form.id === 'filterDefinitionCreateForm') {
+        const payload = formPayload(form);
+        const submitButton = $('#createFilterDefinitionSubmit');
+        const formStatus = $('#filterDefinitionCreateStatus');
+        const originalLabel = submitButton?.textContent || '新增定义';
+        if (submitButton?.disabled) return;
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = '正在创建…';
+        }
+        if (formStatus) formStatus.textContent = '';
+        try {
+          await api('/filter-permissions', {
+            method: 'POST',
+            body: JSON.stringify({
+              expectedVersion: state.filterPermissionAdmin?.version,
+              note: String(payload.note || '').trim(),
+              sourceKey: payload.sourceKey,
+              label: String(payload.label || '').trim(),
+              displayMode: payload.displayMode,
+              sortOrder: Number(payload.sortOrder),
+              enabled: Boolean(payload.enabled),
+              sensitive: Boolean(payload.sensitive),
+            }),
+          });
+          await loadFilterPermissionAdmin({ force: true });
+          invalidateAuthorizedFilterMounts();
+          closeModal();
+          toast('筛选定义已新增，授权后销售方可使用');
+        } catch (error) {
+          if (error.code === 'FILTER_VERSION_CONFLICT') {
+            try { await loadFilterPermissionAdmin({ force: true }); }
+            catch (_refreshError) {}
+          }
+          if (formStatus) formStatus.textContent = `创建失败：${error.message}`;
+          throw error;
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalLabel;
+          }
+        }
       } else if (form.id === 'adminPasswordResetForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
@@ -4392,6 +4862,7 @@
     }
     const definitionEditor = event.target.closest('[data-edit-filter-definition]');
     if (definitionEditor) openFilterDefinitionEditor(definitionEditor.dataset.editFilterDefinition);
+    if (event.target.closest('#newFilterDefinitionBtn')) openFilterDefinitionCreator();
     const customer = event.target.closest('[data-open-customer],[data-customer]');
     if (customer && (!event.target.closest('button,a,input,select,textarea') || customer.matches('button[data-open-customer]'))) openCustomer(customer.dataset.openCustomer || customer.dataset.customer);
     const intakeProfile = event.target.closest('[data-intake-profile]');
@@ -4589,6 +5060,18 @@
     if (event.target.closest('#customerLoadMore')) {
       await loadCustomerPage({ reset: false });
     }
+    const businessLoadMore = event.target.closest('[data-load-business-page]');
+    if (businessLoadMore) {
+      await loadAuthorizedBusinessPage(businessLoadMore.dataset.loadBusinessPage, { reset: false });
+    }
+    const intakePageTab = event.target.closest('[data-authorized-intake-page]');
+    if (intakePageTab) {
+      state.intakeAuthorizedPage = intakePageTab.dataset.authorizedIntakePage;
+      $$('[data-authorized-intake-page]').forEach(button => {
+        button.classList.toggle('active', button.dataset.authorizedIntakePage === state.intakeAuthorizedPage);
+      });
+      await initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage, { force: true });
+    }
     if (event.target.closest('#selectFilteredCustomers')) {
       const matches = state.customerList.rows;
       state.selectedCustomerIds = new Set(matches.slice(0, 500).map(account => account.id));
@@ -4657,6 +5140,12 @@
     }
     const loadMore = event.target.closest('[data-load-research]');
     if (loadMore) await loadResearch(loadMore.dataset.loadResearch);
+    const retryResearch = event.target.closest('[data-retry-research]');
+    if (retryResearch) await loadResearch(retryResearch.dataset.retryResearch, { reset: true });
+    const retryResearchSchema = event.target.closest('[data-retry-research-schema]');
+    if (retryResearchSchema) {
+      await initializeResearchFilters(retryResearchSchema.dataset.retryResearchSchema, { force: true });
+    }
     if (event.target.closest('#intakeLoadMore')) await loadIntakePage();
     if (event.target.closest('#changePasswordBtn')) openPasswordModal();
     if (event.target.closest('#intakeSettingsBtn')) openIntakeSettingsModal();
@@ -4855,13 +5344,15 @@
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
     if (canonicalView === 'pool') renderIntake();
     if (canonicalView === 'pool') {
-      void loadIntakePage({ reset: true });
+      void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage);
     }
     if (canonicalView === 'customers') void initializeCustomerFilters();
     if (canonicalView === 'users' && can('manage_users') && !state.data.impersonation) {
       void loadFilterPermissionAdmin().catch(error => toast(error.message));
     }
-    if (researchConfig[canonicalView] && !state.research[canonicalView].loaded) void loadResearch(canonicalView);
+    if (researchConfig[canonicalView] && !state.research[canonicalView].filterMount) {
+      void initializeResearchFilters(canonicalView);
+    }
     if (canonicalView === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
     if (canonicalView === 'aiTasks' && !state.aiGovernance.loaded) void loadAiGovernance();
     if (canonicalView === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
@@ -4870,7 +5361,13 @@
     if (canonicalView === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
       void loadSalesCoaching();
     }
-    if (canonicalView === 'recycleBin') void loadRecycleBin();
+    const businessPageKey = {
+      pipeline: 'pipeline',
+      alerts: 'alerts',
+      insights: 'insights',
+      recycleBin: 'recycle_bin',
+    }[canonicalView];
+    if (businessPageKey) void initializeAuthorizedBusinessFilters(businessPageKey);
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     closeDrawer();
     closeCustomerFilterPanel();
@@ -4912,6 +5409,7 @@
       syncFilterPermissionTargets();
       renderFilterPermissionAdmin();
     }
+    if (event.target.id === 'filterDefinitionSource') syncFilterDefinitionSourceFields();
     if (['filterPermissionTarget', 'filterIdentityPreview'].includes(event.target.id)) {
       renderFilterPermissionAdmin();
     }
@@ -4923,8 +5421,6 @@
   });
   document.addEventListener('input', event => {
     if (event.target.id === 'insightSearch') renderInsightsHub();
-    if (event.target.id === 'peopleSearch') scheduleResearchReload('people');
-    if (event.target.id === 'reconSearch') scheduleResearchReload('recon');
     if (event.target.id === 'intakeSearch') {
       clearTimeout(state.intakeSearchTimer);
       state.intakeSearchTimer = setTimeout(() => {
@@ -4938,7 +5434,6 @@
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
-    if (event.target.id === 'peopleLevelFilter') void loadResearch('people', { reset: true });
     if (event.target.matches('select[data-role-source]')) {
       const groupSelect = event.target.closest('form')?.querySelector('select[data-role-group]');
       if (groupSelect) groupSelect.innerHTML = groupOptions(event.target.value);

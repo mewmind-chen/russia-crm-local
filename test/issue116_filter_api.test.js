@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { adminFixture } = require('./helpers/permission_fixture');
+const { FILTER_DEFINITIONS } = require('../lib/filter_catalog');
 
 function encodeFilters(filters) {
   return encodeURIComponent(JSON.stringify(filters));
@@ -62,7 +63,8 @@ test('Issue #116 management updates are versioned and immediately change user sc
   });
   assert.equal(stateResponse.status, 200);
   const state = await stateResponse.json();
-  assert.equal(state.definitions.length, 19);
+  assert.equal(state.definitions.length, FILTER_DEFINITIONS.length);
+  assert.deepEqual(state.availableSources.map(item => item.key), ['city']);
   assert.ok(state.permissionGroups.some(group => group.id === fx.salesGroupId));
   assert.ok(state.users.some(user => user.id === 'U-OTHER'));
 
@@ -97,6 +99,152 @@ test('Issue #116 management updates are versioned and immediately change user sc
   );
   assert.equal(conflict.status, 409);
   assert.equal((await conflict.json()).code, 'FILTER_VERSION_CONFLICT');
+});
+
+test('Issue #116 administrators create only registered filter sources without implicit grants', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+
+  const before = await (await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+  })).json();
+  const response = await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      sourceKey: 'city',
+      label: '所在城市',
+      displayMode: 'more',
+      requiredPermissions: ['view_customers'],
+      pages: ['customers'],
+      expectedVersion: before.version,
+      note: 'Issue 116 create API acceptance',
+    },
+  });
+  assert.equal(response.status, 200);
+  const created = await response.json();
+  assert.equal(created.filterKey, 'city');
+  assert.equal(created.definition.key, 'city');
+  assert.equal(created.definition.label, '所在城市');
+  assert.equal(created.version, before.version + 1);
+  assert.equal(
+    fx.db.prepare(`SELECT COUNT(*) count FROM permission_group_filter_grants
+      WHERE filter_key='city'`).get().count,
+    0,
+  );
+  const audit = fx.db.prepare(`SELECT action,note,version FROM filter_permission_audit
+    WHERE target_type='filter_definition' AND target_id='city'`).get();
+  assert.deepEqual(audit, {
+    action: 'definition_created',
+    note: 'Issue 116 create API acceptance',
+    version: created.version,
+  });
+
+  const after = await (await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+  })).json();
+  assert.equal(after.definitions.some(item => item.key === 'city'), true);
+  assert.deepEqual(after.availableSources.map(item => item.key), []);
+  const salesSchema = await (await fx.request('/api/sales-crm/filter-schema/customers', {
+    cookie: fx.otherCookie,
+  })).json();
+  assert.equal(salesSchema.schema.fields.some(item => item.key === 'city'), false);
+
+  fx.db.prepare("UPDATE crm_accounts SET city='莫斯科' WHERE id='CRM-OTHER'").run();
+  const grantResponse = await fx.request(
+    `/api/sales-crm/filter-permissions/groups/${fx.salesGroupId}`,
+    {
+      cookie: fx.adminCookie,
+      method: 'PUT',
+      body: { expectedVersion: created.version, filterKeys: ['city'] },
+    },
+  );
+  assert.equal(grantResponse.status, 200);
+  const grantedSchema = await (await fx.request('/api/sales-crm/filter-schema/customers', {
+    cookie: fx.otherCookie,
+  })).json();
+  const cityField = grantedSchema.schema.fields.find(item => item.key === 'city');
+  assert.ok(cityField);
+  assert.equal(cityField.options.some(item => item.value === '莫斯科'), true);
+  const filtered = await fx.request(
+    `/api/sales-crm/accounts?filters=${encodeFilters({
+      city: { operator: 'in', values: ['莫斯科'] },
+    })}`,
+    { cookie: fx.otherCookie },
+  );
+  assert.equal(filtered.status, 200);
+  assert.deepEqual((await filtered.json()).rows.map(item => item.id), ['CRM-OTHER']);
+});
+
+test('Issue #116 create filter API rejects non-admin and impersonated administration', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+
+  const nonAdmin = await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.otherCookie,
+    method: 'POST',
+    body: { sourceKey: 'city' },
+  });
+  assert.equal(nonAdmin.status, 403);
+
+  fx.setUserPermissions('U-WU', { view_users: true, manage_users: true });
+  await fx.startImpersonation('U-WU');
+  const impersonated = await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: { sourceKey: 'city' },
+  });
+  assert.equal(impersonated.status, 403);
+  assert.equal((await impersonated.json()).code, 'IMPERSONATION_ACTION_BLOCKED');
+  assert.equal(
+    fx.db.prepare("SELECT COUNT(*) count FROM filter_definitions WHERE filter_key='city'").get().count,
+    0,
+  );
+});
+
+test('Issue #116 hidden definitions remain enabled but disappear from schema and query authorization', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+
+  const before = await (await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+  })).json();
+  const response = await fx.request(
+    '/api/sales-crm/filter-permissions/definitions/country',
+    {
+      cookie: fx.adminCookie,
+      method: 'PATCH',
+      body: {
+        displayMode: 'hidden',
+        expectedVersion: before.version,
+        note: 'hide country without disabling it',
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  const updated = await response.json();
+  assert.equal(updated.definition.enabled, true);
+  assert.equal(updated.definition.displayMode, 'hidden');
+
+  const state = await (await fx.request('/api/sales-crm/filter-permissions', {
+    cookie: fx.adminCookie,
+  })).json();
+  const definition = state.definitions.find(item => item.key === 'country');
+  assert.equal(definition.enabled, true);
+  assert.equal(definition.displayMode, 'hidden');
+
+  const schema = await (await fx.request('/api/sales-crm/filter-schema/customers', {
+    cookie: fx.otherCookie,
+  })).json();
+  assert.equal(schema.schema.fields.some(item => item.key === 'country'), false);
+  const forged = await fx.request(
+    `/api/sales-crm/accounts?filters=${encodeFilters({
+      country: { operator: 'in', values: ['俄罗斯'] },
+    })}`,
+    { cookie: fx.otherCookie },
+  );
+  assert.equal(forged.status, 403);
+  assert.equal((await forged.json()).code, 'FILTER_NOT_AUTHORIZED');
 });
 
 test('Issue #116 administration remains restricted to a real administrator', async t => {

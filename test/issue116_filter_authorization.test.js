@@ -6,16 +6,19 @@ const Database = require('better-sqlite3');
 
 const {
   FILTER_DEFINITIONS,
+  FILTER_SOURCE_CATALOG,
   PAGE_REQUIRED_PERMISSIONS,
 } = require('../lib/filter_catalog');
 const {
   installFilterAuthorization,
   getFilterPermissionVersion,
   listFilterDefinitions,
+  listAvailableFilterSources,
   effectiveFilterSchemaFor,
   saveGroupFilterGrants,
   saveUserExtraFilterGrants,
   restoreUserExtraFilterGrants,
+  createFilterDefinition,
   updateFilterDefinition,
   validateFilterQuery,
 } = require('../lib/filter_authorization');
@@ -104,7 +107,7 @@ function keys(schema) {
   return schema.filters.map(item => item.key);
 }
 
-test('install creates an idempotent versioned catalog with both pages and seven tag categories', () => {
+test('install creates an idempotent versioned catalog with supported pages and seven tag categories', () => {
   const db = createDb();
   assert.doesNotThrow(() => installFilterAuthorization(db, { now: NOW }));
   assert.equal(getFilterPermissionVersion(db), 1);
@@ -125,9 +128,19 @@ test('install creates an idempotent versioned catalog with both pages and seven 
   }
   assert.deepEqual(PAGE_REQUIRED_PERMISSIONS, {
     customers: ['view_customers'],
+    intake: ['view_intake'],
+    lead_flow: ['view_intake'],
     pipeline: ['view_pipeline'],
+    alerts: ['view_alerts'],
+    insights: ['view_insights'],
+    recycle_bin: ['manage_customer_recycle'],
+    contacts: ['view_contacts'],
+    recon: ['view_recon'],
   });
+  assert.ok(FILTER_SOURCE_CATALOG.some(item => item.key === 'city'));
   const definitions = listFilterDefinitions(db);
+  assert.equal(definitions.some(item => item.key === 'city'), false);
+  assert.deepEqual(listAvailableFilterSources(db).map(item => item.key), ['city']);
   assert.equal(definitions.filter(item => item.type === 'tag_multi').length, 7);
   for (const key of [
     'search', 'country', 'owner', 'stage', 'customer_type', 'industry',
@@ -141,6 +154,55 @@ test('install creates an idempotent versioned catalog with both pages and seven 
   installFilterAuthorization(db, { now: '2026-07-28 11:00:00' });
   assert.equal(getFilterPermissionVersion(db), 2);
   assert.ok(listFilterDefinitions(db).some(item => item.key === 'tag_list'));
+  db.close();
+});
+
+test('install upgrades the legacy definition table with a displayed column', () => {
+  const db = createDb();
+  db.exec('ALTER TABLE filter_definitions DROP COLUMN displayed');
+  assert.equal(
+    db.prepare('PRAGMA table_info(filter_definitions)').all()
+      .some(column => column.name === 'displayed'),
+    false,
+  );
+  installFilterAuthorization(db, { now: '2026-07-28 11:00:00' });
+  assert.equal(
+    db.prepare('PRAGMA table_info(filter_definitions)').all()
+      .some(column => column.name === 'displayed'),
+    true,
+  );
+  assert.equal(
+    db.prepare("SELECT displayed FROM filter_definitions WHERE filter_key='country'").get().displayed,
+    1,
+  );
+  assert.equal(getFilterPermissionVersion(db), 1);
+  db.close();
+});
+
+test('install migrates legacy page coverage and default grants once, including partial catalogs', () => {
+  const db = createDb();
+  const beforeVersion = getFilterPermissionVersion(db);
+  db.prepare("DELETE FROM filter_catalog_migrations WHERE migration_key='issue116-business-pages-v1'").run();
+  db.prepare("UPDATE filter_definitions SET pages_json='[\"customers\"]' WHERE filter_key='search'").run();
+  db.prepare("DELETE FROM permission_group_filter_grants WHERE group_id='PGRP-SALES' AND filter_key='status'").run();
+  assert.ok(db.prepare(
+    "SELECT 1 FROM filter_definitions WHERE filter_key='updated_at'",
+  ).get(), 'partial catalog already contains a previous research field');
+
+  installFilterAuthorization(db, { now: '2026-07-28 11:30:00' });
+  assert.equal(getFilterPermissionVersion(db), beforeVersion + 1);
+  const searchPages = JSON.parse(db.prepare(
+    "SELECT pages_json FROM filter_definitions WHERE filter_key='search'",
+  ).get().pages_json);
+  for (const page of ['customers', 'intake', 'lead_flow', 'alerts', 'insights',
+    'recycle_bin', 'contacts', 'recon']) {
+    assert.ok(searchPages.includes(page), page);
+  }
+  assert.ok(db.prepare(`SELECT 1 FROM permission_group_filter_grants
+    WHERE group_id='PGRP-SALES' AND filter_key='status'`).get());
+
+  installFilterAuthorization(db, { now: '2026-07-28 12:00:00' });
+  assert.equal(getFilterPermissionVersion(db), beforeVersion + 1);
   db.close();
 });
 
@@ -354,9 +416,137 @@ test('definition updates validate configurable fields and audit the committed sn
     error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
   );
   assert.throws(
+    () => updateFilterDefinition(db, actor(), 'owner', { requiredPermissions: [] }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
+    () => updateFilterDefinition(db, actor(), 'created_at', { type: 'multi', operators: ['in'] }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
+    () => updateFilterDefinition(db, actor(), 'tag_business_product', { sensitive: false }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
     () => updateFilterDefinition(db, sales(), 'industry', { enabled: false }),
     error => error.statusCode === 403,
   );
+  db.close();
+});
+
+test('hidden display mode is persisted compatibly and excluded from schemas and AST authorization', () => {
+  const db = createDb();
+  saveGroupFilterGrants(db, actor(), 'PGRP-SALES', ['country'], { now: NOW });
+  updateFilterDefinition(db, actor(), 'country', { displayMode: 'hidden' }, { now: NOW });
+  const stored = db.prepare(`SELECT display_mode,displayed FROM filter_definitions
+    WHERE filter_key='country'`).get();
+  assert.deepEqual(stored, { display_mode: 'horizontal', displayed: 0 });
+  assert.equal(listFilterDefinitions(db).find(item => item.key === 'country').displayMode, 'hidden');
+  assert.deepEqual(keys(effectiveFilterSchemaFor(db, sales(), 'customers')), []);
+  assert.equal(keys(effectiveFilterSchemaFor(db, actor(), 'customers')).includes('country'), false);
+  assert.throws(
+    () => validateFilterQuery(db, sales(), 'customers', {
+      country: { operator: 'in', values: ['俄罗斯'] },
+    }),
+    error => error.statusCode === 403 && error.code === 'FILTER_NOT_AUTHORIZED',
+  );
+  installFilterAuthorization(db, { now: '2026-07-28 11:00:00' });
+  assert.equal(listFilterDefinitions(db).find(item => item.key === 'country').displayMode, 'hidden');
+  updateFilterDefinition(db, actor(), 'country', { displayMode: 'more' }, { now: NOW });
+  assert.deepEqual(
+    db.prepare(`SELECT display_mode,displayed FROM filter_definitions
+      WHERE filter_key='country'`).get(),
+    { display_mode: 'more', displayed: 1 },
+  );
+  db.close();
+});
+
+test('create accepts registered sources, does not grant groups, and audits the versioned definition', () => {
+  const db = createDb();
+  const result = createFilterDefinition(db, actor(), {
+    sourceKey: 'city',
+    label: '所在城市',
+    displayMode: 'more',
+    requiredPermissions: ['view_customers'],
+    pages: ['customers'],
+  }, { expectedVersion: 1, note: 'enable city source', now: NOW });
+  assert.equal(result.version, 2);
+  assert.deepEqual(result.definition, {
+    key: 'city',
+    label: '所在城市',
+    type: 'multi',
+    enabled: true,
+    sensitive: false,
+    operators: ['in'],
+    displayMode: 'more',
+    sortOrder: 25,
+    requiredPermissions: ['view_customers'],
+    pages: ['customers'],
+    tagCategory: '',
+  });
+  assert.equal(
+    db.prepare(`SELECT COUNT(*) count FROM permission_group_filter_grants
+      WHERE filter_key='city'`).get().count,
+    0,
+  );
+  assert.deepEqual(listAvailableFilterSources(db), []);
+  const audit = db.prepare(
+    "SELECT * FROM filter_permission_audit WHERE action='definition_created'",
+  ).get();
+  assert.equal(audit.target_id, 'city');
+  assert.equal(audit.before_json, 'null');
+  assert.equal(JSON.parse(audit.after_json).label, '所在城市');
+  assert.equal(audit.note, 'enable city source');
+  db.close();
+});
+
+test('create rejects duplicate, unknown, stale and unsafe source definitions', () => {
+  const db = createDb();
+  assert.throws(
+    () => createFilterDefinition(db, actor(), { sourceKey: 'country' }, { now: NOW }),
+    error => error.statusCode === 409 && error.code === 'FILTER_DEFINITION_EXISTS',
+  );
+  assert.throws(
+    () => createFilterDefinition(db, actor(), { sourceKey: 'arbitrary_sql' }, { now: NOW }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
+    () => createFilterDefinition(db, actor(), {
+      sourceKey: 'city', type: 'text', operators: ['contains'],
+    }, { now: NOW }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
+    () => createFilterDefinition(db, actor(), {
+      sourceKey: 'city', pages: ['pipeline'],
+    }, { now: NOW }),
+    error => error.statusCode === 400 && error.code === 'FILTER_CONFIG_INVALID',
+  );
+  assert.throws(
+    () => createFilterDefinition(db, actor(), { sourceKey: 'city' }, {
+      expectedVersion: 0, now: NOW,
+    }),
+    error => error.statusCode === 409 && error.code === 'FILTER_VERSION_CONFLICT',
+  );
+  assert.equal(listFilterDefinitions(db).some(item => item.key === 'city'), false);
+  db.close();
+});
+
+test('a failed create audit rolls back the definition and permission version', () => {
+  const db = createDb();
+  db.exec(`CREATE TRIGGER reject_filter_definition_audit
+    BEFORE INSERT ON filter_permission_audit
+    WHEN NEW.action='definition_created'
+    BEGIN
+      SELECT RAISE(ABORT, 'definition audit unavailable');
+    END`);
+  assert.throws(
+    () => createFilterDefinition(db, actor(), { sourceKey: 'city' }, { now: NOW }),
+    /definition audit unavailable/,
+  );
+  assert.equal(getFilterPermissionVersion(db), 1);
+  assert.equal(listFilterDefinitions(db).some(item => item.key === 'city'), false);
+  assert.deepEqual(listAvailableFilterSources(db).map(item => item.key), ['city']);
   db.close();
 });
 
