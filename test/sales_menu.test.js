@@ -115,7 +115,7 @@ test('mobile customer profile removes hidden toolbar space and fills the viewpor
   assert.match(appCss, /body\.customer-profile-active \.top-actions\{display:none\}/);
   assert.match(appCss, /@media\(max-width:780px\)\{\.customer-profile-view\.active\{height:calc\(100dvh - 95px\)/);
   assert.match(html, /app\.css\?v=20260728-issue-103/);
-  assert.match(html, /app\.js\?v=20260728-issue-103/);
+  assert.match(html, /app\.js\?v=20260728-issue-107/);
 });
 
 test('manual customer creation surfaces enrichment state and opens the new customer profile', () => {
