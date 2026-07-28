@@ -7,7 +7,7 @@ const { execFileSync } = require('child_process');
 const crypto = require('crypto');
 
 const {
-  getInitialData, updateCustomer, createTag, setCustomerTags, createReconJob,
+  getInitialData, updateCustomer, createTag, setCustomerTags, removeCustomerTag, createReconJob,
   retryReconJob, listQueuedJobs, claimReconJob, heartbeatReconJob, markJobRunning, markJobFailed, submitReconResult,
   createProspectTask, promoteProspectCandidate,
   createContactReconJob, claimContactReconJob, heartbeatContactReconJob, failContactReconJob,
@@ -101,6 +101,7 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     canViewAllCustomers: req.accessContext.canViewAllCustomers,
     modules,
     features: { aiStations: aiEnabled },
+    impersonation: req.impersonation ? { active: true } : null,
   });
 });
 app.get('/development-workbench', requireUnifiedUser, (req, res) => {
@@ -737,6 +738,14 @@ app.post('/api/app', (req, res) => {
       assertRequestCustomer(req, req.body.customerId);
       const identity = auditIdentity(req);
       const r = setCustomerTags(req.body.customerId, req.body.tagIds, {
+        actorId: identity.realUserId,
+      });
+      return res.json({ ok: true, action, ...r });
+    }
+    if (action === 'removeCustomerTag') {
+      assertRequestCustomer(req, req.body.customerId);
+      const identity = auditIdentity(req);
+      const r = removeCustomerTag(req.body.customerId, req.body.tagId, {
         actorId: identity.realUserId,
       });
       return res.json({ ok: true, action, ...r });
