@@ -34,7 +34,8 @@ test('disabled customer, evaluation and notification views omit historical AI pr
   assert.match(app, /const ai = !customerAIEnabled\(\) \? '' : item\.aiStatus/);
   assert.match(app, /showAI \? '保存并生成AI标注' : '保存评价'/);
   assert.match(app, /\.\.\.\(customerAIEnabled\(\) \? \[\['评价标签'/);
-  assert.match(app, /const ai = customerAIEnabled\(\) && account\?\.id\s*\? labelsForAccount\(account\.id\)/);
+  assert.match(app, /const customerTags = Array\.isArray\(account\?\.customerTags\) \? account\.customerTags : \[\]/);
+  assert.doesNotMatch(app, /const ai = customerAIEnabled\(\) && account\?\.id\s*\? labelsForAccount\(account\.id\)/);
   assert.match(app, /customerAIEnabled\(\) \|\| !aiNotificationCodes\.has/);
   assert.match(app, /visiblePermissionDefinitions\(\)/);
   assert.match(app, /visible\.manage_evaluations = '维护经理评价'/);

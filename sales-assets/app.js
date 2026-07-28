@@ -135,36 +135,27 @@
   function uniqueSourceTags(tags) {
     const seen = new Set();
     return tags.filter(tag => {
-      const key = `${tag.source}:${normalizeTagText(tag.name)}`;
+      const key = normalizeTagText(tag.name);
       if (!tag.name || seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }
   function accountSourceTags(account) {
-    const structured = [
-      account?.customer_type ? { source: 'structured', prefix: '客户类型', name: account.customer_type } : null,
-      account?.industry ? { source: 'structured', prefix: '行业', name: account.industry } : null,
-    ].filter(Boolean);
-    const structuredNames = new Set(structured.map(tag => normalizeTagText(tag.name)));
     const customerTags = Array.isArray(account?.customerTags) ? account.customerTags : [];
-    const tagged = customerTags.map(tag => ({
-      source: tag.isPreset && tag.category === '需确认属性'
-        ? 'risk' : tag.isPreset && tag.category === '客户类型' ? 'structured' : 'manual',
-      prefix: tag.isPreset && tag.category === '需确认属性'
-        ? '风险' : tag.isPreset && tag.category === '客户类型' ? tag.category : '人工',
-      name: tag.name,
-    })).filter(tag => tag.source !== 'manual' || !structuredNames.has(normalizeTagText(tag.name)));
-    const ai = customerAIEnabled() && account?.id
-      ? labelsForAccount(account.id).map(name => ({ source: 'ai', prefix: 'AI', name }))
-      : [];
-    return uniqueSourceTags([...structured, ...tagged, ...ai]);
+    return uniqueSourceTags(customerTags
+      .filter(tag => customerAIEnabled() || !tag.readOnly)
+      .map(tag => ({
+        source: tag.readOnly ? 'ai' : 'manual',
+        name: tag.name,
+        category: tag.category,
+      })));
   }
   function sourceTagMarkup(account, limit = 5) {
     const tags = accountSourceTags(account);
     const shown = tags.slice(0, limit);
     return shown.length
-      ? `<div class="source-tag-row">${shown.map(tag => `<span class="source-tag ${esc(tag.source)}" title="${esc(tag.source === 'structured' ? '来自客户资料字段' : tag.source === 'manual' ? '由员工维护' : tag.source === 'ai' ? 'AI评价，只读' : '风险或状态，只读')}">${esc(tag.prefix)} · ${esc(tag.name)}</span>`).join('')}${tags.length > shown.length ? `<span class="source-tag manual">+${tags.length - shown.length}</span>` : ''}</div>`
+      ? `<div class="source-tag-row">${shown.map(tag => `<span class="source-tag ${esc(tag.source)}" title="${esc(tag.category || '客户标签')}">${esc(tag.name)}</span>`).join('')}${tags.length > shown.length ? `<span class="source-tag manual">+${tags.length - shown.length}</span>` : ''}</div>`
       : '';
   }
   function jsonList(value) {
