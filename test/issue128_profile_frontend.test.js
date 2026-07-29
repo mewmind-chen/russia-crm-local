@@ -8,7 +8,7 @@ const workbench = fs.readFileSync(path.join(root, 'Index.html'), 'utf8');
 const crm = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 
 function functionSource(name, nextName) {
-  const pattern = new RegExp(`function ${name}\\([^)]*\\)\\{([\\s\\S]*?)\\n\\s*function ${nextName}\\(`);
+  const pattern = new RegExp(`function ${name}\\([^)]*\\)\\{([\\s\\S]*?)\\n\\s*(?:async\\s+)?function ${nextName}\\(`);
   const match = workbench.match(pattern);
   assert.ok(match, `${name} source should be present`);
   return match[0];
@@ -31,12 +31,28 @@ test('issue 128 customer pool details expose only the customer-facing fields', (
 
 test('issue 128 profile consumes the three-state sanction and lifecycle API contract', () => {
   const details = functionSource('renderPoolDetails', 'renderTagEditor');
+  const sanctionStatus = functionSource('customerSanctionStatus', 'renderReconInline');
+  const reconPanel = functionSource('renderReconPanel', 'reconQualityLabel');
+  const reconCompliance = functionSource('reconComplianceLabel', 'reconEvidenceLabel');
+  const sanctionTag = functionSource('renderSanctionTag', 'renderReportLink');
+  const reconExtended = functionSource('loadReconExtendedDetail', 'closeModal');
 
-  assert.match(details, /\['受制裁','未制裁','未知'\]\.includes\(c\.sanctionStatus\)/);
-  assert.match(details, /\?c\.sanctionStatus:'未知'/);
+  assert.match(details, /customerSanctionStatus\(c\)/);
   assert.doesNotMatch(details, /riskStatus|compliance|sanctioned/);
-  assert.match(details, /c\.createdAt\?formatDateTime\(c\.createdAt\):'-'/);
-  assert.match(details, /c\.updatedAt\?formatDateTime\(c\.updatedAt\):'-'/);
+  assert.match(details, /c\.createdAt\?formatDateTime\(c\.createdAt\):'未知'/);
+  assert.match(details, /c\.updatedAt\?formatDateTime\(c\.updatedAt\):'未知'/);
+  assert.match(sanctionStatus, /\['受制裁','未制裁','未知'\]\.includes\(status\)/);
+  assert.match(sanctionStatus, /state\.customerPool\.find/);
+  assert.match(reconPanel, /sn=renderSanctionTag\(c\)/);
+  assert.match(reconPanel, /任务未完成，可重新执行以获取最新结果/);
+  assert.doesNotMatch(reconPanel, /j\.error|compliance_status|sanction_status|sanctioned/);
+  assert.match(reconCompliance, /customerSanctionStatus\(c\)/);
+  assert.doesNotMatch(reconCompliance, /compliance_status|sanction_status|CLEAR|检查失败|未检查/);
+  assert.match(sanctionTag, /escapeHtml\(status\)/);
+  assert.doesNotMatch(sanctionTag, /sanction_source|sanction_program|未命中/);
+  assert.match(reconExtended, /sanctionStatus=customerSanctionStatus\(target\)/);
+  assert.match(reconExtended, /<span>制裁状态<\/span>/);
+  assert.doesNotMatch(reconExtended, /sanction\.result|sanction\.review_status|e\.message|合规复核/);
 });
 
 test('issue 128 profile keeps one company heading and preserves tags', () => {
@@ -53,6 +69,16 @@ test('issue 128 profile keeps one company heading and preserves tags', () => {
   assert.match(workbench, /id="modalTags"/);
   assert.match(poolTags, /renderSemanticSummary\(c,\{removable:canRemoveManualTags\(\)\}\)/);
   assert.match(workbench, /\['客户类型',c\.customerType\]/);
+});
+
+test('issue 128 tag changes refresh the lifecycle value in the open profile', () => {
+  const applyTags = functionSource('applyCustomerTags', 'notifyParentTags');
+  const refreshTags = functionSource('refreshTagViews', 'saveCustomerTags');
+  const saveTags = functionSource('saveCustomerTags', 'removeManualTag');
+
+  assert.match(applyTags, /c\.updatedAt=updatedAt/);
+  assert.match(refreshTags, /renderPoolDetails\(state\.currentTagTarget\)/);
+  assert.match(saveTags, /r\.updatedAt\|\|''/);
 });
 
 test('issue 128 detail cards retain bounded desktop and single-column mobile grids', () => {

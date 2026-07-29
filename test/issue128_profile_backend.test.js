@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   ensureCustomerPoolLifecycle,
+  removeCustomerTag,
+  setCustomerTags,
 } = require('../lib/db');
 const fixtures = require('./helpers/permission_fixture');
 
@@ -104,7 +106,7 @@ test('profile API exposes lifecycle fields and only normalized sanction states',
       'official-list','2026-07-22 08:00:00','https://evidence.test/hit','2026-07-22 08:00:00')`).run();
   fx.db.prepare(`INSERT INTO sanction_checks
     (job_id,customer_id,provider,result,review_status,matches_json,checked_at,created_at)
-    VALUES ('JOB-HIT','RU-9001','official-list','confirmed_match','confirmed','[]',
+    VALUES ('JOB-HIT','RU-9001','official-list','confirmed_match','confirmed','["official-list:entry-1"]',
       '2026-07-22 08:00:00','2026-07-22 08:00:00')`).run();
 
   fx.db.prepare(`UPDATE recon_results SET sanction_status='CLEAR',compliance_status='clear',
@@ -141,6 +143,12 @@ test('profile API exposes lifecycle fields and only normalized sanction states',
   let body = await response.json();
   assert.equal(body.customerPool[0].sanctionStatus, '未知');
 
+  fx.db.prepare(`UPDATE sanction_checks SET checked_at='2026-07-22 08:00:00',
+    matches_json='[]' WHERE job_id='JOB-HIT'`).run();
+  response = await fx.request('/api/sales-crm/profile/RU-9001', { cookie: fx.cookie });
+  body = await response.json();
+  assert.equal(body.customerPool[0].sanctionStatus, '未知');
+
   fx.db.prepare(`DELETE FROM sanction_checks WHERE job_id='JOB-HIT'`).run();
   fx.db.prepare(`UPDATE recon_results SET sanction_source='',evidence_url=''
     WHERE job_id='JOB-HIT'`).run();
@@ -152,4 +160,49 @@ test('profile API exposes lifecycle fields and only normalized sanction states',
   response = await fx.request('/api/sales-crm/profile/RU-9002', { cookie: fx.cookie });
   body = await response.json();
   assert.equal(body.customerPool[0].sanctionStatus, '未知');
+});
+
+test('customer tag changes advance customer_pool updated_at and no-op saves do not', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+
+  const tag = fx.db.prepare("SELECT id FROM tags WHERE category='应用行业' ORDER BY id LIMIT 1").get();
+  assert.ok(tag?.id);
+
+  fx.db.prepare(`UPDATE customer_pool SET updated_at='2000-01-01 00:00:00'
+    WHERE customer_id='RU-9002'`).run();
+  const added = setCustomerTags('RU-9002', [tag.id], { actorId: 'U-WU' });
+  const afterAdd = fx.db.prepare(`SELECT updated_at updatedAt FROM customer_pool
+    WHERE customer_id='RU-9002'`).get();
+  assert.equal(added.updatedAt, afterAdd.updatedAt);
+  assert.notEqual(afterAdd.updatedAt, '2000-01-01 00:00:00');
+
+  const unchanged = setCustomerTags('RU-9002', [tag.id], { actorId: 'U-WU' });
+  assert.equal(unchanged.updatedAt, afterAdd.updatedAt);
+
+  fx.db.prepare(`UPDATE customer_pool SET updated_at='2001-01-01 00:00:00'
+    WHERE customer_id='RU-9002'`).run();
+  const removed = removeCustomerTag('RU-9002', tag.id, { actorId: 'U-WU' });
+  const afterRemove = fx.db.prepare(`SELECT updated_at updatedAt FROM customer_pool
+    WHERE customer_id='RU-9002'`).get();
+  assert.equal(removed.updatedAt, afterRemove.updatedAt);
+  assert.notEqual(afterRemove.updatedAt, '2001-01-01 00:00:00');
+});
+
+test('CRM-only profile changes advance the related customer master updated_at', async t => {
+  const fx = await fixtures.seededFixture({ permissions: { edit_customer: true } });
+  t.after(() => fx.close());
+
+  fx.db.prepare(`UPDATE customer_pool SET updated_at='2002-01-01 00:00:00'
+    WHERE customer_id='RU-9001'`).run();
+  const response = await fx.request('/api/sales-crm/accounts/CRM-WU', {
+    cookie: fx.cookie,
+    method: 'PATCH',
+    body: { priority: 'A' },
+  });
+  assert.equal(response.status, 200, await response.text());
+
+  const lifecycle = fx.db.prepare(`SELECT updated_at updatedAt FROM customer_pool
+    WHERE customer_id='RU-9001'`).get();
+  assert.notEqual(lifecycle.updatedAt, '2002-01-01 00:00:00');
 });
