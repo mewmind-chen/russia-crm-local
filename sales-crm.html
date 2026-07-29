@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260729-issue137">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260729-issue138">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -63,6 +63,7 @@
           <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>销售能力</span></button>
           <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
+          <button data-view="assignmentRules" data-permission="manage_intake" data-assignment-rules-nav><i data-tp-icon="settings" aria-hidden="true"></i><span>分配规则</span></button>
           <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
           <button data-view="maintenance" data-permission="manage_data_maintenance"><i data-tp-icon="settings" aria-hidden="true"></i><span>数据维护</span></button>
         </div>
@@ -516,6 +517,52 @@
         </section>
       </section>
 
+      <section id="assignmentRulesView" class="view assignment-rules-view">
+        <div class="section-intro assignment-rules-intro">
+          <div>
+            <p class="eyebrow">LEAD ASSIGNMENT GOVERNANCE</p>
+            <h2>分配规则</h2>
+            <p id="assignmentRulesIntroText">规则按顺序命中，发布后同时用于自动入库与批量分配。</p>
+          </div>
+          <div class="top-actions assignment-rules-actions">
+            <button id="assignmentRulesSettings" class="button secondary" type="button" data-assignment-admin-action>基础设置</button>
+            <button id="assignmentRulesHistory" class="button secondary" type="button">历史版本</button>
+            <button id="assignmentRulesSimulate" class="button secondary" type="button">分配试算</button>
+            <button id="assignmentRuleCreate" class="button secondary" type="button" data-assignment-admin-action>新增规则</button>
+            <button id="assignmentRulesPublish" class="button primary" type="button" data-assignment-admin-action>预览并发布</button>
+          </div>
+        </div>
+
+        <div id="assignmentRulesReadOnlyNotice" class="assignment-rules-notice hidden" role="status"></div>
+        <div class="assignment-rules-summary" aria-label="规则状态概况">
+          <div><span>当前发布版本</span><strong id="assignmentRulesPublishedVersion">—</strong></div>
+          <div><span>启用规则</span><strong id="assignmentRulesEnabledCount">—</strong></div>
+          <div><span>草稿变更</span><strong id="assignmentRulesDraftState">—</strong></div>
+          <div><span>最后发布</span><strong id="assignmentRulesPublishedAt">—</strong></div>
+        </div>
+
+        <article class="panel assignment-rules-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">ORDERED RULES</p><h2>规则执行顺序</h2></div>
+            <div class="assignment-rules-panel-meta">
+              <span id="assignmentRulesStatus" class="panel-note" role="status" aria-live="polite">打开页面后加载规则</span>
+              <button id="assignmentRulesRefresh" class="text-button" type="button">刷新</button>
+            </div>
+          </div>
+          <div class="assignment-rules-table-head" aria-hidden="true">
+            <span>顺序 / 状态</span><span>规则与条件</span><span>候选范围</span><span>策略</span><span data-assignment-sensitive>每日额度</span><span>操作</span>
+          </div>
+          <div id="assignmentRulesList" class="assignment-rules-list">
+            <div class="empty">尚未加载分配规则</div>
+          </div>
+        </article>
+
+        <div class="assignment-rule-safety">
+          <strong>系统安全边界</strong>
+          <span>CRM 重复客户、制裁或高风险线索不会自动分配；停用、离职、无权限或额度已满的销售会被排除。单条无法分配不会中断整批。</span>
+        </div>
+      </section>
+
       <section id="maintenanceView" class="view">
         <div class="section-intro">
           <div><p class="eyebrow red">ADMIN DATA MAINTENANCE</p><h2>数据维护</h2><p>先预览影响范围并自动备份，再把指定客户安全恢复到待分配状态。</p></div>
@@ -561,6 +608,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260729-issue137"></script>
+  <script src="/sales-assets/app.js?v=20260729-issue138"></script>
 </body>
 </html>

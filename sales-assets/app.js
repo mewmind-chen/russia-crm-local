@@ -41,6 +41,11 @@
     customerFilterMount: null,
     customerFilterController: null,
     filterPermissionAdmin: null,
+    assignmentRules: {
+      rules: [], versions: [], options: {}, publishedVersion: null,
+      draftRevision: 0, hasDraftChanges: false, changeSummary: null,
+      loaded: false, loading: false, error: '',
+    },
     accessSection: 'accounts',
     customerFilters: {
       search: '', quickView: 'all', sort: 'next_urgent',
@@ -133,6 +138,7 @@
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
     team: ['CAPABILITY REVIEW', '销售能力'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
+    assignmentRules: ['LEAD ASSIGNMENT GOVERNANCE', '分配规则'],
     users: ['ACCESS CONTROL', '用户与权限'],
     maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
@@ -141,6 +147,7 @@
     recycleBin: 'manage_customer_recycle',
     notifications: 'view_customers',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
+    assignmentRules: 'manage_intake',
   };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
@@ -943,6 +950,9 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    $$('[data-assignment-rules-nav]').forEach(el => {
+      el.classList.toggle('hidden', !['admin', 'manager'].includes(user.role) || !can('manage_intake'));
+    });
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
@@ -957,6 +967,7 @@
     $('#ownerFilter').classList.toggle('hidden', !can('view_all_customers'));
     $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle') || Boolean(state.data.impersonation));
     $('#filterPermissionAdmin')?.classList.toggle('hidden', !can('manage_users') || Boolean(state.data.impersonation));
+    applyAssignmentRulePermissions();
   }
 
   function populateFilters() {
@@ -1553,6 +1564,15 @@
     const ai = arbitration.aiRecommendation || {};
     const rule = arbitration.ruleDecision || {};
     const manual = arbitration.manualDecision || null;
+    const canSeeRuleReason = ['admin', 'manager'].includes(state.data?.user?.role) && can('manage_intake');
+    const ruleName = rule.ruleName || rule.rule_name || rule.matchedRule?.name || item.assignment_rule_name || '';
+    const ruleStatus = rule.disposition === 'manager_review'
+      ? '待分配'
+      : rule.disposition === 'blocked'
+        ? '规则阻止'
+        : rule.disposition === 'assign'
+          ? '可分配'
+          : '待裁决';
     const ranked = Array.isArray(ai.rankedCandidates) ? ai.rankedCandidates : [];
     const ranking = ranked.length
       ? ranked.slice(0, 3).map((candidate, index) =>
@@ -1560,12 +1580,19 @@
       : `<span class="subtle">${esc(ai.available === false ? `AI未提供排名${ai.reasonCode ? ` · ${ai.reasonCode}` : ''}` : '暂无候选排名')}</span>`;
     return {
       ai: `<div class="decision-layer"><span>AI 推荐</span><strong>${ranking}</strong><small>${ai.confidence == null ? '—' : `置信度 ${(Number(ai.confidence) * 100).toFixed(0)}%`}${ai.reviewRequired ? ' · 建议复核' : ''}</small></div>`,
-      rule: `<div class="decision-layer"><span>规则裁决</span><strong>${esc(rule.disposition === 'manager_review' ? '待分配' : rule.disposition === 'blocked' ? '规则阻止' : rule.disposition === 'assign' ? '可分配' : '待裁决')}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`,
-      manual: `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待经理处理'))}</small></div>`,
+      rule: canSeeRuleReason
+        ? `<div class="decision-layer"><span>${ruleName ? `命中规则 · ${esc(ruleName)}` : '规则裁决'}</span><strong>${esc(ruleStatus)}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`
+        : `<div class="decision-layer"><span>分配状态</span><strong>${esc(intakeStatusLabel(item.status))}</strong><small>仅显示分配给你的线索</small></div>`,
+      manual: canSeeRuleReason
+        ? `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待经理处理'))}</small></div>`
+        : '',
     };
   }
 
   function intakeAuditMarkup(item) {
+    if (!['admin', 'manager'].includes(state.data?.user?.role) || !can('manage_intake')) {
+      return '<span class="subtle">分配记录由管理者按权限查看</span>';
+    }
     const history = Array.isArray(item.assignmentAudit) ? item.assignmentAudit : [];
     if (!history.length) return '<span class="subtle">暂无裁决审计记录</span>';
     return history.slice(0, 8).map(entry => {
@@ -1703,7 +1730,7 @@
         const businessColumns = [
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
-          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
+          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}${salesView ? '' : `<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span>`}</div>`,
           `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusLabel(item.status) })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
           actions,
         ];
@@ -4140,6 +4167,7 @@
     if (!item) return;
     const signals = intakeSignals(item);
     const layers = intakeDecisionLayers(item);
+    const canSeeRuleReason = ['admin', 'manager'].includes(state.data?.user?.role) && can('manage_intake');
     state.selectedCustomerId = '';
     state.recycleCustomerDetail = null;
     const showAI = customerAIEnabled();
@@ -4153,7 +4181,7 @@
         `产品重点：${item.product_focus || '未标注'}`,
         ...(showAI ? [`Fit：${signals.fitScore} / ${signals.fitGrade}；readiness：${signals.readiness}；优先级：${signals.priority}`] : []),
         `联系人等级：${item.contact_level || 'L0'}；分配状态：${intakeStatusLabel(item.status)}`,
-        `分配依据：${item.decision_reason || '暂无'}`,
+        `分配状态：${canSeeRuleReason ? item.decision_reason || '暂无' : intakeStatusLabel(item.status)}`,
       ].join('\n'),
       view: state.view,
     };
@@ -4183,7 +4211,7 @@
           <div><span>企业与地区</span><p>${esc([item.company_name, item.country].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>联系人</span><p>${esc([item.contact_name, item.contact_title, item.contact_methods].filter(Boolean).join(' · ') || '暂无具名联系人')}</p></div>
-          <div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>
+          <div><span>${canSeeRuleReason ? '分配依据 / 阻断原因' : '分配状态'}</span><p>${esc(canSeeRuleReason ? item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无' : intakeStatusLabel(item.status))}</p></div>
           ${item.status === 'returned' ? `<div><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
           <div><span>筛选证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : '暂无关联证据'}</p></div>
         </div>
@@ -4727,6 +4755,438 @@
     </form>`);
   }
 
+  function canAdministerAssignmentRules() {
+    return state.data?.user?.role === 'admin'
+      && can('manage_intake')
+      && !state.data?.impersonation
+      && state.assignmentRules?.canEdit !== false;
+  }
+
+  function canViewAssignmentRules() {
+    return ['admin', 'manager'].includes(state.data?.user?.role) && can('manage_intake');
+  }
+
+  function applyAssignmentRulePermissions() {
+    const admin = canAdministerAssignmentRules();
+    const view = $('#assignmentRulesView');
+    if (!view) return;
+    $$('[data-assignment-admin-action]').forEach(button => button.classList.toggle('hidden', !admin));
+    $$('[data-assignment-sensitive]').forEach(item => item.classList.toggle('hidden', !admin));
+    $('#assignmentRulesList')?.classList.toggle('redacted', !admin);
+    $('.assignment-rules-table-head')?.classList.toggle('redacted', !admin);
+    const notice = $('#assignmentRulesReadOnlyNotice');
+    if (!notice) return;
+    notice.classList.toggle('hidden', admin);
+    notice.textContent = state.data?.impersonation
+      ? '当前正在模拟其他账号，仅可查看规则与试算结果，不能修改、排序、发布或恢复版本。'
+      : '销售经理为只读模式，可查看规则命中结果并执行试算；候选人员明细和每日额度仅管理员可见。';
+  }
+
+  function assignmentRuleId(rule) {
+    return String(rule?.id || rule?.ruleId || rule?.rule_id || '');
+  }
+
+  function assignmentRuleList(result) {
+    if (Array.isArray(result?.rules)) return result.rules;
+    if (Array.isArray(result?.draft?.rules)) return result.draft.rules;
+    if (Array.isArray(result?.items)) return result.items;
+    return [];
+  }
+
+  function assignmentRuleVersionLabel(version) {
+    if (!version) return '尚未发布';
+    const value = typeof version === 'object'
+      ? version.version || version.versionNumber || version.version_number || version.id
+      : version;
+    return value ? `v${String(value).replace(/^v/i, '')}` : '尚未发布';
+  }
+
+  function assignmentValueList(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(item => {
+      if (item && typeof item === 'object') return item.label || item.name || item.value || item.id || '';
+      return item;
+    }).map(String).filter(Boolean);
+  }
+
+  function assignmentConditions(rule) {
+    return rule?.conditions && typeof rule.conditions === 'object' ? rule.conditions : {};
+  }
+
+  function assignmentRuleConditionMarkup(rule) {
+    const conditions = assignmentConditions(rule);
+    const groups = [
+      ['国家', conditions.countries],
+      ['行业', conditions.industries],
+      ['产品', conditions.products],
+      ['类型', conditions.customerTypes || conditions.customer_types],
+      ['标签', conditions.tagNames || conditions.tags || conditions.customerTags || conditions.tagIds],
+      ['等级', conditions.matchGroups || conditions.match_groups],
+    ].map(([label, values]) => [label, assignmentValueList(values)])
+      .filter(([, values]) => values.length);
+    if (!groups.length) return '<span class="assignment-rule-fallback">无条件，作为默认兜底</span>';
+    return groups.map(([label, values]) =>
+      `<span class="assignment-rule-condition"><b>${esc(label)}</b>${esc(values.join('、'))}</span>`).join('');
+  }
+
+  function assignmentStrategyLabel(strategy) {
+    return ({
+      balanced: '负荷均衡',
+      round_robin: '轮流分配',
+      fixed_priority: '固定优先级',
+    })[strategy] || strategy || '负荷均衡';
+  }
+
+  function assignmentTargetText(rule, admin) {
+    const mode = rule.targetMode || rule.target_mode || rule.candidateMode || rule.candidate_mode;
+    if (mode === 'all_authorized') return '全部有线索权限的销售';
+    if (!admin) return '管理员已限定候选范围';
+    const names = assignmentValueList(
+      rule.salesUserNames || rule.sales_user_names || rule.candidateNames || rule.candidate_names,
+    );
+    const ids = assignmentValueList(rule.salesUserIds || rule.sales_user_ids || rule.candidateUserIds);
+    const salesIds = ids.length ? ids : assignmentValueList(rule.candidates);
+    const labels = names.length ? names : salesIds.map(id => userById(id)?.name || id);
+    return labels.length ? labels.join(' → ') : '尚未选择销售';
+  }
+
+  function renderAssignmentRules() {
+    const model = state.assignmentRules;
+    const admin = canAdministerAssignmentRules();
+    applyAssignmentRulePermissions();
+    $('#assignmentRulesPublishedVersion').textContent = assignmentRuleVersionLabel(model.publishedVersion);
+    $('#assignmentRulesEnabledCount').textContent = String(model.rules.filter(rule => rule.enabled !== false).length);
+    $('#assignmentRulesDraftState').textContent = model.hasDraftChanges ? '有待发布修改' : '已与线上一致';
+    $('#assignmentRulesPublishedAt').textContent = model.publishedAt ? shortDate(model.publishedAt, true) : '尚未发布';
+    const status = $('#assignmentRulesStatus');
+    if (model.loading) status.textContent = '正在加载规则…';
+    else if (model.error) status.textContent = `加载失败：${model.error}`;
+    else status.textContent = `${model.rules.length} 条规则，按从上到下顺序执行`;
+    const list = $('#assignmentRulesList');
+    if (model.loading && !model.rules.length) {
+      list.innerHTML = '<div class="empty">正在加载分配规则…</div>';
+      return;
+    }
+    if (model.error && !model.rules.length) {
+      list.innerHTML = `<div class="empty"><strong>规则加载失败</strong><span>${esc(model.error)}</span><button class="button secondary tiny" type="button" id="assignmentRulesRetry">重试</button></div>`;
+      return;
+    }
+    if (!model.rules.length) {
+      list.innerHTML = admin
+        ? '<div class="empty">还没有规则。新增业务规则后，系统默认兜底仍会在全部授权销售中负荷均衡。</div>'
+        : '<div class="empty">当前没有可查看的已发布规则。</div>';
+      return;
+    }
+    list.innerHTML = model.rules.map((rule, index) => {
+      const id = assignmentRuleId(rule);
+      const enabled = rule.enabled !== false;
+      const dailyQuota = rule.dailyQuota ?? rule.daily_quota;
+      const modifiedBy = rule.updatedByName || rule.updated_by_name || rule.updatedBy || rule.updated_by || '系统';
+      const modifiedAt = rule.updatedAt || rule.updated_at || '';
+      const systemRule = Boolean(
+        rule.isSystemDefault || rule.is_system_default
+        || rule.systemDefault || rule.system_default || rule.isDefault || rule.is_default,
+      );
+      const nextRule = model.rules[index + 1] || null;
+      const nextIsSystemRule = Boolean(
+        nextRule?.isSystemDefault || nextRule?.is_system_default
+        || nextRule?.systemDefault || nextRule?.system_default
+        || nextRule?.isDefault || nextRule?.is_default,
+      );
+      return `<div class="assignment-rule-row ${enabled ? '' : 'is-disabled'}" data-assignment-rule="${esc(id)}">
+        <div class="assignment-rule-order">
+          <strong>${index + 1}</strong>
+          <span class="status-pill ${enabled ? 'green' : 'gray'}">${enabled ? '启用' : '暂停'}</span>
+          ${admin ? `<div class="assignment-rule-order-actions">
+            <button class="icon-button" type="button" data-assignment-rule-move="up" data-rule-id="${esc(id)}" aria-label="上移规则" title="上移" ${index === 0 || systemRule ? 'disabled' : ''}>↑</button>
+            <button class="icon-button" type="button" data-assignment-rule-move="down" data-rule-id="${esc(id)}" aria-label="下移规则" title="下移" ${index === model.rules.length - 1 || nextIsSystemRule ? 'disabled' : ''}>↓</button>
+          </div>` : ''}
+        </div>
+        <div class="assignment-rule-main">
+          <div class="assignment-rule-title"><strong>${esc(rule.name || '未命名规则')}</strong>${systemRule ? '<span class="pill gray">系统兜底</span>' : ''}</div>
+          <div class="assignment-rule-conditions">${assignmentRuleConditionMarkup(rule)}</div>
+          <small>${esc(userById(modifiedBy)?.name || modifiedBy)}${modifiedAt ? ` · ${esc(shortDate(modifiedAt, true))}` : ''}</small>
+        </div>
+        <div class="assignment-rule-target">${esc(assignmentTargetText(rule, admin))}</div>
+        <div><span class="pill">${esc(assignmentStrategyLabel(rule.strategy))}</span></div>
+        <div data-assignment-sensitive class="${admin ? '' : 'hidden'}">${dailyQuota == null ? '系统默认' : `${Number(dailyQuota)} 条 / 人 / 天`}</div>
+        <div class="assignment-rule-row-actions">
+          ${admin && !systemRule ? `<button class="text-button" type="button" data-assignment-rule-edit="${esc(id)}">编辑</button>
+          <button class="text-button" type="button" data-assignment-rule-toggle="${esc(id)}">${enabled ? '暂停' : '启用'}</button>` : `<span class="subtle">${systemRule ? '系统保护' : '只读'}</span>`}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadAssignmentRules({ force = false } = {}) {
+    if (!canViewAssignmentRules()) return;
+    if (state.assignmentRules.loading || (state.assignmentRules.loaded && !force)) {
+      renderAssignmentRules();
+      return;
+    }
+    state.assignmentRules.loading = true;
+    state.assignmentRules.error = '';
+    renderAssignmentRules();
+    try {
+      const result = await api('/intake/assignment-rules');
+      state.assignmentRules.rules = assignmentRuleList(result);
+      state.assignmentRules.options = result.options || result.ruleOptions || result.rule_options || {};
+      const ruleState = result.state || {};
+      state.assignmentRules.draftRevision = Number(
+        ruleState.draftRevision ?? ruleState.draft_revision ?? result.draftRevision ?? result.draft_revision ?? 0,
+      );
+      state.assignmentRules.publishedVersion = ruleState.publishedVersionNumber
+        ?? ruleState.published_version_number
+        ?? result.publishedVersion
+        ?? result.published_version ?? result.activeVersion ?? result.active_version ?? null;
+      state.assignmentRules.publishedAt = ruleState.publishedAt || ruleState.published_at
+        || result.publishedAt || result.published_at
+        || state.assignmentRules.publishedVersion?.publishedAt
+        || state.assignmentRules.publishedVersion?.published_at || '';
+      const explicitDraftState = result.hasDraftChanges
+        ?? result.has_draft_changes ?? result.draft?.hasChanges ?? result.draft?.has_changes;
+      state.assignmentRules.hasDraftChanges = explicitDraftState === undefined
+        ? Boolean(ruleState.updatedAt && ruleState.publishedAt && ruleState.updatedAt !== ruleState.publishedAt)
+        : Boolean(explicitDraftState);
+      state.assignmentRules.changeSummary = result.changeSummary || result.change_summary || null;
+      state.assignmentRules.canEdit = result.capabilities?.canEdit
+        ?? result.capabilities?.can_edit
+        ?? result.permissions?.canEdit
+        ?? result.permissions?.can_edit
+        ?? false;
+      state.assignmentRules.loaded = true;
+    } catch (error) {
+      state.assignmentRules.error = error.message;
+    } finally {
+      state.assignmentRules.loading = false;
+      renderAssignmentRules();
+    }
+  }
+
+  function assignmentOptionEntries(key) {
+    const options = state.assignmentRules.options || {};
+    let values = options[key] || options[`${key}Options`] || options[`${key}_options`] || [];
+    if (!Array.isArray(values) || !values.length) {
+      const intake = state.data?.intake?.items || [];
+      const sourceKey = ({
+        countries: 'country', industries: 'industry', products: 'products',
+        customerTypes: 'customer_type', matchGroups: 'match_group',
+      })[key];
+      if (sourceKey) values = intake.flatMap(item => assignmentValueList(item[sourceKey])
+        .concat(typeof item[sourceKey] === 'string' ? [item[sourceKey]] : []));
+      if (key === 'tags') {
+        values = intake.flatMap(item => item.customerTags || item.customer_tags || []);
+      }
+      if (key === 'matchGroups') values = ['A', 'B', 'C', 'D'];
+    }
+    const seen = new Set();
+    return values.map(item => {
+      const value = item && typeof item === 'object'
+        ? item.id || item.value || item.key || item.name || item.label
+        : item;
+      const label = item && typeof item === 'object' ? item.label || item.name || value : value;
+      return { value: String(value || ''), label: String(label || '') };
+    }).filter(item => item.value && !seen.has(item.value) && seen.add(item.value));
+  }
+
+  function assignmentMultiOptions(key, selected = []) {
+    const selectedSet = new Set(assignmentValueList(selected));
+    return assignmentOptionEntries(key)
+      .map(item => `<option value="${esc(item.value)}" ${selectedSet.has(item.value) ? 'selected' : ''}>${esc(item.label)}</option>`)
+      .join('');
+  }
+
+  function openAssignmentRuleEditor(ruleId = '') {
+    if (!canAdministerAssignmentRules()) return toast('当前身份不能修改分配规则');
+    const rule = state.assignmentRules.rules.find(item => assignmentRuleId(item) === ruleId) || {};
+    const conditions = assignmentConditions(rule);
+    const targetMode = rule.targetMode || rule.target_mode || 'selected';
+    const strategy = rule.strategy || 'balanced';
+    const selectedSales = new Set(assignmentValueList(
+      rule.salesUserIds || rule.sales_user_ids || rule.candidateUserIds || rule.candidates,
+    ));
+    const configuredSales = assignmentOptionEntries('sales');
+    const fallbackSales = (state.data?.users || [])
+      .filter(user => user.role === 'sales' && user.active && !user.archived)
+      .map(user => ({ value: user.id, label: user.name }));
+    const sales = configuredSales.length ? configuredSales : fallbackSales;
+    const priorityIds = assignmentValueList(
+      rule.salesUserIds || rule.sales_user_ids || rule.candidateUserIds || rule.candidates,
+    );
+    openModal(ruleId ? `编辑规则 · ${rule.name || ''}` : '新增分配规则', 'ASSIGNMENT RULE', `<form id="assignmentRuleForm" class="form-grid assignment-rule-form">
+      <input type="hidden" name="ruleId" value="${esc(ruleId)}">
+      <label>规则名称<input name="name" maxlength="80" required value="${esc(rule.name || '')}" placeholder="例如：巴西工业客户"></label>
+      <label>运行状态<select name="enabled"><option value="true" ${rule.enabled !== false ? 'selected' : ''}>启用</option><option value="false" ${rule.enabled === false ? 'selected' : ''}>暂停</option></select></label>
+      <fieldset class="assignment-rule-fieldset">
+        <legend>适用客户</legend>
+        <div class="assignment-rule-condition-grid">
+          <label>国家 / 地区<select name="countries" multiple>${assignmentMultiOptions('countries', conditions.countries)}</select></label>
+          <label>行业<select name="industries" multiple>${assignmentMultiOptions('industries', conditions.industries)}</select></label>
+          <label>重点产品<select name="products" multiple>${assignmentMultiOptions('products', conditions.products)}</select></label>
+          <label>客户类型<select name="customerTypes" multiple>${assignmentMultiOptions('customerTypes', conditions.customerTypes || conditions.customer_types)}</select></label>
+          <label>客户标签<select name="tagIds" multiple>${assignmentMultiOptions('tags', conditions.tagIds || conditions.tags || conditions.customerTags)}</select></label>
+          <label>匹配等级<select name="matchGroups" multiple>${assignmentMultiOptions('matchGroups', conditions.matchGroups || conditions.match_groups)}</select></label>
+        </div>
+        <p class="subtle">同一项内满足任一值；不同项目之间必须同时满足。全部留空时作为兜底规则。</p>
+      </fieldset>
+      <fieldset class="assignment-rule-fieldset">
+        <legend>候选销售与选择方式</legend>
+        <label>候选范围<select name="targetMode" data-assignment-target-mode>
+          <option value="selected" ${targetMode === 'selected' ? 'selected' : ''}>指定销售</option>
+          <option value="all_authorized" ${targetMode === 'all_authorized' ? 'selected' : ''}>全部有线索权限的销售</option>
+        </select></label>
+        <div class="assignment-rule-sales ${targetMode === 'all_authorized' ? 'hidden' : ''}" data-assignment-sales-list>
+          ${sales.map((sale, index) => {
+            const selectedIndex = priorityIds.indexOf(sale.value);
+            return `<label class="assignment-rule-sales-row">
+              <input type="checkbox" data-rule-sales-id="${esc(sale.value)}" ${selectedSales.has(sale.value) ? 'checked' : ''}>
+              <span>${esc(sale.label)}</span>
+              <input type="number" min="1" max="${sales.length}" value="${selectedIndex >= 0 ? selectedIndex + 1 : index + 1}" data-rule-sales-priority="${esc(sale.value)}" aria-label="${esc(sale.label)}优先级">
+            </label>`;
+          }).join('') || '<span class="subtle">暂无具备线索权限的销售</span>'}
+          <small>优先级数字用于固定优先级策略；其他策略也会保留此候选顺序。</small>
+        </div>
+        <div class="assignment-rule-strategy-grid">
+          <label>选择方式<select name="strategy">
+            <option value="balanced" ${strategy === 'balanced' ? 'selected' : ''}>负荷均衡</option>
+            <option value="round_robin" ${strategy === 'round_robin' ? 'selected' : ''}>轮流分配</option>
+            <option value="fixed_priority" ${strategy === 'fixed_priority' ? 'selected' : ''}>固定优先级</option>
+          </select></label>
+          <label>每名销售每日额度<input name="dailyQuota" type="number" min="1" max="1000" value="${esc(rule.dailyQuota ?? rule.daily_quota ?? '')}" placeholder="留空使用系统默认"></label>
+        </div>
+      </fieldset>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${ruleId ? '保存草稿' : '新增到草稿'}</button></div>
+    </form>`);
+  }
+
+  function selectedAssignmentValues(form, name) {
+    return Array.from(form.elements[name]?.selectedOptions || []).map(option => option.value);
+  }
+
+  function assignmentRulePayload(form) {
+    const values = formPayload(form);
+    const salesUserIds = Array.from(form.querySelectorAll('[data-rule-sales-id]:checked'))
+      .map(input => ({
+        id: input.dataset.ruleSalesId,
+        priority: Number(form.querySelector(`[data-rule-sales-priority="${CSS.escape(input.dataset.ruleSalesId)}"]`)?.value || 999),
+      }))
+      .sort((left, right) => left.priority - right.priority)
+      .map(item => item.id);
+    return {
+      name: String(values.name || '').trim(),
+      enabled: values.enabled === 'true',
+      conditions: {
+        countries: selectedAssignmentValues(form, 'countries'),
+        industries: selectedAssignmentValues(form, 'industries'),
+        products: selectedAssignmentValues(form, 'products'),
+        customerTypes: selectedAssignmentValues(form, 'customerTypes'),
+        tagIds: selectedAssignmentValues(form, 'tagIds'),
+        matchGroups: selectedAssignmentValues(form, 'matchGroups'),
+      },
+      targetMode: values.targetMode,
+      salesUserIds: values.targetMode === 'selected' ? salesUserIds : [],
+      strategy: values.strategy,
+      dailyQuota: values.dailyQuota === '' ? null : Number(values.dailyQuota),
+    };
+  }
+
+  async function moveAssignmentRule(ruleId, direction) {
+    if (!canAdministerAssignmentRules()) return;
+    const ids = state.assignmentRules.rules.map(assignmentRuleId);
+    const index = ids.indexOf(ruleId);
+    const destination = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || destination < 0 || destination >= ids.length) return;
+    [ids[index], ids[destination]] = [ids[destination], ids[index]];
+    await api('/intake/assignment-rules/reorder', {
+      method: 'POST', body: JSON.stringify({
+        ruleIds: ids,
+        expectedRevision: state.assignmentRules.draftRevision,
+      }),
+    });
+    state.assignmentRules.loaded = false;
+    await loadAssignmentRules({ force: true });
+    toast('规则顺序已保存到草稿');
+  }
+
+  function assignmentChangeSummaryText(summary) {
+    if (!summary || typeof summary !== 'object') return '无变更摘要';
+    const parts = [];
+    const count = key => Array.isArray(summary[key]) ? summary[key].length : 0;
+    if (count('added')) parts.push(`新增 ${count('added')} 条`);
+    if (count('changed')) parts.push(`修改 ${count('changed')} 条`);
+    if (count('removed')) parts.push(`移除 ${count('removed')} 条`);
+    if (summary.reordered) parts.push('调整执行顺序');
+    if (summary.migratedFromLegacySettings) parts.push('由原有设置自动迁移');
+    if (summary.restoredFromVersionNumber) parts.push(`恢复自 v${summary.restoredFromVersionNumber}`);
+    return parts.join(' · ') || '规则内容无变化';
+  }
+
+  function openAssignmentRulesPublishPreview() {
+    if (!canAdministerAssignmentRules()) return toast('当前身份不能发布规则');
+    const rules = state.assignmentRules.rules;
+    openModal('发布规则变更', 'PUBLISH PREVIEW', `<div class="assignment-publish-preview">
+      <div class="recommendation"><strong>发布后立即生效</strong><br>自动入库与“批量按规则分配”会使用同一版本；试算不会占用额度。</div>
+      <p class="assignment-change-summary"><strong>本次变更：</strong>${esc(assignmentChangeSummaryText(state.assignmentRules.changeSummary))}</p>
+      <ol>${rules.map((rule, index) =>
+        `<li><strong>${index + 1}. ${esc(rule.name || '未命名规则')}</strong><span>${rule.enabled === false ? '暂停' : assignmentStrategyLabel(rule.strategy)}</span></li>`).join('')}</ol>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="assignmentRulesPublishConfirm" class="button primary" type="button">确认发布</button></div>
+    </div>`);
+  }
+
+  async function loadAssignmentRuleVersions() {
+    try {
+      const result = await api('/intake/assignment-rules/versions');
+      const versions = Array.isArray(result.versions) ? result.versions : Array.isArray(result.items) ? result.items : [];
+      state.assignmentRules.versions = versions;
+      const admin = canAdministerAssignmentRules();
+      openModal('分配规则历史版本', 'VERSION HISTORY', `<div class="assignment-version-list">
+        ${versions.map(version => {
+          const id = version.id || version.versionId || version.version_id;
+          const number = version.version || version.versionNumber || version.version_number || id;
+          const author = version.publishedByName || version.published_by_name || version.publishedBy || '系统';
+          const publishedAt = version.publishedAt || version.published_at || version.createdAt || version.created_at;
+          const summary = version.changeSummary || version.change_summary;
+          const summaryText = version.note || assignmentChangeSummaryText(summary);
+          return `<div class="assignment-version-row"><div><strong>v${esc(number)}</strong><span>${esc(author)} · ${esc(shortDate(publishedAt, true))}</span><small>${esc(summaryText)}</small></div>
+            ${admin ? `<button class="button secondary tiny" type="button" data-assignment-version-restore="${esc(id)}">恢复此版本</button>` : ''}</div>`;
+        }).join('') || '<div class="empty">暂无已发布历史版本</div>'}
+      </div>`);
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  function openAssignmentRulesSimulation() {
+    if (!canViewAssignmentRules()) return;
+    const items = state.data?.intake?.items || [];
+    openModal('分配试算', 'READ-ONLY SIMULATION', `<form id="assignmentRulesSimulationForm" class="form-grid">
+      <div class="recommendation"><strong>只读试算</strong><br>不会分配客户、创建 CRM 客户或占用销售额度。</div>
+      <label>选择当前线索<select name="itemId" required><option value="">请选择线索</option>${items.map(item =>
+        `<option value="${esc(item.id)}">${esc(item.company_name || item.external_customer_id || item.id)} · ${esc(item.country || '地区未标注')}</option>`).join('')}</select></label>
+      ${items.length ? '' : '<p class="form-status">当前页没有可试算线索，请先在线索池加载数据。</p>'}
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" ${items.length ? '' : 'disabled'}>开始试算</button></div>
+    </form>`);
+  }
+
+  function showAssignmentSimulationResult(result) {
+    const decision = result.decision || result.result || result;
+    const admin = canAdministerAssignmentRules();
+    const selected = decision.selectedUserName || decision.selected_user_name
+      || decision.ownerName || decision.owner_name || decision.selectedUserId || decision.selected_user_id || '进入人工处理';
+    const ruleName = decision.ruleName || decision.rule_name || decision.matchedRuleName || decision.matched_rule_name || '默认均衡分配';
+    const reason = decision.reason || decision.reasonText || decision.reason_text || decision.reasonCode || decision.reason_code || '规则试算完成';
+    const eligible = assignmentValueList(decision.eligibleCandidateNames || decision.eligible_candidate_names || decision.candidateNames);
+    const excluded = Array.isArray(decision.excludedCandidates || decision.excluded_candidates)
+      ? (decision.excludedCandidates || decision.excluded_candidates) : [];
+    openModal('分配试算结果', 'SIMULATION RESULT', `<div class="assignment-simulation-result">
+      <dl><div><dt>命中规则</dt><dd>${esc(ruleName)}</dd></div><div><dt>预计负责人</dt><dd>${esc(selected)}</dd></div><div><dt>判断原因</dt><dd>${esc(reason)}</dd></div></dl>
+      ${admin ? `<section><strong>符合条件的销售</strong><p>${esc(eligible.join('、') || '无可用销售')}</p></section>
+      <section><strong>被排除的候选</strong>${excluded.length ? `<ul>${excluded.map(item =>
+        `<li>${esc(item.userName || item.user_name || item.userId || item.user_id || '候选销售')}：${esc(item.reason || item.reasonCode || item.reason_code || '不可用')}</li>`).join('')}</ul>` : '<p>无</p>'}</section>` : '<p class="subtle">销售经理只显示命中规则、最终结果和业务原因；完整候选与排除明细仅管理员可见。</p>'}
+      <div class="form-actions"><button type="button" class="button primary" data-close-modal>完成</button></div>
+    </div>`);
+  }
+
   function openNicknameModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     if (!account || !can('edit_customer')) return;
@@ -4878,6 +5338,37 @@
         await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)), timeoutMs: 10000 });
         setLoginState('workspace');
         await load({ fromLogin: true });
+      } else if (form.id === 'assignmentRuleForm') {
+        if (!canAdministerAssignmentRules()) throw new Error('当前身份不能修改分配规则');
+        const ruleId = String(new FormData(form).get('ruleId') || '');
+        const payload = {
+          ...assignmentRulePayload(form),
+          expectedRevision: state.assignmentRules.draftRevision,
+        };
+        if (!payload.name) throw new Error('请输入规则名称');
+        if (payload.targetMode === 'selected' && !payload.salesUserIds.length) {
+          throw new Error('指定销售模式下至少选择一名销售');
+        }
+        if (ruleId) {
+          await api(`/intake/assignment-rules/${encodeURIComponent(ruleId)}`, {
+            method: 'PATCH', body: JSON.stringify(payload),
+          });
+        } else {
+          await api('/intake/assignment-rules/draft', {
+            method: 'POST', body: JSON.stringify(payload),
+          });
+        }
+        closeModal();
+        state.assignmentRules.loaded = false;
+        await loadAssignmentRules({ force: true });
+        toast(ruleId ? '规则修改已保存到草稿' : '新规则已加入草稿');
+      } else if (form.id === 'assignmentRulesSimulationForm') {
+        const itemId = String(new FormData(form).get('itemId') || '');
+        if (!itemId) throw new Error('请选择需要试算的线索');
+        const result = await api('/intake/assignment-rules/simulate', {
+          method: 'POST', body: JSON.stringify({ itemId }),
+        });
+        showAssignmentSimulationResult(result);
       } else if (form.id === 'aiStrategyForm') {
         const payload = formPayload(form);
         payload.config = JSON.parse(payload.configJson || '{}');
@@ -5515,7 +6006,71 @@
     }
     if (event.target.closest('#intakeLoadMore')) await loadIntakePage();
     if (event.target.closest('#changePasswordBtn')) openPasswordModal();
-    if (event.target.closest('#intakeSettingsBtn')) openIntakeSettingsModal();
+    if (event.target.closest('#intakeSettingsBtn')) switchView('assignmentRules');
+    if (event.target.closest('#assignmentRulesSettings')) openIntakeSettingsModal();
+    if (event.target.closest('#assignmentRulesRefresh,#assignmentRulesRetry')) {
+      state.assignmentRules.loaded = false;
+      void loadAssignmentRules({ force: true });
+    }
+    if (event.target.closest('#assignmentRuleCreate')) openAssignmentRuleEditor();
+    const editAssignmentRule = event.target.closest('[data-assignment-rule-edit]');
+    if (editAssignmentRule) openAssignmentRuleEditor(editAssignmentRule.dataset.assignmentRuleEdit);
+    const toggleAssignmentRule = event.target.closest('[data-assignment-rule-toggle]');
+    if (toggleAssignmentRule && canAdministerAssignmentRules()) {
+      const rule = state.assignmentRules.rules.find(item =>
+        assignmentRuleId(item) === toggleAssignmentRule.dataset.assignmentRuleToggle);
+      if (rule) {
+        try {
+          await api(`/intake/assignment-rules/${encodeURIComponent(assignmentRuleId(rule))}`, {
+            method: 'PATCH', body: JSON.stringify({
+              enabled: rule.enabled === false,
+              expectedRevision: state.assignmentRules.draftRevision,
+            }),
+          });
+          state.assignmentRules.loaded = false;
+          await loadAssignmentRules({ force: true });
+          toast(rule.enabled === false ? '规则已启用，发布后生效' : '规则已暂停，发布后生效');
+        } catch (error) { toast(error.message); }
+      }
+    }
+    const moveAssignmentButton = event.target.closest('[data-assignment-rule-move]');
+    if (moveAssignmentButton) {
+      try {
+        await moveAssignmentRule(moveAssignmentButton.dataset.ruleId, moveAssignmentButton.dataset.assignmentRuleMove);
+      } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#assignmentRulesHistory')) void loadAssignmentRuleVersions();
+    if (event.target.closest('#assignmentRulesSimulate')) openAssignmentRulesSimulation();
+    if (event.target.closest('#assignmentRulesPublish')) openAssignmentRulesPublishPreview();
+    if (event.target.closest('#assignmentRulesPublishConfirm') && canAdministerAssignmentRules()) {
+      try {
+        const result = await api('/intake/assignment-rules/publish', {
+          method: 'POST',
+          body: JSON.stringify({ expectedRevision: state.assignmentRules.draftRevision }),
+        });
+        closeModal();
+        state.assignmentRules.loaded = false;
+        await loadAssignmentRules({ force: true });
+        const publishedNumber = result.version?.versionNumber || result.version?.version_number || '';
+        toast(`规则已发布${publishedNumber ? ` · v${publishedNumber}` : ''}`);
+      } catch (error) { toast(error.message); }
+    }
+    const restoreAssignmentVersion = event.target.closest('[data-assignment-version-restore]');
+    if (restoreAssignmentVersion && canAdministerAssignmentRules()) {
+      const versionId = restoreAssignmentVersion.dataset.assignmentVersionRestore;
+      if (window.confirm('恢复后会立即生成并发布一个新版本。确认继续吗？')) {
+        try {
+          await api(`/intake/assignment-rules/versions/${encodeURIComponent(versionId)}/restore`, {
+            method: 'POST',
+            body: JSON.stringify({ expectedRevision: state.assignmentRules.draftRevision }),
+          });
+          closeModal();
+          state.assignmentRules.loaded = false;
+          await loadAssignmentRules({ force: true });
+          toast('历史版本已恢复并发布为新版本');
+        } catch (error) { toast(error.message); }
+      }
+    }
     if (event.target.closest('#bulkAssignIntakeBtn')) {
       try {
         const result = await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action: 'bulk_assign' }) });
@@ -5664,6 +6219,9 @@
   document.addEventListener('change', event => {
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
     if (event.target.matches('[data-ai-feature]')) void setAIFeature(event.target.dataset.aiFeature, event.target.checked);
+    if (event.target.matches('[data-assignment-target-mode]')) {
+      $('[data-assignment-sales-list]')?.classList.toggle('hidden', event.target.value === 'all_authorized');
+    }
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
     if (event.target.matches('[data-select-customer]')) {
       const customerId = event.target.dataset.selectCustomer;
@@ -5691,6 +6249,10 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
+    if (view === 'assignmentRules' && !canViewAssignmentRules()) {
+      view = firstAllowedBusinessView();
+      toast('当前账号没有分配规则查看权限');
+    }
     if (view === 'aiTasks' && !customerAIEnabled()) {
       view = firstAllowedBusinessView();
       toast('AI 功能已关闭，已返回业务首页');
@@ -5709,7 +6271,7 @@
     $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
     $('#viewTitle').textContent = viewMeta[canonicalView][1];
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
-    document.body.classList.toggle('access-admin-active', canonicalView === 'users');
+    document.body.classList.toggle('access-admin-active', ['users', 'assignmentRules'].includes(canonicalView));
     if (canonicalView === 'pool') renderIntake();
     if (canonicalView === 'pool') {
       void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage);
@@ -5718,6 +6280,7 @@
     if (canonicalView === 'users' && can('manage_users') && !state.data.impersonation) {
       void loadFilterPermissionAdmin().catch(error => toast(error.message));
     }
+    if (canonicalView === 'assignmentRules') void loadAssignmentRules();
     if (researchConfig[canonicalView] && !state.research[canonicalView].filterMount) {
       void initializeResearchFilters(canonicalView);
     }

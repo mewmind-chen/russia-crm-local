@@ -190,26 +190,27 @@ test('database recommendation resolves only server snapshot tokens and rechecks 
   assert.equal(stale.reasonCode, 'ai_snapshot_invalid');
 });
 
-function insertScreenedCustomer(db, customerId, score, riskLevel = 'low') {
+function insertScreenedCustomer(db, customerId, score, riskLevel = 'low', poolRiskStatus = '') {
   db.prepare(`INSERT INTO customer_pool
-    (customer_id,company_name,country,products) VALUES (?,?,?,?)`)
-    .run(customerId, `Arbitration ${customerId}`, '俄罗斯', 'MCU');
+    (customer_id,company_name,country,products,risk_status) VALUES (?,?,?,?,?)`)
+    .run(customerId, `Arbitration ${customerId}`, '俄罗斯', 'MCU', poolRiskStatus);
   db.prepare(`INSERT INTO company_screening
     (customer_id,match_score,match_group,risk_level,checked_at,created_at,updated_at)
     VALUES (?,?,'A',?,'2026-07-24 10:00:00','2026-07-24 10:00:00','2026-07-24 10:00:00')`)
     .run(customerId, score, riskLevel);
 }
 
-test('automatic intake assigns fallback candidates but leaves value, risk and AI conflicts pending', async t => {
+test('automatic intake keeps AI inside published candidates and leaves value and risk pending', async t => {
   const fx = await permissionFixtures.seededFixture({ managerViewAll: true });
   t.after(() => fx.close());
   fx.db.prepare(`UPDATE crm_intake_settings
-    SET enabled=1,approval_mode='automatic',daily_per_sales=10,countries_json='[]',match_groups_json='["A"]'
+    SET enabled=1,approval_mode='automatic',daily_per_sales=10,countries_json='["巴西"]',match_groups_json='["A"]'
     WHERE id='default'`).run();
   insertScreenedCustomer(fx.db, 'RU-9101', 80);
   insertScreenedCustomer(fx.db, 'RU-9102', 82);
   insertScreenedCustomer(fx.db, 'RU-9103', 85, 'blocked');
   insertScreenedCustomer(fx.db, 'RU-9104', 95);
+  insertScreenedCustomer(fx.db, 'RU-9105', 84, 'low', 'sanctions match');
 
   const jobs = createAIJobStore(fx.db, { idFactory: () => 'AIJ-ARB-CONFLICT' });
   const job = jobs.enqueue({
@@ -263,7 +264,7 @@ test('automatic intake assigns fallback candidates but leaves value, risk and AI
   assert.equal(response.status, 200);
 
   const rows = fx.db.prepare(`SELECT external_customer_id,status,assigned_owner_id,decision_reason
-    FROM crm_intake_items WHERE external_customer_id IN ('RU-9101','RU-9102','RU-9103','RU-9104')
+    FROM crm_intake_items WHERE external_customer_id IN ('RU-9101','RU-9102','RU-9103','RU-9104','RU-9105')
     ORDER BY external_customer_id`).all();
   const byCustomer = new Map(rows.map(row => [row.external_customer_id, row]));
   assert.equal(byCustomer.get('RU-9101').status, 'assigned');
@@ -272,7 +273,8 @@ test('automatic intake assigns fallback candidates but leaves value, risk and AI
   assert.match(byCustomer.get('RU-9104').decision_reason, /高价值/);
   assert.equal(byCustomer.get('RU-9103').status, 'pending');
   assert.match(byCustomer.get('RU-9103').decision_reason, /风险规则/);
-  assert.equal(byCustomer.get('RU-9102').status, 'pending');
-  assert.match(byCustomer.get('RU-9102').decision_reason, /冲突/);
-  assert.equal(byCustomer.get('RU-9102').assigned_owner_id, '');
+  assert.equal(byCustomer.get('RU-9105').status, 'pending');
+  assert.match(byCustomer.get('RU-9105').decision_reason, /风险规则/);
+  assert.equal(byCustomer.get('RU-9102').status, 'assigned');
+  assert.notEqual(byCustomer.get('RU-9102').assigned_owner_id, '');
 });
