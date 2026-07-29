@@ -4,6 +4,10 @@
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
   const uiFormat = window.TradePulseUIFormat;
+  const dataTableOverflowState = new WeakMap();
+  const dataTablesNeedingHintReset = new Set();
+  let dataTableOverflowFrame = 0;
+  let dataTableResizeObserver = null;
   const emptyAuthorizedListState = () => ({
     rows: [], page: 0, pageSize: 50, total: 0, authorizedTotal: 0,
     hasMore: false, loading: false, loaded: false, error: '',
@@ -64,6 +68,7 @@
     notificationStatus: 'unread',
     recycleKind: 'sales_return',
     recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
+    recycleCustomerDetail: null,
     authorizedBusinessLists: Object.fromEntries([
       'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
     ].map(pageKey => [pageKey, emptyAuthorizedListState()])),
@@ -1157,6 +1162,75 @@
   function table(headers, rows, attrs = '') {
     if (!rows.length) return '<div class="empty">暂无符合条件的数据</div>';
     return `<table ${attrs}><thead><tr>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+
+  function refreshDataTableOverflowHint(element, { resetHint = false } = {}) {
+    if (!element?.classList) return;
+    let meta = dataTableOverflowState.get(element);
+    if (!meta) {
+      meta = { dismissed: false, lastScrollLeft: Number(element.scrollLeft || 0) };
+      dataTableOverflowState.set(element, meta);
+      element.addEventListener('scroll', () => {
+        const nextScrollLeft = Number(element.scrollLeft || 0);
+        if (nextScrollLeft !== meta.lastScrollLeft) {
+          meta.dismissed = true;
+          element.classList.remove('show-horizontal-scroll-hint');
+        }
+        meta.lastScrollLeft = nextScrollLeft;
+      }, { passive: true });
+      dataTableResizeObserver?.observe(element);
+    }
+    if (resetHint) meta.dismissed = false;
+    const overflowing = Number(element.scrollWidth || 0) > Number(element.clientWidth || 0) + 1;
+    if (!overflowing) meta.dismissed = false;
+    meta.lastScrollLeft = Number(element.scrollLeft || 0);
+    element.classList.toggle('is-horizontally-overflowing', overflowing);
+    element.classList.toggle(
+      'show-horizontal-scroll-hint',
+      overflowing && !meta.dismissed && meta.lastScrollLeft <= 1,
+    );
+  }
+
+  function scheduleDataTableOverflowRefresh(resetTables = []) {
+    resetTables.forEach(element => dataTablesNeedingHintReset.add(element));
+    if (dataTableOverflowFrame) return;
+    dataTableOverflowFrame = requestAnimationFrame(() => {
+      dataTableOverflowFrame = 0;
+      $$('.data-table').forEach(element => {
+        refreshDataTableOverflowHint(element, {
+          resetHint: dataTablesNeedingHintReset.has(element),
+        });
+      });
+      dataTablesNeedingHintReset.clear();
+    });
+  }
+
+  function initializeDataTableOverflowHints() {
+    if (typeof ResizeObserver === 'function') {
+      dataTableResizeObserver = new ResizeObserver(entries => {
+        scheduleDataTableOverflowRefresh(entries.map(entry => entry.target));
+      });
+    }
+    if (typeof MutationObserver === 'function') {
+      const observer = new MutationObserver(records => {
+        const affected = new Set();
+        records.forEach(record => {
+          const table = record.target.closest?.('.data-table');
+          if (table) affected.add(table);
+          record.addedNodes.forEach(node => {
+            if (node.nodeType !== 1) return;
+            if (node.matches?.('.data-table')) affected.add(node);
+            node.querySelectorAll?.('.data-table').forEach(element => affected.add(element));
+          });
+        });
+        scheduleDataTableOverflowRefresh([...affected]);
+      });
+      observer.observe($('#app') || document.body, { childList: true, subtree: true });
+    }
+    window.addEventListener('resize', () => {
+      scheduleDataTableOverflowRefresh($$('.data-table'));
+    }, { passive: true });
+    scheduleDataTableOverflowRefresh($$('.data-table'));
   }
 
   const researchConfig = {
@@ -2733,6 +2807,7 @@
       const search = ($('#recycleSearch')?.value || '').trim();
       const payload = await api(`/api/sales-crm/accounts/recycle-bin?kind=${encodeURIComponent(state.recycleKind)}&page=1&pageSize=100&search=${encodeURIComponent(search)}`);
       state.recycleBin = { ...state.recycleBin, ...payload, loading: false };
+      if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
       renderRecycleBin();
     } catch (error) {
       state.recycleBin.loading = false;
@@ -2749,21 +2824,56 @@
       root.innerHTML = '<div class="empty">回收站暂无客户</div>';
       return;
     }
-    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    const sales = state.data.assignmentCandidates || [];
     root.innerHTML = table(
       ['客户', '原负责人', '原因', '回收时间', '操作'],
-      rows.map(row => [
-        `<div class="company-cell"><strong>${esc(accountDisplayName(row))}</strong><span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}</span></div>`,
-        esc(row.previousOwnerName || '未分配'),
-        esc(row.reason || '—'),
-        shortDate(row.recycledAt, true),
-        row.recycleKind === 'sales_return'
-          ? `<select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button>`
-          : can('manage_manual_customer_deletion') && !state.data.impersonation
-            ? `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`
-            : '<span class="subtle">仅真实管理员可恢复</span>',
-      ]),
+      rows.map(row => {
+        const cells = [
+          `<div class="company-cell"><button type="button" class="text-button tp-company-anchor" data-open-recycle-customer="${esc(row.customerId)}">${esc(accountDisplayName(row))}</button><span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}</span></div>`,
+          esc(row.previousOwnerName || '未分配'),
+          esc(row.reason || '—'),
+          shortDate(row.recycledAt, true),
+          row.actions?.includes('reassign')
+            ? `<div class="assignment-actions"><select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button></div>`
+            : row.actions?.includes('restore')
+              && state.data.user?.role === 'admin'
+              && can('manage_manual_customer_deletion')
+              && !state.data.impersonation
+              ? `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`
+              : '<span class="subtle">当前无可执行操作</span>',
+        ];
+        row._attrs = `data-open-recycle-customer="${esc(row.customerId)}"`;
+        cells._attrs = row._attrs;
+        return cells;
+      }),
     );
+  }
+
+  async function openRecycleCustomer(customerId) {
+    if (!can('manage_customer_recycle')) return;
+    customerId = String(customerId || '').trim();
+    if (!customerId) return;
+    state.selectedCustomerId = customerId;
+    state.recycleCustomerDetail = null;
+    state.drawerAiContext = null;
+    $('#drawerStage').textContent = '回收站客户';
+    $('#drawerCompany').textContent = '正在读取客户资料…';
+    $('#drawerMeta').textContent = customerId;
+    $('#drawerUpdateBtn').classList.add('hidden');
+    $('#drawerNicknameBtn').classList.add('hidden');
+    $('#drawerContent').innerHTML = '<div class="empty">正在读取完整历史资料…</div>';
+    $('#customerDrawer').classList.add('open');
+    $('#drawerBackdrop').classList.add('open');
+    $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    try {
+      const detail = await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}/recycle-profile`);
+      if (state.selectedCustomerId !== customerId || !$('#customerDrawer').classList.contains('open')) return;
+      state.recycleCustomerDetail = detail;
+      renderDrawer();
+    } catch (error) {
+      if (state.selectedCustomerId === customerId) closeDrawer();
+      toast(error.message);
+    }
   }
 
   function labelsForAccount(customerId) {
@@ -4000,6 +4110,7 @@
   }
 
   function openCustomer(customerId) {
+    state.recycleCustomerDetail = null;
     state.selectedCustomerId = customerId;
     state.drawerAiContext = null;
     renderDrawer();
@@ -4030,6 +4141,7 @@
     const signals = intakeSignals(item);
     const layers = intakeDecisionLayers(item);
     state.selectedCustomerId = '';
+    state.recycleCustomerDetail = null;
     const showAI = customerAIEnabled();
     state.drawerAiContext = {
       companyName: item.company_name || '',
@@ -4087,6 +4199,7 @@
     $('#customerDrawer').classList.remove('open');
     $('#drawerBackdrop').classList.remove('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
+    state.recycleCustomerDetail = null;
   }
 
   function evaluationCard(item) {
@@ -4106,7 +4219,109 @@
     </article>`;
   }
 
+  function renderRecycleDrawer(detail) {
+    const account = detail.account || {};
+    const master = detail.customerPool?.[0] || {};
+    const recycle = detail.recycle || {};
+    const activities = detail.activities || [];
+    const rfqs = detail.rfqs || [];
+    const quotes = detail.quotes || [];
+    const orders = detail.orders || [];
+    const timeline = detail.timeline || [];
+    const insights = detail.insights || { contacts: [], evaluations: [] };
+    const contacts = insights.contacts || [];
+    const evaluations = insights.evaluations || [];
+    const auditLog = detail.auditLog || [];
+    const customerId = account.id || state.selectedCustomerId;
+    const name = accountDisplayName(account) || master.companyName || '未命名客户';
+    const recycleKindLabel = recycle.kind === 'sales_return' ? '销售退回' : '手工删除';
+    const history = timeline.length ? timeline : activities.map(item => ({
+      title: activityMeta[item.activity_type]?.[0] || item.activity_type || '跟进记录',
+      summary: item.summary || item.outcome || '',
+      actor_name: item.user_name || item.userName || '',
+      occurred_at: item.occurred_at || item.occurredAt,
+      next_action: item.next_action || item.nextAction,
+    }));
+    const canReassign = detail.recycle.kind === 'sales_return'
+      && detail.actions.includes('reassign');
+    const canRestore = detail.recycle.kind === 'manual_delete'
+      && detail.actions.includes('restore')
+      && can('manage_manual_customer_deletion')
+      && !state.data.impersonation;
+    const sales = state.data.assignmentCandidates || [];
+    const recycleAction = canReassign
+      ? `<div class="assignment-actions"><select data-recycle-detail-owner="${esc(customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary" type="button" data-reassign-customer="${esc(customerId)}">重新分配</button></div>`
+      : canRestore
+        ? `<button class="button secondary" type="button" data-restore-customer="${esc(customerId)}">恢复客户</button>`
+        : '<span class="subtle">当前没有可执行操作</span>';
+    const commerceGroups = [
+      ['询价历史', rfqs, item => `${item.subject || item.summary || item.id || '询价'} · ${item.status || '—'} · ${shortDate(item.received_at || item.receivedAt, true)}`],
+      ['报价历史', quotes, item => `${item.quote_no || item.quoteNo || item.id || '报价'} · ${money(item.amount)} · ${item.status || '—'} · ${shortDate(item.sent_at || item.sentAt, true)}`],
+      ['订单历史', orders, item => `${item.order_no || item.orderNo || item.id || '订单'} · ${money(item.amount)} · ${item.status || '—'} · ${shortDate(item.ordered_at || item.orderedAt, true)}`],
+    ];
+
+    $('#drawerStage').textContent = '回收站客户';
+    $('#drawerCompany').textContent = name;
+    $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
+    $('#drawerUpdateBtn').classList.add('hidden');
+    $('#drawerNicknameBtn').classList.add('hidden');
+    $('#drawerContent').innerHTML = `
+      <div class="next-step">
+        <div><span class="eyebrow">RECYCLED CUSTOMER · READ ONLY</span><p>${esc(recycle.reason || '未填写回收原因')}</p></div>
+        <span class="pill amber">${esc(recycleKindLabel)}</span>
+      </div>
+      <div class="account-facts">
+        ${[
+          ['当前状态', '回收站客户'], ['回收类型', recycleKindLabel],
+          ['原负责人', recycle.previousOwnerName || '未分配'],
+          ['回收操作人', recycle.recycledByName || recycle.recycledBy || '—'],
+          ['回收时间', shortDate(recycle.recycledAt, true)],
+          ['回收原因', recycle.reason || '—'],
+          ['原阶段', stageLabel(account.stage)], ['CRM 客户编号', customerId],
+          ['客户主档编号', account.external_customer_id || master.customerId || '—'],
+        ].map(([label, value]) => `<div class="fact"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+      </div>
+      <section class="master-profile">
+        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>客户主档</h3></div><span class="pill gray">只读</span></div>
+        <div class="master-profile-grid">
+          <div><span>企业简介</span><p>${esc(master.description || account.master_description || '暂无企业简介')}</p></div>
+          <div><span>行业与客户类型</span><p>${esc([master.industry || account.industry, master.customerType || account.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
+          <div><span>产品与潜在需求</span><p>${esc(master.products || account.product_focus || '未标注')}</p></div>
+          <div><span>官网与地区</span><p>${esc([master.website || account.website, master.country || account.country, master.city || account.city].filter(Boolean).join(' · ') || '未标注')}</p></div>
+        </div>
+      </section>
+      <div class="commerce-strip recycle-commerce-strip">
+        <div class="commerce-card"><span>跟进</span><strong>${activities.length}</strong></div>
+        <div class="commerce-card"><span>询价</span><strong>${rfqs.length}</strong></div>
+        <div class="commerce-card"><span>报价</span><strong>${quotes.length}</strong></div>
+        <div class="commerce-card"><span>订单</span><strong>${orders.length}</strong></div>
+      </div>
+      <section class="insight-section">
+        <div class="insight-head"><div><p class="eyebrow">CONTACT HISTORY</p><h3>联系人历史</h3></div><span class="panel-note">${contacts.length} 人</span></div>
+        <div class="insight-body">${contacts.length ? contacts.map(contact => `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name || '未命名联系人')}</strong><span>${esc([contact.title, contact.department, contact.contactLevel].filter(Boolean).join(' · ') || '职位未标注')}</span></div></div><p>${esc([contact.email, contact.phone, contact.social].filter(Boolean).join(' · ') || '联系方式受权限保护或未记录')}</p></article>`).join('') : '<div class="empty">暂无联系人历史</div>'}</div>
+      </section>
+      <section class="insight-section">
+        <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>经理评价历史</h3></div><span class="panel-note">${evaluations.length} 条</span></div>
+        <div class="insight-body">${evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '经理评价')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无经理评价</div>'}</div>
+      </section>
+      ${commerceGroups.map(([label, rows, describe]) => `<section class="insight-section"><div class="insight-head"><div><h3>${label}</h3></div><span class="panel-note">${rows.length} 条</span></div><div class="insight-body">${rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>'}</div></section>`).join('')}
+      <section class="insight-section">
+        <div class="insight-head"><div><p class="eyebrow">FULL TIMELINE</p><h3>完整客户时间线</h3></div><span class="panel-note">${history.length} 条</span></div>
+        <div class="timeline">${history.map(event => `<div class="timeline-item"><h4>${esc(event.title || event.kind || '客户事件')}</h4><p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p><time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`).join('') || '<div class="empty">暂无历史记录</div>'}</div>
+      </section>
+      <section class="insight-section">
+        <div class="insight-head"><div><p class="eyebrow">AUDIT TRAIL</p><h3>客户审计历史</h3></div><span class="panel-note">${auditLog.length} 条</span></div>
+        <div class="insight-body">${auditLog.length ? auditLog.map(item => `<div class="audit-line"><strong>${esc(item.action || '客户操作')}</strong><span>${esc(item.userName || item.actorName || item.user_id || '')}</span><time>${shortDate(item.createdAt || item.created_at, true)}</time></div>`).join('') : '<div class="empty">暂无审计记录</div>'}</div>
+      </section>
+      <div class="form-actions">${recycleAction}</div>`;
+  }
+
   function renderDrawer() {
+    if (state.recycleCustomerDetail
+      && (state.recycleCustomerDetail.account?.id || state.selectedCustomerId) === state.selectedCustomerId) {
+      renderRecycleDrawer(state.recycleCustomerDetail);
+      return;
+    }
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
     if (!account) return;
     $('#drawerStage').textContent = stageLabel(account.stage);
@@ -5004,6 +5219,12 @@
     const definitionEditor = event.target.closest('[data-edit-filter-definition]');
     if (definitionEditor) openFilterDefinitionEditor(definitionEditor.dataset.editFilterDefinition);
     if (event.target.closest('#newFilterDefinitionBtn')) openFilterDefinitionCreator();
+    const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
+    if (recycleCustomer
+      && (!event.target.closest('button,a,input,select,textarea')
+        || recycleCustomer.matches('button[data-open-recycle-customer]'))) {
+      openRecycleCustomer(recycleCustomer.dataset.openRecycleCustomer);
+    }
     const customer = event.target.closest('[data-open-customer],[data-customer]');
     if (customer && (!event.target.closest('button,a,input,select,textarea') || customer.matches('button[data-open-customer]'))) openCustomer(customer.dataset.openCustomer || customer.dataset.customer);
     const intakeProfile = event.target.closest('[data-intake-profile]');
@@ -5262,13 +5483,16 @@
     if (restoreCustomer) {
       try {
         await api(`/api/sales-crm/accounts/${encodeURIComponent(restoreCustomer.dataset.restoreCustomer)}/restore`, { method: 'POST', body: '{}' });
-        await loadRecycleBin();
+        closeDrawer();
         await refresh('手工客户已恢复');
+        await loadRecycleBin();
       } catch (error) { toast(error.message); }
     }
     const reassignCustomer = event.target.closest('[data-reassign-customer]');
     if (reassignCustomer) {
-      const ownerId = document.querySelector(`[data-recycle-owner="${CSS.escape(reassignCustomer.dataset.reassignCustomer)}"]`)?.value || '';
+      const ownerId = reassignCustomer.parentElement?.querySelector('select')?.value
+        || document.querySelector(`[data-recycle-owner="${CSS.escape(reassignCustomer.dataset.reassignCustomer)}"]`)?.value
+        || '';
       if (!ownerId) return toast('请选择目标销售');
       const reason = window.prompt('请输入重新分配原因', '按区域和语言能力重新分配') || '';
       if (!reason.trim()) return;
@@ -5276,8 +5500,9 @@
         await api(`/api/sales-crm/accounts/${encodeURIComponent(reassignCustomer.dataset.reassignCustomer)}/reassign`, {
           method: 'POST', body: JSON.stringify({ ownerId, reason }),
         });
-        await loadRecycleBin();
+        closeDrawer();
         await refresh('客户已重新分配');
+        await loadRecycleBin();
       } catch (error) { toast(error.message); }
     }
     const loadMore = event.target.closest('[data-load-research]');
@@ -5641,5 +5866,6 @@
     if (viewMeta[view] && state.data) switchView(view, false);
   });
 
+  initializeDataTableOverflowHints();
   load();
 })();
