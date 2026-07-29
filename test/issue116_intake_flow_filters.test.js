@@ -156,7 +156,7 @@ test('manager-wide and assigned-owner scopes preserve current intake visibility'
   );
   assert.deepEqual(ids(db, manager), [
     'I-APPROVED', 'I-ASSIGNED-ONE', 'I-CLAIMED-ONE',
-    'I-PENDING', 'I-REJECTED-TWO', 'I-RETURNED-ONE',
+    'I-DUPLICATE', 'I-PENDING', 'I-REJECTED-TWO', 'I-RETURNED-ONE',
   ]);
   db.close();
 });
@@ -225,7 +225,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
   );
   assert.equal(result.page, 2);
   assert.equal(result.pageSize, 20);
-  assert.equal(result.total, 6);
+  assert.equal(result.total, 7);
   assert.equal(result.items.length, 0);
   assert.equal(result.hasMore, false);
 
@@ -237,7 +237,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
     { page: 1, pageSize: 999 },
   );
   assert.equal(first.pageSize, 200);
-  assert.equal(first.items.length, 6);
+  assert.equal(first.items.length, 7);
   db.close();
 });
 
@@ -260,6 +260,24 @@ test('filter options expose only requested authorized fields and the same row sc
     { value: 'Manufacturer', label: 'Manufacturer', count: 2 },
   ]);
   assert.doesNotMatch(JSON.stringify(options), /RU|FR|Distributor|Secret List/);
+
+  const managerStatus = intakeFlowFilterOptions(
+    db,
+    user('U-MANAGER', { manage_intake: true }),
+    'intake',
+    ['status'],
+  ).status;
+  assert.deepEqual(Object.fromEntries(
+    managerStatus.map(option => [option.value, option.label]),
+  ), {
+    approved: '待分配',
+    assigned: '待领取',
+    claimed: '已领取',
+    duplicate: '已在 CRM',
+    pending: '待分配',
+    rejected: '不对口',
+    returned: '已退回',
+  });
   db.close();
 });
 

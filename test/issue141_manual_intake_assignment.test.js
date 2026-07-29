@@ -185,7 +185,7 @@ test('manual assignment uses the authorized filter scope instead of selecting fr
   );
 });
 
-test('manual assignment ignores daily quota while preserving hard risk blocks', async t => {
+test('manual assignment ignores daily quota and does not block risk information', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
   fx.db.prepare("UPDATE crm_intake_settings SET daily_per_sales=1 WHERE id='default'").run();
@@ -227,8 +227,8 @@ test('manual assignment ignores daily quota while preserving hard risk blocks', 
   });
   let body = await response.json();
   assert.equal(response.status, 200, body.error);
-  assert.equal(body.eligibleCount, 2);
-  assert.equal(body.blockedCount, 1);
+  assert.equal(body.eligibleCount, 3);
+  assert.equal(body.blockedCount, 0);
   assert.deepEqual(
     Object.keys(body.sales.find(owner => owner.id === 'U-OTHER')).sort(),
     ['id', 'name'],
