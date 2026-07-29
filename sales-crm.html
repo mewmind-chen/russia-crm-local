@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260729-ui-polish">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260729-access-admin-2">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-ui-polish">
 </head>
 <body data-app="sales">
@@ -418,11 +418,85 @@
         <div id="segmentGrid" class="segment-grid"></div>
       </section>
 
-          <section id="usersView" class="view">
-            <div class="section-intro">
-              <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>销售只查看自己的客户；经理查看团队全盘；管理员管理账号与系统配置。</p></div>
-              <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
+      <section id="usersView" class="view access-admin-view">
+        <div class="section-intro access-intro">
+          <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>集中管理成员账号、权限基线与关键系统操作。</p></div>
+          <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
+        </div>
+        <div id="accessSummary" class="access-summary-grid" aria-label="用户与权限概况">
+          <article class="access-summary-card">
+            <span>启用账号</span><strong id="accessActiveUserCount">—</strong><small>当前可登录</small>
+          </article>
+          <article class="access-summary-card">
+            <span>权限组</span><strong id="accessPermissionGroupCount">—</strong><small>角色权限基线</small>
+          </article>
+          <article class="access-summary-card">
+            <span>个人例外</span><strong id="accessOverrideUserCount">—</strong><small>存在单独覆盖</small>
+          </article>
+          <article class="access-summary-card">
+            <span>归档账号</span><strong id="accessArchivedUserCount">—</strong><small>保留历史记录</small>
+          </article>
+        </div>
+        <div class="access-section-tabs" role="tablist" aria-label="用户与权限管理区域">
+          <button id="accessAccountsTab" type="button" role="tab" aria-selected="true" aria-controls="accessAccountsPanel" data-access-section="accounts">
+            <span>账号管理</span><small>成员、状态与身份检查</small>
+          </button>
+          <button id="accessPermissionsTab" type="button" role="tab" aria-selected="false" aria-controls="accessPermissionsPanel" data-access-section="permissions">
+            <span>权限配置</span><small>权限组与筛选范围</small>
+          </button>
+          <button id="accessGovernanceTab" type="button" role="tab" aria-selected="false" aria-controls="accessGovernancePanel" data-access-section="governance">
+            <span>系统与审计</span><small>运行状态与操作记录</small>
+          </button>
+        </div>
+
+        <section id="accessAccountsPanel" class="access-workspace-panel" role="tabpanel" aria-labelledby="accessAccountsTab">
+          <article class="panel access-panel access-user-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">TEAM ACCOUNTS</p><h2>成员账号</h2><p>编辑账号和个人权限属于高频操作；其他账号操作收纳在“更多操作”中。</p></div>
+              <span id="activeUserPanelCount" class="panel-note"></span>
             </div>
+            <div id="userTable" class="data-table access-user-table"></div>
+          </article>
+          <details class="panel access-panel archived-users-panel">
+            <summary>
+              <span><b>归档用户</b><small>历史业务记录继续保留，需要时可恢复账号。</small></span>
+              <strong id="archivedUserPanelCount">0 人</strong>
+            </summary>
+            <div id="archivedUserTable" class="data-table"></div>
+          </details>
+        </section>
+
+        <section id="accessPermissionsPanel" class="access-workspace-panel hidden" role="tabpanel" aria-labelledby="accessPermissionsTab">
+          <article class="panel access-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2><p>先用权限组建立角色基线，再为少数成员设置个人例外。</p></div>
+              <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
+            </div>
+            <div id="permissionGroupTable" class="data-table"></div>
+          </article>
+          <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
+            <div class="panel-head">
+              <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组定义基线；个人例外只能追加授权或恢复组默认。</p></div>
+              <div class="top-actions">
+                <button id="newFilterDefinitionBtn" class="button secondary" type="button" disabled>新增筛选定义</button>
+                <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
+              </div>
+            </div>
+            <div class="filter-permission-controls">
+              <label>配置范围<select id="filterPermissionScope"><option value="group">权限组</option><option value="user">个人例外</option></select></label>
+              <label>目标<select id="filterPermissionTarget"></select></label>
+              <label>身份预览<select id="filterIdentityPreview"></select></label>
+            </div>
+            <p id="filterPermissionStatus" class="panel-note" role="status" aria-live="polite">进入本页后加载当前配置</p>
+            <div id="filterPermissionTable" class="data-table"></div>
+            <div class="form-actions">
+              <button id="filterPermissionRestore" class="button secondary hidden" type="button">恢复组默认</button>
+              <button id="filterPermissionSave" class="button primary" type="button">保存配置</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="accessGovernancePanel" class="access-workspace-panel hidden" role="tabpanel" aria-labelledby="accessGovernanceTab">
             <section id="assistantRuntimePanel" class="assistant-runtime-panel hidden" aria-labelledby="assistantRuntimeTitle">
               <div class="assistant-runtime-head">
                 <div><p class="eyebrow">AI ENGINE RUNTIME</p><h2 id="assistantRuntimeTitle">AI 引擎运行状态</h2><p>切换全局对话引擎模式，重新检测会更新健康状态。</p></div>
@@ -437,40 +511,9 @@
               <p id="aiFeatureStatus" class="assistant-runtime-status" role="status" aria-live="polite"></p>
               <div id="aiFeatureRows" class="ai-feature-rows"></div>
             </section>
-            <article class="panel"><div id="userTable" class="data-table"></div></article>
-        <article class="panel access-panel">
-          <div class="panel-head"><div><p class="eyebrow">ARCHIVED USERS</p><h2>归档用户</h2></div><span class="panel-note">历史业务记录继续保留</span></div>
-          <div id="archivedUserTable" class="data-table"></div>
-        </article>
-        <article class="panel access-panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2></div>
-            <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
-          </div>
-          <div id="permissionGroupTable" class="data-table"></div>
-        </article>
-        <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
-          <div class="panel-head">
-            <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组定义基线；个人例外只能追加授权或恢复组默认。</p></div>
-            <div class="top-actions">
-              <button id="newFilterDefinitionBtn" class="button secondary" type="button" disabled>新增筛选定义</button>
-              <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
-            </div>
-          </div>
-          <div class="filter-permission-controls">
-            <label>配置范围<select id="filterPermissionScope"><option value="group">权限组</option><option value="user">个人例外</option></select></label>
-            <label>目标<select id="filterPermissionTarget"></select></label>
-            <label>身份预览<select id="filterIdentityPreview"></select></label>
-          </div>
-          <p id="filterPermissionStatus" class="panel-note" role="status" aria-live="polite">进入本页后加载当前配置</p>
-          <div id="filterPermissionTable" class="data-table"></div>
-          <div class="form-actions">
-            <button id="filterPermissionRestore" class="button secondary hidden" type="button">恢复组默认</button>
-            <button id="filterPermissionSave" class="button primary" type="button">保存配置</button>
-          </div>
-        </article>
-        <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
-        <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
+          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
+          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
+        </section>
       </section>
 
       <section id="maintenanceView" class="view">
@@ -518,6 +561,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-ui-polish"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260729-ui-polish"></script>
+  <script src="/sales-assets/app.js?v=20260729-access-admin-2"></script>
 </body>
 </html>

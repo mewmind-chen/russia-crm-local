@@ -37,6 +37,7 @@
     customerFilterMount: null,
     customerFilterController: null,
     filterPermissionAdmin: null,
+    accessSection: 'accounts',
     customerFilters: {
       search: '', quickView: 'all', sort: 'next_urgent',
       countries: [], owners: [], stages: [], priorities: [], customerTypes: [],
@@ -3301,22 +3302,42 @@
   function renderUsers() {
     if (!can('view_users')) return;
     const canMutate = can('manage_users') && !state.data.impersonation;
+    const users = state.data.users || [];
+    const archivedUsers = state.data.archivedUsers || [];
+    const activeUsers = users.filter(user => user.active && !user.archived);
+    const overrideUsers = users.filter(user => Number(user.permissionOverrideCount || 0) > 0);
+    const permissionGroups = state.data.permissionGroups || [];
+    $('#accessActiveUserCount').textContent = String(activeUsers.length);
+    $('#accessPermissionGroupCount').textContent = String(permissionGroups.length);
+    $('#accessOverrideUserCount').textContent = String(overrideUsers.length);
+    $('#accessArchivedUserCount').textContent = String(archivedUsers.length);
+    $('#activeUserPanelCount').textContent = `${activeUsers.length} 个启用 · ${users.length} 个在职`;
+    $('#archivedUserPanelCount').textContent = `${archivedUsers.length} 人`;
     $('#userTable').innerHTML = table(
       ['用户', '角色', '权限组', '覆盖数', '状态', '操作'],
-      state.data.users.map(user => [
+      users.map(user => [
         `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
         `<span class="pill">${roleLabel(user.role)}</span>`,
         esc(user.permissionGroupName || '—'),
         user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项覆盖</span>` : '<span class="subtle">继承组默认</span>',
         `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
         canMutate
-          ? `<div class="assignment-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button>${user.id === state.data.user.id ? '<span class="subtle">当前账号</span>' : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}<button class="text-button danger-text" data-archive-user="${user.id}">归档</button>`}</div>`
+          ? `<div class="user-row-actions">
+              <div class="user-primary-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button></div>
+              ${user.id === state.data.user.id
+                ? '<span class="current-account-label">当前账号</span>'
+                : `<details class="user-action-menu"><summary aria-label="${esc(user.name)}的更多操作">更多操作</summary><div>
+                    <button class="text-button" data-reset-password="${user.id}">修改密码</button>
+                    ${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}
+                    <button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>
+                  </div></details>`}
+            </div>`
           : '<span class="subtle">无变更权限</span>',
       ]),
     );
     $('#archivedUserTable').innerHTML = table(
       ['用户', '角色', '归档时间', '操作'],
-      (state.data.archivedUsers || []).map(user => [
+      archivedUsers.map(user => [
         `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
         `<span class="pill gray">${roleLabel(user.role)}</span>`,
         shortDate(user.archivedAt, true),
@@ -3325,6 +3346,7 @@
           : '<span class="subtle">无变更权限</span>',
       ]),
     );
+    switchAccessSection(state.accessSection);
     renderPermissionGroups(canMutate);
     if (state.filterPermissionAdmin) renderFilterPermissionAdmin();
     renderAssistantRuntime();
@@ -3350,6 +3372,26 @@
         ];
       }),
     );
+  }
+
+  function switchAccessSection(section, { focus = false } = {}) {
+    const allowedSections = ['accounts', 'permissions', 'governance'];
+    const nextSection = allowedSections.includes(section) ? section : 'accounts';
+    state.accessSection = nextSection;
+    $$('[data-access-section]').forEach(button => {
+      const selected = button.dataset.accessSection === nextSection;
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && focus) button.focus();
+    });
+    const panels = {
+      accounts: $('#accessAccountsPanel'),
+      permissions: $('#accessPermissionsPanel'),
+      governance: $('#accessGovernancePanel'),
+    };
+    Object.entries(panels).forEach(([key, panel]) => {
+      if (panel) panel.classList.toggle('hidden', key !== nextSection);
+    });
   }
 
   const assistantEngineLabels = {
@@ -4940,8 +4982,11 @@
     if (nav) switchView(nav.dataset.view);
     const go = event.target.closest('[data-go]');
     if (go) switchView(go.dataset.go);
+    const accessSection = event.target.closest('[data-access-section]');
+    if (accessSection) switchAccessSection(accessSection.dataset.accessSection);
     if (event.target.closest('[data-filter-permission-entry]')) {
       await runFilterPermissionAction(async () => {
+        switchAccessSection('permissions');
         await loadFilterPermissionAdmin({ force: true });
         $('#filterPermissionAdmin')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -5439,6 +5484,7 @@
     $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
     $('#viewTitle').textContent = viewMeta[canonicalView][1];
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
+    document.body.classList.toggle('access-admin-active', canonicalView === 'users');
     if (canonicalView === 'pool') renderIntake();
     if (canonicalView === 'pool') {
       void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage);
@@ -5553,6 +5599,18 @@
     location.reload();
   });
   document.addEventListener('keydown', event => {
+    const accessTab = event.target.closest?.('[data-access-section]');
+    if (accessTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      const tabs = $$('[data-access-section]');
+      const currentIndex = tabs.indexOf(accessTab);
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      switchAccessSection(tabs[nextIndex].dataset.accessSection, { focus: true });
+    }
     if (event.key === 'Escape') { closeModal(); closeDrawer(); closeCustomerFilterPanel(); document.body.classList.remove('sidebar-open'); }
   });
   $('#salesMenuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
