@@ -116,3 +116,42 @@ test('CRM creation synchronizes a pending lead to a visible non-assignable statu
   assert.match(appSource, /duplicate:\s*'已在 CRM'/);
   assert.match(appSource, /!Boolean\(item\?\.in_crm\)/);
 });
+
+test('lead pool returns the current intake status together with CRM assignment status', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  const now = '2026-07-30 10:00:00';
+  fx.db.prepare(`INSERT INTO customer_pool(customer_id,company_name) VALUES
+    ('RU-9145','Assigned Lead'),
+    ('RU-9146','Claimed Lead'),
+    ('RU-9147','Returned Lead')`).run();
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,created_at,updated_at)
+    VALUES
+    ('INT-143-A','BATCH-TEST','RU-9145','Assigned Lead','assigned','U-OTHER',?,?),
+    ('INT-143-C','BATCH-TEST','RU-9146','Claimed Lead','claimed','U-OTHER',?,?),
+    ('INT-143-R','BATCH-TEST','RU-9147','Returned Lead','returned','U-OTHER',?,?)`).run(
+    now, now, now, now, now, now,
+  );
+  fx.db.prepare(`INSERT INTO crm_accounts
+    (id,external_customer_id,company_name,owner_id,stage,assignment_status,created_at,updated_at)
+    VALUES
+    ('CRM-143-A','RU-9145','Assigned Lead','U-OTHER','qualified','assigned',?,?),
+    ('CRM-143-C','RU-9146','Claimed Lead','U-OTHER','contacted','claimed',?,?),
+    ('CRM-143-R','RU-9147','Returned Lead','U-OTHER','lost','returned',?,?)`).run(
+    now, now, now, now, now, now,
+  );
+
+  const response = await fx.request('/api/sales-crm/intake?page=1&pageSize=200', {
+    cookie: fx.adminCookie,
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const byId = new Map(body.items.map(item => [item.external_customer_id, item]));
+  assert.equal(byId.get('RU-9145').status, 'assigned');
+  assert.equal(byId.get('RU-9145').crm_assignment_status, 'assigned');
+  assert.equal(byId.get('RU-9146').status, 'claimed');
+  assert.equal(byId.get('RU-9146').crm_assignment_status, 'claimed');
+  assert.equal(byId.get('RU-9147').status, 'returned');
+  assert.equal(byId.get('RU-9147').crm_assignment_status, 'returned');
+});
