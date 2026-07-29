@@ -3,6 +3,7 @@
 
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
+  const uiFormat = window.TradePulseUIFormat;
   const emptyAuthorizedListState = () => ({
     rows: [], page: 0, pageSize: 50, total: 0, authorizedTotal: 0,
     hasMore: false, loading: false, loaded: false, error: '',
@@ -148,6 +149,21 @@
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+  }
+  function websiteMarkup(value) {
+    const site = uiFormat.website(value);
+    return site
+      ? `<a class="tp-website" href="${esc(site.href)}" target="_blank" rel="noopener">${esc(site.label)}${uiFormat.icon('external')}</a>`
+      : '<span class="tp-empty-value">暂无官网</span>';
+  }
+  function productChipMarkup(value) {
+    const result = uiFormat.products(value);
+    if (!result.items.length) return '<span class="tp-empty-value">暂无产品信息</span>';
+    return `<span class="tp-product-list">${result.items.map(item => `<span>${esc(item)}</span>`).join('')}${result.overflow ? `<b>+${result.overflow}</b>` : ''}</span>`;
+  }
+  function statusMarkup(value, labels) {
+    const display = uiFormat.status(value, labels);
+    return `<span class="tp-status ${display.tone}"><i class="tp-status-dot" aria-hidden="true"></i>${esc(display.label)}</span>`;
   }
   function accountDisplayName(account) {
     return String(account?.nickname || account?.company_name || account?.companyName || '').trim();
@@ -1079,9 +1095,17 @@
       ['深度会议', summary.meetings, `回复后 ${percent(summary.meetings, summary.replies)}`, ''],
       ['正式询价', summary.rfqs, `会议后 ${percent(summary.rfqs, summary.meetings)}`, ''],
       ['成交订单', summary.orders, money(summary.revenue), ''],
-      ['超期 / 待介入', `${summary.overdue} / ${summary.managerNeeded}`, '优先处理', summary.overdue ? 'alert' : 'warn'],
     ];
-    $('#summaryCards').innerHTML = cards.map(([label, value, note, cls]) => `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    $('#summaryCards').innerHTML = cards.map(([label, value, note, cls]) => (
+      `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`
+    )).join('');
+    const attentionSummary = $('#attentionSummary');
+    if (attentionSummary) {
+      attentionSummary.textContent = summary.overdue || summary.managerNeeded
+        ? `${summary.overdue} 个超期 · ${summary.managerNeeded} 个待介入`
+        : '当前无待处理提醒';
+      attentionSummary.classList.toggle('critical', Boolean(summary.overdue));
+    }
     const stageOrder = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
     const funnelStages = state.data.stages.filter(item => !['new', 'lost', 'disqualified'].includes(item.key));
     const funnel = funnelStages.map(stage => ({
@@ -1585,7 +1609,6 @@
         }
         else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
         else actions = '—';
-        const statusClass = item.status === 'returned' || item.status === 'rejected' ? 'red' : item.status === 'assigned' ? 'amber' : item.status === 'claimed' ? '' : 'gray';
         const signals = intakeSignals(item);
         const layers = intakeDecisionLayers(item);
         const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
@@ -1597,17 +1620,16 @@
           .concat((Array.isArray(item.customer_tags) ? item.customer_tags
             : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'))
             .map(tag => typeof tag === 'object' ? tag : { name: tag, category: '客户标签', isPreset: false }));
-        const website = /^https?:\/\//i.test(item.website || '')
-          ? `<a class="text-button" href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.website)}</a>`
-          : esc(item.website || '无官网');
+        const website = websiteMarkup(item.website);
+        const productSummary = productChipMarkup(item.product_focus || item.potential_demand);
         const contactCompleteness = item.contact_name && item.contact_methods
           ? '具名联系人与联系方式完备'
           : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const businessColumns = [
-          `<div class="company-cell"><strong>${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span><span>${esc(item.product_focus || item.potential_demand || '产品与潜在需求未标注')}</span>${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || (showAI ? item.suggested_owner_name : '') || '暂无可用配额')}</strong>${layers.rule}<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
-          `<div class="assignment-cell"><span class="pill ${statusClass}">${intakeStatusLabel(item.status)}</span><span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
+          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusLabel(item.status) })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
           actions,
         ];
         const aiColumns = [
@@ -2686,9 +2708,9 @@
         ].filter(Boolean).join('');
         return [
           canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          `<div class="company-cell"><strong>${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${sourceTagMarkup(account, 4)}</div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
-          `<span class="status-pill">${esc(stageLabel(account.stage))}</span>`,
+          statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           esc(account.owner_name || '未分配'),
           `<span>${relative(account.last_activity_at)}</span>`,
           `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${shortDate(account.next_action_at, true)}</span></div>`,

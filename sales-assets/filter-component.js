@@ -425,6 +425,45 @@
     return '<span class="tp-filter-result-count">等待应用筛选</span>';
   }
 
+  const PRIMARY_FILTER_KEYS = new Set([
+    'country',
+    'owner',
+    'assigned_owner',
+    'assigned_owner_id',
+    'stage',
+    'status',
+    'intake_status',
+    'lead_status',
+  ]);
+
+  function splitFilterFields(schema) {
+    const searchFields = schema.fields.filter(field => field.placement === 'search');
+    const nonSearch = schema.fields.filter(field => field.placement !== 'search');
+    const primaryFields = nonSearch.filter(field => (
+      PRIMARY_FILTER_KEYS.has(field.key)
+      && !['tag', 'date_range'].includes(field.type)
+    ));
+    const advancedFields = nonSearch.filter(field => !primaryFields.includes(field));
+    return { searchFields, primaryFields, advancedFields };
+  }
+
+  function renderCompactField(field, state) {
+    if (['facet', 'tag'].includes(field.type)) return renderFacetRow(field, state);
+    return renderMoreField(field, state);
+  }
+
+  function renderPrimaryField(field, state) {
+    if (!['facet', 'tag'].includes(field.type)) return renderMoreField(field, state);
+    const selected = selectedValuesFor(state, field);
+    return `<details class="tp-filter-menu" data-filter-menu="${escapeHtml(field.key)}">
+      <summary>${escapeHtml(field.label)}${selected.length ? ` <span>${selected.length}</span>` : ''}</summary>
+      <div class="tp-filter-menu-options">
+        <button class="tp-filter-option tp-filter-all" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-all="true" aria-pressed="${selected.length ? 'false' : 'true'}">全部</button>
+        ${field.options.map(option => renderOption(field, option, selected.includes(option.value))).join('')}
+      </div>
+    </details>`;
+  }
+
   function renderFilterComponent(model = {}) {
     const status = model.status || 'ready';
     const schema = normalizeSchema(model.schema);
@@ -442,23 +481,31 @@
       draft: sanitizeValues(model.state?.draft, schema),
       applied: sanitizeValues(model.state?.applied, schema),
     };
-    const searchFields = schema.fields.filter(field => field.placement === 'search');
-    const facets = schema.fields.filter(field => ['facet', 'tag'].includes(field.placement));
-    const moreFields = schema.fields.filter(field => field.placement === 'more');
-    const tagCount = schema.fields.filter(field => field.placement === 'tag').length;
-    const tagOptionCount = schema.fields
-      .filter(field => field.placement === 'tag')
-      .reduce((sum, field) => sum + field.options.length, 0);
-    return `<section class="tp-filter-component" data-filter-status="ready" data-schema-version="${escapeHtml(schema.schemaVersion)}" data-permission-version="${escapeHtml(schema.permissionVersion)}">
-      ${searchFields.length ? `<div class="tp-filter-search-row">${searchFields.map(field => renderSearchField(field, state)).join('')}<button class="tp-filter-apply tp-filter-apply-inline" type="button" data-filter-apply>应用筛选</button></div>` : ''}
-      ${moreFields.length ? `<div class="tp-filter-basic-grid">${moreFields.map(field => renderMoreField(field, state)).join('')}</div>` : ''}
-      ${facets.length ? `<div class="tp-filter-facets">
-        ${tagCount ? `<div class="tp-filter-facet-summary"><div><strong>客户标签</strong><small>${tagCount} 个分类 · ${tagOptionCount} 个可用标签</small></div><span>同类型内任一匹配 · 不同类型同时满足</span></div>` : ''}
-        ${facets.map(field => renderFacetRow(field, state)).join('')}
-      </div>` : ''}
-      <div class="tp-filter-actions"><button class="tp-filter-clear" type="button" data-filter-clear>清空条件</button><button class="tp-filter-apply" type="button" data-filter-apply>应用筛选</button></div>
+    const { searchFields, primaryFields, advancedFields } = splitFilterFields(schema);
+    const appliedCount = Object.keys(state.applied).length;
+    const selectedAdvancedCount = advancedFields.filter(field => (
+      state.applied[field.key] !== undefined
+    )).length;
+    return `<section class="tp-filter-component" data-filter-status="ready"
+        data-schema-version="${escapeHtml(schema.schemaVersion)}"
+        data-permission-version="${escapeHtml(schema.permissionVersion)}">
+      <div class="tp-filter-primary-row">
+        ${searchFields.map(field => renderSearchField(field, state)).join('')}
+        ${primaryFields.map(field => renderPrimaryField(field, state)).join('')}
+        <div class="tp-filter-primary-actions">
+          <button class="tp-filter-clear" type="button" data-filter-clear>清空</button>
+          <button class="tp-filter-apply" type="button" data-filter-apply>应用筛选</button>
+        </div>
+      </div>
+      ${advancedFields.length ? `<details class="tp-filter-advanced">
+        <summary>详细筛选${selectedAdvancedCount ? ` <span>${selectedAdvancedCount}</span>` : ''}</summary>
+        <div class="tp-filter-advanced-grid">${advancedFields.map(field => renderCompactField(field, state)).join('')}</div>
+      </details>` : ''}
       <div class="tp-filter-applied">
-        <div class="tp-filter-applied-head"><strong>已启用条件</strong>${renderResultMeta(model.resultMeta)}</div>
+        <div class="tp-filter-applied-head">
+          <strong>${appliedCount ? `已启用条件 · ${appliedCount} 项` : '当前结果'}</strong>
+          ${renderResultMeta(model.resultMeta)}
+        </div>
         ${renderAppliedChips(schema, state)}
       </div>
     </section>`;
@@ -483,17 +530,38 @@
       });
     }
 
+    function restoreOpenMenu(fieldKey) {
+      if (!fieldKey || typeof rootElement.querySelectorAll !== 'function') return;
+      const menu = [...rootElement.querySelectorAll('[data-filter-menu]')]
+        .find(element => element.dataset.filterMenu === fieldKey);
+      if (menu) menu.open = true;
+    }
+
+    function restoreAdvancedDisclosure(wasOpen) {
+      if (!wasOpen || typeof rootElement.querySelector !== 'function') return;
+      const advanced = rootElement.querySelector('.tp-filter-advanced');
+      if (advanced) advanced.open = true;
+    }
+
     function handleClick(event) {
       const all = event.target.closest('[data-filter-all]');
       if (all && rootElement.contains(all)) {
+        const menuField = all.closest?.('[data-filter-menu]')?.dataset.filterMenu || '';
+        const advancedWasOpen = Boolean(all.closest?.('.tp-filter-advanced')?.open);
         controller.clearField(all.dataset.filterField, { draftOnly: true });
         render();
+        restoreOpenMenu(menuField);
+        restoreAdvancedDisclosure(advancedWasOpen);
         return;
       }
       const option = event.target.closest('.tp-filter-option[data-filter-value]');
       if (option && rootElement.contains(option)) {
+        const menuField = option.closest?.('[data-filter-menu]')?.dataset.filterMenu || '';
+        const advancedWasOpen = Boolean(option.closest?.('.tp-filter-advanced')?.open);
         controller.toggleValue(option.dataset.filterField, option.dataset.filterValue);
         render();
+        restoreOpenMenu(menuField);
+        restoreAdvancedDisclosure(advancedWasOpen);
         return;
       }
       const remove = event.target.closest('[data-filter-remove]');
@@ -568,6 +636,7 @@
     STORAGE_PREFIX,
     normalizeSchema,
     createFilterController,
+    splitFilterFields,
     renderFilterComponent,
     mountFilterComponent,
   });
