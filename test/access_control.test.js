@@ -183,6 +183,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'GET /data-maintenance/runs',
     'PATCH /ai/features/:featureKey',
     'PATCH /filter-permissions/definitions/:filterKey',
+    'PATCH /master/:customerId',
     'PATCH /permission-groups/:groupId',
     'PATCH /users/:userId',
     'POST /accounts/:customerId/reassign',
