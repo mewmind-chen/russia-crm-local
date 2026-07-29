@@ -189,7 +189,8 @@ test('modal width stays inside narrow mobile viewports', () => {
   assert.match(css, /\.modal\{box-sizing:border-box;width:min\(620px,calc\(100vw - 40px\)\)/);
 });
 
-test('suggested assignment requires both a real owner id and name', () => {
+test('unassigned leads use the explicit manual assignment flow instead of suggested assignment', () => {
   const js = readAsset('sales-assets', 'app.js');
-  assert.match(js, /item\.suggested_owner_id && item\.suggested_owner_name/);
+  assert.match(js, /id="intakeManualAssignForm"/);
+  assert.doesNotMatch(js, /item\.suggested_owner_id && item\.suggested_owner_name/);
 });

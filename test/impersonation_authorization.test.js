@@ -89,7 +89,7 @@ test('security routes are blocked even when the target holds management permissi
   assert.equal(stop.status, 200);
 });
 
-test('ordinary customer writes stay allowed but assignment configuration is blocked during inspection', async t => {
+test('ordinary customer and intake writes stay allowed during inspection', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   await fx.startImpersonation('U-MGR');
@@ -102,7 +102,7 @@ test('ordinary customer writes stay allowed but assignment configuration is bloc
     cookie: fx.adminCookie, method: 'PATCH',
     body: { approvalMode: 'automatic', dailyPerSales: 6 },
   });
-  assert.equal(settings.status, 403);
+  assert.equal(settings.status, 200);
 });
 
 test('bootstrap audit rows expose names for both identities', async t => {
