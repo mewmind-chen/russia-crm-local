@@ -37,7 +37,7 @@ test('intake bootstrap exposes arbitration layers and keeps manual assignment hi
   const item = body.intake.items.find(row => row.id === 'INTAKE-OTHER');
   assert.ok(item);
   assert.equal(item.arbitration.candidateSnapshotId, 'SNAPSHOT-1');
-  assert.deepEqual(item.arbitration.aiRecommendation.rankedCandidates, []);
+  assert.equal(item.arbitration.aiRecommendation.rankedCandidates[0].name, 'Other');
   assert.equal(item.arbitration.ruleDecision.reasonCode, 'high_value_review');
   assert.equal(item.assignmentAudit.length, 1);
 
