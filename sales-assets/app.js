@@ -1459,6 +1459,18 @@
     return ({ pending: '待分配', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '已在 CRM' })[status] || status;
   }
 
+  function intakeStatusDisplay(item = {}) {
+    const status = String(item.status || '');
+    if (status === 'duplicate') return { label: '已在 CRM（重复）', className: 'gray' };
+    if (status === 'claimed') return { label: '已领取 · 已进入 CRM', className: '' };
+    if (status === 'assigned') return { label: '待领取', className: 'amber' };
+    if (status === 'returned') return { label: '已退回线索池', className: 'red' };
+    if (status === 'rejected') return { label: '不对口', className: 'red' };
+    if (status === 'approved') return { label: '待分配', className: 'gray' };
+    if (status === 'pending') return { label: '待审核', className: 'gray' };
+    return { label: intakeStatusLabel(status) || '状态未知', className: 'gray' };
+  }
+
   function intakeItemAssignable(item) {
     return ['pending', 'approved', 'returned'].includes(item?.status)
       && !Boolean(item?.in_crm)
@@ -1842,7 +1854,7 @@
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong><span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
-          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusLabel(item.status) })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span></div>`,
+          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
           actions,
         ];
         const aiColumns = [
