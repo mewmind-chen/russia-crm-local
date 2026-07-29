@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { seededFixture } = require('./helpers/permission_fixture');
+const { adminFixture, seededFixture } = require('./helpers/permission_fixture');
 
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
 
@@ -11,6 +11,9 @@ test('customer profile header separates CRM lifecycle from access scope', () => 
   assert.match(appSource, /尚未进入 CRM · 线索主档只读/);
   assert.match(appSource, /已进入 CRM · 当前范围只读/);
   assert.match(appSource, /lead\?\.profileAccess\?\.inCrm/);
+  assert.match(appSource, /管理员主档全权限/);
+  assert.match(appSource, /id="customerMasterForm"/);
+  assert.match(appSource, /\/api\/sales-crm\/master\//);
 });
 
 test('intake profile reports not-in-CRM and outside-scope states explicitly', async t => {
@@ -95,4 +98,71 @@ test('intake profile identifies CRM access when the linked account is in scope',
   assert.equal(body.profileAccess.inCrm, true);
   assert.equal(body.profileAccess.crmAccessible, true);
   assert.equal(body.profileAccess.status, 'crm_accessible');
+});
+
+test('real administrators can edit a master before it enters CRM', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  const now = '2026-07-29 11:00:00';
+  fx.db.prepare(`INSERT INTO customer_pool
+    (customer_id,company_name,country,customer_type,description,products)
+    VALUES ('BR-9014','Admin Master','俄罗斯','制造商','Before','MCU')`).run();
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,created_at,updated_at)
+    VALUES ('INTAKE-ADMIN','BATCH-TEST','BR-9014','Admin Master','approved',?,?)`)
+    .run(now, now);
+
+  let response = await fx.request('/api/sales-crm/intake/INTAKE-ADMIN/profile', {
+    cookie: fx.adminCookie,
+  });
+  let body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.profileAccess.readOnly, false);
+  assert.equal(body.profileAccess.source, 'master');
+  assert.equal(body.profileAccess.status, 'admin_master');
+  assert.equal(body.profileAccess.adminMasterAccess, true);
+  assert.equal(body.customerPool[0].description, 'Before');
+
+  response = await fx.request('/api/sales-crm/master/BR-9014', {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: {
+      companyName: 'Admin Master Updated',
+      country: '巴西',
+      customerType: '贸易公司',
+      description: 'After',
+      productFocus: '传感器',
+    },
+  });
+  body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.changed, true);
+  assert.deepEqual(
+    fx.db.prepare(`SELECT company_name,country,customer_type,description,products
+      FROM customer_pool WHERE customer_id='BR-9014'`).get(),
+    {
+      company_name: 'Admin Master Updated',
+      country: '巴西',
+      customer_type: '贸易公司',
+      description: 'After',
+      products: '传感器',
+    },
+  );
+  assert.equal(
+    fx.db.prepare(`SELECT COUNT(*) count FROM crm_accounts
+      WHERE external_customer_id='BR-9014'`).get().count,
+    0,
+  );
+  assert.equal(
+    fx.db.prepare(`SELECT COUNT(*) count FROM crm_audit_log
+      WHERE action='customer_master_updated' AND entity_id='BR-9014'`).get().count,
+    1,
+  );
+
+  response = await fx.request('/api/sales-crm/master/BR-9014', {
+    cookie: fx.otherCookie,
+    method: 'PATCH',
+    body: { country: '德国' },
+  });
+  assert.equal(response.status, 403);
 });

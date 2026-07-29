@@ -51,6 +51,7 @@
     customerProfileIntakeItemId: '',
     customerProfileReadOnly: false,
     customerProfileLead: null,
+    customerProfileMaster: null,
     customerAi: null,
     customerAiError: '',
     customerAiLoading: false,
@@ -1711,11 +1712,33 @@
     if (!externalCustomerId) return toast('该线索未关联客户主档，暂时无法查看完整资料');
     const account = state.data.accounts.find(row => row.external_customer_id === externalCustomerId);
     if (account) return openCustomerProfile(externalCustomerId);
+    const adminMasterAccess = state.data.user?.role === 'admin' && !state.data.impersonation;
+    let master = null;
+    if (adminMasterAccess) {
+      try {
+        const profile = await api(`/api/sales-crm/intake/${encodeURIComponent(itemId)}/profile`);
+        master = profile.customerPool?.[0] || null;
+        if (master) {
+          item = {
+            ...item,
+            company_name: master.companyName || item.company_name,
+            customer_type: master.customerType,
+            industry: master.industry,
+            customerTags: master.tags || item.customerTags || [],
+            in_crm: Boolean(profile.profileAccess?.inCrm),
+            profileAccess: profile.profileAccess || null,
+          };
+        }
+      } catch (error) {
+        return toast(error.message || '客户主档读取失败');
+      }
+    }
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
     state.customerProfileExternalId = externalCustomerId;
     state.customerProfileIntakeItemId = String(item.id || itemId);
-    state.customerProfileReadOnly = true;
+    state.customerProfileReadOnly = !adminMasterAccess;
     state.customerProfileLead = item;
+    state.customerProfileMaster = master;
     state.selectedCustomerId = '';
     state.customerAiPollCount = 0;
     state.customerAi = null;
@@ -1739,7 +1762,10 @@
     const account = state.data?.accounts?.find(item => item.id === state.selectedCustomerId);
     const lead = state.customerProfileLead;
     if (!account && !lead) return;
-    const readOnly = state.customerProfileReadOnly || !account;
+    const adminMasterAccess = !account
+      && state.data.user?.role === 'admin'
+      && !state.data.impersonation;
+    const readOnly = state.customerProfileReadOnly || (!account && !adminMasterAccess);
     const leadInCrm = Boolean(
       lead?.in_crm
       || lead?.crm_customer_id
@@ -1748,7 +1774,9 @@
     $('#customerProfileTitle').textContent = accountDisplayName(account) || lead?.company_name || '客户资料';
     $('#customerProfileIdentity').textContent = account
       ? accountIdentity(account)
-      : `${state.customerProfileExternalId} · ${leadInCrm
+      : adminMasterAccess
+        ? `${state.customerProfileExternalId} · 管理员主档全权限`
+        : `${state.customerProfileExternalId} · ${leadInCrm
         ? '已进入 CRM · 当前范围只读'
         : '尚未进入 CRM · 线索主档只读'}`;
     $('#customerProfileTags').innerHTML = sourceTagMarkup(account || {
@@ -1756,11 +1784,11 @@
       industry: lead?.industry,
       customerTags: lead?.customerTags || [],
     });
-    $('#customerProfileActivity').classList.toggle('hidden', readOnly || !can('record_activity'));
-    $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
+    $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
+    $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerProfileNickname').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerAiStation')?.classList.toggle('hidden', readOnly || !customerAIEnabled());
+    $('#customerProfileNickname').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
+    $('#customerAiStation')?.classList.toggle('hidden', readOnly || !account || !customerAIEnabled());
   }
 
   function returnFromCustomerProfile() {
@@ -1776,6 +1804,7 @@
     state.customerProfileIntakeItemId = '';
     state.customerProfileReadOnly = false;
     state.customerProfileLead = null;
+    state.customerProfileMaster = null;
     const url = new URL(location.href);
     url.searchParams.delete('customer');
     url.searchParams.delete('intake');
@@ -4399,6 +4428,26 @@
     </form>`);
   }
 
+  function openCustomerMasterEditModal() {
+    const master = state.customerProfileMaster;
+    if (!master || state.data.user?.role !== 'admin' || state.data.impersonation) return;
+    const options = state.data.customerOptions || {};
+    openModal('编辑客户主档', 'ADMIN MASTER PROFILE', `<form id="customerMasterForm" class="form-grid two">
+      <label class="span-2">公司名称<input name="companyName" value="${esc(master.companyName)}"></label>
+      <label>俄文名称<input name="russianName" value="${esc(master.russianName)}"></label>
+      <label>英文名称<input name="englishName" value="${esc(master.englishName)}"></label>
+      <label>国家 / 地区<input name="country" value="${esc(master.country)}"></label>
+      <label>城市<input name="city" value="${esc(master.city)}"></label>
+      <label class="span-2">官网<input name="website" type="url" value="${esc(master.website)}" placeholder="https://example.com"></label>
+      <label>行业<input name="industry" value="${esc(master.industry)}"></label>
+      <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, master.customerType, '请选择客户类型')}</select></label>
+      <label>评级<input name="rating" value="${esc(master.rating)}"></label>
+      <label class="span-2">重点产品<input name="productFocus" value="${esc(master.products)}"></label>
+      <label class="span-2">客户简介<textarea name="description">${esc(master.description)}</textarea></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存主档</button></div>
+    </form>`);
+  }
+
   function openNicknameModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     if (!account || !can('edit_customer')) return;
@@ -4756,6 +4805,22 @@
         await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         await refresh('客户资料已更新');
         reloadCustomerProfileFrame();
+      } else if (form.id === 'customerMasterForm') {
+        const payload = formPayload(form);
+        const result = await api(`/api/sales-crm/master/${encodeURIComponent(state.customerProfileExternalId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+        state.customerProfileMaster = { ...state.customerProfileMaster, ...payload, updatedAt: result.updatedAt };
+        Object.assign(state.customerProfileLead, {
+          company_name: payload.companyName,
+          customer_type: payload.customerType,
+          industry: payload.industry,
+        });
+        closeModal();
+        renderCustomerProfileHeader();
+        reloadCustomerProfileFrame();
+        toast(result.changed ? '客户主档已更新' : '客户主档没有变化');
       } else if (form.id === 'nicknameForm') {
         const payload = formPayload(form);
         const customerId = payload.customerId;
@@ -4942,7 +5007,8 @@
     }
     if (event.target.closest('#customerProfileDataEdit')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑资料');
-      else openCustomerProfileEditModal(state.selectedCustomerId);
+      else if (state.selectedCustomerId) openCustomerProfileEditModal(state.selectedCustomerId);
+      else openCustomerMasterEditModal();
     }
     if (event.target.closest('#customerProfileNickname')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能设置昵称');
