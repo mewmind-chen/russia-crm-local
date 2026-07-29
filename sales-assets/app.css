@@ -89,8 +89,55 @@ h3{font-size:16px;line-height:1.4;font-weight:650}
 @media(max-width:780px){.master-profile .insight-head{align-items:flex-start;flex-wrap:wrap}.master-profile .assignment-actions{justify-content:flex-start}}
 @media(max-width:780px){.action-proposal-compose{grid-column:1;grid-template-columns:1fr}.action-proposal-compose .button{grid-column:1;width:100%}}
 
-/* Access administration: permission groups and tri-state overrides */
+/* Access administration */
+.access-admin-view{padding-bottom:24px}
+body.access-admin-active .topbar .filters-inline,body.access-admin-active #newCustomerBtn,body.access-admin-active #quickUpdateBtn{display:none!important}
+.access-intro{align-items:center;margin-bottom:16px}
+.access-intro h2{font-size:20px}
+.access-intro p{max-width:680px;font-size:13px}
+.access-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.access-summary-card{min-height:96px;padding:14px 16px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-panel);display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-content:center}
+.access-summary-card span{color:var(--text-secondary);font-size:12px;font-weight:600}
+.access-summary-card strong{grid-column:2;grid-row:1/span 2;align-self:center;color:var(--text-primary);font-size:28px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}
+.access-summary-card small{color:var(--text-secondary);font-size:11px}
+.access-section-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px;border-bottom:1px solid var(--border-default)}
+.access-section-tabs button{position:relative;min-height:62px;padding:9px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--text-secondary);display:grid;gap:2px;text-align:left;letter-spacing:0;transition:color .16s,background-color .16s,border-color .16s}
+.access-section-tabs button:hover{background:var(--surface-subtle);color:var(--text-primary)}
+.access-section-tabs button[aria-selected="true"]{border-bottom-color:var(--brand);background:var(--brand-subtle);color:var(--brand)}
+.access-section-tabs button:focus-visible{z-index:1;outline:0;box-shadow:inset 0 0 0 3px rgba(15,118,110,.2)}
+.access-section-tabs span{font-size:13px;font-weight:650}
+.access-section-tabs small{color:var(--text-secondary);font-size:11px;font-weight:500}
+.access-workspace-panel{display:grid;gap:14px}
+.access-panel .panel-head{align-items:center}
+.access-panel .panel-head>div{min-width:0}
+.access-panel .panel-head p:not(.eyebrow){max-width:720px;margin:4px 0 0;color:var(--text-secondary);font-size:12px}
 .access-panel .panel-head .button{white-space:nowrap}
+.access-panel>.data-table{border:0;border-radius:0}
+.access-user-table table{min-width:940px}
+.archived-users-panel>summary{min-height:58px;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;list-style:none}
+.archived-users-panel>summary::-webkit-details-marker{display:none}
+.archived-users-panel>summary:before{content:"›";width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:var(--surface-subtle);color:var(--text-secondary);font-size:18px;line-height:1;transition:transform .16s}
+.archived-users-panel[open]>summary:before{transform:rotate(90deg)}
+.archived-users-panel>summary span{flex:1;display:grid;gap:2px}
+.archived-users-panel>summary b{font-size:15px}
+.archived-users-panel>summary small{color:var(--text-secondary);font-size:11px;font-weight:500}
+.archived-users-panel>summary strong{color:var(--text-secondary);font-size:12px;font-variant-numeric:tabular-nums}
+.archived-users-panel[open]>summary{border-bottom:1px solid var(--border-default)}
+.user-row-actions{display:flex;align-items:flex-start;gap:8px;min-width:250px}
+.user-primary-actions{display:flex;align-items:center;gap:6px}
+.user-primary-actions .text-button,.user-action-menu>summary{min-height:32px;padding:6px 8px;border-radius:6px;font-size:12px;white-space:nowrap}
+.user-primary-actions .text-button:hover,.user-action-menu>summary:hover{background:var(--brand-subtle)}
+.current-account-label{display:inline-flex;align-items:center;min-height:32px;padding:4px 8px;color:var(--text-secondary);font-size:11px;white-space:nowrap}
+.user-action-menu{min-width:82px}
+.user-action-menu>summary{display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-weight:600;cursor:pointer;list-style:none}
+.user-action-menu>summary::-webkit-details-marker{display:none}
+.user-action-menu>summary:after{content:"⌄";margin-left:5px;font-size:11px}
+.user-action-menu[open]>summary{background:var(--surface-subtle);color:var(--text-primary)}
+.user-action-menu>div{display:grid;gap:2px;margin-top:5px;padding-top:5px;border-top:1px solid var(--border-default)}
+.user-action-menu>div .text-button{min-height:30px;padding:5px 8px;border-radius:5px;text-align:left;font-size:11px;white-space:nowrap}
+.user-action-menu>div .text-button:hover{background:var(--surface-subtle)}
+.user-action-menu>div .danger-text{margin-top:3px;border-top:1px solid var(--border-default);border-radius:0}
+.access-governance-panel .assistant-runtime-panel,.access-workspace-panel>.assistant-runtime-panel{margin:0;padding:16px 18px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-panel)}
 .permission-override-list{display:grid;gap:8px;max-height:48vh;overflow:auto;padding-right:4px}
 .permission-override-row{display:grid;grid-template-columns:1fr 132px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .permission-override-row strong{font-size:12px}
@@ -101,7 +148,9 @@ h3{font-size:16px;line-height:1.4;font-weight:650}
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .permission-check{display:flex;gap:6px;align-items:center;font-size:11px;color:#435149}
 .permission-check small{display:block;color:var(--muted);font-size:9px;line-height:1.45;margin-top:2px}
-@media(max-width:780px){.permission-override-row{grid-template-columns:1fr}.permission-override-row select{width:100%}.permission-grid{grid-template-columns:1fr 1fr}.assignment-actions{flex-wrap:wrap}.access-panel .panel-head{flex-wrap:wrap}}
+@media(max-width:980px){.access-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1180px){.access-user-table{overflow:visible;background:transparent;border:0}.access-user-table table,.access-user-table tbody{display:block;min-width:0}.access-user-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.access-user-table tbody{display:grid;gap:10px;padding:10px;background:var(--surface-subtle)}.access-user-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 12px;padding:12px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-panel)}.access-user-table td{min-width:0;padding:0!important;border:0!important}.access-user-table td:first-child{grid-column:1/-1;padding-bottom:10px!important;border-bottom:1px solid var(--border-default)!important}.access-user-table td:nth-child(n+2):nth-child(-n+5){display:grid;gap:3px;align-content:start}.access-user-table td:nth-child(n+2):nth-child(-n+5):before{color:var(--text-secondary);font-size:10px;font-weight:600}.access-user-table td:nth-child(2):before{content:"角色"}.access-user-table td:nth-child(3):before{content:"权限组"}.access-user-table td:nth-child(4):before{content:"个人覆盖"}.access-user-table td:nth-child(5):before{content:"账号状态"}.access-user-table td:last-child{grid-column:1/-1;padding-top:8px!important;border-top:1px solid var(--border-default)!important}.access-user-table:after{display:none}.user-row-actions{min-width:0;flex-wrap:wrap}}
+@media(max-width:780px){.access-intro{align-items:stretch;flex-direction:column;gap:12px}.access-intro .button{width:100%}.access-summary-grid{gap:8px;margin-bottom:12px}.access-summary-card{min-height:84px;padding:12px}.access-summary-card strong{font-size:24px}.access-section-tabs{margin-inline:-12px;padding-inline:12px;overflow-x:auto}.access-section-tabs button{min-width:138px;min-height:52px;padding:8px 10px}.access-section-tabs small{display:none}.access-panel .panel-head{align-items:flex-start;flex-wrap:wrap}.archived-users-panel>summary{padding:12px}.archived-users-panel>summary small{white-space:normal}.user-primary-actions .text-button,.user-action-menu>summary{min-height:44px}.user-action-menu>div .text-button{min-height:44px}.permission-override-row{grid-template-columns:1fr}.permission-override-row select{width:100%}.permission-grid{grid-template-columns:1fr 1fr}.assignment-actions{flex-wrap:wrap}.access-workspace-panel>.assistant-runtime-panel{padding:14px 12px}}
 
 /* Identity inspection banner */
 .impersonation-banner{margin:14px 0 0;background:#102b22;color:#fff;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;box-shadow:var(--shadow)}

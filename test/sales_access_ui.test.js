@@ -38,6 +38,42 @@ test('user table renders group column override counts and scoped actions', () =>
   assert.match(js, /manage_users/);
 });
 
+test('access administration separates account permissions and governance work', () => {
+  const html = readAsset('sales-crm.html');
+  const js = readAsset('sales-assets', 'app.js');
+  const css = readAsset('sales-assets', 'app.css');
+  for (const marker of [
+    'id="accessSummary"',
+    'id="accessAccountsPanel"',
+    'id="accessPermissionsPanel"',
+    'id="accessGovernancePanel"',
+    'role="tablist"',
+    'data-access-section="accounts"',
+    'data-access-section="permissions"',
+    'data-access-section="governance"',
+  ]) {
+    assert.match(html, new RegExp(marker));
+  }
+  assert.match(js, /function switchAccessSection/);
+  assert.match(js, /aria-selected/);
+  assert.match(js, /access-admin-active/);
+  assert.match(css, /\.access-summary-grid/);
+  assert.match(css, /\.access-section-tabs/);
+  assert.match(css, /body\.access-admin-active \.topbar \.filters-inline/);
+  assert.match(css, /@media\(max-width:1180px\)\{\.access-user-table/);
+  assert.match(css, /\.access-user-table tr\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.access-intro\{align-items:stretch;flex-direction:column/);
+});
+
+test('user actions keep frequent commands visible and secondary commands in a menu', () => {
+  const js = readAsset('sales-assets', 'app.js');
+  const css = readAsset('sales-assets', 'app.css');
+  assert.match(js, /user-primary-actions/);
+  assert.match(js, /user-action-menu/);
+  assert.match(js, /更多操作/);
+  assert.match(css, /\.user-action-menu/);
+});
+
 test('audit rows show real and effective operators when they differ', () => {
   const js = readAsset('sales-assets', 'app.js');
   assert.match(js, /real_user_name/);
