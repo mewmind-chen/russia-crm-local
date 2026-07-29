@@ -1456,7 +1456,13 @@
   }
 
   function intakeStatusLabel(status) {
-    return ({ pending: '待分配', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '重复客户' })[status] || status;
+    return ({ pending: '待分配', approved: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口', duplicate: '已在 CRM' })[status] || status;
+  }
+
+  function intakeItemAssignable(item) {
+    return ['pending', 'approved', 'returned'].includes(item?.status)
+      && !Boolean(item?.in_crm)
+      && !String(item?.crm_customer_id || '').trim();
   }
 
   const intakeFilterControls = {
@@ -1797,7 +1803,7 @@
     const canManualAssign = !salesView
       && state.intakeAuthorizedPage === 'intake'
       && !state.data.impersonation;
-    const assignableItems = items.filter(item => ['pending', 'approved', 'returned'].includes(item.status));
+    const assignableItems = items.filter(intakeItemAssignable);
     const selectedVisibleCount = assignableItems.filter(item => state.selectedIntakeIds.has(item.id)).length;
     renderIntakeAssignmentBar();
     const showAI = customerAIEnabled();
@@ -1813,7 +1819,7 @@
         let actions = '';
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
-        else if (!salesView && ['pending', 'approved', 'returned'].includes(item.status)) actions = '—';
+        else if (!salesView && intakeItemAssignable(item)) actions = '—';
         else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
         else actions = '—';
         const signals = intakeSignals(item);
@@ -1847,7 +1853,7 @@
           ? [businessColumns[0], ...aiColumns, ...businessColumns.slice(1)]
           : businessColumns;
         if (canManualAssign) {
-          row.unshift(['pending', 'approved', 'returned'].includes(item.status)
+          row.unshift(intakeItemAssignable(item)
             ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(item.company_name)}"></span>`
             : '');
         }
@@ -5861,7 +5867,7 @@
     }
     if (event.target.id === 'selectVisibleIntake') {
       const assignable = (state.data.intake?.items || [])
-        .filter(item => ['pending', 'approved', 'returned'].includes(item.status));
+        .filter(intakeItemAssignable);
       assignable.forEach(item => {
         if (event.target.checked) state.selectedIntakeIds.add(item.id);
         else state.selectedIntakeIds.delete(item.id);

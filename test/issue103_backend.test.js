@@ -56,8 +56,8 @@ test('unified lead pool merges pending and approved with filter-aligned counts',
     '/api/sales-crm/intake?sourceBatch=BATCH-103&pageSize=50',
     { cookie: fx.adminCookie },
   );
-  assert.equal(allBusinessStatuses.total, 2);
-  assert.doesNotMatch(allBusinessStatuses.items.map(item => item.status).join(','), /duplicate/);
+  assert.equal(allBusinessStatuses.total, 3);
+  assert.match(allBusinessStatuses.items.map(item => item.status).join(','), /duplicate/);
 
   const withoutWebsite = await fx.requestJson(
     '/api/sales-crm/intake?status=unassigned&sourceBatch=BATCH-103&hasWebsite=0',
