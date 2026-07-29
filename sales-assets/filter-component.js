@@ -464,6 +464,13 @@
     </details>`;
   }
 
+  function renderAdvancedFilterIcon() {
+    const icon = globalThis.TradePulseUIFormat?.icon;
+    return `<span class="tp-filter-advanced-icon" aria-hidden="true">${
+      typeof icon === 'function' ? icon('pipeline') : '≡'
+    }</span>`;
+  }
+
   function renderFilterComponent(model = {}) {
     const status = model.status || 'ready';
     const schema = normalizeSchema(model.schema);
@@ -484,7 +491,7 @@
     const { searchFields, primaryFields, advancedFields } = splitFilterFields(schema);
     const appliedCount = Object.keys(state.applied).length;
     const selectedAdvancedCount = advancedFields.filter(field => (
-      state.applied[field.key] !== undefined
+      state.draft[field.key] !== undefined
     )).length;
     return `<section class="tp-filter-component" data-filter-status="ready"
         data-schema-version="${escapeHtml(schema.schemaVersion)}"
@@ -498,7 +505,13 @@
         </div>
       </div>
       ${advancedFields.length ? `<details class="tp-filter-advanced">
-        <summary>详细筛选${selectedAdvancedCount ? ` <span>${selectedAdvancedCount}</span>` : ''}</summary>
+        <summary aria-expanded="false">
+          ${renderAdvancedFilterIcon()}
+          <span class="tp-filter-advanced-label">详细筛选</span>
+          <span class="tp-filter-advanced-count" data-filter-advanced-count
+            aria-label="已选 ${selectedAdvancedCount} 个高级条件" ${selectedAdvancedCount ? '' : 'hidden'}>${selectedAdvancedCount}</span>
+          <span class="tp-filter-advanced-arrow" aria-hidden="true">▼</span>
+        </summary>
         <div class="tp-filter-advanced-grid">${advancedFields.map(field => renderCompactField(field, state)).join('')}</div>
       </details>` : ''}
       <div class="tp-filter-applied">
@@ -583,12 +596,17 @@
 
     function handleInput(event) {
       const search = event.target.closest('[data-filter-search]');
-      if (search && rootElement.contains(search)) controller.setDraft(search.dataset.filterSearch, search.value);
+      if (search && rootElement.contains(search)) {
+        controller.setDraft(search.dataset.filterSearch, search.value);
+        return;
+      }
+      const input = event.target.closest('[data-filter-basic]');
+      if (!input || !rootElement.contains(input) || !['date', 'text'].includes(input.type)) return;
+      setBasicDraft(input);
+      syncAdvancedCount();
     }
 
-    function handleChange(event) {
-      const input = event.target.closest('[data-filter-basic]');
-      if (!input || !rootElement.contains(input)) return;
+    function setBasicDraft(input) {
       const fieldKey = input.dataset.filterBasic;
       if (input.dataset.rangeEdge) {
         const current = controller.getState().draft[fieldKey] || {};
@@ -602,9 +620,37 @@
       }
     }
 
+    function syncAdvancedCount() {
+      const counter = rootElement.querySelector('[data-filter-advanced-count]');
+      if (!counter) return;
+      const { advancedFields } = splitFilterFields(controller.getSchema());
+      const draft = controller.getState().draft;
+      const count = advancedFields.filter(field => draft[field.key] !== undefined).length;
+      counter.textContent = String(count);
+      counter.hidden = count === 0;
+      counter.setAttribute('aria-label', `已选 ${count} 个高级条件`);
+    }
+
+    function handleChange(event) {
+      const input = event.target.closest('[data-filter-basic]');
+      if (!input || !rootElement.contains(input)) return;
+      setBasicDraft(input);
+      syncAdvancedCount();
+    }
+
+    function handleToggle(event) {
+      const advanced = event.target.closest?.('.tp-filter-advanced');
+      if (!advanced || !rootElement.contains(advanced)) return;
+      const summary = advanced.querySelector('summary');
+      summary?.setAttribute('aria-expanded', String(advanced.open));
+      const arrow = summary?.querySelector('.tp-filter-advanced-arrow');
+      if (arrow) arrow.textContent = advanced.open ? '▲' : '▼';
+    }
+
     rootElement.addEventListener('click', handleClick);
     rootElement.addEventListener('input', handleInput);
     rootElement.addEventListener('change', handleChange);
+    rootElement.addEventListener('toggle', handleToggle, true);
     render();
 
     return {
@@ -627,6 +673,7 @@
         rootElement.removeEventListener('click', handleClick);
         rootElement.removeEventListener('input', handleInput);
         rootElement.removeEventListener('change', handleChange);
+        rootElement.removeEventListener('toggle', handleToggle, true);
         rootElement.innerHTML = '';
       },
     };
