@@ -23,6 +23,12 @@ function excelDate(val) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
+function localDateTimeText(d = new Date()) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+    + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 function sheetToRows(workbook, sheetName) {
   return workbook[sheetName] || [];
 }
@@ -43,6 +49,7 @@ async function main() {
 
   console.log('读取 Excel...');
   const wb = loadWorkbookRows(XLSX_PATH);
+  const importedAt = localDateTimeText();
   const sheetNames = Object.keys(wb);
   console.log('工作表:', sheetNames.join(', '));
 
@@ -118,8 +125,9 @@ async function main() {
         customer_id, domain, company_name, russian_name, english_name, country, city,
         website, industry, customer_type, description, products, rating, current_pool,
         phone, email, inn, risk_status, website_verification, contact_count,
-        deep_report, source_file, first_found, last_found, search_count, verified, notes
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+        deep_report, source_file, first_found, last_found, search_count, verified, notes,
+        created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
 
       const insert = db.transaction(rows => {
         for (let i = 1; i < rows.length; i++) {
@@ -154,6 +162,8 @@ async function main() {
             String(row[col('搜索次数')] || '').trim() || '0',
             String(row[col('已验证')] || '').trim(),
             String(row[col('备注')] || '').trim(),
+            importedAt,
+            importedAt,
           );
         }
       });

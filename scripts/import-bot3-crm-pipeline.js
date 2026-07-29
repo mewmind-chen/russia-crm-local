@@ -79,9 +79,13 @@ Notes:
 }
 
 function todayText() {
-  const d = new Date();
+  return localDateTimeText().slice(0, 10);
+}
+
+function localDateTimeText(d = new Date()) {
   const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+    + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function clean(value) {
@@ -186,6 +190,7 @@ function notesForLead(lead, previousNotes = '') {
 }
 
 function mapLead(lead, existingRow) {
+  const importedAt = localDateTimeText();
   const website = ensureWebsite(lead);
   const domain = normalizeDomain(lead.domain || website);
   const names = splitNames(lead);
@@ -231,6 +236,8 @@ function mapLead(lead, existingRow) {
     search_count: String(Number(existingRow?.search_count || 0) + (existingRow ? 1 : 0 || 1)),
     verified: existingRow?.verified || '',
     notes: notesForLead(lead, existingRow?.notes || ''),
+    created_at: existingRow ? (existingRow.created_at || '') : importedAt,
+    updated_at: importedAt,
   };
 }
 
@@ -314,14 +321,14 @@ function main() {
       description, products, rating, current_pool,
       phone, email, inn, risk_status, website_verification,
       contact_count, deep_report, source_file,
-      first_found, last_found, search_count, verified, notes
+      first_found, last_found, search_count, verified, notes, created_at, updated_at
     ) VALUES (
       @customer_id, @domain, @company_name, @russian_name, @english_name,
       @country, @city, @website, @industry, @customer_type,
       @description, @products, @rating, @current_pool,
       @phone, @email, @inn, @risk_status, @website_verification,
       @contact_count, @deep_report, @source_file,
-      @first_found, @last_found, @search_count, @verified, @notes
+      @first_found, @last_found, @search_count, @verified, @notes, @created_at, @updated_at
     )
   `);
   const update = db.prepare(`
@@ -344,7 +351,8 @@ function main() {
       source_file = @source_file,
       last_found = @last_found,
       search_count = @search_count,
-      notes = @notes
+      notes = @notes,
+      updated_at = @updated_at
     WHERE domain = @domain
   `);
 
