@@ -1696,6 +1696,8 @@
           customer_type: pool.customerType,
           industry: pool.industry,
           customerTags: pool.tags || [],
+          in_crm: Boolean(profile.profileAccess?.inCrm),
+          profileAccess: profile.profileAccess || null,
         } : null;
       } catch (error) {
         if (state.view === 'customerProfile' && !state.customerProfileExternalId) {
@@ -1738,10 +1740,17 @@
     const lead = state.customerProfileLead;
     if (!account && !lead) return;
     const readOnly = state.customerProfileReadOnly || !account;
+    const leadInCrm = Boolean(
+      lead?.in_crm
+      || lead?.crm_customer_id
+      || lead?.profileAccess?.inCrm
+    );
     $('#customerProfileTitle').textContent = accountDisplayName(account) || lead?.company_name || '客户资料';
     $('#customerProfileIdentity').textContent = account
       ? accountIdentity(account)
-      : `${state.customerProfileExternalId} · 未进入或无权访问 CRM · 只读主档`;
+      : `${state.customerProfileExternalId} · ${leadInCrm
+        ? '已进入 CRM · 当前范围只读'
+        : '尚未进入 CRM · 线索主档只读'}`;
     $('#customerProfileTags').innerHTML = sourceTagMarkup(account || {
       customer_type: lead?.customer_type,
       industry: lead?.industry,
