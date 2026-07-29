@@ -132,5 +132,5 @@ test('today task UI exposes three levels, one action, reason tags, and cache-bus
   assert.match(js, /同一对象只显示一行|reasonCount|otherReasons/);
   assert.match(js, /唯一建议动作/);
   assert.match(css, /\.alert-reasons/);
-  assert.match(css, /\.data-table\{overflow:auto\}/);
+  assert.match(css, /\.data-table\{[^}]*overflow:auto/);
 });

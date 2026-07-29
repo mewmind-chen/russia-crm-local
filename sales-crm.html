@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260728-issue-116-research">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260728-issue-116">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260729-ui-polish">
+  <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-ui-polish">
 </head>
 <body data-app="sales">
   <div id="loginScreen" class="login-screen">
@@ -46,33 +46,33 @@
       </a>
       <nav id="nav" class="nav">
         <div class="nav-group"><div class="nav-group-label">今日工作</div>
-          <button data-view="dashboard" data-permission="view_dashboard" class="active"><i>◫</i><span>经营驾驶舱</span></button>
-          <button data-view="alerts" data-permission="view_alerts"><i>!</i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
-          <button data-view="notifications" data-permission="view_customers"><i>◉</i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
-          <button data-view="aiTasks" data-permission="view_customers" data-ai-business><i>✦</i><span>AI任务中心</span></button>
+          <button data-view="dashboard" data-permission="view_dashboard" class="active"><i data-tp-icon="dashboard" aria-hidden="true"></i><span>经营驾驶舱</span></button>
+          <button data-view="alerts" data-permission="view_alerts"><i data-tp-icon="alert" aria-hidden="true"></i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
+          <button data-view="notifications" data-permission="view_customers"><i data-tp-icon="bell" aria-hidden="true"></i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
+          <button data-view="aiTasks" data-permission="view_customers" data-ai-business><i data-tp-icon="sparkles" aria-hidden="true"></i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
-          <button data-view="pool" data-permission="view_intake"><i>⇣</i><span id="navIntakeLabel">线索池</span><b id="navIntakeCount">0</b></button>
-          <button data-view="contacts" data-permission="view_contacts"><i>♙</i><span>负责人线索</span></button>
-          <button data-view="recon" data-permission="view_recon"><i>⌕</i><span>Recon 情报</span></button>
-          <button data-view="customers" data-permission="view_customers"><i>◎</i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
-          <button data-view="recycleBin" data-permission="manage_customer_recycle"><i>↺</i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
-          <button data-view="pipeline" data-permission="view_pipeline"><i>≡</i><span>推进管道</span></button>
+          <button data-view="pool" data-permission="view_intake"><i data-tp-icon="inbox" aria-hidden="true"></i><span id="navIntakeLabel">线索池</span><b id="navIntakeCount">0</b></button>
+          <button data-view="contacts" data-permission="view_contacts"><i data-tp-icon="users" aria-hidden="true"></i><span>负责人线索</span></button>
+          <button data-view="recon" data-permission="view_recon"><i data-tp-icon="search" aria-hidden="true"></i><span>Recon 情报</span></button>
+          <button data-view="customers" data-permission="view_customers"><i data-tp-icon="building" aria-hidden="true"></i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
+          <button data-view="recycleBin" data-permission="manage_customer_recycle"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
+          <button data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
-          <button data-view="team" data-permission="view_team"><i>◇</i><span>销售能力</span></button>
-          <button data-view="insights" data-permission="view_insights"><i>✎</i><span>经理评价</span><b id="navInsightCount">0</b></button>
-          <button data-view="markets" data-permission="view_markets"><i>⌁</i><span>市场策略</span></button>
-          <button data-view="users" data-permission="view_users"><i>⊕</i><span>用户与权限</span></button>
-          <button data-view="maintenance" data-permission="manage_data_maintenance"><i>⌫</i><span>数据维护</span></button>
+          <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>销售能力</span></button>
+          <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
+          <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
+          <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
+          <button data-view="maintenance" data-permission="manage_data_maintenance"><i data-tp-icon="settings" aria-hidden="true"></i><span>数据维护</span></button>
         </div>
       </nav>
       <div class="sidebar-foot">
         <div class="account-mini">
           <span id="userAvatar" class="avatar">管</span>
           <div><strong id="userName">—</strong><small id="userRole">—</small></div>
-          <button id="changePasswordBtn" title="修改密码">•••</button>
-          <button id="logoutBtn" title="退出登录">↪</button>
+          <button id="changePasswordBtn" class="icon-button" type="button" title="修改密码" aria-label="修改密码"><span data-tp-icon="settings" aria-hidden="true"></span></button>
+          <button id="logoutBtn" class="icon-button" type="button" title="退出登录" aria-label="退出登录"><span data-tp-icon="logout" aria-hidden="true"></span></button>
         </div>
       </div>
     </aside>
@@ -84,14 +84,14 @@
         <button id="stopImpersonationBtn" class="button secondary" type="button">返回管理员账号</button>
       </div>
       <header class="topbar">
-        <button id="salesMenuBtn" class="menu-button" type="button" aria-label="打开导航">☰</button>
+        <button id="salesMenuBtn" class="menu-button icon-button" type="button" aria-label="打开导航" title="打开导航"><span data-tp-icon="menu" aria-hidden="true"></span></button>
         <div>
           <p id="viewEyebrow" class="eyebrow">MANAGEMENT OVERVIEW</p>
           <h1 id="viewTitle">经营驾驶舱</h1>
         </div>
         <div class="top-actions">
-          <button id="notificationButton" data-view="notifications" data-permission="view_customers" class="notification-button" type="button" title="打开通知中心" aria-label="打开通知中心">
-            <span aria-hidden="true">&#128276;</span><b id="topNotificationCount">0</b>
+          <button id="notificationButton" data-view="notifications" data-permission="view_customers" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
+            <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
           </button>
           <span class="workspace-chip">销售经营中心</span>
           <div class="filters-inline">
@@ -116,7 +116,7 @@
           </article>
           <article class="panel span-4 attention-panel">
             <div class="panel-head">
-              <div><p class="eyebrow red">NEEDS ATTENTION</p><h2>需要我处理</h2></div>
+              <div><h2>需要我处理</h2><span id="attentionSummary" class="attention-summary">当前无待处理提醒</span></div>
               <button class="text-button" data-go="alerts">查看全部</button>
             </div>
             <div id="attentionList" class="attention-list"></div>
@@ -289,7 +289,7 @@
       <section id="customerProfileView" class="view customer-profile-view">
         <div class="customer-profile-toolbar">
           <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
-          <div><p class="eyebrow">CUSTOMER PROFILE</p><h2 id="customerProfileTitle">客户资料</h2><p id="customerProfileIdentity" class="subtle"></p><div id="customerProfileTags" class="source-tag-row"></div></div>
+          <div><h2 id="customerProfileTitle">客户资料</h2><p id="customerProfileIdentity" class="subtle"></p><div id="customerProfileTags" class="source-tag-row"></div></div>
           <div class="customer-profile-actions">
             <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
             <button id="customerProfileNickname" class="button secondary hidden" type="button">客户昵称</button>
@@ -299,7 +299,7 @@
         </div>
         <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
           <div class="customer-ai-station-head">
-            <div><p class="eyebrow">AI SALES ASSIST</p><h3>AI 客户分析与销售资料包</h3></div>
+            <div><h3>AI 客户分析与销售资料包</h3></div>
             <div id="customerAiStationActions" class="customer-ai-station-actions"></div>
           </div>
           <div id="customerAiStationBody" class="customer-ai-station-body"><span class="subtle">正在读取评分状态…</span></div>
@@ -500,7 +500,7 @@
 
   <aside id="customerDrawer" class="drawer" aria-hidden="true">
     <div class="drawer-head">
-      <button class="icon-button" data-close-drawer>×</button>
+      <button class="icon-button" type="button" data-close-drawer title="关闭客户详情" aria-label="关闭客户详情"><span data-tp-icon="close" aria-hidden="true"></span></button>
       <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
       <button id="drawerNicknameBtn" class="button secondary hidden" type="button">客户昵称</button>
       <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录动作</button>
@@ -511,12 +511,13 @@
 
   <div id="modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal">
-      <div class="modal-head"><div><p id="modalEyebrow" class="eyebrow">QUICK UPDATE</p><h2 id="modalTitle">快速更新</h2></div><button class="icon-button" data-close-modal>×</button></div>
+      <div class="modal-head"><div><p id="modalEyebrow" class="eyebrow">QUICK UPDATE</p><h2 id="modalTitle">快速更新</h2></div><button class="icon-button" type="button" data-close-modal title="关闭弹窗" aria-label="关闭弹窗"><span data-tp-icon="close" aria-hidden="true"></span></button></div>
       <div id="modalBody"></div>
     </div>
   </div>
-  <div id="toast" class="toast"></div>
-  <script src="/sales-assets/filter-component.js?v=20260728-issue-116"></script>
-  <script src="/sales-assets/app.js?v=20260728-issue-116-research-admin"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script src="/sales-assets/filter-component.js?v=20260729-ui-polish"></script>
+  <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
+  <script src="/sales-assets/app.js?v=20260729-ui-polish"></script>
 </body>
 </html>

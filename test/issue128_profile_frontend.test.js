@@ -81,8 +81,21 @@ test('issue 128 tag changes refresh the lifecycle value in the open profile', ()
   assert.match(saveTags, /r\.updatedAt\|\|''/);
 });
 
-test('issue 128 detail cards retain bounded desktop and single-column mobile grids', () => {
-  assert.match(workbench, /\.detail-grid \{ display: grid; grid-template-columns: repeat\(3,minmax\(180px,1fr\)\); gap: 10px; \}/);
-  assert.match(workbench, /@media \(max-width:720px\)[^{]*\{[\s\S]*?\.detail-grid,[\s\S]*?grid-template-columns: 1fr;/);
-  assert.match(workbench, /@media \(max-width:720px\)[^{]*\{[\s\S]*?\.detail-item\.span-2, \.detail-item\.span-3,[\s\S]*?grid-column: auto;/);
+test('issue 128 profile fields are retained in grouped responsive sections', () => {
+  const poolDetails = functionSource('renderPoolDetails', 'renderTagEditor');
+
+  for (const field of [
+    '客户ID', '官网', '俄文名称', '英文名称', '国家/城市', '客户类型', '行业',
+    '当前池子', '简介', '产品需求', '邮箱', '电话', 'INN', '制裁状态',
+    '联系人数量', '深度报告', '来源文件', '创建时间', '最后修改时间',
+  ]) {
+    assert.match(poolDetails, new RegExp(field), `${field} should remain visible`);
+  }
+
+  assert.match(poolDetails, /renderDetailSection/);
+  assert.match(workbench, /\.detail-section/);
+  assert.match(
+    workbench,
+    /@media \(max-width:\s*720px\)[^{]*\{[\s\S]*?\.detail-definition-grid[\s\S]*?grid-template-columns:\s*1fr/,
+  );
 });

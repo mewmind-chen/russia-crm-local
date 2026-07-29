@@ -317,10 +317,295 @@ test('mount API is exported and component CSS covers desktop facets and 390px mo
   const css = fs.readFileSync(cssPath, 'utf8');
   assert.match(css, /\.tp-filter-facet-row/);
   assert.match(css, /\.tp-filter-option\[aria-pressed="true"\]/);
-  assert.match(css, /#0b6ff4|#1677ff|rgb\(11,\s*111,\s*244\)/i);
-  assert.match(css, /@media\s*\(max-width:\s*600px\)/);
+  assert.match(css, /#0f766e/i);
+  assert.match(css, /@media\s*\(max-width:\s*780px\)/);
   assert.match(css, /grid-template-columns:\s*1fr/);
   assert.match(css, /flex-wrap:\s*wrap/);
+});
+
+test('compact layout keeps common fields visible and advanced filters collapsed', () => {
+  const html = renderFilterComponent({
+    schema: schema({
+      fields: [
+        ...schema().fields,
+        {
+          key: 'stage',
+          label: '客户阶段',
+          type: 'select',
+          operator: 'eq',
+          placement: 'more',
+          options: [{ value: 'qualified', label: '已确认' }],
+        },
+        {
+          key: 'updated_range',
+          label: '更新时间',
+          type: 'date_range',
+          operator: 'between',
+          placement: 'more',
+        },
+      ],
+    }),
+    state: { draft: {}, applied: {} },
+    resultMeta: { total: 42, shown: 42 },
+  });
+
+  assert.match(html, /class="tp-filter-primary-row"/);
+  assert.match(html, /class="tp-filter-menu"/);
+  assert.match(html, /data-filter-basic="owner"/);
+  assert.match(html, /data-filter-basic="stage"/);
+  assert.match(html, /<details class="tp-filter-advanced">/);
+  assert.doesNotMatch(html, /<details class="tp-filter-advanced" open/);
+  assert.match(html, /更新时间/);
+  assert.match(html, /42 条结果/);
+});
+
+test('presentation grouping does not alter serialized authorization payload', () => {
+  const controller = createFilterController({
+    pageKey: 'customers',
+    schema: schema(),
+    storage: new MemoryStorage(),
+  });
+  controller.setDraft('search', '电源');
+  controller.toggleValue('country', 'RU');
+  controller.setDraft('owner', 'U-1');
+
+  assert.deepEqual(controller.apply().filters, [
+    { field: 'search', operator: 'contains', value: '电源' },
+    { field: 'country', operator: 'in', value: ['RU'] },
+    { field: 'owner', operator: 'eq', value: 'U-1' },
+  ]);
+});
+
+test('primary multi-select rerender restores only the active menu disclosure', () => {
+  class FilterRoot {
+    constructor() {
+      this.listeners = {};
+      this.menus = [];
+      this.html = '';
+    }
+
+    set innerHTML(value) {
+      this.html = value;
+      this.menus = [...value.matchAll(/data-filter-menu="([^"]+)"/g)].map(match => ({
+        dataset: { filterMenu: match[1] },
+        open: false,
+      }));
+    }
+
+    get innerHTML() {
+      return this.html;
+    }
+
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    }
+
+    removeEventListener(type) {
+      delete this.listeners[type];
+    }
+
+    contains() {
+      return true;
+    }
+
+    querySelectorAll(selector) {
+      return selector === '[data-filter-menu]' ? this.menus : [];
+    }
+  }
+
+  const root = new FilterRoot();
+  const controller = createFilterController({
+    pageKey: 'customers',
+    schema: schema({
+      fields: [
+        ...schema().fields,
+        {
+          key: 'status',
+          label: '线索状态',
+          type: 'facet',
+          operator: 'in',
+          placement: 'facet',
+          multi: true,
+          options: [{ value: 'new', label: '新线索' }],
+        },
+      ],
+    }),
+    storage: new MemoryStorage(),
+  });
+  mountFilterComponent(root, { controller });
+
+  const countryMenu = root.menus.find(menu => menu.dataset.filterMenu === 'country');
+  const countryOption = {
+    dataset: { filterField: 'country', filterValue: 'RU' },
+    closest: selector => (selector === '[data-filter-menu]' ? countryMenu : null),
+  };
+  root.listeners.click({
+    target: {
+      closest(selector) {
+        if (selector === '.tp-filter-option[data-filter-value]') return countryOption;
+        return null;
+      },
+    },
+  });
+
+  assert.deepEqual(controller.getState().draft.country, ['RU']);
+  assert.equal(root.menus.find(menu => menu.dataset.filterMenu === 'country').open, true);
+  assert.equal(root.menus.find(menu => menu.dataset.filterMenu === 'status').open, false);
+
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-apply]' ? {} : null),
+    },
+  });
+  assert.equal(root.menus.every(menu => menu.open === false), true);
+
+  const currentCountryMenu = root.menus.find(menu => menu.dataset.filterMenu === 'country');
+  const countryAll = {
+    dataset: { filterField: 'country' },
+    closest: selector => (selector === '[data-filter-menu]' ? currentCountryMenu : null),
+  };
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-all]' ? countryAll : null),
+    },
+  });
+  assert.equal(controller.getState().draft.country, undefined);
+  assert.equal(root.menus.find(menu => menu.dataset.filterMenu === 'country').open, true);
+  assert.equal(root.menus.find(menu => menu.dataset.filterMenu === 'status').open, false);
+
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-clear]' ? {} : null),
+    },
+  });
+  assert.equal(root.menus.every(menu => menu.open === false), true);
+
+  const nextCountryMenu = root.menus.find(menu => menu.dataset.filterMenu === 'country');
+  const nextCountryOption = {
+    dataset: { filterField: 'country', filterValue: 'RU' },
+    closest: selector => (selector === '[data-filter-menu]' ? nextCountryMenu : null),
+  };
+  root.listeners.click({
+    target: {
+      closest(selector) {
+        if (selector === '.tp-filter-option[data-filter-value]') return nextCountryOption;
+        return null;
+      },
+    },
+  });
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-apply]' ? {} : null),
+    },
+  });
+  assert.deepEqual(controller.getState().applied.country, ['RU']);
+  const removeCountry = {
+    dataset: { filterRemove: 'country', filterValue: 'RU' },
+  };
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-remove]' ? removeCountry : null),
+    },
+  });
+  assert.equal(controller.getState().applied.country, undefined);
+  assert.equal(root.menus.every(menu => menu.open === false), true);
+});
+
+test('advanced multi-select rerender preserves an open disclosure until apply or clear', () => {
+  class FilterRoot {
+    constructor() {
+      this.listeners = {};
+      this.advanced = null;
+      this.html = '';
+    }
+
+    set innerHTML(value) {
+      this.html = value;
+      this.advanced = value.includes('class="tp-filter-advanced"') ? { open: false } : null;
+    }
+
+    get innerHTML() {
+      return this.html;
+    }
+
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    }
+
+    removeEventListener(type) {
+      delete this.listeners[type];
+    }
+
+    contains() {
+      return true;
+    }
+
+    querySelector(selector) {
+      return selector === '.tp-filter-advanced' ? this.advanced : null;
+    }
+
+    querySelectorAll() {
+      return [];
+    }
+  }
+
+  const root = new FilterRoot();
+  const controller = createFilterController({
+    pageKey: 'customers',
+    schema: schema(),
+    storage: new MemoryStorage(),
+  });
+  mountFilterComponent(root, { controller });
+
+  root.advanced.open = true;
+  const advancedOption = {
+    dataset: { filterField: 'tag_customer_type', filterValue: 'manufacturer' },
+    closest(selector) {
+      return selector === '.tp-filter-advanced' ? root.advanced : null;
+    },
+  };
+  root.listeners.click({
+    target: {
+      closest(selector) {
+        return selector === '.tp-filter-option[data-filter-value]' ? advancedOption : null;
+      },
+    },
+  });
+
+  assert.deepEqual(controller.getState().draft.tag_customer_type, ['manufacturer']);
+  assert.equal(root.advanced.open, true);
+
+  const advancedAll = {
+    dataset: { filterField: 'tag_customer_type' },
+    closest(selector) {
+      return selector === '.tp-filter-advanced' ? root.advanced : null;
+    },
+  };
+  root.listeners.click({
+    target: {
+      closest(selector) {
+        return selector === '[data-filter-all]' ? advancedAll : null;
+      },
+    },
+  });
+
+  assert.equal(controller.getState().draft.tag_customer_type, undefined);
+  assert.equal(root.advanced.open, true);
+
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-apply]' ? {} : null),
+    },
+  });
+  assert.equal(root.advanced.open, false);
+
+  root.advanced.open = true;
+  root.listeners.click({
+    target: {
+      closest: selector => (selector === '[data-filter-clear]' ? {} : null),
+    },
+  });
+  assert.equal(root.advanced.open, false);
 });
 
 test('customer filter initialization ignores stale concurrent schema responses', () => {
