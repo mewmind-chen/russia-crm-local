@@ -9,11 +9,13 @@ const COPY_TABLES = Object.freeze([
   'customer_pool', 'customers', 'company_screening', 'company_entry_points', 'company_identifiers',
   'website_checks', 'sanction_checks', 'contacts', 'recon_jobs', 'recon_results', 'recon_evidence',
   'contact_recon_jobs', 'contact_recon_audit', 'person_candidates', 'contact_methods', 'person_evidence',
-  'crm_intake_batches', 'crm_intake_items', 'crm_accounts', 'crm_account_contacts', 'crm_activities',
+  'crm_intake_batches', 'crm_intake_items', 'crm_accounts', 'crm_account_contacts',
+  'crm_activity_reaction_options', 'crm_activities',
   'crm_rfqs', 'crm_quotes', 'crm_orders', 'crm_manager_evaluations', 'tags', 'customer_tags',
 ]);
 
 const CLEAR_ONLY_TABLES = Object.freeze([
+  'crm_activity_action_requests',
   'crm_ai_field_provenance', 'crm_ai_enrichment_evidence',
   'crm_ai_enrichment_events', 'crm_ai_enrichment_node_links', 'crm_ai_enrichment_runs',
   'crm_ai_budget_alerts', 'crm_ai_usage_ledger', 'crm_ai_budget_reservations',
@@ -27,7 +29,7 @@ const CLEAR_ONLY_TABLES = Object.freeze([
 
 const USER_REFERENCE_COLUMNS = new Set([
   'owner_id', 'manager_id', 'user_id', 'author_id', 'created_by', 'requested_by',
-  'suggested_owner_id', 'assigned_owner_id',
+  'suggested_owner_id', 'assigned_owner_id', 'updated_by',
 ]);
 
 function quoteIdentifier(value) {
@@ -123,7 +125,12 @@ function syncCustomerTables(source, destination) {
   const copied = [];
   destination.pragma('foreign_keys = OFF');
   const apply = destination.transaction(() => {
-    for (const table of [...CLEAR_ONLY_TABLES, ...COPY_TABLES].reverse()) {
+    for (const table of [...COPY_TABLES].reverse()) {
+      if (tableExists(source, table) && tableExists(destination, table)) {
+        destination.prepare(`DELETE FROM ${quoteIdentifier(table)}`).run();
+      }
+    }
+    for (const table of [...CLEAR_ONLY_TABLES].reverse()) {
       if (tableExists(destination, table)) destination.prepare(`DELETE FROM ${quoteIdentifier(table)}`).run();
     }
     for (const table of COPY_TABLES) {

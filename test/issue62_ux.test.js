@@ -32,7 +32,8 @@ test('Issue #62 export and bulk assignment expose safe user confirmation and fil
   assert.match(js, /format: 'csv'/);
   assert.match(js, /window\.confirm\(`将设置/);
   assert.match(backend, /text\/csv; charset=utf-8/);
-  assert.match(backend, /crm-customers-\$\{new Date\(\)\.toISOString\(\)\.slice\(0, 10\)\}\.csv/);
+  assert.match(backend, /dataset === 'activities' \? 'activities' : 'customers'/);
+  assert.match(backend, /\$\{new Date\(\)\.toISOString\(\)\.slice\(0, 10\)\}\.csv/);
   assert.match(backend, /function exportCrmCsv/);
 });
 

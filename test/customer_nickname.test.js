@@ -159,7 +159,9 @@ test('nickname UI uses escaped display helpers across primary CRM entry points',
   assert.match(html, /id="drawerNicknameBtn"/);
   assert.match(app, /data-clear-nickname/);
   assert.match(app, /nicknameForm/);
-  assert.match(app, /customerOptions[\s\S]*accountDisplayName\(item\)/);
+  assert.match(app, /function activityCustomerDisplayName\(customer\)/);
+  assert.match(app, /activityCustomerDisplayName\(customer\)/);
+  assert.match(app, /activityCustomerIdentity\(customer\)/);
   assert.match(app, /renderRecycleBin[\s\S]*accountDisplayName\(row\)/);
   assert.match(app, /renderPipeline[\s\S]*accountDisplayName\(account\)/);
   assert.match(app, /renderAlerts[\s\S]*accountDisplayName\(account\)/);

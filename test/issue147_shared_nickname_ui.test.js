@@ -21,7 +21,7 @@ test('lead, CRM, recycle and customer selectors share nickname-first identity he
   const intake = sourceOf('renderIntake', 'customerProfileFrameUrl');
   const customers = sourceOf('renderCustomers', 'loadRecycleBin');
   const recycle = sourceOf('renderRecycleBin', 'openRecycleCustomer');
-  const selectors = sourceOf('customerOptions', 'setActivityType');
+  const selectors = sourceOf('activityCustomerIdentity', 'selectActivityCustomer');
 
   assert.match(display, /account\?\.nickname[\s\S]*account\?\.company_name[\s\S]*account\?\.companyName/);
   assert.match(identity, /officialName[\s\S]*customerCode[\s\S]*join\(' · '\)/);
@@ -31,8 +31,10 @@ test('lead, CRM, recycle and customer selectors share nickname-first identity he
   assert.match(customers, /accountIdentity\(account\)/);
   assert.match(recycle, /accountDisplayName\(row\)/);
   assert.match(recycle, /accountIdentity\(row\)/);
-  assert.match(selectors, /accountDisplayName\(item\)/);
-  assert.match(selectors, /accountIdentity\(item\)/);
+  assert.match(selectors, /customer\?\.nickname/);
+  assert.match(selectors, /companyName/);
+  assert.match(selectors, /externalCustomerId/);
+  assert.match(selectors, /ownerName/);
 });
 
 test('every shared drawer path clears and recomputes nickname actions for the current object', () => {
@@ -79,6 +81,6 @@ test('a visible nickname action uses the stable master id and synchronizes all l
 test('nickname actions start hidden and the Issue 147 assets are cache-busted', () => {
   assert.match(html, /id="customerProfileNickname" class="button secondary hidden"/);
   assert.match(html, /id="drawerNicknameBtn" class="button secondary hidden"/);
-  assert.match(html, /app\.css\?v=20260730-issue148/);
-  assert.match(html, /app\.js\?v=20260730-issue148/);
+  assert.match(html, /app\.css\?v=20260731-issue149/);
+  assert.match(html, /app\.js\?v=20260731-issue149/);
 });

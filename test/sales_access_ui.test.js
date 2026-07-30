@@ -61,7 +61,7 @@ test('access administration separates account permissions and governance work', 
   assert.match(js, /access-admin-active/);
   assert.match(css, /\.access-summary-grid/);
   assert.match(css, /\.access-section-tabs/);
-  assert.match(css, /body\.access-admin-active \.topbar \.filters-inline/);
+  assert.doesNotMatch(css, /\.filters-inline/);
   assert.match(css, /@media\(max-width:1180px\)\{\.access-user-table/);
   assert.match(css, /\.access-user-table tr\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.access-intro\{align-items:stretch;flex-direction:column/);
@@ -109,8 +109,8 @@ test('override editor styles exist and asset versions are refreshed', () => {
   assert.match(js, /permission-override-row/);
   assert.match(css, /permission-override-row/);
   assert.match(css, /binary-permission-control/);
-  assert.match(html, /app\.css\?v=20260730-issue148/);
-  assert.match(html, /app\.js\?v=20260730-issue148/);
+  assert.match(html, /app\.css\?v=20260731-issue149/);
+  assert.match(html, /app\.js\?v=20260731-issue149/);
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });

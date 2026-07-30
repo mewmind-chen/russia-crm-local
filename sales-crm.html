@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260730-issue148">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260731-issue149">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -15,7 +15,7 @@
       <div class="login-mark">TP</div>
       <p class="eyebrow">TRADEPULSE CRM</p>
       <h1>不用逐个追问，<br>全盘进度自己说话。</h1>
-      <p>把客户动作变成管理信号：销售快速更新，系统自动识别停滞、介入时机与能力差异。</p>
+      <p>把客户进展变成管理信号：销售及时记录，系统自动识别停滞、介入时机与能力差异。</p>
       <div class="login-points">
         <span>实时客户时间线</span><span>异常驱动管理</span><span>销售能力画像</span>
       </div>
@@ -93,14 +93,8 @@
           <button id="notificationButton" data-view="notifications" data-permission="view_customers" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
             <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
           </button>
-          <span class="workspace-chip">销售经营中心</span>
-          <div class="filters-inline">
-            <select id="countryFilter" aria-label="国家筛选"><option value="">全部国家</option></select>
-            <select id="ownerFilter" aria-label="销售筛选"><option value="">全部销售</option></select>
-            <select id="periodFilter" aria-label="周期筛选"><option value="90">近90天</option><option value="30">近30天</option><option value="7">近7天</option><option value="365">近一年</option></select>
-          </div>
           <button id="newCustomerBtn" data-permission="create_customer" class="button secondary">＋ 新增CRM客户</button>
-          <button id="quickUpdateBtn" data-permission="record_activity" class="button primary">＋ 快速更新</button>
+          <button id="quickUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录新进展</button>
         </div>
       </header>
 
@@ -295,7 +289,7 @@
           <button id="customerProfileBack" class="button secondary" type="button">← 返回</button>
           <div><h2 id="customerProfileTitle">客户资料</h2><p id="customerProfileIdentity" class="subtle"></p><div id="customerProfileTags" class="source-tag-row"></div></div>
           <div class="customer-profile-actions">
-            <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录跟进</button>
+            <button id="customerProfileActivity" data-permission="record_activity" class="button primary" type="button">记录新进展</button>
             <button id="customerProfileNickname" class="button secondary hidden" type="button">共享昵称</button>
             <button id="customerProfileStageEdit" class="button secondary hidden" type="button">调整阶段和评级</button>
             <button id="customerProfileDataEdit" class="button secondary hidden" type="button">编辑客户资料</button>
@@ -550,21 +544,21 @@
       <button class="icon-button" type="button" data-close-drawer title="关闭客户详情" aria-label="关闭客户详情"><span data-tp-icon="close" aria-hidden="true"></span></button>
       <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
       <button id="drawerNicknameBtn" class="button secondary hidden" type="button">共享昵称</button>
-      <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录动作</button>
+      <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录新进展</button>
     </div>
     <div id="drawerContent" class="drawer-content"></div>
   </aside>
   <div id="drawerBackdrop" class="backdrop" data-close-drawer></div>
 
   <div id="modal" class="modal-backdrop" aria-hidden="true">
-    <div class="modal">
-      <div class="modal-head"><div><p id="modalEyebrow" class="eyebrow">QUICK UPDATE</p><h2 id="modalTitle">快速更新</h2></div><button class="icon-button" type="button" data-close-modal title="关闭弹窗" aria-label="关闭弹窗"><span data-tp-icon="close" aria-hidden="true"></span></button></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><div><p id="modalEyebrow" class="eyebrow">CUSTOMER PROGRESS</p><h2 id="modalTitle">记录新进展</h2></div><button class="icon-button" type="button" data-close-modal title="关闭弹窗" aria-label="关闭弹窗"><span data-tp-icon="close" aria-hidden="true"></span></button></div>
       <div id="modalBody"></div>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260730-issue148"></script>
+  <script src="/sales-assets/app.js?v=20260731-issue149"></script>
 </body>
 </html>

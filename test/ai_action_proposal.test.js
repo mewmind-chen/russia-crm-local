@@ -111,6 +111,7 @@ test('natural-language result becomes an async proposal and confirmation writes 
   const first = await confirmed.json();
   assert.match(first.activityId, /^ACT-/);
   assert.equal(first.deduplicated, false);
+  fx.db.prepare("UPDATE crm_activity_reaction_options SET active=0 WHERE name_key='有兴趣'").run();
 
   const repeated = await fx.request('/api/sales-crm/activities', {
     cookie: fx.cookie, method: 'POST', body: payload,
@@ -119,6 +120,18 @@ test('natural-language result becomes an async proposal and confirmation writes 
   const second = await repeated.json();
   assert.equal(second.activityId, first.activityId);
   assert.equal(second.deduplicated, true);
+  assert.deepEqual(
+    {
+      stageBefore: second.stageBefore,
+      stageAfter: second.stageAfter,
+      stageChanged: second.stageChanged,
+    },
+    {
+      stageBefore: first.stageBefore,
+      stageAfter: first.stageAfter,
+      stageChanged: first.stageChanged,
+    },
+  );
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_activities WHERE id=?').get(first.activityId).count, 1);
   assert.equal(fx.db.prepare('SELECT state FROM crm_ai_jobs WHERE id=?').get(job.id).state, 'succeeded');
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_action_proposal_consumptions WHERE job_id=?')
@@ -186,9 +199,20 @@ test('activity modal exposes AI draft generation but keeps the activity API as t
   assert.match(app, /id="actionProposalInput"/);
   assert.match(app, /action-proposals/);
   assert.match(app, /proposalJobId/);
-  assert.match(app, /确认并记录/);
+  assert.match(app, /保存进展/);
   assert.match(app, /\/api\/sales-crm\/activities/);
   assert.doesNotMatch(app, /autoConfirmActionProposal|autoCreateActivity/);
   assert.match(css, /\.action-proposal-compose/);
   assert.match(css, /@media\(max-width:780px\)\{\.action-proposal-compose/);
+});
+
+test('AI confirmation treats the configurable customer reaction as optional', () => {
+  const station = fs.readFileSync(path.join(__dirname, '..', 'lib', 'ai_stations', 'action_proposal.js'), 'utf8');
+  const schema = fs.readFileSync(path.join(__dirname, '..', 'lib', 'ai_stations', 'schemas', 'action_proposal.v1.json'), 'utf8');
+  const confirmedFields = station.slice(
+    station.indexOf('const CONFIRMED_FIELDS'),
+    station.indexOf(']);', station.indexOf('const CONFIRMED_FIELDS')) + 3,
+  );
+  assert.doesNotMatch(confirmedFields, /['"]outcome['"]/);
+  assert.doesNotMatch(schema, /"outcome"[\s\S]{0,120}"enum"/);
 });

@@ -177,11 +177,14 @@ test('identity inspection blocks exactly the Recon and account-security policies
   const blockedSales = Object.entries(SALES_ROUTE_POLICIES)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([key]) => key).sort();
   assert.deepEqual(blockedSales, [
+    'DELETE /activity-reactions/:reactionId',
     'DELETE /users/:userId',
+    'GET /activity-reactions/admin',
     'GET /ai/budgets',
     'GET /ai/features',
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
+    'PATCH /activity-reactions/:reactionId',
     'PATCH /ai/features/:featureKey',
     'PATCH /filter-permissions/definitions/:filterKey',
     'PATCH /master/:customerId',
@@ -190,6 +193,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /accounts/:customerId/reassign',
     'POST /accounts/:customerId/restore',
     'POST /accounts/:customerId/trash',
+    'POST /activity-reactions',
     'POST /ai/bulk/cancel',
     'POST /ai/bulk/retry',
     'POST /ai/customers/:customerId/action-proposals',
@@ -221,6 +225,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /users/:userId/archive',
     'POST /users/:userId/password-reset',
     'POST /users/:userId/restore',
+    'PUT /activity-reactions/order',
     'PUT /ai/budgets/:scopeType/:scopeId',
     'PUT /filter-permissions/groups/:groupId',
     'PUT /filter-permissions/users/:userId',

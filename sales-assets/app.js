@@ -54,6 +54,17 @@
     stageReached: '',
     teamUserId: '',
     activityType: 'email',
+    activityProgressType: 'email',
+    activitySelectedCustomer: null,
+    activityCustomerResults: [],
+    activityCustomerSearchTimer: null,
+    activityCustomerRequestEpoch: 0,
+    activityCustomerActiveIndex: -1,
+    activityReactions: [],
+    activityReactionsLoaded: false,
+    activityReactionAdminRows: [],
+    activityDraftBeforeReactionAdmin: null,
+    activitySubmitting: false,
     drawerAiContext: null,
     drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
@@ -152,6 +163,18 @@
     manager_join: ['管理者介入', '管'], rfq: ['收到询价', '询'], quote: ['发送报价', '报'],
     negotiation: ['商务谈判', '谈'], order: ['首次下单', '单'], repeat_order: ['复购', '复'], lost: ['暂停/流失', '停'],
   };
+  const activityProgressOptions = [
+    { key: 'email', label: '发送邮件', activityType: 'email', channel: 'email' },
+    { key: 'call', label: '电话开发', activityType: 'call', channel: 'call' },
+    { key: 'whatsapp', label: 'WhatsApp 联系', activityType: 'social', channel: 'WhatsApp' },
+    { key: 'telegram', label: 'Telegram 联系', activityType: 'social', channel: 'Telegram' },
+    { key: 'linkedin', label: 'LinkedIn / 社媒联系', activityType: 'social', channel: 'LinkedIn' },
+    { key: 'reply', label: '客户回复', activityType: 'reply', channel: 'other' },
+    { key: 'meeting', label: '视频会议', activityType: 'meeting', channel: 'video' },
+    { key: 'rfq', label: '收到询价', activityType: 'rfq', channel: 'business' },
+    { key: 'negotiation', label: '商务谈判', activityType: 'negotiation', channel: 'business' },
+    { key: 'lost', label: '暂停 / 流失', activityType: 'lost', channel: 'other' },
+  ];
   const capabilityLabels = {
     activation: '资源激活', outreach: '开发破冰', relationship: '关系建立', discovery: '需求挖掘',
     professional: '专业能力', conversion: '商务转化', retention: '客户经营', execution: '执行纪律', collaboration: '协作承接',
@@ -191,6 +214,34 @@
   }
   function sharedCustomerOfficialName(customer) {
     return String(customer?.company_name || customer?.companyName || '').trim();
+  }
+  function normalizeActivityCustomer(customer) {
+    if (!customer) return null;
+    return {
+      ...customer,
+      id: String(customer.id || customer.customerId || customer.customer_id || ''),
+      externalCustomerId: String(customer.externalCustomerId || customer.external_customer_id || ''),
+      nickname: String(customer.nickname || ''),
+      companyName: String(customer.companyName || customer.company_name || ''),
+      ownerId: String(customer.ownerId || customer.owner_id || ''),
+      ownerName: String(customer.ownerName || customer.owner_name || ''),
+      stage: String(customer.stage || ''),
+    };
+  }
+  function normalizeActivityReactions(rows) {
+    return (Array.isArray(rows) ? rows : []).map((item, index) => ({
+      id: String(item.id || ''),
+      name: String(item.name || '').trim(),
+      sortOrder: Number(item.sortOrder ?? item.sort_order ?? index),
+      active: item.active !== false && Number(item.active ?? 1) !== 0,
+    })).filter(item => item.id && item.name)
+      .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'));
+  }
+  function bootstrapActivityReactions(data = state.data) {
+    return data?.activityReactions || data?.activityReactionOptions || data?.reactionOptions;
+  }
+  function isRealAdmin() {
+    return state.data?.user?.role === 'admin' && !state.data?.impersonation;
   }
   function normalizeTagText(value) {
     return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
@@ -317,8 +368,6 @@
       customerLastActionFilter: 'lastActionBuckets', customerNextStepFilter: 'nextStepBuckets',
     };
     for (const [id, key] of Object.entries(mappings)) setSelectedValues($(`#${id}`), filters[key]);
-    if ($('#countryFilter')) $('#countryFilter').value = filters.countries.length === 1 ? filters.countries[0] : '';
-    if ($('#ownerFilter')) $('#ownerFilter').value = filters.owners.length === 1 ? filters.owners[0] : '';
     $$('#customerQuickViews [data-customer-quick]').forEach(button =>
       button.classList.toggle('active', button.dataset.customerQuick === filters.quickView));
   }
@@ -885,6 +934,12 @@
   async function load({ fromLogin = false } = {}) {
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      const bootstrapReactions = bootstrapActivityReactions(state.data);
+      state.activityReactions = normalizeActivityReactions(bootstrapReactions);
+      state.activityReactionsLoaded = Array.isArray(bootstrapReactions);
+      state.activitySelectedCustomer = null;
+      state.activityCustomerResults = [];
+      state.activityCustomerRequestEpoch += 1;
       state.customerRequestEpoch += 1;
       state.customerInitializeEpoch += 1;
       state.customerFilterMount?.destroy();
@@ -970,16 +1025,13 @@
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
       group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
     });
-    $('#ownerFilter').classList.toggle('hidden', !can('view_all_customers'));
     $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle') || Boolean(state.data.impersonation));
     $('#filterPermissionAdmin')?.classList.toggle('hidden', !can('manage_users') || Boolean(state.data.impersonation));
   }
 
   function populateFilters() {
     const countries = [...new Set(state.data.accounts.map(item => item.country).filter(Boolean))].sort();
-    $('#countryFilter').innerHTML = '<option value="">全部国家</option>' + countries.map(item => `<option>${esc(item)}</option>`).join('');
     const activeSales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
-    $('#ownerFilter').innerHTML = '<option value="">全部负责人</option><option value="__unassigned__">不分配</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
     const bulkOwner = $('#bulkCustomerOwner');
     if (bulkOwner) {
       const selected = bulkOwner.value;
@@ -1021,11 +1073,7 @@
   }
 
   function scopedAccounts() {
-    const countries = state.customerFilters.countries;
-    const owners = state.customerFilters.owners;
-    return state.data.accounts.filter(account =>
-      (!countries.length || countries.includes(account.country))
-      && (!owners.length || owners.includes(account.owner_id || '__unassigned__')));
+    return state.data.accounts;
   }
   function alertReasons(alert) {
     return Array.isArray(alert?.reasons) && alert.reasons.length ? alert.reasons : [alert];
@@ -1036,22 +1084,14 @@
   function scopedAlerts() {
     const accounts = scopedAccounts();
     const ids = new Set(accounts.map(item => item.id));
-    const owners = state.customerFilters.owners;
-    const countries = state.customerFilters.countries;
-    return state.data.alerts.filter(item => {
-      if (!item.intakeItemId) return ids.has(item.customerId);
-      return (!owners.length || owners.includes(item.ownerId || '__unassigned__'))
-        && (!countries.length || countries.includes(item.country || ''));
-    });
+    return state.data.alerts.filter(item => item.intakeItemId || ids.has(item.customerId));
   }
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
   }
   function filteredActivities(accounts = scopedAccounts()) {
     const ids = new Set(accounts.map(item => item.id));
-    const days = Number($('#periodFilter')?.value || 90);
-    const cutoff = Date.now() - days * 86400000;
-    return state.data.activities.filter(item => ids.has(item.customer_id) && new Date(String(item.occurred_at).replace(' ', 'T') + 'Z').getTime() >= cutoff);
+    return state.data.activities.filter(item => ids.has(item.customer_id));
   }
 
   function renderAll() {
@@ -2845,6 +2885,8 @@
         || (filters.quickView === 'disqualified' && account.stage === 'disqualified');
       const created = String(account.created_at || '').slice(0, 10);
       return keywords.every(keyword => text.includes(keyword)) && reached && quickMatches
+        && (!filters.countries.length || filters.countries.includes(account.country))
+        && (!filters.owners.length || filters.owners.includes(account.owner_id || '__unassigned__'))
         && (!filters.stages.length || filters.stages.includes(account.stage))
         && (!filters.priorities.length || filters.priorities.includes(account.priority))
         && (!filters.customerTypes.length || filters.customerTypes.includes(account.customer_type))
@@ -3206,12 +3248,7 @@
     if (!root || !status || !canViewManagerAnomalies()) return;
     const meta = state.managerAnomalies;
     const rows = meta.items.filter(item => {
-      const account = state.data.accounts.find(accountItem => accountItem.id === item.customerId);
-      return (!$('#countryFilter')?.value || account?.country === $('#countryFilter').value)
-        && (!$('#ownerFilter')?.value
-          || ($('#ownerFilter').value === '__unassigned__'
-            ? !item.ownerId : item.ownerId === $('#ownerFilter').value))
-        && (!state.alertSeverity
+      return (!state.alertSeverity
           || (state.alertSeverity === 'immediate' ? item.severity === 'critical'
             : state.alertSeverity === 'attention' ? item.severity !== 'critical'
               : false));
@@ -3470,7 +3507,7 @@
 
   function renderTeam() {
     if (!can('view_team')) return;
-    const rows = state.data.teamReport.filter(item => !$('#ownerFilter').value || item.user.id === $('#ownerFilter').value);
+    const rows = state.data.teamReport;
     const coachingStatus = $('#teamCoachingStatus');
     if (coachingStatus) {
       coachingStatus.classList.toggle('hidden', !canViewSalesCoaching());
@@ -4673,29 +4710,193 @@
       }).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
   }
 
-  function openModal(title, eyebrow, html) {
+  function openModal(title, eyebrow, html, modalClass = '') {
     $('#modalTitle').textContent = title;
     $('#modalEyebrow').textContent = eyebrow;
     $('#modalBody').innerHTML = `<div class="modal-body">${html}</div>`;
+    uiFormat?.mountIcons?.($('#modalBody'));
+    const dialog = $('#modal .modal');
+    if (dialog) dialog.className = `modal${modalClass ? ` ${modalClass}` : ''}`;
     $('#modal').classList.add('open');
     $('#modal').setAttribute('aria-hidden', 'false');
   }
   function closeModal() {
+    clearTimeout(state.activityCustomerSearchTimer);
+    state.activityCustomerRequestEpoch += 1;
     $('#modal').classList.remove('open');
     $('#modal').setAttribute('aria-hidden', 'true');
-  }
-  function customerOptions(selected = '') {
-    return scopedAccounts().filter(item => !['lost'].includes(item.stage)).map(item => `<option value="${item.id}" ${item.id === selected ? 'selected' : ''}>${esc(accountDisplayName(item))} · ${esc(accountIdentity(item))} · ${esc(item.owner_name)}</option>`).join('');
+    state.activityDraftBeforeReactionAdmin = null;
+    const dialog = $('#modal .modal');
+    if (dialog) dialog.className = 'modal';
   }
 
-  function setActivityType(activityType) {
-    state.activityType = activityType || '';
-    $$('.activity-type').forEach(item =>
-      item.classList.toggle('active', item.dataset.activity === state.activityType));
+  async function loadActivityReactions({ force = false, admin = false } = {}) {
+    if (!force && state.activityReactionsLoaded && !admin) return state.activityReactions;
+    const path = admin ? '/activity-reactions/admin' : '/activity-reactions';
+    const result = await api(path);
+    const rows = normalizeActivityReactions(result.reactions);
+    if (admin) state.activityReactionAdminRows = rows.filter(item => item.active);
+    state.activityReactions = rows.filter(item => item.active);
+    state.activityReactionsLoaded = true;
+    return admin ? rows : state.activityReactions;
+  }
+
+  function activityCustomerIdentity(customer) {
+    const officialName = String(customer?.companyName || customer?.company_name || '').trim();
+    const externalId = String(
+      customer?.externalCustomerId || customer?.external_customer_id || customer?.id || '',
+    ).trim();
+    return customer?.nickname
+      ? [officialName, externalId].filter(Boolean).join(' · ')
+      : externalId;
+  }
+
+  function activityCustomerDisplayName(customer) {
+    return String(customer?.nickname || customer?.companyName || customer?.company_name
+      || customer?.externalCustomerId || customer?.external_customer_id || customer?.id || '').trim();
+  }
+
+  function renderActivityCustomerResults(message = '') {
+    const root = $('#activityCustomerResults');
+    if (!root) return;
+    const rows = state.activityCustomerResults;
+    if (message) {
+      root.innerHTML = `<div class="activity-customer-result-state">${esc(message)}</div>`;
+      root.classList.add('open');
+      return;
+    }
+    if (!rows.length) {
+      root.innerHTML = '';
+      root.classList.remove('open');
+      return;
+    }
+    root.innerHTML = rows.map((customer, index) => `
+      <button type="button" role="option" id="activityCustomerOption${index}"
+        aria-selected="${index === state.activityCustomerActiveIndex}"
+        class="activity-customer-result${index === state.activityCustomerActiveIndex ? ' active' : ''}"
+        data-activity-customer-result="${index}">
+        <strong>${esc(activityCustomerDisplayName(customer))}</strong>
+        <span>${esc(activityCustomerIdentity(customer))}${activityCustomerIdentity(customer) ? ' · ' : ''}${esc(customer.ownerName || '未分配')}</span>
+      </button>`).join('');
+    root.classList.add('open');
+    const input = $('#activityCustomerSearch');
+    if (input) input.setAttribute('aria-activedescendant',
+      state.activityCustomerActiveIndex >= 0 ? `activityCustomerOption${state.activityCustomerActiveIndex}` : '');
+  }
+
+  function renderActivityCustomerPicker({ focusSearch = false } = {}) {
+    const root = $('#activityCustomerPicker');
+    const form = $('#activityForm');
+    if (!root || !form) return;
+    const customer = state.activitySelectedCustomer;
+    const proposalDetails = $('.action-proposal-details');
+    if (proposalDetails) {
+      proposalDetails.classList.toggle('hidden', !String(
+        customer?.externalCustomerId || customer?.external_customer_id || '',
+      ).trim());
+    }
+    form.elements.customerId.value = customer?.id || '';
+    if (customer) {
+      root.innerHTML = `<section class="activity-customer-selected">
+        <div><span>已选择客户</span><strong>${esc(activityCustomerDisplayName(customer))}</strong>
+          <small>${esc(activityCustomerIdentity(customer))}${activityCustomerIdentity(customer) ? ' · ' : ''}${esc(customer.ownerName || '未分配')}</small></div>
+        <button class="text-button" type="button" data-change-activity-customer>更换客户</button>
+      </section>`;
+      return;
+    }
+    root.innerHTML = `<div class="activity-customer-search-wrap">
+      <label for="activityCustomerSearch">客户搜索</label>
+      <input id="activityCustomerSearch" type="search" autocomplete="off" placeholder="输入昵称、正式公司名称或客户编号"
+        role="combobox" aria-autocomplete="list" aria-controls="activityCustomerResults" aria-expanded="false">
+      <div id="activityCustomerResults" class="activity-customer-results" role="listbox"></div>
+    </div>`;
+    if (focusSearch) requestAnimationFrame(() => $('#activityCustomerSearch')?.focus());
+  }
+
+  async function searchActivityCustomers(query) {
+    const normalized = String(query || '').trim();
+    const requestEpoch = ++state.activityCustomerRequestEpoch;
+    state.activityCustomerActiveIndex = -1;
+    if (!normalized) {
+      state.activityCustomerResults = [];
+      renderActivityCustomerResults();
+      return;
+    }
+    renderActivityCustomerResults('正在搜索有权客户…');
+    try {
+      const result = await api(`/activity-customers?q=${encodeURIComponent(normalized)}`, { timeoutMs: 10000 });
+      if (requestEpoch !== state.activityCustomerRequestEpoch) return;
+      state.activityCustomerResults = (result.customers || []).map(normalizeActivityCustomer).filter(customer => customer?.id);
+      state.activityCustomerActiveIndex = state.activityCustomerResults.length ? 0 : -1;
+      renderActivityCustomerResults(state.activityCustomerResults.length ? '' : '没有找到可记录进展的客户');
+      $('#activityCustomerSearch')?.setAttribute('aria-expanded', String(Boolean(state.activityCustomerResults.length)));
+    } catch (error) {
+      if (requestEpoch !== state.activityCustomerRequestEpoch) return;
+      state.activityCustomerResults = [];
+      renderActivityCustomerResults(error.status === 403 ? '当前账号无权搜索客户' : (error.message || '客户搜索失败'));
+    }
+  }
+
+  function selectActivityCustomer(customer) {
+    state.activitySelectedCustomer = normalizeActivityCustomer(customer);
+    state.activityCustomerResults = [];
+    state.activityCustomerActiveIndex = -1;
+    renderActivityCustomerPicker();
+  }
+
+  function progressOption(progressType) {
+    return activityProgressOptions.find(item => item.key === progressType) || activityProgressOptions[0];
+  }
+
+  function progressTypeForLegacy(activityType, channel) {
+    const normalizedChannel = String(channel || '').toLocaleLowerCase('en-US');
+    const exact = activityProgressOptions.find(item => item.activityType === activityType
+      && item.channel.toLocaleLowerCase('en-US') === normalizedChannel);
+    if (exact) return exact.key;
+    const sameType = activityProgressOptions.filter(item => item.activityType === activityType);
+    return sameType.length === 1 ? sameType[0].key : '';
+  }
+
+  function setProgressType(progressType) {
+    const option = progressOption(progressType);
+    state.activityProgressType = option.key;
+    state.activityType = option.activityType;
     const form = $('#activityForm');
     if (!form) return;
-    form.elements.activityType.value = state.activityType;
-    $('#rfqFields')?.classList.toggle('hidden', state.activityType !== 'rfq');
+    form.elements.progressType.value = option.key;
+    form.elements.activityType.value = option.activityType;
+    form.elements.channel.value = option.channel;
+    const submit = $('#activitySubmit');
+    if (submit) submit.textContent = option.key === 'rfq' ? '继续填写询价信息' : '保存进展';
+  }
+
+  function setActivityReaction(reactionOptionId) {
+    const form = $('#activityForm');
+    if (!form) return;
+    const reaction = state.activityReactions.find(item => item.id === reactionOptionId);
+    if (form.elements.reactionOptionId) form.elements.reactionOptionId.value = reaction?.id || '';
+    if (form.elements.outcome) form.elements.outcome.value = reaction?.name || '';
+  }
+
+  function resizeActivitySummary(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const computed = getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
+    const verticalPadding = (Number.parseFloat(computed.paddingTop) || 0) + (Number.parseFloat(computed.paddingBottom) || 0);
+    const maxHeight = lineHeight * 5 + verticalPadding + 2;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }
+
+  function showActivityRfqStep(show = true) {
+    const main = $('#activityMainStep');
+    const rfq = $('#activityRfqStep');
+    if (!main || !rfq) return;
+    main.classList.toggle('hidden', show);
+    rfq.classList.toggle('hidden', !show);
+    $('#modalEyebrow').textContent = show ? '询价补充信息 · 最后一步' : '选择客户后，记录本次进展与下一步计划';
+    requestAnimationFrame(() => (show ? rfq.querySelector('input') : main.querySelector('select'))?.focus());
   }
 
   function setActivityField(form, name, value) {
@@ -4712,25 +4913,46 @@
     const form = $('#activityForm');
     const value = task?.result?.value;
     if (!form || !value) throw new Error('活动提案没有可用结果');
-    setActivityType(value.activityType);
-    setActivityField(form, 'channel', value.channel);
-    setActivityField(form, 'outcome', value.outcome);
+    const progressType = progressTypeForLegacy(value.activityType, value.channel);
+    if (progressType) {
+      setActivityField(form, 'progressType', progressType);
+      setProgressType(progressType);
+    } else {
+      state.activityProgressType = '';
+      state.activityType = '';
+      setActivityField(form, 'progressType', '');
+      setActivityField(form, 'activityType', '');
+      setActivityField(form, 'channel', '');
+    }
+    setActivityReaction('');
+    const reaction = state.activityReactions.find(item => item.name === String(value.outcome || '').trim());
+    if (reaction) {
+      setActivityField(form, 'reactionOptionId', reaction.id);
+      setActivityReaction(reaction.id);
+    }
     setActivityField(form, 'summary', value.summary);
     setActivityField(form, 'nextAction', value.nextAction);
     setActivityField(form, 'nextActionAt', String(value.nextActionAt || '').replace(' ', 'T').slice(0, 16));
     setActivityField(form, 'proposalJobId', task.taskId);
     const missingLabels = {
-      activityType: '本次动作', channel: '渠道', outcome: '结果',
-      summary: '简短记录', nextAction: '下一步动作', nextActionAt: '计划时间',
+      activityType: '本次进展', channel: '本次进展', outcome: '客户反应',
+      summary: '进展内容', nextAction: '下一步计划', nextActionAt: '下次跟进时间',
     };
-    const missing = (value.missingFields || []).map(field => missingLabels[field] || field);
+    const missing = (value.missingFields || [])
+      .filter(field => field !== 'outcome')
+      .map(field => missingLabels[field] || field);
+    if (!progressType) missing.push('本次进展（请重新选择）');
+    if (String(value.outcome || '').trim() && !reaction && state.activityReactions.length) {
+      missing.push('客户反应（请从当前配置中选择）');
+    }
     const confidence = Math.round(Number(value.confidence || 0) * 100);
     const status = $('#actionProposalStatus');
     status.className = `action-proposal-status ${confidence < 70 || missing.length ? 'warning' : 'ready'}`;
     status.textContent = missing.length
       ? `AI 草稿置信度 ${confidence}%。确认前请补充：${missing.join('、')}。`
       : `AI 草稿置信度 ${confidence}%。请核对并修改，确认后才会写入客户时间线。`;
-    $('#activitySubmit').textContent = '确认并记录';
+    $('#activitySubmit').textContent = progressType === 'rfq' ? '继续填写询价信息' : '保存进展';
+    resizeActivitySummary(form.elements.summary);
   }
 
   async function loadActionProposal(jobId) {
@@ -4752,14 +4974,17 @@
     const button = $('#actionProposalGenerate');
     const status = $('#actionProposalStatus');
     const input = $('#actionProposalInput')?.value.trim() || '';
-    const account = scopedAccounts().find(item => item.id === form?.elements?.customerId?.value);
+    const account = state.activitySelectedCustomer;
     if (!account) return toast('请先选择客户');
+    if (!String(account.externalCustomerId || '').trim()) {
+      return toast('该客户尚未关联稳定客户编号，暂不能使用 AI 整理');
+    }
     if (input.length < 3) return toast('请描述本次触达结果');
     button.disabled = true;
     status.className = 'action-proposal-status';
     status.textContent = '正在整理活动字段…';
     try {
-      const created = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(account.external_customer_id)}/action-proposals`, {
+      const created = await api(`/api/sales-crm/ai/customers/${encodeURIComponent(account.externalCustomerId)}/action-proposals`, {
         method: 'POST',
         body: JSON.stringify({ input, clientRequestId: proposalRequestId() }),
       });
@@ -4773,38 +4998,213 @@
     }
   }
 
-  function openActivityModal(customerId = '') {
+  function activityReactionField() {
+    const settings = isRealAdmin()
+      ? '<button id="activityReactionSettings" class="icon-button activity-reaction-settings" type="button" title="管理客户反应" aria-label="管理客户反应"><span data-tp-icon="settings" aria-hidden="true"></span></button>'
+      : '';
+    if (!state.activityReactions.length) {
+      return settings
+        ? `<div class="activity-reaction-admin-entry">${settings}<span>配置客户反应</span></div>`
+        : '';
+    }
+    return `<div id="activityReactionField" class="activity-field">
+      <div class="activity-field-heading"><label for="activityReaction">客户反应</label>${settings}</div>
+      <select id="activityReaction" name="reactionOptionId">
+        <option value="">请选择</option>
+        ${state.activityReactions.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  function captureActivityDraft() {
+    const form = $('#activityForm');
+    if (!form) return null;
+    return {
+      customer: state.activitySelectedCustomer ? { ...state.activitySelectedCustomer } : null,
+      payload: formPayload(form),
+      rfqStep: !$('#activityRfqStep')?.classList.contains('hidden'),
+      proposalInput: $('#actionProposalInput')?.value || '',
+      proposalStatus: $('#actionProposalStatus')?.textContent || '',
+      proposalStatusClass: $('#actionProposalStatus')?.className || '',
+    };
+  }
+
+  async function restoreActivityDraft() {
+    const draft = state.activityDraftBeforeReactionAdmin;
+    state.activityDraftBeforeReactionAdmin = null;
+    if (!draft) return closeModal();
+    await openActivityModal(draft.customer?.id || '');
+    if (draft.customer) {
+      state.activitySelectedCustomer = normalizeActivityCustomer(draft.customer);
+      renderActivityCustomerPicker();
+    }
+    const form = $('#activityForm');
+    if (!form) return;
+    Object.entries(draft.payload || {}).forEach(([name, value]) => {
+      const field = form.elements[name];
+      if (!field) return;
+      if (field.type === 'checkbox') field.checked = Boolean(value);
+      else field.value = String(value ?? '');
+    });
+    if (draft.payload?.progressType
+        && activityProgressOptions.some(item => item.key === draft.payload.progressType)) {
+      setProgressType(draft.payload.progressType);
+    }
+    setActivityReaction(
+      state.activityReactions.some(item => item.id === draft.payload?.reactionOptionId)
+        ? draft.payload.reactionOptionId
+        : '',
+    );
+    if ($('#actionProposalInput')) $('#actionProposalInput').value = draft.proposalInput;
+    if ($('#actionProposalStatus')) {
+      $('#actionProposalStatus').textContent = draft.proposalStatus;
+      $('#actionProposalStatus').className = draft.proposalStatusClass || 'action-proposal-status';
+    }
+    showActivityRfqStep(Boolean(draft.rfqStep));
+    resizeActivitySummary(form.elements.summary);
+  }
+
+  async function openActivityModal(customerId = '') {
+    if (!can('record_activity')) return toast('当前账号没有记录进展权限');
+    try {
+      await loadActivityReactions({ force: true });
+    } catch (error) {
+      return toast(error.message || '客户反应选项读取失败');
+    }
+    const account = state.data.accounts.find(item => item.id === customerId);
+    state.activitySelectedCustomer = account ? normalizeActivityCustomer(account) : null;
+    state.activityCustomerResults = [];
+    state.activityCustomerActiveIndex = -1;
+    state.activityProgressType = 'email';
     state.activityType = 'email';
-    openModal('记录客户动作', 'QUICK UPDATE · 30秒完成', `
-      <form id="activityForm" class="form-grid two">
-        <label class="span-2">客户<select name="customerId" required><option value="">请选择客户</option>${customerOptions(customerId)}</select></label>
-        ${customerAIEnabled() && can('use_ai_assistant') ? `<section class="action-proposal-compose span-2">
-          <div><strong>AI 整理触达结果</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
-          <textarea id="actionProposalInput" maxlength="4000" placeholder="例如：客户通过邮件回复，对STM32有兴趣，本周五整理BOM发给我，下周一上午跟进。"></textarea>
-          <button id="actionProposalGenerate" class="button secondary" type="button">整理为活动草稿</button>
-          <p id="actionProposalStatus" class="action-proposal-status" role="status" aria-live="polite"></p>
-        </section>` : ''}
-        <input type="hidden" name="proposalJobId" value="">
-        <div class="span-2"><label>本次动作</label><div id="activityTypes" class="activity-types">${[
-          ['email', '发送邮件'], ['call', '电话开发'], ['social', '社媒联系'], ['reply', '客户回复'],
-          ['meeting', '视频会议'], ['manager_join', '管理者介入'], ['rfq', '收到询价'], ['negotiation', '商务谈判'], ['lost', '暂停/流失'],
-        ].map(([key, label], index) => `<button type="button" class="activity-type ${index === 0 ? 'active' : ''}" data-activity="${key}">${label}</button>`).join('')}</div></div>
+    openModal('记录新进展', '选择客户后，记录本次进展与下一步计划', `
+      <form id="activityForm" class="activity-progress-form">
+        <input type="hidden" name="customerId" value="${esc(state.activitySelectedCustomer?.id || '')}">
+        <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
         <input type="hidden" name="activityType" value="email">
-        <label>渠道<select name="channel"><option value="">请选择</option><option>email</option><option>call</option><option>WhatsApp</option><option>Telegram</option><option>LinkedIn</option><option>video</option><option>展会</option><option>business</option><option>other</option></select></label>
-        <label>结果<select name="outcome"><option value="">请选择</option><option>已完成</option><option>有兴趣</option><option>需要跟进</option><option>未接通</option><option>暂无回复</option><option>明确拒绝</option></select></label>
-        <label class="span-2">简短记录<textarea name="summary" placeholder="记录客户反馈、需求或当前障碍"></textarea></label>
-        <div id="rfqFields" class="span-2 form-grid two hidden">
-          <label>询价编号<input name="reference" placeholder="如 RFQ-2026-0719"></label>
-          <label>BOM 行数<input name="bomLines" type="number" min="0"></label>
-          <label>预估金额（USD）<input name="expectedValue" type="number" min="0"></label>
-          <label>资料完整度<input name="completeness" type="number" min="0" max="100" value="80"></label>
-          <label class="span-2">产品类别<input name="productCategory" placeholder="MCU、连接器、传感器等"></label>
+        <input type="hidden" name="channel" value="email">
+        <input type="hidden" name="outcome" value="">
+        <input type="hidden" name="proposalJobId" value="">
+        <section id="activityMainStep" class="activity-main-step">
+          <div id="activityCustomerPicker" class="activity-customer-picker"></div>
+          <div class="activity-primary-grid">
+            <div class="activity-field">
+              <label for="activityProgressType">本次进展</label>
+              <select id="activityProgressType" name="progressType" required>
+                ${activityProgressOptions.map(item => `<option value="${esc(item.key)}">${esc(item.label)}</option>`).join('')}
+              </select>
+            </div>
+            ${activityReactionField()}
+          </div>
+          <label class="activity-summary-field">进展内容
+            <textarea id="activitySummary" name="summary" rows="2" maxlength="4000" placeholder="记录客户反馈、需求或当前障碍"></textarea>
+          </label>
+          <div class="activity-primary-grid">
+            <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
+            <label>下次跟进时间<input name="nextActionAt" type="datetime-local" value="${dateInput(2)}"></label>
+          </div>
+          <label class="activity-manager-check">
+            <input name="managerRequired" type="checkbox">
+            <span><strong>需要经理协助</strong><small>勾选后提醒销售经理关注并协助本次进展</small></span>
+          </label>
+          ${customerAIEnabled() && can('use_ai_assistant') ? `<details class="action-proposal-details">
+            <summary>使用 AI 整理本次进展</summary>
+            <section class="action-proposal-compose">
+              <div><strong>AI 整理进展</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
+              <textarea id="actionProposalInput" maxlength="4000" placeholder="例如：客户通过邮件回复，对 STM32 有兴趣，本周五整理 BOM，下周一上午跟进。"></textarea>
+              <button id="actionProposalGenerate" class="button secondary" type="button">整理为进展草稿</button>
+              <p id="actionProposalStatus" class="action-proposal-status" role="status" aria-live="polite"></p>
+            </section>
+          </details>` : ''}
+          <div class="form-actions activity-form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="activitySubmit" class="button primary">保存进展</button></div>
+        </section>
+        <section id="activityRfqStep" class="activity-rfq-step hidden">
+          <div class="activity-step-intro"><strong>补充询价信息</strong><span>这些信息只在收到询价时填写，提交后与本次进展一次性保存。</span></div>
+          <div class="activity-primary-grid">
+            <label>询价编号<input name="reference" placeholder="如 RFQ-2026-0719"></label>
+            <label>BOM 行数<input name="bomLines" type="number" min="0"></label>
+            <label>预估金额（USD）<input name="expectedValue" type="number" min="0"></label>
+            <label>资料完整度<input name="completeness" type="number" min="0" max="100" value="80"></label>
+          </div>
+          <label>产品类别<input name="productCategory" placeholder="MCU、连接器、传感器等"></label>
+          <div class="form-actions activity-form-actions"><button type="button" class="button secondary" data-activity-main-step>返回修改</button><button class="button primary">保存进展</button></div>
+        </section>
+      </form>`, 'activity-progress-modal');
+    renderActivityCustomerPicker({ focusSearch: !state.activitySelectedCustomer });
+    setProgressType('email');
+    resizeActivitySummary($('#activitySummary'));
+  }
+
+  function renderActivityReactionAdminModal() {
+    const rows = state.activityReactionAdminRows;
+    openModal('管理客户反应', '全公司统一选项 · 仅管理员可修改', `
+      <div class="activity-reaction-admin">
+        <p class="subtle">改名或移除只影响今后的选择，已经记录的历史文字保持不变。</p>
+        <form id="activityReactionCreateForm" class="activity-reaction-create">
+          <label>新增客户反应<input name="name" maxlength="40" required placeholder="例如：等待样品"></label>
+          <button class="button primary" type="submit">新增</button>
+        </form>
+        <div class="activity-reaction-admin-list">
+          ${rows.length ? rows.map((item, index) => `<div class="activity-reaction-admin-row" data-reaction-row="${esc(item.id)}">
+            <input value="${esc(item.name)}" maxlength="40" aria-label="客户反应名称">
+            <div class="activity-reaction-order">
+              <button class="icon-button" type="button" data-reaction-move="${esc(item.id)}" data-direction="-1" ${index === 0 ? 'disabled' : ''} aria-label="上移">↑</button>
+              <button class="icon-button" type="button" data-reaction-move="${esc(item.id)}" data-direction="1" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="下移">↓</button>
+            </div>
+            <button class="button secondary tiny" type="button" data-reaction-save="${esc(item.id)}">保存</button>
+            <button class="button danger tiny" type="button" data-reaction-remove="${esc(item.id)}">移除</button>
+          </div>`).join('') : '<div class="empty">尚未配置客户反应，新增后销售即可选择。</div>'}
         </div>
-        <label>下一步动作<input name="nextAction" placeholder="例如：追踪客户BOM"></label>
-        <label>计划时间<input name="nextActionAt" type="datetime-local" value="${dateInput(2)}"></label>
-        <label class="span-2 check"><input name="managerRequired" type="checkbox"> 这是重点节点，需要管理者介入</label>
-        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="activitySubmit" class="button primary">保存并更新阶段</button></div>
-      </form>`);
+        <div class="form-actions"><button type="button" class="button secondary" data-return-activity-draft>完成</button></div>
+      </div>`, 'activity-reaction-admin-modal');
+  }
+
+  async function openActivityReactionAdmin() {
+    if (!isRealAdmin()) return toast('只有真实管理员可以管理客户反应');
+    state.activityDraftBeforeReactionAdmin = captureActivityDraft();
+    try {
+      await loadActivityReactions({ force: true, admin: true });
+      renderActivityReactionAdminModal();
+    } catch (error) {
+      state.activityDraftBeforeReactionAdmin = null;
+      toast(error.message || '客户反应配置读取失败');
+    }
+  }
+
+  async function reloadActivityReactionAdmin(message = '') {
+    await loadActivityReactions({ force: true, admin: true });
+    renderActivityReactionAdminModal();
+    if (message) toast(message);
+  }
+
+  async function saveActivityReaction(reactionId) {
+    if (!isRealAdmin()) return toast('身份检查状态下不能修改客户反应');
+    const row = document.querySelector(`[data-reaction-row="${CSS.escape(reactionId)}"]`);
+    const name = row?.querySelector('input')?.value.trim() || '';
+    if (!name) return toast('客户反应名称不能为空');
+    await api(`/activity-reactions/${encodeURIComponent(reactionId)}`, {
+      method: 'PATCH', body: JSON.stringify({ name }),
+    });
+    await reloadActivityReactionAdmin('客户反应名称已更新');
+  }
+
+  async function removeActivityReaction(reactionId) {
+    if (!isRealAdmin()) return toast('身份检查状态下不能修改客户反应');
+    await api(`/activity-reactions/${encodeURIComponent(reactionId)}`, { method: 'DELETE' });
+    await reloadActivityReactionAdmin('客户反应已停止提供新选择');
+  }
+
+  async function moveActivityReaction(reactionId, direction) {
+    if (!isRealAdmin()) return toast('身份检查状态下不能修改客户反应');
+    const rows = state.activityReactionAdminRows.filter(item => item.active);
+    const index = rows.findIndex(item => item.id === reactionId);
+    const nextIndex = index + Number(direction);
+    if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
+    [rows[index], rows[nextIndex]] = [rows[nextIndex], rows[index]];
+    await api('/activity-reactions/order', {
+      method: 'PUT', body: JSON.stringify({ ids: rows.map(item => item.id) }),
+    });
+    await reloadActivityReactionAdmin('客户反应顺序已更新');
   }
 
   function openNewCustomerModal() {
@@ -5255,14 +5655,50 @@
         closeModal();
         await loadAiGovernance();
         toast('影子评估已保存');
+      } else if (form.id === 'activityReactionCreateForm') {
+        if (!isRealAdmin()) throw new Error('身份检查状态下不能修改客户反应');
+        const name = String(formPayload(form).name || '').trim();
+        if (!name) throw new Error('客户反应名称不能为空');
+        await api('/activity-reactions', {
+          method: 'POST', body: JSON.stringify({ name }),
+        });
+        await reloadActivityReactionAdmin('客户反应已新增');
       } else if (form.id === 'activityForm') {
+        if (state.activitySubmitting) return;
         const payload = formPayload(form);
-        payload.nextActionAt = apiTime(payload.nextActionAt);
-        payload.bomLines = Number(payload.bomLines || 0);
-        payload.expectedValue = Number(payload.expectedValue || 0);
-        payload.completeness = Number(payload.completeness || 0);
-        await api('/api/sales-crm/activities', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh('客户动作已记录，阶段和预警已同步');
+        if (!state.activitySelectedCustomer || payload.customerId !== state.activitySelectedCustomer.id) {
+          throw new Error('请先搜索并选择客户');
+        }
+        if (payload.progressType === 'rfq' && $('#activityRfqStep')?.classList.contains('hidden')) {
+          showActivityRfqStep(true);
+          return;
+        }
+        const submitButtons = Array.from(form.querySelectorAll('button[type="submit"],button:not([type])'));
+        state.activitySubmitting = true;
+        submitButtons.forEach(button => { button.disabled = true; });
+        try {
+          payload.nextActionAt = apiTime(payload.nextActionAt);
+          payload.bomLines = Number(payload.bomLines || 0);
+          payload.expectedValue = Number(payload.expectedValue || 0);
+          payload.completeness = Number(payload.completeness || 0);
+          if (payload.progressType !== 'rfq') {
+            delete payload.reference;
+            delete payload.bomLines;
+            delete payload.expectedValue;
+            delete payload.completeness;
+            delete payload.productCategory;
+          }
+          const result = await api('/api/sales-crm/activities', { method: 'POST', body: JSON.stringify(payload) });
+          const stageBefore = result.stageBefore || result.previousStage || '';
+          const stageAfter = result.stageAfter || result.stage || '';
+          const stageChanged = result.stageChanged ?? Boolean(stageBefore && stageAfter && stageBefore !== stageAfter);
+          await refresh(stageChanged
+            ? `进展已记录，客户阶段已更新为“${stageLabel(stageAfter)}”`
+            : '进展已记录，客户阶段未发生变化');
+        } finally {
+          state.activitySubmitting = false;
+          if (form.isConnected) submitButtons.forEach(button => { button.disabled = false; });
+        }
       } else if (form.id === 'customerForm') {
         const payload = formPayload(form);
         payload.companyName = String(payload.companyName || '').trim();
@@ -5686,11 +6122,15 @@
       renderCustomers();
     }
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
-    if (event.target.closest('[data-close-modal]')) closeModal();
+    if (event.target.closest('[data-close-modal]')) {
+      if (state.activityDraftBeforeReactionAdmin && $('.activity-reaction-admin')) void restoreActivityDraft();
+      else closeModal();
+    }
+    if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileActivity')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能记录跟进');
-      else openActivityModal(state.selectedCustomerId);
+      else void openActivityModal(state.selectedCustomerId);
     }
     if (event.target.closest('#customerProfileStageEdit')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能调整阶段');
@@ -5779,11 +6219,37 @@
     const adoptNextActionButton = event.target.closest('[data-adopt-next-action]');
     if (adoptNextActionButton) void adoptNextAction(adoptNextActionButton.dataset.adoptNextAction);
     if (event.target.closest('#actionProposalGenerate')) void generateActionProposal();
-    const activity = event.target.closest('[data-activity]');
-    if (activity) setActivityType(activity.dataset.activity);
-    if (event.target.closest('#quickUpdateBtn')) openActivityModal();
+    const activityCustomerResult = event.target.closest('[data-activity-customer-result]');
+    if (activityCustomerResult) {
+      const customer = state.activityCustomerResults[Number(activityCustomerResult.dataset.activityCustomerResult)];
+      if (customer) selectActivityCustomer(customer);
+    }
+    if (event.target.closest('[data-change-activity-customer]')) {
+      state.activitySelectedCustomer = null;
+      state.activityCustomerResults = [];
+      state.activityCustomerActiveIndex = -1;
+      renderActivityCustomerPicker({ focusSearch: true });
+    }
+    if (event.target.closest('[data-activity-main-step]')) showActivityRfqStep(false);
+    if (event.target.closest('#activityReactionSettings')) void openActivityReactionAdmin();
+    const reactionSave = event.target.closest('[data-reaction-save]');
+    if (reactionSave) {
+      try { await saveActivityReaction(reactionSave.dataset.reactionSave); }
+      catch (error) { toast(error.message); }
+    }
+    const reactionRemove = event.target.closest('[data-reaction-remove]');
+    if (reactionRemove) {
+      try { await removeActivityReaction(reactionRemove.dataset.reactionRemove); }
+      catch (error) { toast(error.message); }
+    }
+    const reactionMove = event.target.closest('[data-reaction-move]');
+    if (reactionMove) {
+      try { await moveActivityReaction(reactionMove.dataset.reactionMove, reactionMove.dataset.direction); }
+      catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#quickUpdateBtn')) void openActivityModal();
     if (event.target.closest('#newCustomerBtn')) openNewCustomerModal();
-    if (event.target.closest('#drawerUpdateBtn')) openActivityModal(state.selectedCustomerId);
+    if (event.target.closest('#drawerUpdateBtn')) void openActivityModal(state.selectedCustomerId);
     if (event.target.closest('#drawerNicknameBtn')) openNicknameModal(state.drawerNicknameTarget);
     if (event.target.closest('[data-add-quote]')) openQuoteModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-order]')) openOrderModal(state.selectedCustomerId);
@@ -6170,17 +6636,6 @@
     }
   }
 
-  ['countryFilter', 'ownerFilter', 'periodFilter'].forEach(id => document.addEventListener('change', event => {
-    if (event.target.id === id) {
-      if (event.target.id === 'countryFilter') state.customerFilters.countries = event.target.value ? [event.target.value] : [];
-      if (event.target.id === 'ownerFilter') state.customerFilters.owners = event.target.value ? [event.target.value] : [];
-      if (['countryFilter', 'ownerFilter'].includes(event.target.id)) {
-        saveCustomerFilters();
-        syncCustomerFilterControls();
-      }
-      renderAll();
-    }
-  }));
   document.addEventListener('input', event => {
     if (event.target.id === 'customerSearch') {
       clearTimeout(state.customerSearchTimer);
@@ -6191,6 +6646,11 @@
         renderCustomers();
       }, 250);
     }
+    if (event.target.id === 'activityCustomerSearch') {
+      clearTimeout(state.activityCustomerSearchTimer);
+      state.activityCustomerSearchTimer = setTimeout(() => void searchActivityCustomers(event.target.value), 250);
+    }
+    if (event.target.id === 'activitySummary') resizeActivitySummary(event.target);
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'customerSort') {
@@ -6205,6 +6665,8 @@
       renderFilterPermissionAdmin();
     }
     if (event.target.id === 'stageFilter') state.stageReached = '';
+    if (event.target.id === 'activityProgressType') setProgressType(event.target.value);
+    if (event.target.id === 'activityReaction') setActivityReaction(event.target.value);
     if (event.target.closest('#customerFilterPanel')) {
       readCustomerFilterControls();
       if ($('#customerFilterApply')) $('#customerFilterApply').textContent = `查看结果（${filteredCustomerAccounts().length}）`;
@@ -6262,6 +6724,29 @@
     location.reload();
   });
   document.addEventListener('keydown', event => {
+    if (event.target.id === 'activityCustomerSearch') {
+      const rows = state.activityCustomerResults;
+      if (['ArrowDown', 'ArrowUp'].includes(event.key) && rows.length) {
+        event.preventDefault();
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        state.activityCustomerActiveIndex = (state.activityCustomerActiveIndex + direction + rows.length) % rows.length;
+        renderActivityCustomerResults();
+        return;
+      }
+      if (event.key === 'Enter' && rows.length && state.activityCustomerActiveIndex >= 0) {
+        event.preventDefault();
+        selectActivityCustomer(rows[state.activityCustomerActiveIndex]);
+        return;
+      }
+      if (event.key === 'Escape' && ($('#activityCustomerResults')?.classList.contains('open'))) {
+        event.preventDefault();
+        state.activityCustomerResults = [];
+        state.activityCustomerActiveIndex = -1;
+        renderActivityCustomerResults();
+        event.target.setAttribute('aria-expanded', 'false');
+        return;
+      }
+    }
     const binaryPermission = event.target.closest?.('.binary-permission-control input[type="radio"]');
     if (binaryPermission && [' ', 'Space', 'Spacebar', 'Enter'].includes(event.key)) {
       event.preventDefault();
@@ -6280,7 +6765,17 @@
       event.preventDefault();
       switchAccessSection(tabs[nextIndex].dataset.accessSection, { focus: true });
     }
-    if (event.key === 'Escape') { closeModal(); closeDrawer(); closeCustomerFilterPanel(); document.body.classList.remove('sidebar-open'); }
+    if (event.key === 'Escape') {
+      if (state.activityDraftBeforeReactionAdmin && $('.activity-reaction-admin')) {
+        event.preventDefault();
+        void restoreActivityDraft();
+      } else {
+        closeModal();
+      }
+      closeDrawer();
+      closeCustomerFilterPanel();
+      document.body.classList.remove('sidebar-open');
+    }
   });
   $('#salesMenuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#salesSidebarMask').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
