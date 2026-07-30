@@ -86,7 +86,7 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 6. 验证
 
    - Issue #147 与相关权限、迁移、回收站、Issue #144/#146 专项回归：`39/39`。
-   - 发布前聚焦回归：`28/28`。
+   - 发布前聚焦回归：`32/32`。
    - 全量测试：`758/758`，0 失败。
    - 所有修改的 JavaScript 文件均通过 `node --check`。
    - `git diff --check` 通过。
@@ -96,8 +96,34 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 
 ### 发布状态
 
-当前文档生成时，代码已完成本地验证，正在进行最终只读审查。PR、合并、远端 CI 和生产
-部署信息将在发布完成后更新到本节。
+- 功能提交：`703c3e3d2a75202f835a329442131c222d98e731`
+- 功能 PR：[PR #150](https://github.com/mewmind-chen/russia-crm-local/pull/150)
+- PR CI：成功，GitHub Actions run `30552539028`
+- 合并提交：`b29d9f1c06fe8e2d4911c1b2e79fb889611d5430`
+- `main` CI：成功，GitHub Actions run `30552874242`
+- 合并时间：`2026-07-30T14:40:34Z`
+- 自动部署完成时间：`2026-07-30T14:42:48.571Z`
+- 当前不可变 release：
+  `/Users/ylf/Desktop/projects/tradepulse-production/releases/b29d9f1c06fe`
+- 上一 release：
+  `/Users/ylf/Desktop/projects/tradepulse-production/releases/6cd62eb2c3a7`
+- 本地 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
+- 公网 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
+- 公网根页面：HTTP `200`，加载
+  `app.css?v=20260730-issue147` 和 `app.js?v=20260730-issue147`
+- Issue #147：已由 `Closes #147` 自动关闭
+- 发布失败状态：空；未发生回滚
+
+生产数据库只读验收：
+
+- `customer_pool.nickname` 列：存在
+- CRM 账号：`58`
+- 非空账号兼容昵称：`2`
+- 非空主档昵称：`2`
+- 主档/账号镜像不一致：`0`
+- 迁移审计：`2`
+- 上线后业务操作审计：`0`（验收未修改真实业务昵称）
+- `PRAGMA integrity_check`：`ok`
 
 ## 已修改文件
 
@@ -144,25 +170,24 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 
 ## 未完成事项
 
-发布完成前仍需：
+Issue #147 的功能、迁移、测试、合并、部署和生产只读验收均已完成，没有阻断项。
 
-1. 完成最终只读代码审查并处理阻断项。
-2. 提交并推送 `codex/issue-147-shared-nickname`。
-3. 使用 GitHub CLI 创建包含 `Closes #147` 的 PR。
-4. 等待 PR CI 全绿后合并到 `main`。
-5. 等待 `main` CI 和自动部署完成。
-6. 核对本地与公网 `/healthz` 的 `releaseSha` 等于本次合并提交。
-7. 在生产库只读确认昵称列、迁移审计、镜像一致性和数据库完整性。
-8. 用最终 PR、SHA、CI、部署时间和生产验证结果更新本文件。
+非阻断的后续改进：
+
+1. 目前前端抽屉连续切换测试以源码契约为主；可补浏览器级
+   CRM → 线索 → 回收站连续切换自动化。
+2. 兼容触发器允许旧脚本直接写 `crm_accounts.nickname` 并回写主档，但数据库级触发器
+   无法补充真实用户审计。后续应清点旧脚本并要求业务写入统一走 HTTP/事务接口。
+3. GitHub Actions 提示 `actions/checkout@v4` 和 `actions/setup-node@v4` 的 Node 20
+   运行时已弃用；与 Issue #147 无关，可单独升级 action 版本。
 
 ## 下一步计划
 
-1. 查看最终审查结果，必要时补测试和修复。
-2. 再跑受影响专项、全量测试和静态检查。
-3. 通过 GitHub CLI 提交 PR，观察检查结果。
-4. CI 通过后合并并等待不可变发布完成。
-5. 使用确切合并 SHA 验证本地服务、公网 Cloudflare 入口和部署状态。
-6. 完成生产数据库只读验收并关闭交接中的发布待办。
+1. 正常观察昵称新增、修改、清空的 `customer_nickname_audit` 是否随真实使用产生。
+2. 若用户报告按钮状态问题，优先复现连续切换路径并增加浏览器级回归。
+3. 在后续清理中逐步移除直接写 `crm_accounts.nickname` 的旧脚本依赖；兼容列要等回滚窗口
+   结束且所有旧版本停用后再评估删除。
+4. 单独处理 GitHub Actions Node 运行时弃用提醒。
 
 ## 注意事项
 
