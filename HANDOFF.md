@@ -95,13 +95,28 @@ TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整
 
 ### 发布状态
 
-- 功能提交：待创建
-- 功能 PR：待创建
-- PR CI：待运行
-- `main` CI：待运行
-- 自动部署：待执行
-- 生产健康检查：待验证
-- Issue #148：保持打开，等待 PR 通过 `Closes #148` 自动关闭
+- 功能提交：`84717acd12b68980854576f1e89283fd23302357`
+  （`feat: simplify personal permissions`）。
+- 功能 PR：[PR #153](https://github.com/mewmind-chen/russia-crm-local/pull/153)，
+  已于 `2026-07-30T15:47:01Z` 合并。
+- PR CI：[Actions #30557586503](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30557586503)
+  第 2 次运行通过，校验的 head SHA 为功能提交。
+  第 1 次运行仅有既存并发用例出现一次
+  `enrichment node link collision`；本地全量测试通过且没有相关代码改动，
+  对失败任务重新运行后全部通过。
+- 合并提交：`ea59374d2c58938dd6dd15e8b4de9b99a97f96eb`。
+- `main` CI：[Actions #30558380774](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30558380774)
+  第 1 次运行通过，目标 SHA 与合并提交完全一致。
+- 自动部署：`2026-07-30T15:50:00.586Z` 成功；不可变 release 为
+  `/Users/ylf/Desktop/projects/tradepulse-production/releases/ea59374d2c58`。
+- 回滚点：`/Users/ylf/Desktop/projects/tradepulse-production/releases/54ef0bef7b40`。
+- 本机与公网 `/healthz` 均返回 `ok=true`、`database=ok` 和完整合并 SHA；
+  `https://crm.newmindchen.com/` 返回 HTTP 200，并引用
+  `20260730-issue148` 版本的 CSS/JS 资产。
+- Issue [#148](https://github.com/mewmind-chen/russia-crm-local/issues/148)
+  已于 `2026-07-30T15:47:02Z` 由 `Closes #148` 自动关闭。
+- 本文档在功能上线验收后通过独立的文档 PR 补入；该后续提交不改变
+  Issue #148 的运行时代码或上述首次功能发布证据。
 
 ## 已修改文件
 
@@ -134,21 +149,19 @@ TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整
 
 ## 未完成事项
 
-- 使用 `gh` CLI 创建提交、推送分支和 ready PR。
-- 等待并确认 PR GitHub Actions 全部通过。
-- 合并 PR 并确认 Issue #148 自动关闭。
-- 等待 `main` CI 和 macOS 自动部署完成。
-- 核对不可变 release、部署状态、本地与公网 `/healthz` 的精确提交 SHA。
-- 上线后更新本交接文档中的发布证据。
+- Issue #148 需求、功能发布和生产验收均已完成，没有遗留的必做开发项。
+- GitHub Actions 当前有一条非阻塞注解：`actions/checkout@v4` 和
+  `actions/setup-node@v4` 使用的 Node.js 20 运行时已弃用，并被运行器强制到
+  Node.js 24。它不影响本次 CI 结果，可在后续基础设施维护中升级 action 版本。
+- 既存 enrichment 并发测试曾在 PR CI 第 1 次运行中偶发链接碰撞；本次重新运行
+  已通过。若后续再次出现，应单独跟踪其并发稳定性，不要归因于权限功能。
 
 ## 下一步计划
 
-1. 提交当前实现并推送 `codex/issue-148-binary-permissions`。
-2. 使用 `gh pr create` 创建带 `Closes #148` 的 ready PR。
-3. 使用 `gh pr checks --watch` 等待 PR CI。
-4. CI 全绿后使用 `gh pr merge` 合并。
-5. 等待 `main` CI、自动部署和生产健康检查。
-6. 将最终 SHA、PR、Actions run、release 路径和健康检查写回 `HANDOFF.md`。
+1. 正常观察生产错误日志和权限相关审计，重点关注权限组变更与个人调整清理。
+2. 后续修改权限 API 时继续运行 Issue #148 专项、权限回归和全量测试。
+3. 如需优化 CI，单独处理 action 运行时升级和 enrichment 并发测试稳定性，
+   不与本次已完成的权限需求混合。
 
 ## 注意事项
 
