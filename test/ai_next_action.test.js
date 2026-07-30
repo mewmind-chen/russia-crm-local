@@ -125,7 +125,7 @@ test('RFQ and quote events enqueue one proposal each without blocking business w
     cookie: fx.cookie,
     method: 'POST',
     body: {
-      customerId: 'CRM-OWN', activityType: 'rfq', channel: 'email', outcome: '收到BOM',
+      customerId: 'CRM-OWN', progressType: 'rfq', reactionOptionId: 'REACTION-FOLLOW-UP',
       summary: '收到正式询价', nextAction: '准备报价', nextActionAt: '2026-07-27 09:00:00',
       reference: 'RFQ-A3-03', bomLines: 20, expectedValue: 12000, completeness: 85,
     },

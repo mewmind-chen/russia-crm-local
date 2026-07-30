@@ -14,6 +14,7 @@ const {
   createUserMap,
   prepareRowForImport,
   remapUserReferences,
+  syncCustomerTables,
 } = require('../scripts/sync-production-customer-data');
 
 test('development sync clears enrichment children before their referenced control-plane rows', () => {
@@ -78,6 +79,41 @@ test('table copy uses only compatible columns and keeps destination defaults', (
   const result = copyTable(source, destination, 'customer_pool');
   assert.equal(result.copied, 1);
   assert.deepEqual(destination.prepare('SELECT * FROM customer_pool').get(), { id: '1', name: 'Acme', new_field: 'default' });
+  source.close();
+  destination.close();
+});
+
+test('sync keeps destination defaults when an older source lacks a new copy table', () => {
+  const source = userDatabase([{ id: 'PROD-ADMIN', role: 'admin' }]);
+  const destination = userDatabase([{ id: 'DEV-ADMIN', role: 'admin' }]);
+  destination.exec(`CREATE TABLE crm_activity_reaction_options(
+    id TEXT PRIMARY KEY,name TEXT
+  ); INSERT INTO crm_activity_reaction_options VALUES ('REACTION-DEFAULT','已完成')`);
+
+  const result = syncCustomerTables(source, destination);
+
+  assert.ok(result.copied.find(item => item.table === 'crm_activity_reaction_options')?.skipped);
+  assert.deepEqual(
+    destination.prepare('SELECT * FROM crm_activity_reaction_options').all(),
+    [{ id: 'REACTION-DEFAULT', name: '已完成' }],
+  );
+  source.close();
+  destination.close();
+});
+
+test('sync clears stale activity idempotency responses when replacing activity data', () => {
+  const source = userDatabase([{ id: 'PROD-ADMIN', role: 'admin' }]);
+  const destination = userDatabase([{ id: 'DEV-ADMIN', role: 'admin' }]);
+  destination.exec(`CREATE TABLE crm_activity_action_requests(
+    idempotency_key TEXT PRIMARY KEY,response_json TEXT
+  ); INSERT INTO crm_activity_action_requests VALUES ('stale','{"activityId":"ACT-GHOST"}')`);
+
+  syncCustomerTables(source, destination);
+
+  assert.equal(
+    destination.prepare('SELECT COUNT(*) count FROM crm_activity_action_requests').get().count,
+    0,
+  );
   source.close();
   destination.close();
 });

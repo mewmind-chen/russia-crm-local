@@ -19,15 +19,15 @@
     "version": { "const": "v1" },
     "activityType": {
       "type": "string",
-      "enum": ["", "email", "call", "social", "reply", "meeting", "manager_join", "rfq", "negotiation", "lost"]
+      "enum": ["", "email", "call", "social", "reply", "meeting", "rfq", "negotiation", "lost"]
     },
     "channel": {
       "type": "string",
-      "enum": ["", "email", "call", "WhatsApp", "Telegram", "LinkedIn", "video", "展会", "business", "other"]
+      "enum": ["", "email", "call", "WhatsApp", "Telegram", "LinkedIn", "video", "business", "other"]
     },
     "outcome": {
       "type": "string",
-      "enum": ["", "已完成", "有兴趣", "需要跟进", "未接通", "暂无回复", "明确拒绝"]
+      "maxLength": 200
     },
     "summary": { "type": "string", "maxLength": 4000 },
     "nextAction": { "type": "string", "maxLength": 1000 },

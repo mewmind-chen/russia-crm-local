@@ -1,35 +1,26 @@
-# Issue #148 开发交接
+# Issue #149 开发交接
 
-更新时间：2026-07-30
+更新时间：2026-07-31
 
-Issue：[个人权限简化为“允许/拒绝”并自动处理权限组例外](https://github.com/mewmind-chen/russia-crm-local/issues/148)
+Issue：[重构“记录新进展”：客户搜索、紧凑表单与自定义客户反应](https://github.com/mewmind-chen/russia-crm-local/issues/149)
 
 ## 项目背景
 
-TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整”模型。Issue #148
-要求管理员只面对每项权限最终的“允许 / 拒绝”结果，不再手工理解或维护三态来源。
-数据库仍以权限组为基础，只在个人选择与权限组不同的时候保存
-`user_permission_overrides`，从而保留权限组批量调整能力。
+TradePulse CRM 原“快速更新”入口依赖顶栏的国家、负责人和周期全局筛选，并在弹窗内
+长期展示动作类型、渠道及询价扩展字段。Issue #149 将其改为独立的“记录新进展”
+工作流：先按昵称、正式名称或客户编号搜索有权客户，再用十个稳定进展类型填写紧凑表单；
+询价资料只在第二步出现。客户反应由真实管理员维护，历史记录保存稳定 ID 和当时文字快照。
 
-本次还要求：
-
-- 新建用户必须选择与角色匹配的权限组，并可在创建前调整最终权限。
-- 保存个人权限时，服务端自动增加或删除个人调整。
-- 更换权限组时明确确认、清空旧个人调整，并与审计处于同一事务。
-- 历史账号升级前后的有效权限保持一致。
-- 权限变化对现有登录态及时生效。
-- 未知、缺失、非布尔权限值和伪造字段全部拒绝。
-- 只有真实、有效的管理员可管理账号和权限，身份检查期间禁止修改。
-- 最后一个有效管理员不能被停用、降权、换到受限组或关闭管理权限。
-- 成员列表取消“更多操作”，符合条件的操作直接展示且适配手机、平板和桌面。
+本次同时清理顶栏隐式筛选依赖，保持现有权限范围、阶段推进和 AI 人工确认边界，并要求
+手机、平板和桌面均无嵌套或横向滚动。
 
 ## 分支与工作区
 
 - 仓库：`mewmind-chen/russia-crm-local`
-- 开发分支：`codex/issue-148-binary-permissions`
+- 开发分支：`codex/issue-149-progress-modal`
 - 隔离 worktree：
-  `/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-148-binary-permissions`
-- 开发基线：`origin/main@54ef0bef7b408c0b553c88927df2b1b0f39796eb`
+  `/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-149-progress-modal`
+- 开发基线：`origin/main@002afd3296891e1803eb27a444ad3b60136c8a7d`
 - 主工作区：`/Users/ylf/Desktop/projects/russia-crm-local`
 - 发布方式：PR 合并 `main` 后由 macOS 不可变发布脚本自动部署
 
@@ -40,106 +31,119 @@ TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整
 
 ### 已完成
 
-1. 二选一个人权限
+1. 顶栏与客户选择
 
-   - 个人权限弹窗每项只展示“允许 / 拒绝”。
-   - 不再展示继承来源、权限组默认值、个人开启或个人关闭等技术状态。
-   - 前端提交完整的最终布尔权限图。
-   - 服务端以当前权限组为基准，只保存不同项；相同项自动删除个人调整。
-   - 新建用户选择权限组后立即预览最终权限，并可在创建前调整。
+   - 顶栏仅保留通知、新增 CRM 客户和记录新进展。
+   - 删除工作区标签及国家、负责人、周期全局筛选和全部 JavaScript 隐式依赖。
+   - 新接口按昵称、正式名称、外部客户编号或 CRM ID 搜索，并同时执行
+     `record_activity` 权限和客户范围过滤。
+   - 搜索结果昵称优先，展示正式名称、稳定客户编号和负责人；手工客户回退显示 CRM ID。
+   - 顶栏、客户详情和抽屉入口统一复用同一弹窗，详情入口自动预选当前客户。
 
-2. 权限组与换组事务
+2. 紧凑进展表单
 
-   - 权限组保存同样要求完整布尔权限图。
-   - 权限组修改后，无个人调整的字段自动跟随；个人调整继续保留。
-   - 更换用户权限组前显示：
-     `更换后将清除该用户原有的个人权限调整，并采用新权限组设置。`
-   - 服务端不信任前端确认；只要权限组实际变化，就在更新事务内清空旧个人调整。
-   - 换组审计 `user_permission_group_changed` 与账号更新、例外清理同事务提交。
-   - 最后管理员校验失败时，账号组、个人调整和换组审计全部回滚。
+   - 固定十个进展选项：邮件、电话、WhatsApp、Telegram、LinkedIn、客户回复、
+     视频会议、收到询价、商务谈判、暂停/流失。
+   - 服务端固定映射 `progressType → activity_type / channel / stage`，不信任客户端伪造渠道。
+   - 客户反应为可选下拉；0 个有效选项时销售端不显示，真实管理员仍保留配置入口。
+   - 文本区初始两行，最多自然增长至约五行，之后只在文本区内部滚动。
+   - “需要经理协助”使用稳定 18×18 原生复选框和独立说明。
+   - 收到询价后进入第二步补充编号、BOM、金额、完整度和产品类别，最终只调用一次活动写接口。
+   - 前端提交锁和服务端幂等键共同防止双击、超时重试导致重复活动或重复 RFQ。
 
-3. 权限与安全
+3. 自定义客户反应
 
-   - 账号新增、账号更新、权限组新增/更新、个人权限更新都要求真实管理员。
-   - 身份检查期间继续由路由策略统一阻止安全写操作。
-   - 个人权限接口只接受 `{ permissions: 完整布尔权限图 }`。
-   - 未知权限、缺失权限、字符串状态和额外顶层字段返回 `400`。
-   - 个人权限成功保存记录 `user_personal_permissions_updated` 专门审计。
-   - 新建用户记录角色、权限组和个人调整数量，不记录密码。
-   - 有效权限继续在每次会话解析时从数据库计算，无需重新登录。
-   - 既有迁移逻辑和 `user_permission_overrides` 表结构未修改，历史有效权限不变。
+   - 新表 `crm_activity_reaction_options` 保存稳定 ID、名称、排序、启用状态和审计字段。
+   - 默认安装六项：已完成、有兴趣、需要跟进、未接通、暂无回复、明确拒绝。
+   - 真实且未处于身份检查的管理员可新增、改名、排序和软移除；每种变更写专门审计。
+   - 活动同时保存 `reaction_option_id` 与 `reaction_label_snapshot`，改名或移除不会改写历史。
+   - 名称拒绝空值、超长、重复、`Cc` 控制字符和 `Cf` 格式控制字符。
+   - 打开配置页会保存当前客户、字段、AI 草稿和 RFQ 步骤；完成、关闭或按 Escape 都恢复草稿。
 
-4. 成员列表与响应式界面
+4. 数据、迁移与导出
 
-   - 删除“更多操作”下拉菜单及相关 CSS。
-   - 直接展示编辑账号、个人权限、修改密码、身份检查和归档账号。
-   - 当前管理员只显示编辑账号、个人权限和“当前账号”，不显示身份检查或归档。
-   - 身份检查只对启用的经理和销售展示。
-   - 归档账号继续使用危险操作样式。
-   - 手机卡片标签统一为“个人调整”，操作区允许自然换行。
-   - 个人权限二选一保留原生单选语义、可见焦点，并支持空格和 Enter。
-   - 资产缓存版本更新为 `20260730-issue148`。
+   - 活动新增 `progress_key`、反应 ID/快照和 `stage_before`。
+   - 旧 WhatsApp、Telegram、LinkedIn 活动迁移为稳定
+     `whatsapp / telegram / linkedin` 键，迁移可重复执行。
+   - JSON 导出升级为 schemaVersion 2，并携带活动客户编号、稳定进展和反应快照。
+   - CSV 支持 `dataset=activities`，默认客户 CSV 行为保持不变。
+   - CSV 对首个非空白字符为 `= + - @` 的单元格前置单引号，防止表格公式注入。
+   - 生产客户快照同步仅在源表和目标表同时存在时才清空复制表；旧源库缺少新反应表时
+     不会删除目标默认配置。
+   - 同步替换活动数据时会清理陈旧活动幂等响应，避免重放不存在的 activityId。
 
-5. 验证
+5. AI 兼容
 
-   - Issue #148 专项及权限相关回归：`105/105`。
-   - 修正缓存版本断言后的相关回归：`17/17`。
-   - 最终全量测试：`764/764`，0 失败。
-   - `lib/permission_groups.js`、`lib/sales_crm.js`、`sales-assets/app.js`
-     均通过 `node --check`。
+   - AI 仍只生成待人工确认草稿，不直接写业务状态。
+   - 客户反应改为可选自由文本提示，不再硬编码旧六项枚举，也不再作为确认必填字段。
+   - AI 反应只有与当前配置精确匹配时才选择；未匹配时清空并提示人工选择。
+   - 不支持的活动类型/渠道不再静默回退到邮件或 WhatsApp，而是清空必填进展并提示重新选择。
+   - 手工客户没有稳定外部编号时隐藏 AI 入口，并在调用层再次拒绝。
+   - AI proposal 重试优先重放首次结果，不依赖后来已改名或移除的反应，并返回原始阶段变化。
+
+6. 权限与事务
+
+   - 搜索、反应读取和活动写入均要求 `record_activity`。
+   - 客户搜索和直接写入共享相同 account scope，越权客户不会泄露或落库。
+   - 反应管理只允许真实管理员，身份检查期间由路由策略统一阻止。
+   - 活动、客户阶段/下次行动、RFQ、proposal 确认和幂等完成标记在同一立即事务中。
+   - 任一步失败时整体回滚；严格布尔校验经理协助字段。
+   - 新增反应快照别名已加入联系人敏感字段脱敏，避免低权限导出泄露。
+
+7. 验证
+
+   - 最终全量测试：`793/793`，0 失败。
+   - Issue #149 与 AI、同步专项：`39/39`；独立综合审查相关回归：`55/55`。
+   - `lib/sales_crm.js`、`lib/access_control.js`、`sales-assets/app.js`、
+     `scripts/sync-production-customer-data.js`、AI action proposal 与 prompt 文件均通过
+     `node --check`。
    - `git diff --check` 通过。
-   - 浏览器实测 375、768、1024、1440 四档宽度，成员操作区无横向溢出，
-     不存在“更多操作”菜单。
-   - 375px 权限弹窗共 33 个二选一控件，弹窗、列表和控件均无横向溢出。
-   - 浏览器键盘实测可用空格把“经营驾驶舱”从允许切换为拒绝。
+   - 浏览器实测 `375×812`、`768×1024`、`1024×768`、`1440×900`、
+     `1920×1080`：弹窗完全位于视口内，文档、弹窗、表单均无横向溢出。
+   - 浏览器确认复选框始终 18×18，七行文本高度约 120px 且 `overflow-y:auto`。
+   - 浏览器确认客户搜索、配置页草稿恢复和 RFQ 第二步；临时数据库只新增
+     1 条活动、1 条 RFQ 和 1 条幂等记录，控制台无错误。
+   - 多代理独立综合审查最终结论：无阻塞问题。
 
 ### 发布状态
 
-- 功能提交：`84717acd12b68980854576f1e89283fd23302357`
-  （`feat: simplify personal permissions`）。
-- 功能 PR：[PR #153](https://github.com/mewmind-chen/russia-crm-local/pull/153)，
-  已于 `2026-07-30T15:47:01Z` 合并。
-- PR CI：[Actions #30557586503](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30557586503)
-  第 2 次运行通过，校验的 head SHA 为功能提交。
-  第 1 次运行仅有既存并发用例出现一次
-  `enrichment node link collision`；本地全量测试通过且没有相关代码改动，
-  对失败任务重新运行后全部通过。
-- 合并提交：`ea59374d2c58938dd6dd15e8b4de9b99a97f96eb`。
-- `main` CI：[Actions #30558380774](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30558380774)
-  第 1 次运行通过，目标 SHA 与合并提交完全一致。
-- 自动部署：`2026-07-30T15:50:00.586Z` 成功；不可变 release 为
-  `/Users/ylf/Desktop/projects/tradepulse-production/releases/ea59374d2c58`。
-- 回滚点：`/Users/ylf/Desktop/projects/tradepulse-production/releases/54ef0bef7b40`。
-- 本机与公网 `/healthz` 均返回 `ok=true`、`database=ok` 和完整合并 SHA；
-  `https://crm.newmindchen.com/` 返回 HTTP 200，并引用
-  `20260730-issue148` 版本的 CSS/JS 资产。
-- Issue [#148](https://github.com/mewmind-chen/russia-crm-local/issues/148)
-  已于 `2026-07-30T15:47:02Z` 由 `Closes #148` 自动关闭。
-- 本文档在功能上线验收后通过独立的文档 PR 补入；该后续提交不改变
-  Issue #148 的运行时代码或上述首次功能发布证据。
+- 功能代码、本交接文档和测试已在隔离 worktree 完成。
+- 当前尚未提交、创建 PR、合并或部署；下一步按本文件“下一步计划”执行。
+- 部署完成后需在本节补充功能提交、PR、合并 SHA、CI、不可变 release、回滚点、
+  本机/公网健康检查和 Issue 关闭证据。
 
 ## 已修改文件
 
 - `lib/access_control.js`
-  - 账号和权限写接口增加真实管理员策略。
-- `lib/permission_groups.js`
-  - 完整权限图校验、服务端差异计算、个人权限审计。
+  - 新反应配置路由权限和身份检查阻断策略。
 - `lib/sales_crm.js`
-  - 新建用户权限、换组清理与同事务审计、个人权限新请求契约。
-- `sales-assets/app.js`
-  - 二选一编辑器、新用户权限预览、换组确认、直接操作按钮和键盘支持。
-- `sales-assets/app.css`
-  - 二选一控件、焦点样式、直接操作区和移动端布局。
+  - 搜索、稳定进展映射、反应配置/审计/迁移、活动事务/幂等、导出和脱敏。
+- `lib/ai_stations/action_proposal.js`
+- `lib/ai_stations/prompts/v1.js`
+- `lib/ai_stations/schemas/action_proposal.v1.json`
+  - 自定义反应可选契约及稳定进展兼容。
 - `sales-crm.html`
-  - 权限文案、成员区说明和 Issue #148 资产版本。
-- `test/issue148_binary_permissions.test.js`
-  - 新建、差异保存、组传播、换组、回滚、安全校验和 UI 专项回归。
-- `test/permission_group_api.test.js`
-  - 三态接口回归改为完整布尔权限契约。
-- `test/permission_integration.test.js`
-  - 账号换组后的个人权限请求更新为新契约。
+  - 精简顶栏、统一文案和 Issue #149 资产版本。
+- `sales-assets/app.js`
+  - 搜索选择器、紧凑表单、RFQ 第二步、反应管理、草稿恢复、AI 兼容和提交锁。
+- `sales-assets/app.css`
+  - 弹窗、选择器、反应管理、复选框、文本区和五档响应式约束。
+- `scripts/sync-production-customer-data.js`
+  - 新反应配置复制、旧源缺表保护和陈旧幂等清理。
+- `test/issue149_progress_backend.test.js`
+- `test/issue149_reaction_options.test.js`
+- `test/issue149_progress_ui.test.js`
+  - Issue #149 后端、配置、幂等、迁移、安全和 UI 专项测试。
+- `test/ai_action_proposal.test.js`
+- `test/development_customer_sync.test.js`
+  - AI 可选反应、重试与生产同步边界回归。
+- `test/a3_06_sales_execution_gate.test.js`
+- `test/access_control.test.js`
+- `test/ai_next_action.test.js`
+- `test/customer_nickname.test.js`
+- `test/issue62_ux.test.js`
 - `test/sales_access_ui.test.js`
-  - 二选一和直接操作 UI 契约。
+  - 既有行为适配新的进展请求与界面契约。
 - `test/issue112_tag_semantics.test.js`
 - `test/issue116_research_filter_component.test.js`
 - `test/issue147_shared_nickname_ui.test.js`
@@ -149,27 +153,30 @@ TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整
 
 ## 未完成事项
 
-- Issue #148 需求、功能发布和生产验收均已完成，没有遗留的必做开发项。
-- GitHub Actions 当前有一条非阻塞注解：`actions/checkout@v4` 和
-  `actions/setup-node@v4` 使用的 Node.js 20 运行时已弃用，并被运行器强制到
-  Node.js 24。它不影响本次 CI 结果，可在后续基础设施维护中升级 action 版本。
-- 既存 enrichment 并发测试曾在 PR CI 第 1 次运行中偶发链接碰撞；本次重新运行
-  已通过。若后续再次出现，应单独跟踪其并发稳定性，不要归因于权限功能。
+- 必做事项仅剩 GitHub 发布、CI、合并、自动部署和生产验收。
+- 上线后需把最终发布证据回填到 `HANDOFF.md`；建议使用独立文档 PR，避免改变首次功能
+  release 的代码证据。
+- 未发现需要继续开发的 Issue #149 功能缺口。
 
 ## 下一步计划
 
-1. 正常观察生产错误日志和权限相关审计，重点关注权限组变更与个人调整清理。
-2. 后续修改权限 API 时继续运行 Issue #148 专项、权限回归和全量测试。
-3. 如需优化 CI，单独处理 action 运行时升级和 enrichment 并发测试稳定性，
-   不与本次已完成的权限需求混合。
+1. 审查最终 diff，提交 `codex/issue-149-progress-modal` 并推送。
+2. 用 GitHub CLI 创建包含 `Closes #149` 的 ready PR。
+3. 等待 PR CI 全部通过后合并，确认 Issue #149 自动关闭。
+4. 等待 `main` CI 和自动部署完成，记录合并 SHA、release 与回滚点。
+5. 验证本机和公网 `/healthz`、首页 HTTP 200、Issue #149 CSS/JS 缓存版本。
+6. 用独立文档 PR 回填最终发布证据，再次确认文档合并后的部署健康。
 
 ## 注意事项
 
 - 不要修改或重置主工作区中的用户改动。
-- 不要把个人权限 API 恢复为 `inherit / allow / deny` 三态。
-- UI 可以隐藏当前关闭的 AI 权限项，但提交时必须保留这些权限的现有效值，服务端要求完整图。
-- 换组清理必须保留在服务端事务中，不能只依赖浏览器确认。
-- `user_permission_overrides` 是存储实现，不应重新暴露为管理员需要理解的来源选择。
-- 权限组和个人权限请求都必须保持拒绝未知、缺失和非布尔权限值。
-- 最后有效管理员保护必须覆盖角色、状态、权限组、权限组内容和个人权限五类变更。
 - 生产部署只接受 `main`，不要直接修改生产目录或手工替换 `current`。
+- 不要恢复已删除的顶栏全局筛选或用其隐式限制记录新进展。
+- `progressType` 是公开稳定键；客户端不能自行控制其 activity type、channel 或阶段映射。
+- 反应 option ID 是配置身份，snapshot 是历史显示文字；改名和软移除不能改写旧活动。
+- 反应管理必须保持真实管理员限制，并在身份检查期间阻止写入。
+- activity、阶段、RFQ、proposal 确认和幂等结果必须继续处于同一事务。
+- 普通活动前端必须继续发送随机 `idempotencyKey`；AI 活动以 proposal job 作为重试键。
+- 生产快照同步不能在旧源缺表时清空目标新表，替换活动时必须清理陈旧幂等响应。
+- CSV 导出新增自由文本字段时必须继续经过 `csvCell` 公式中和。
+- AI 无法映射当前配置时应要求人工选择，不得静默回退到另一个进展类型或反应。

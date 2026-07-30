@@ -146,9 +146,8 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
     method: 'POST',
     body: {
       customerId,
-      activityType: 'email',
-      channel: 'email',
-      outcome: '已人工发送',
+      progressType: 'email',
+      reactionOptionId: 'REACTION-COMPLETED',
       summary: '销售复核资料包后人工发送首次触达邮件。',
       nextAction: '等待客户回复',
       nextActionAt: '2026-07-28 09:00:00',
@@ -193,9 +192,8 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
     method: 'POST',
     body: {
       customerId,
-      activityType: 'rfq',
-      channel: 'email',
-      outcome: '收到正式 BOM',
+      progressType: 'rfq',
+      reactionOptionId: 'REACTION-FOLLOW-UP',
       summary: '客户人工确认进入询价阶段。',
       nextAction: '准备报价',
       nextActionAt: '2026-07-30 09:00:00',
