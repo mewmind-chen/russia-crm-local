@@ -1,33 +1,35 @@
-# Issue #147 开发交接
+# Issue #148 开发交接
 
 更新时间：2026-07-30
 
-Issue：[将客户昵称提升为客户主档共享数据并修复线索页修改](https://github.com/mewmind-chen/russia-crm-local/issues/147)
+Issue：[个人权限简化为“允许/拒绝”并自动处理权限组例外](https://github.com/mewmind-chen/russia-crm-local/issues/148)
 
 ## 项目背景
 
-TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先保存在
-`crm_accounts.nickname` 的昵称提升为稳定客户主档数据，使同一个
-`external_customer_id` 在线索池、我的线索、CRM、回收站、客户选择器和导出中共享
-同一昵称。
+TradePulse 的账号权限采用“角色匹配的权限组 + 少量个人调整”模型。Issue #148
+要求管理员只面对每项权限最终的“允许 / 拒绝”结果，不再手工理解或维护三态来源。
+数据库仍以权限组为基础，只在个人选择与权限组不同的时候保存
+`user_permission_overrides`，从而保留权限组批量调整能力。
 
-本次变更还要求：
+本次还要求：
 
-- 未进入 CRM 的线索也能在 `edit_customer` 权限和当前数据范围内修改昵称。
-- 展示时优先使用昵称，并同时保留正式名称和稳定客户编号。
-- 昵称、正式名称和编号都能参与服务端搜索，且不能扩大用户的数据范围。
-- 历史昵称无损迁移；冲突采用确定性规则并留下审计。
-- 新增、修改、清空昵称均记录操作审计；身份检查场景同时记录真实用户和有效用户。
-- 抽屉切换客户时重新计算操作按钮，不能遗留上一个客户的权限状态。
-- 保持 Issue #144 和 #146 的线索状态与 CRM 状态语义不回归。
+- 新建用户必须选择与角色匹配的权限组，并可在创建前调整最终权限。
+- 保存个人权限时，服务端自动增加或删除个人调整。
+- 更换权限组时明确确认、清空旧个人调整，并与审计处于同一事务。
+- 历史账号升级前后的有效权限保持一致。
+- 权限变化对现有登录态及时生效。
+- 未知、缺失、非布尔权限值和伪造字段全部拒绝。
+- 只有真实、有效的管理员可管理账号和权限，身份检查期间禁止修改。
+- 最后一个有效管理员不能被停用、降权、换到受限组或关闭管理权限。
+- 成员列表取消“更多操作”，符合条件的操作直接展示且适配手机、平板和桌面。
 
 ## 分支与工作区
 
 - 仓库：`mewmind-chen/russia-crm-local`
-- 开发分支：`codex/issue-147-shared-nickname`
+- 开发分支：`codex/issue-148-binary-permissions`
 - 隔离 worktree：
-  `/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-147-shared-nickname`
-- 开发基线：`origin/main@6cd62eb2c3a7a78ee2ed6b1955fde019e4eda199`
+  `/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-148-binary-permissions`
+- 开发基线：`origin/main@54ef0bef7b408c0b553c88927df2b1b0f39796eb`
 - 主工作区：`/Users/ylf/Desktop/projects/russia-crm-local`
 - 发布方式：PR 合并 `main` 后由 macOS 不可变发布脚本自动部署
 
@@ -38,176 +40,123 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 
 ### 已完成
 
-1. 共享昵称主档
+1. 二选一个人权限
 
-   - `customer_pool.nickname` 成为唯一事实源。
-   - `crm_accounts.nickname` 保留为兼容镜像，便于旧代码和回滚版本读取。
-   - 主档更新会同步所有关联 CRM 账号；旧账号昵称写入会回写主档。
-   - 线索、CRM、回收站、客户池和选择器统一昵称优先展示。
+   - 个人权限弹窗每项只展示“允许 / 拒绝”。
+   - 不再展示继承来源、权限组默认值、个人开启或个人关闭等技术状态。
+   - 前端提交完整的最终布尔权限图。
+   - 服务端以当前权限组为基准，只保存不同项；相同项自动删除个人调整。
+   - 新建用户选择权限组后立即预览最终权限，并可在创建前调整。
 
-2. 历史迁移
+2. 权限组与换组事务
 
-   - 生产快照中 58 个 CRM 账号、2 个非空历史昵称均成功迁移。
-   - 主档已有昵称时保留主档值。
-   - 主档为空时按 `updated_at DESC`、`created_at DESC`、账号 ID 升序选择。
-   - 迁移候选、选中值、规则和冲突状态写入
-     `customer_nickname_migration_audit`。
-   - 冲突另写入 `crm_audit_log`。
-   - 重复执行迁移不会重复增加迁移审计。
+   - 权限组保存同样要求完整布尔权限图。
+   - 权限组修改后，无个人调整的字段自动跟随；个人调整继续保留。
+   - 更换用户权限组前显示：
+     `更换后将清除该用户原有的个人权限调整，并采用新权限组设置。`
+   - 服务端不信任前端确认；只要权限组实际变化，就在更新事务内清空旧个人调整。
+   - 换组审计 `user_permission_group_changed` 与账号更新、例外清理同事务提交。
+   - 最后管理员校验失败时，账号组、个人调整和换组审计全部回滚。
 
-3. 权限、范围和审计
+3. 权限与安全
 
-   - 新增接口：
-     `PATCH /api/sales-crm/customers/:externalCustomerId/nickname`。
-   - 接口必须具备 `edit_customer`。
-   - CRM 客户按账号 scope 校验；线索按 `manage_intake` 或本人已分配 scope 校验；
-     回收客户按回收站 scope 校验。
-   - 越权请求返回 `403`，不会通过搜索或稳定编号扩大数据范围。
-   - 身份检查使用有效用户权限和数据范围，审计同时记录真实用户、有效用户和上下文 ID。
-   - 新增 `customer_nickname_audit` 保存旧值、新值和操作身份。
+   - 账号新增、账号更新、权限组新增/更新、个人权限更新都要求真实管理员。
+   - 身份检查期间继续由路由策略统一阻止安全写操作。
+   - 个人权限接口只接受 `{ permissions: 完整布尔权限图 }`。
+   - 未知权限、缺失权限、字符串状态和额外顶层字段返回 `400`。
+   - 个人权限成功保存记录 `user_personal_permissions_updated` 专门审计。
+   - 新建用户记录角色、权限组和个人调整数量，不记录密码。
+   - 有效权限继续在每次会话解析时从数据库计算，无需重新登录。
+   - 既有迁移逻辑和 `user_permission_overrides` 表结构未修改，历史有效权限不变。
 
-4. 搜索、导出和生命周期
+4. 成员列表与响应式界面
 
-   - 线索池、线索流转、CRM、客户池和回收站搜索均包含共享昵称。
-   - `CONTACT_SAFE_POOL_KEYS` 已允许非联系人敏感的 `nickname` 字段。
-   - 导出继续将昵称、正式名称和稳定客户编号分列。
-   - 客户退回、重新分配、软删除和恢复后昵称保持不变。
-   - Issue #144/#146 的线索真实状态和 CRM 分配状态逻辑未被替换。
+   - 删除“更多操作”下拉菜单及相关 CSS。
+   - 直接展示编辑账号、个人权限、修改密码、身份检查和归档账号。
+   - 当前管理员只显示编辑账号、个人权限和“当前账号”，不显示身份检查或归档。
+   - 身份检查只对启用的经理和销售展示。
+   - 归档账号继续使用危险操作样式。
+   - 手机卡片标签统一为“个人调整”，操作区允许自然换行。
+   - 个人权限二选一保留原生单选语义、可见焦点，并支持空格和 Enter。
+   - 资产缓存版本更新为 `20260730-issue148`。
 
-5. 前端
+5. 验证
 
-   - 统一 `accountDisplayName()`、`accountIdentity()` 和稳定客户 ID 解析。
-   - 线索、CRM、回收站、提醒、经理评价和客户选择器使用昵称优先展示。
-   - 共享抽屉每次打开先清空按钮，再按当前客户能力位重新计算。
-   - 未进入 CRM 的线索可以直接打开共享昵称编辑。
-   - 保存后同步当前列表、抽屉、客户页、回收站和已加载的授权业务列表。
-   - 资产版本更新为 `20260730-issue147`。
-
-6. 验证
-
-   - Issue #147 与相关权限、迁移、回收站、Issue #144/#146 专项回归：`39/39`。
-   - 发布前聚焦回归：`32/32`。
-   - 全量测试：`758/758`，0 失败。
-   - 所有修改的 JavaScript 文件均通过 `node --check`。
+   - Issue #148 专项及权限相关回归：`105/105`。
+   - 修正缓存版本断言后的相关回归：`17/17`。
+   - 最终全量测试：`764/764`，0 失败。
+   - `lib/permission_groups.js`、`lib/sales_crm.js`、`sales-assets/app.js`
+     均通过 `node --check`。
    - `git diff --check` 通过。
-   - 生产数据库只读快照迁移结果：
-     `58` 个账号、`2` 个历史昵称、`2` 个主档昵称、`0` 个镜像不一致、
-     `2` 条幂等迁移审计、`integrity_check=ok`。
+   - 浏览器实测 375、768、1024、1440 四档宽度，成员操作区无横向溢出，
+     不存在“更多操作”菜单。
+   - 375px 权限弹窗共 33 个二选一控件，弹窗、列表和控件均无横向溢出。
+   - 浏览器键盘实测可用空格把“经营驾驶舱”从允许切换为拒绝。
 
 ### 发布状态
 
-以下为功能 PR #150 首次上线的验收记录；其后的纯文档提交不改变功能代码或迁移结果。
-
-- 功能提交：`703c3e3d2a75202f835a329442131c222d98e731`
-- 功能 PR：[PR #150](https://github.com/mewmind-chen/russia-crm-local/pull/150)
-- PR CI：成功，GitHub Actions run `30552539028`
-- 合并提交：`b29d9f1c06fe8e2d4911c1b2e79fb889611d5430`
-- `main` CI：成功，GitHub Actions run `30552874242`
-- 合并时间：`2026-07-30T14:40:34Z`
-- 自动部署完成时间：`2026-07-30T14:42:48.571Z`
-- 功能首次上线的不可变 release：
-  `/Users/ylf/Desktop/projects/tradepulse-production/releases/b29d9f1c06fe`
-- 功能上线前的 release：
-  `/Users/ylf/Desktop/projects/tradepulse-production/releases/6cd62eb2c3a7`
-- 本地 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
-- 公网 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
-- 公网根页面：HTTP `200`，加载
-  `app.css?v=20260730-issue147` 和 `app.js?v=20260730-issue147`
-- Issue #147：已由 `Closes #147` 自动关闭
-- 发布失败状态：空；未发生回滚
-- 最终交接文档 PR：
-  [PR #151](https://github.com/mewmind-chen/russia-crm-local/pull/151)
-- 交接文档合并提交：`4e022f3f434e7764b64e80e7d74d08a409f8ae14`
-- 交接文档 `main` CI：成功，GitHub Actions run `30553376567`
-- 交接文档提交仅改变 `HANDOFF.md`；活跃 release 可能因后续纯文档提交前进，运行中的
-  功能代码仍包含 `b29d9f1c…`。
-
-生产数据库只读验收：
-
-- `customer_pool.nickname` 列：存在
-- CRM 账号：`58`
-- 非空账号兼容昵称：`2`
-- 非空主档昵称：`2`
-- 主档/账号镜像不一致：`0`
-- 迁移审计：`2`
-- 上线后业务操作审计：`0`（验收未修改真实业务昵称）
-- `PRAGMA integrity_check`：`ok`
+- 功能提交：待创建
+- 功能 PR：待创建
+- PR CI：待运行
+- `main` CI：待运行
+- 自动部署：待执行
+- 生产健康检查：待验证
+- Issue #148：保持打开，等待 PR 通过 `Closes #148` 自动关闭
 
 ## 已修改文件
 
-### 后端与数据
-
 - `lib/access_control.js`
-  - 注册共享昵称写接口权限策略。
-  - 将昵称加入安全客户主档投影。
-- `lib/business_page_filters.js`
-  - 推进、经理评价和回收站读取/搜索主档昵称。
-- `lib/customer_filters.js`
-  - CRM 客户搜索使用主档昵称。
-- `lib/db.js`
-  - 客户池新增 `nickname`，资料响应加入昵称能力位。
-- `lib/intake_flow_filters.js`
-  - 授权线索列表读取和搜索主档昵称。
+  - 账号和权限写接口增加真实管理员策略。
+- `lib/permission_groups.js`
+  - 完整权限图校验、服务端差异计算、个人权限审计。
 - `lib/sales_crm.js`
-  - 主档 schema、迁移、镜像触发器、冲突与操作审计。
-  - 新昵称接口、数据范围校验和能力位。
-  - CRM、线索、回收、导出和研究列表的共享昵称读取。
-- `server.js`
-  - 旧客户池接口搜索支持昵称。
-
-### 前端
-
+  - 新建用户权限、换组清理与同事务审计、个人权限新请求契约。
 - `sales-assets/app.js`
-  - 统一客户显示标识、抽屉操作重算、共享昵称编辑和本地状态同步。
+  - 二选一编辑器、新用户权限预览、换组确认、直接操作按钮和键盘支持。
+- `sales-assets/app.css`
+  - 二选一控件、焦点样式、直接操作区和移动端布局。
 - `sales-crm.html`
-  - “共享昵称”操作文案和 Issue #147 资产版本。
-
-### 测试
-
-- `test/issue147_shared_nickname_backend.test.js`
-- `test/issue147_shared_nickname_ui.test.js`
-- `test/issue116_intake_flow_filters.test.js`
-- `test/issue130_profile_access_status.test.js`
-- `test/issue137_recycle_backend.test.js`
+  - 权限文案、成员区说明和 Issue #148 资产版本。
+- `test/issue148_binary_permissions.test.js`
+  - 新建、差异保存、组传播、换组、回滚、安全校验和 UI 专项回归。
+- `test/permission_group_api.test.js`
+  - 三态接口回归改为完整布尔权限契约。
+- `test/permission_integration.test.js`
+  - 账号换组后的个人权限请求更新为新契约。
+- `test/sales_access_ui.test.js`
+  - 二选一和直接操作 UI 契约。
 - `test/issue112_tag_semantics.test.js`
 - `test/issue116_research_filter_component.test.js`
-
-### 文档
-
+- `test/issue147_shared_nickname_ui.test.js`
+  - 更新共享 CRM 资产缓存版本断言。
 - `HANDOFF.md`
+  - 本交接文档。
 
 ## 未完成事项
 
-Issue #147 的功能、迁移、测试、合并、部署和生产只读验收均已完成，没有阻断项。
-
-非阻断的后续改进：
-
-1. 目前前端抽屉连续切换测试以源码契约为主；可补浏览器级
-   CRM → 线索 → 回收站连续切换自动化。
-2. 兼容触发器允许旧脚本直接写 `crm_accounts.nickname` 并回写主档，但数据库级触发器
-   无法补充真实用户审计。后续应清点旧脚本并要求业务写入统一走 HTTP/事务接口。
-3. GitHub Actions 提示 `actions/checkout@v4` 和 `actions/setup-node@v4` 的 Node 20
-   运行时已弃用；与 Issue #147 无关，可单独升级 action 版本。
+- 使用 `gh` CLI 创建提交、推送分支和 ready PR。
+- 等待并确认 PR GitHub Actions 全部通过。
+- 合并 PR 并确认 Issue #148 自动关闭。
+- 等待 `main` CI 和 macOS 自动部署完成。
+- 核对不可变 release、部署状态、本地与公网 `/healthz` 的精确提交 SHA。
+- 上线后更新本交接文档中的发布证据。
 
 ## 下一步计划
 
-1. 正常观察昵称新增、修改、清空的 `customer_nickname_audit` 是否随真实使用产生。
-2. 若用户报告按钮状态问题，优先复现连续切换路径并增加浏览器级回归。
-3. 在后续清理中逐步移除直接写 `crm_accounts.nickname` 的旧脚本依赖；兼容列要等回滚窗口
-   结束且所有旧版本停用后再评估删除。
-4. 单独处理 GitHub Actions Node 运行时弃用提醒。
+1. 提交当前实现并推送 `codex/issue-148-binary-permissions`。
+2. 使用 `gh pr create` 创建带 `Closes #148` 的 ready PR。
+3. 使用 `gh pr checks --watch` 等待 PR CI。
+4. CI 全绿后使用 `gh pr merge` 合并。
+5. 等待 `main` CI、自动部署和生产健康检查。
+6. 将最终 SHA、PR、Actions run、release 路径和健康检查写回 `HANDOFF.md`。
 
 ## 注意事项
 
-- `customer_pool.nickname` 是事实源；新增代码不能重新把
-  `crm_accounts.nickname` 当作独立业务字段。
-- `crm_accounts.nickname` 是兼容镜像，部署后不要手工删除，旧版本回滚仍需读取它。
-- 迁移必须先于唯一外部客户索引恢复执行，以兼容历史重复账号的确定性冲突处理。
-- 昵称清空只接受空字符串；纯空白、控制字符和超过 40 个字符会被拒绝。
-- 所有昵称写入必须走共享接口或现有 CRM 更新事务并写审计。
-- 身份检查不能使用真实管理员权限越过有效用户范围。
-- 搜索昵称时必须保留原有账号、线索或回收站 scope。
-- 昵称只用于内部显示和检索，不改变去重、AI、Recon、制裁核查或正式外部名称。
-- 不要把“已推送分支”称为“已上线”；必须确认 `main` 合并、部署状态和公网
-  `/healthz` 都指向同一个 SHA。
-- 发布脚本在切换前会备份数据库、验证隔离运行时，并在健康检查失败时自动回滚。
+- 不要修改或重置主工作区中的用户改动。
+- 不要把个人权限 API 恢复为 `inherit / allow / deny` 三态。
+- UI 可以隐藏当前关闭的 AI 权限项，但提交时必须保留这些权限的现有效值，服务端要求完整图。
+- 换组清理必须保留在服务端事务中，不能只依赖浏览器确认。
+- `user_permission_overrides` 是存储实现，不应重新暴露为管理员需要理解的来源选择。
+- 权限组和个人权限请求都必须保持拒绝未知、缺失和非布尔权限值。
+- 最后有效管理员保护必须覆盖角色、状态、权限组、权限组内容和个人权限五类变更。
+- 生产部署只接受 `main`，不要直接修改生产目录或手工替换 `current`。

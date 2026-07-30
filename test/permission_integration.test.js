@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const fixtures = require('./helpers/permission_fixture');
+const { ROLE_PERMISSIONS } = require('../lib/access_control');
 
 test('capabilities contain permissions but no business data', async t => {
   assert.equal(typeof fixtures.seededFixture, 'function');
@@ -662,7 +663,13 @@ test('Sales user updates assign an explicit matching group before dedicated over
   const overrides = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
     cookie: fx.cookie,
     method: 'PUT',
-    body: { view_all_customers: 'deny', use_ai_assistant: 'deny' },
+    body: {
+      permissions: {
+        ...ROLE_PERMISSIONS.manager,
+        view_all_customers: false,
+        use_ai_assistant: false,
+      },
+    },
   });
   assert.equal(overrides.status, 200);
   const user = fx.db.prepare('SELECT role,permission_group_id,permissions_json FROM sales_users WHERE id=?').get('U-OTHER');
