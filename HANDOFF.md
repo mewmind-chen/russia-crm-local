@@ -96,6 +96,8 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 
 ### 发布状态
 
+以下为功能 PR #150 首次上线的验收记录；其后的纯文档提交不改变功能代码或迁移结果。
+
 - 功能提交：`703c3e3d2a75202f835a329442131c222d98e731`
 - 功能 PR：[PR #150](https://github.com/mewmind-chen/russia-crm-local/pull/150)
 - PR CI：成功，GitHub Actions run `30552539028`
@@ -103,9 +105,9 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
 - `main` CI：成功，GitHub Actions run `30552874242`
 - 合并时间：`2026-07-30T14:40:34Z`
 - 自动部署完成时间：`2026-07-30T14:42:48.571Z`
-- 当前不可变 release：
+- 功能首次上线的不可变 release：
   `/Users/ylf/Desktop/projects/tradepulse-production/releases/b29d9f1c06fe`
-- 上一 release：
+- 功能上线前的 release：
   `/Users/ylf/Desktop/projects/tradepulse-production/releases/6cd62eb2c3a7`
 - 本地 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
 - 公网 `/healthz`：`ok=true`、`database=ok`、`releaseSha=b29d9f1c…`
@@ -113,6 +115,12 @@ TradePulse 是面向电子元器件外贸团队的 CRM。Issue #147 要把原先
   `app.css?v=20260730-issue147` 和 `app.js?v=20260730-issue147`
 - Issue #147：已由 `Closes #147` 自动关闭
 - 发布失败状态：空；未发生回滚
+- 最终交接文档 PR：
+  [PR #151](https://github.com/mewmind-chen/russia-crm-local/pull/151)
+- 交接文档合并提交：`4e022f3f434e7764b64e80e7d74d08a409f8ae14`
+- 交接文档 `main` CI：成功，GitHub Actions run `30553376567`
+- 交接文档提交仅改变 `HANDOFF.md`；活跃 release 可能因后续纯文档提交前进，运行中的
+  功能代码仍包含 `b29d9f1c…`。
 
 生产数据库只读验收：
 
