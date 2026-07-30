@@ -55,6 +55,7 @@
     teamUserId: '',
     activityType: 'email',
     drawerAiContext: null,
+    drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
     customerProfileExternalId: '',
     customerProfileIntakeItemId: '',
@@ -175,14 +176,21 @@
     return `<span class="tp-status ${display.tone}"><i class="tp-status-dot" aria-hidden="true"></i>${esc(display.label)}</span>`;
   }
   function accountDisplayName(account) {
-    return String(account?.nickname || account?.company_name || account?.companyName || '').trim();
+    return String(account?.nickname || account?.company_name || account?.companyName
+      || account?.external_customer_id || account?.externalCustomerId || account?.customerId || '').trim();
   }
   function accountIdentity(account) {
     const officialName = String(account?.company_name || account?.companyName || '').trim();
-    const customerCode = String(account?.external_customer_id || account?.externalCustomerId || '').trim();
+    const customerCode = sharedCustomerId(account);
     return account?.nickname
       ? [officialName, customerCode].filter(Boolean).join(' · ')
       : customerCode;
+  }
+  function sharedCustomerId(customer) {
+    return String(customer?.external_customer_id || customer?.externalCustomerId || customer?.customerId || '').trim();
+  }
+  function sharedCustomerOfficialName(customer) {
+    return String(customer?.company_name || customer?.companyName || '').trim();
   }
   function normalizeTagText(value) {
     return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
@@ -1136,8 +1144,9 @@
     const attention = scopedAlerts().slice(0, 5);
     $('#attentionList').innerHTML = attention.length ? attention.map(item => {
       const account = state.data.accounts.find(row => row.id === item.customerId);
+      const displayCustomer = account || item;
       return `<div class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
-        <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(account ? accountDisplayName(account) : item.companyName)}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
+        <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(accountDisplayName(displayCustomer))}</strong><span>${esc(accountIdentity(displayCustomer))}${accountIdentity(displayCustomer) ? ' · ' : ''}${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
       </div>`;
     }).join('') : '<div class="empty">当前没有需要处理的异常</div>';
     renderCountrySnapshot(accounts);
@@ -1851,7 +1860,7 @@
           ? '具名联系人与联系方式完备'
           : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const businessColumns = [
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(item.company_name)}</strong><span>${esc(item.external_customer_id)} · ${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong><span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
           `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
@@ -1866,7 +1875,7 @@
           : businessColumns;
         if (canManualAssign) {
           row.unshift(intakeItemAssignable(item)
-            ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(item.company_name)}"></span>`
+            ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
             : '');
         }
         row._attrs = `data-intake-profile="${esc(item.id)}"`;
@@ -1954,10 +1963,12 @@
           id: itemId,
           external_customer_id: pool.customerId,
           company_name: pool.companyName,
+          nickname: pool.nickname || '',
           customer_type: pool.customerType,
           industry: pool.industry,
           customerTags: pool.tags || [],
           in_crm: Boolean(profile.profileAccess?.inCrm),
+          can_edit_nickname: Boolean(profile.profileAccess?.canEditNickname),
           profileAccess: profile.profileAccess || null,
         } : null;
       } catch (error) {
@@ -1982,10 +1993,12 @@
           item = {
             ...item,
             company_name: master.companyName || item.company_name,
+            nickname: master.nickname || item.nickname || '',
             customer_type: master.customerType,
             industry: master.industry,
             customerTags: master.tags || item.customerTags || [],
             in_crm: Boolean(profile.profileAccess?.inCrm),
+            can_edit_nickname: Boolean(profile.profileAccess?.canEditNickname),
             profileAccess: profile.profileAccess || null,
           };
         }
@@ -2031,9 +2044,14 @@
       || lead?.crm_customer_id
       || lead?.profileAccess?.inCrm
     );
-    $('#customerProfileTitle').textContent = accountDisplayName(account) || lead?.company_name || '客户资料';
+    const profileCustomer = account || lead;
+    $('#customerProfileTitle').textContent = accountDisplayName(profileCustomer) || '客户资料';
     $('#customerProfileIdentity').textContent = account
       ? accountIdentity(account)
+      : lead?.nickname
+        ? `${accountIdentity(lead)} · ${adminMasterAccess ? '管理员主档全权限' : leadInCrm
+          ? '已进入 CRM · 当前范围只读'
+          : '尚未进入 CRM · 线索主档'}`
       : adminMasterAccess
         ? `${state.customerProfileExternalId} · 管理员主档全权限`
         : `${state.customerProfileExternalId} · ${leadInCrm
@@ -2047,7 +2065,7 @@
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
     $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerProfileNickname').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
+    $('#customerProfileNickname').classList.toggle('hidden', !customerAllowsNicknameEdit(profileCustomer));
     $('#customerAiStation')?.classList.toggle('hidden', readOnly || !account || !customerAIEnabled());
   }
 
@@ -3022,6 +3040,7 @@
     $('#drawerStage').textContent = '回收站客户';
     $('#drawerCompany').textContent = '正在读取客户资料…';
     $('#drawerMeta').textContent = customerId;
+    resetDrawerActions();
     $('#drawerUpdateBtn').classList.add('hidden');
     $('#drawerNicknameBtn').classList.add('hidden');
     $('#drawerContent').innerHTML = '<div class="empty">正在读取完整历史资料…</div>';
@@ -3090,7 +3109,7 @@
           : '未设置计划时间';
         const row = [
           `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
-          `<div class="company-cell"><strong>${esc(account ? accountDisplayName(account) : item.companyName)}</strong><span>${item.intakeItemId ? '未开发线索 · 待领取' : `${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
+          `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${item.intakeItemId ? `${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}未开发线索 · 待领取` : `${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
           `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
           esc(due), esc(account?.owner_name || userById(item.ownerId)?.name || ''), item.intakeItemId
             ? `<button class="text-button" data-intake-profile="${esc(item.intakeItemId)}">${esc(item.action)} →</button>`
@@ -3305,7 +3324,7 @@
       $('#insightResultCount').textContent = `已显示 ${rows.length} / ${authorizedMeta.total} 家企业`;
       $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
         <article class="insight-hub-card">
-          <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(item.companyName || item.nickname || item.customerId)}</h3><p>${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
+          <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(accountDisplayName(item))}</h3><p>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
           <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>经理评价：</strong>${esc(item.evaluationText || item.aiSummary || '已有评价')}` : '尚未填写企业经营评价'}</div>
           <div><div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div><p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
           <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>
@@ -4272,13 +4291,74 @@
     syncFilterDefinitionSourceFields();
   }
 
+  function nicknameTarget(customer, {
+    source = 'crm',
+    crmCustomerId = '',
+    intakeItemId = '',
+  } = {}) {
+    const externalCustomerId = sharedCustomerId(customer);
+    if (!customer || !externalCustomerId) return null;
+    return {
+      source,
+      crmCustomerId: String(crmCustomerId || customer.id || '').trim(),
+      intakeItemId: String(intakeItemId || '').trim(),
+      externalCustomerId,
+      companyName: sharedCustomerOfficialName(customer),
+      nickname: String(customer.nickname || '').trim(),
+    };
+  }
+
+  function customerAllowsNicknameEdit(customer) {
+    if (!customer || !can('edit_customer') || !sharedCustomerId(customer)) return false;
+    const explicit = customer.can_edit_nickname ?? customer.canEditNickname;
+    return explicit !== false;
+  }
+
+  function resetDrawerActions() {
+    state.drawerNicknameTarget = null;
+    const nicknameButton = $('#drawerNicknameBtn');
+    const updateButton = $('#drawerUpdateBtn');
+    nicknameButton?.classList.add('hidden');
+    updateButton?.classList.add('hidden');
+    if (nicknameButton) nicknameButton.disabled = true;
+    if (updateButton) updateButton.disabled = true;
+  }
+
+  function configureDrawerActions({
+    customer = null,
+    source = 'crm',
+    crmCustomerId = '',
+    intakeItemId = '',
+    allowActivity = false,
+    readOnly = false,
+    allowNickname = !readOnly,
+  } = {}) {
+    resetDrawerActions();
+    const nicknameButton = $('#drawerNicknameBtn');
+    const updateButton = $('#drawerUpdateBtn');
+    if (!readOnly && allowActivity && crmCustomerId && can('record_activity')) {
+      updateButton?.classList.remove('hidden');
+      if (updateButton) updateButton.disabled = false;
+    }
+    if (allowNickname && customerAllowsNicknameEdit(customer)) {
+      state.drawerNicknameTarget = nicknameTarget(customer, {
+        source, crmCustomerId, intakeItemId,
+      });
+      nicknameButton?.classList.remove('hidden');
+      if (nicknameButton) nicknameButton.disabled = false;
+    }
+  }
+
   function openCustomer(customerId) {
+    const account = state.data.accounts.find(item => item.id === customerId);
+    if (!account) {
+      resetDrawerActions();
+      return toast('当前客户不在可见范围内');
+    }
     state.recycleCustomerDetail = null;
     state.selectedCustomerId = customerId;
     state.drawerAiContext = null;
     renderDrawer();
-    $('#drawerUpdateBtn').classList.toggle('hidden', !can('record_activity'));
-    $('#drawerNicknameBtn').classList.toggle('hidden', !can('edit_customer'));
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
@@ -4300,7 +4380,10 @@
 
   function openIntakeProfile(itemId) {
     const item = state.data.intake?.items?.find(row => row.id === itemId);
-    if (!item) return;
+    if (!item) {
+      resetDrawerActions();
+      return toast('当前线索不在可见范围内');
+    }
     const signals = intakeSignals(item);
     const layers = intakeDecisionLayers(item);
     state.selectedCustomerId = '';
@@ -4321,9 +4404,16 @@
       view: state.view,
     };
     $('#drawerStage').textContent = intakeStatusLabel(item.status);
-    $('#drawerCompany').textContent = item.company_name || '未命名客户';
-    $('#drawerMeta').textContent = [item.external_customer_id, item.country, item.customer_type || item.industry].filter(Boolean).join(' · ');
-    $('#drawerUpdateBtn').classList.add('hidden');
+    $('#drawerCompany').textContent = accountDisplayName(item) || '未命名客户';
+    $('#drawerMeta').textContent = [
+      accountIdentity(item), item.country, item.customer_type || item.industry,
+    ].filter(Boolean).join(' · ');
+    configureDrawerActions({
+      customer: item,
+      source: 'intake',
+      intakeItemId: item.id,
+      readOnly: false,
+    });
     const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
     $('#drawerContent').innerHTML = `
       <div class="next-step"><div><span class="eyebrow">ASSIGNMENT STATUS</span><p>${esc(item.status === 'assigned' ? '公司已分配，领取后进入 CRM 并开始跟进。' : '查看客户资料与匹配依据。')}</p></div><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span></div>
@@ -4363,6 +4453,7 @@
     $('#drawerBackdrop').classList.remove('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
     state.recycleCustomerDetail = null;
+    resetDrawerActions();
   }
 
   function evaluationCard(item) {
@@ -4426,8 +4517,20 @@
     $('#drawerStage').textContent = '回收站客户';
     $('#drawerCompany').textContent = name;
     $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
-    $('#drawerUpdateBtn').classList.add('hidden');
-    $('#drawerNicknameBtn').classList.add('hidden');
+    configureDrawerActions({
+      customer: {
+        ...account,
+        canEditNickname: detail.canEditNickname
+          ?? detail.profileAccess?.canEditNickname
+          ?? detail.permissions?.canEditNickname
+          ?? account.canEditNickname
+          ?? account.can_edit_nickname,
+      },
+      source: 'recycle',
+      crmCustomerId: customerId,
+      allowNickname: true,
+      readOnly: true,
+    });
     $('#drawerContent').innerHTML = `
       <div class="next-step">
         <div><span class="eyebrow">RECYCLED CUSTOMER · READ ONLY</span><p>${esc(recycle.reason || '未填写回收原因')}</p></div>
@@ -4486,7 +4589,16 @@
       return;
     }
     const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-    if (!account) return;
+    if (!account) {
+      resetDrawerActions();
+      return;
+    }
+    configureDrawerActions({
+      customer: account,
+      source: 'crm',
+      crmCustomerId: account.id,
+      allowActivity: true,
+    });
     $('#drawerStage').textContent = stageLabel(account.stage);
     $('#drawerCompany').textContent = accountDisplayName(account);
     $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
@@ -4890,14 +5002,72 @@
     </form>`);
   }
 
+  function profileNicknameTarget() {
+    const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
+    if (account) return nicknameTarget(account, {
+      source: 'crm',
+      crmCustomerId: account.id,
+    });
+    return nicknameTarget(state.customerProfileLead, {
+      source: 'intake',
+      intakeItemId: state.customerProfileIntakeItemId || state.customerProfileLead?.id,
+    });
+  }
+
+  function synchronizeSharedNickname(externalCustomerId, nickname) {
+    const normalizedId = String(externalCustomerId || '').trim();
+    const normalizedNickname = String(nickname || '').trim();
+    if (!normalizedId) return;
+    const update = customer => {
+      if (customer && sharedCustomerId(customer) === normalizedId) customer.nickname = normalizedNickname;
+    };
+    [
+      state.data?.accounts,
+      state.data?.intake?.items,
+      state.customerList?.rows,
+      state.recycleBin?.rows,
+      state.data?.alerts,
+      ...Object.values(state.authorizedBusinessLists || {}).map(meta => meta?.rows),
+    ].forEach(rows => Array.isArray(rows) && rows.forEach(update));
+    [
+      state.customerProfileLead,
+      state.customerProfileMaster,
+      state.recycleCustomerDetail?.account,
+      state.recycleCustomerDetail?.master,
+    ].forEach(update);
+    if (state.drawerNicknameTarget?.externalCustomerId === normalizedId) {
+      state.drawerNicknameTarget.nickname = normalizedNickname;
+    }
+  }
+
+  function renderAfterSharedNicknameUpdate(target) {
+    renderAll();
+    renderRecycleBin();
+    if (!$('#customerDrawer')?.classList.contains('open')) return;
+    if (target?.source === 'intake' && target.intakeItemId) {
+      openIntakeProfile(target.intakeItemId);
+    } else {
+      renderDrawer();
+    }
+  }
+
   function openNicknameModal(customerId) {
-    const account = state.data.accounts.find(item => item.id === customerId);
-    if (!account || !can('edit_customer')) return;
-    openModal(`${account.nickname ? '修改' : '设置'}客户昵称`, 'CUSTOMER NICKNAME', `<form id="nicknameForm" class="form-grid">
-      <input type="hidden" name="customerId" value="${esc(customerId)}">
-      <div class="recommendation"><strong>${esc(account.company_name)}</strong><br>${esc(account.external_customer_id)}。昵称仅用于 CRM 内部展示，不影响正式名称、去重、AI、Recon、制裁核查或外部报告。</div>
-      <label>客户昵称<input name="nickname" value="${esc(account.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符"></label>
-      <div class="form-actions">${account.nickname ? '<button type="button" class="button secondary" data-clear-nickname>清除昵称</button>' : ''}<button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存昵称</button></div>
+    let target = customerId || state.drawerNicknameTarget;
+    if (typeof target === 'string') {
+      const account = state.data.accounts.find(item => item.id === target);
+      target = nicknameTarget(account, { source: 'crm', crmCustomerId: target });
+    }
+    if (!target?.externalCustomerId || !can('edit_customer')) {
+      return toast('当前客户不在可编辑范围内');
+    }
+    openModal(`${target.nickname ? '修改' : '设置'}客户昵称`, 'CUSTOMER NICKNAME', `<form id="nicknameForm" class="form-grid">
+      <input type="hidden" name="externalCustomerId" value="${esc(target.externalCustomerId)}">
+      <input type="hidden" name="nicknameSource" value="${esc(target.source || '')}">
+      <input type="hidden" name="crmCustomerId" value="${esc(target.crmCustomerId || '')}">
+      <input type="hidden" name="intakeItemId" value="${esc(target.intakeItemId || '')}">
+      <div class="recommendation"><strong>${esc(target.companyName || '未命名客户')}</strong><br>${esc(target.externalCustomerId)}。昵称绑定客户主档并供公司内部共用，不影响正式名称、去重、AI、Recon、制裁核查或外部报告。</div>
+      <label>客户昵称<input name="nickname" value="${esc(target.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符"></label>
+      <div class="form-actions">${target.nickname ? '<button type="button" class="button secondary" data-clear-nickname>清除昵称</button>' : ''}<button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存昵称</button></div>
     </form>`);
   }
 
@@ -5263,11 +5433,20 @@
         toast(result.changed ? '客户主档已更新' : '客户主档没有变化');
       } else if (form.id === 'nicknameForm') {
         const payload = formPayload(form);
-        const customerId = payload.customerId;
-        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, {
+        const target = {
+          source: payload.nicknameSource,
+          crmCustomerId: payload.crmCustomerId,
+          intakeItemId: payload.intakeItemId,
+          externalCustomerId: payload.externalCustomerId,
+        };
+        const result = await api(`/api/sales-crm/customers/${encodeURIComponent(payload.externalCustomerId)}/nickname`, {
           method: 'PATCH', body: JSON.stringify({ nickname: payload.nickname }),
         });
-        await refresh(payload.nickname ? '客户昵称已保存' : '客户昵称已清除');
+        const nickname = result?.customer?.nickname ?? result?.nickname ?? payload.nickname;
+        synchronizeSharedNickname(payload.externalCustomerId, nickname);
+        closeModal();
+        renderAfterSharedNicknameUpdate(target);
+        toast(nickname ? '客户昵称已保存并同步' : '客户昵称已清除并同步');
       } else if (form.id === 'passwordForm') {
         const payload = formPayload(form);
         if (payload.newPassword !== payload.confirmPassword) throw new Error('两次输入的新密码不一致');
@@ -5496,8 +5675,7 @@
       else openCustomerMasterEditModal();
     }
     if (event.target.closest('#customerProfileNickname')) {
-      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能设置昵称');
-      else openNicknameModal(state.selectedCustomerId);
+      openNicknameModal(profileNicknameTarget());
     }
     if (event.target.closest('[data-clear-nickname]')) {
       const input = $('#nicknameForm input[name="nickname"]');
@@ -5579,7 +5757,7 @@
     if (event.target.closest('#quickUpdateBtn')) openActivityModal();
     if (event.target.closest('#newCustomerBtn')) openNewCustomerModal();
     if (event.target.closest('#drawerUpdateBtn')) openActivityModal(state.selectedCustomerId);
-    if (event.target.closest('#drawerNicknameBtn')) openNicknameModal(state.selectedCustomerId);
+    if (event.target.closest('#drawerNicknameBtn')) openNicknameModal(state.drawerNicknameTarget);
     if (event.target.closest('[data-add-quote]')) openQuoteModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-order]')) openOrderModal(state.selectedCustomerId);
     if (event.target.closest('[data-edit-stage-rating]')) openStageRatingModal(state.selectedCustomerId);

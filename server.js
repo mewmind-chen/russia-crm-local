@@ -667,8 +667,8 @@ app.get('/api/customers', (req, res) => {
     const clauses = [`customer_id IN (${placeholders})`];
     const params = [...allowedIds];
     if (search) {
-      clauses.push('(company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?)');
-      params.push(like, like, like);
+      clauses.push('(nickname LIKE ? OR company_name LIKE ? OR customer_id LIKE ? OR website LIKE ?)');
+      params.push(like, like, like, like);
     }
     const where = `WHERE ${clauses.join(' AND ')}`;
     const total = db.prepare(`SELECT COUNT(*) total FROM customer_pool ${where}`).get(...params).total;
