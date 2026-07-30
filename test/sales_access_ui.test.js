@@ -7,14 +7,16 @@ function readAsset(...segments) {
   return fs.readFileSync(path.join(__dirname, '..', ...segments), 'utf8');
 }
 
-test('access UI exposes groups tri-state overrides account edits and password reset', () => {
+test('access UI exposes groups binary personal permissions account edits and password reset', () => {
   const html = readAsset('sales-crm.html');
   const js = readAsset('sales-assets', 'app.js');
   assert.match(html, /id="permissionGroupTable"/);
   assert.match(js, /permissionOverrideForm/);
-  assert.match(js, /value="inherit"/);
-  assert.match(js, /value="allow"/);
-  assert.match(js, /value="deny"/);
+  assert.match(js, /binary-permission-control/);
+  assert.match(js, /name="personalPermission__/);
+  assert.match(js, /value="true"/);
+  assert.match(js, /value="false"/);
+  assert.doesNotMatch(js, /value="inherit"/);
   assert.match(js, /adminPasswordResetForm/);
   assert.match(js, /passwordConfirm/);
   assert.match(js, /data-edit-user/);
@@ -31,7 +33,7 @@ test('permission group panel sits beside the user and audit panels', () => {
 
 test('user table renders group column override counts and scoped actions', () => {
   const js = readAsset('sales-assets', 'app.js');
-  assert.match(js, /'用户', '角色', '权限组', '覆盖数', '状态', '操作'/);
+  assert.match(js, /'用户', '角色', '权限组', '个人调整', '状态', '操作'/);
   assert.match(js, /data-edit-overrides/);
   assert.match(js, /data-reset-password/);
   assert.match(js, /data-start-impersonation/);
@@ -65,13 +67,16 @@ test('access administration separates account permissions and governance work', 
   assert.match(css, /\.access-intro\{align-items:stretch;flex-direction:column/);
 });
 
-test('user actions keep frequent commands visible and secondary commands in a menu', () => {
+test('user actions expose every eligible command directly without a more menu', () => {
   const js = readAsset('sales-assets', 'app.js');
   const css = readAsset('sales-assets', 'app.css');
-  assert.match(js, /user-primary-actions/);
-  assert.match(js, /user-action-menu/);
-  assert.match(js, /更多操作/);
-  assert.match(css, /\.user-action-menu/);
+  assert.match(js, /user-row-actions/);
+  assert.match(js, /data-reset-password/);
+  assert.match(js, /data-start-impersonation/);
+  assert.match(js, /data-archive-user/);
+  assert.doesNotMatch(js, /user-action-menu/);
+  assert.doesNotMatch(js, /更多操作/);
+  assert.doesNotMatch(css, /\.user-action-menu/);
 });
 
 test('audit rows show real and effective operators when they differ', () => {
@@ -103,6 +108,9 @@ test('override editor styles exist and asset versions are refreshed', () => {
   const js = readAsset('sales-assets', 'app.js');
   assert.match(js, /permission-override-row/);
   assert.match(css, /permission-override-row/);
+  assert.match(css, /binary-permission-control/);
+  assert.match(html, /app\.css\?v=20260730-issue148/);
+  assert.match(html, /app\.js\?v=20260730-issue148/);
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });

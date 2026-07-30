@@ -3606,23 +3606,22 @@
     $('#activeUserPanelCount').textContent = `${activeUsers.length} 个启用 · ${users.length} 个在职`;
     $('#archivedUserPanelCount').textContent = `${archivedUsers.length} 人`;
     $('#userTable').innerHTML = table(
-      ['用户', '角色', '权限组', '覆盖数', '状态', '操作'],
+      ['用户', '角色', '权限组', '个人调整', '状态', '操作'],
       users.map(user => [
         `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
         `<span class="pill">${roleLabel(user.role)}</span>`,
         esc(user.permissionGroupName || '—'),
-        user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项覆盖</span>` : '<span class="subtle">继承组默认</span>',
+        user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项调整</span>` : '<span class="subtle">无个人调整</span>',
         `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
         canMutate
           ? `<div class="user-row-actions">
-              <div class="user-primary-actions"><button class="text-button" data-edit-user="${user.id}">编辑账号</button><button class="text-button" data-edit-overrides="${user.id}">个人权限</button></div>
+              <button class="text-button" data-edit-user="${user.id}">编辑账号</button>
+              <button class="text-button" data-edit-overrides="${user.id}">个人权限</button>
               ${user.id === state.data.user.id
                 ? '<span class="current-account-label">当前账号</span>'
-                : `<details class="user-action-menu"><summary aria-label="${esc(user.name)}的更多操作">更多操作</summary><div>
-                    <button class="text-button" data-reset-password="${user.id}">修改密码</button>
-                    ${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}
-                    <button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>
-                  </div></details>`}
+                : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>
+                  ${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}
+                  <button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>`}
             </div>`
           : '<span class="subtle">无变更权限</span>',
       ]),
@@ -4100,7 +4099,7 @@
           <div><span class="pill gray">${esc(filterDisplayModeLabels[definition.displayMode] || definition.displayMode)}</span></div>
           <div class="filter-permission-badges">
             <span class="pill ${definition.sensitive ? 'amber' : 'gray'}">${definition.sensitive ? '敏感字段' : '普通字段'}</span>
-            ${scope === 'user' && isInherited ? '<span class="pill">组继承</span>' : ''}
+            ${scope === 'user' && isInherited ? '<span class="pill">权限组设置</span>' : ''}
             ${scope === 'user' && !prerequisitesMet ? '<span class="pill red">缺少字段权限</span>' : ''}
             ${previewUser ? `<span class="pill ${previewed ? '' : 'gray'}">${previewed ? '预览可见' : '预览隐藏'}</span>` : ''}
           </div>
@@ -4122,7 +4121,7 @@
           && item.enabled
           && filterPermissionPrerequisites(item, previewUser.permissions || {})).length} 项`
       : '';
-    status.textContent = `配置版本 v${admin.version}；${scope === 'user' ? '个人例外仅可追加，组继承项不可取消' : '权限组基线'}${previewText}`;
+    status.textContent = `配置版本 v${admin.version}；${scope === 'user' ? '个人调整仅可追加，权限组已有项不可取消' : '权限组基础范围'}${previewText}`;
     $('#filterPermissionSave').disabled = Boolean(state.data.impersonation);
   }
 
@@ -4177,7 +4176,7 @@
       await api(path, { method: 'PUT', body: JSON.stringify(body) });
       await loadFilterPermissionAdmin({ force: true });
       invalidateAuthorizedFilterMounts();
-      toast(restore ? '已恢复组默认筛选权限' : '筛选权限已保存');
+      toast(restore ? '已恢复权限组筛选设置' : '筛选权限已保存');
     } finally {
       if (button) {
         button.disabled = false;
@@ -4853,7 +4852,32 @@
       .map(group => `<option value="${esc(group.id)}" ${group.id === selected ? 'selected' : ''}>${esc(group.name)}</option>`).join('');
   }
 
+  function groupPermissionValues(groupId, fallback = {}) {
+    return (state.data.permissionGroups || []).find(group => group.id === groupId)?.permissions || fallback;
+  }
+
+  function personalPermissionFields(permissions = {}) {
+    return Object.entries(visiblePermissionDefinitions()).map(([key, label]) => {
+      const allowed = Boolean(permissions[key]);
+      const description = state.data.permissionDescriptions?.[key] || '';
+      return `<div class="permission-override-row">
+        <div><strong>${esc(label)}</strong>${description ? `<small>${esc(description)}</small>` : ''}</div>
+        <div class="binary-permission-control" role="radiogroup" aria-label="${esc(label)}">
+          <label><input type="radio" name="personalPermission__${esc(key)}" value="true" ${allowed ? 'checked' : ''}><span>允许</span></label>
+          <label><input type="radio" name="personalPermission__${esc(key)}" value="false" ${allowed ? '' : 'checked'}><span>拒绝</span></label>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPersonalPermissionEditor(form, permissions) {
+    const editor = form?.querySelector('[data-personal-permission-editor]');
+    if (editor) editor.innerHTML = personalPermissionFields(permissions);
+  }
+
   function openUserModal() {
+    const initialGroupId = (state.data.permissionGroups || []).find(group => group.role === 'sales')?.id || '';
+    const initialPermissions = groupPermissionValues(initialGroupId, state.data.rolePermissions?.sales || {});
     openModal('新增团队用户', 'USER & ROLE', `<form id="userForm" class="form-grid two">
       <label>姓名<input name="name" required></label><label>工作邮箱<input name="email" type="email" required></label>
       <label>角色<select name="role" data-role-source><option value="sales">销售代表</option><option value="manager">销售经理</option><option value="admin">系统管理员</option></select></label>
@@ -4861,6 +4885,10 @@
       <label>初始密码<input name="password" type="password" placeholder="留空则由系统随机生成" minlength="8" autocomplete="new-password"></label>
       <label class="span-2">语言（用逗号分隔）<input name="languages" placeholder="英文, 俄语"></label>
       <label>优势国家<input name="countries" placeholder="俄罗斯, 哈萨克斯坦"></label><label>优势渠道<input name="channels" placeholder="电话, Telegram"></label>
+      <section class="span-2 new-user-permissions">
+        <div class="recommendation"><strong>个人权限</strong><br>已按所选权限组显示实际结果，可在创建前直接选择允许或拒绝。</div>
+        <div class="permission-override-list" data-personal-permission-editor>${personalPermissionFields(initialPermissions)}</div>
+      </section>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">创建用户</button></div>
     </form>`);
   }
@@ -4903,35 +4931,19 @@
         <label>角色<select name="role" ${group ? 'disabled' : ''}>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === (group?.role || 'sales') ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
       </div>
       <label>描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
-      <div class="recommendation"><strong>组默认权限</strong><br>成员默认继承这里的布尔权限；个人差异通过用户行的“个人权限”做继承/允许/拒绝三态覆盖。${group ? '' : '切换角色会套用该角色的默认模板。'}</div>
+      <div class="recommendation"><strong>权限组设置</strong><br>这里是成员的基础权限；个人权限页面可直接选择允许或拒绝。${group ? '' : '切换角色会套用该角色的权限模板。'}</div>
       <div class="permission-editor">${permissionFields(permissions)}</div>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
     </form>`);
   }
 
-  function permissionOverrideFields(user) {
-    return Object.entries(visiblePermissionDefinitions()).map(([key, label]) => {
-      const inherited = Boolean(state.data.permissionGroups.find(group => group.id === user.permissionGroupId)?.permissions[key]);
-      const selected = user.permissionOverrides?.[key] || 'inherit';
-      const description = state.data.permissionDescriptions?.[key] || '';
-      return `<div class="permission-override-row">
-        <div><strong>${esc(label)}</strong><small>${description ? `${esc(description)}<br>` : ''}组默认：${inherited ? '允许' : '拒绝'} · 当前：${user.permissions[key] ? '允许' : '拒绝'}</small></div>
-        <select name="override__${esc(key)}">
-          <option value="inherit" ${selected === 'inherit' ? 'selected' : ''}>继承</option>
-          <option value="allow" ${selected === 'allow' ? 'selected' : ''}>允许</option>
-          <option value="deny" ${selected === 'deny' ? 'selected' : ''}>拒绝</option>
-        </select>
-      </div>`;
-    }).join('');
-  }
-
   function openOverridesModal(userId) {
     const user = state.data.users.find(item => item.id === userId);
     if (!user) return;
-    openModal(`个人权限 · ${user.name}`, 'GROUP DEFAULTS + OVERRIDES', `<form id="permissionOverrideForm" class="form-grid">
+    openModal(`个人权限 · ${user.name}`, 'ALLOW OR DENY', `<form id="permissionOverrideForm" class="form-grid">
       <input type="hidden" name="userId" value="${esc(user.id)}">
-      <div class="recommendation"><strong>${esc(user.email)}</strong><br>权限组：${esc(user.permissionGroupName || '未分配')}。“继承”跟随组默认并随组调整自动更新；“允许 / 拒绝”只影响该账号。</div>
-      <div class="permission-override-list">${permissionOverrideFields(user)}</div>
+      <div class="recommendation"><strong>${esc(user.email)}</strong><br>权限组：${esc(user.permissionGroupName || '未分配')}。请选择该账号每项权限的实际结果；与权限组相同的选择会自动取消个人调整。</div>
+      <div class="permission-override-list" data-personal-permission-editor>${personalPermissionFields(user.permissions)}</div>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存个人权限</button></div>
     </form>`);
   }
@@ -5197,6 +5209,16 @@
     return permissions;
   }
 
+  function personalPermissionsFromPayload(payload, fallback = {}) {
+    const permissions = { ...fallback };
+    Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
+      const field = `personalPermission__${key}`;
+      if (Object.hasOwn(payload, field)) permissions[key] = payload[field] === 'true';
+      delete payload[field];
+    });
+    return permissions;
+  }
+
   document.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.target;
@@ -5270,11 +5292,20 @@
         payload.languages = splitTags(payload.languages);
         payload.countries = splitTags(payload.countries);
         payload.channels = splitTags(payload.channels);
+        payload.permissions = personalPermissionsFromPayload(
+          payload,
+          groupPermissionValues(payload.permissionGroupId, state.data.rolePermissions?.[payload.role] || {}),
+        );
         const result = await api('/api/sales-crm/users', { method: 'POST', body: JSON.stringify(payload) });
         await refresh(result.temporaryPassword ? `新用户已创建，临时密码：${result.temporaryPassword}` : '新用户已创建');
       } else if (form.id === 'editUserForm') {
         const payload = formPayload(form);
         const userId = payload.userId;
+        const user = state.data.users.find(item => item.id === userId);
+        if (user && payload.permissionGroupId !== user.permissionGroupId
+          && !window.confirm('更换后将清除该用户原有的个人权限调整，并采用新权限组设置。')) {
+          return;
+        }
         await api(`/api/sales-crm/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({
           name: String(payload.name || '').trim(),
           role: payload.role,
@@ -5308,15 +5339,11 @@
         const payload = formPayload(form);
         const userId = payload.userId;
         const user = state.data.users.find(item => item.id === userId);
-        const overrides = { ...(user?.permissionOverrides || {}) };
-        Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-          if (Object.hasOwn(payload, `override__${key}`)) {
-            overrides[key] = ['inherit', 'allow', 'deny'].includes(payload[`override__${key}`])
-              ? payload[`override__${key}`]
-              : 'inherit';
-          }
+        const permissions = personalPermissionsFromPayload(payload, user?.permissions || {});
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, {
+          method: 'PUT',
+          body: JSON.stringify({ permissions }),
         });
-        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, { method: 'PUT', body: JSON.stringify(overrides) });
         await refresh('个人权限已更新');
       } else if (form.id === 'filterDefinitionForm') {
         const payload = formPayload(form);
@@ -6199,8 +6226,23 @@
   document.addEventListener('change', event => {
     if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
     if (event.target.matches('select[data-role-source]')) {
-      const groupSelect = event.target.closest('form')?.querySelector('select[data-role-group]');
-      if (groupSelect) groupSelect.innerHTML = groupOptions(event.target.value);
+      const form = event.target.closest('form');
+      const groupSelect = form?.querySelector('select[data-role-group]');
+      if (groupSelect) {
+        groupSelect.innerHTML = groupOptions(event.target.value);
+        if (form.id === 'userForm') {
+          renderPersonalPermissionEditor(
+            form,
+            groupPermissionValues(groupSelect.value, state.data.rolePermissions?.[event.target.value] || {}),
+          );
+        }
+      }
+    }
+    if (event.target.matches('#userForm select[data-role-group]')) {
+      renderPersonalPermissionEditor(
+        event.target.closest('form'),
+        groupPermissionValues(event.target.value, {}),
+      );
     }
     if (event.target.matches('#newCustomerOwner')) {
       const submit = $('#newCustomerSubmit');
@@ -6220,6 +6262,12 @@
     location.reload();
   });
   document.addEventListener('keydown', event => {
+    const binaryPermission = event.target.closest?.('.binary-permission-control input[type="radio"]');
+    if (binaryPermission && [' ', 'Space', 'Spacebar', 'Enter'].includes(event.key)) {
+      event.preventDefault();
+      binaryPermission.checked = true;
+      binaryPermission.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const accessTab = event.target.closest?.('[data-access-section]');
     if (accessTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       const tabs = $$('[data-access-section]');

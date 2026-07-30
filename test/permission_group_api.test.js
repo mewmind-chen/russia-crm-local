@@ -18,7 +18,9 @@ test('group edits and allow/deny overrides affect members without relogin', asyn
   });
   assert.equal(account.status, 200);
   const overrides = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
-    cookie: fx.adminCookie, method: 'PUT', body: { view_recon: 'allow', view_contacts: 'deny' },
+    cookie: fx.adminCookie, method: 'PUT', body: {
+      permissions: { ...ROLE_PERMISSIONS.sales, view_recon: true, view_contacts: false },
+    },
   });
   assert.equal(overrides.status, 200);
   const bootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
@@ -54,21 +56,23 @@ test('group APIs validate permissions and deny non-administrators', async t => {
   assert.equal(invalid.status, 400);
 });
 
-test('inherit removes an existing override and restores the current group default', async t => {
+test('saving a value equal to the group automatically removes the personal adjustment', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   const denied = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
-    cookie: fx.adminCookie, method: 'PUT', body: { view_recon: 'deny' },
+    cookie: fx.adminCookie, method: 'PUT', body: {
+      permissions: { ...ROLE_PERMISSIONS.sales, view_recon: false },
+    },
   });
   assert.equal(denied.status, 200);
   const overridden = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
   assert.equal(overridden.user.permissions.view_recon, false);
   assert.equal(overridden.user.permissionOverrides.view_recon, 'deny');
 
-  const inherited = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
-    cookie: fx.adminCookie, method: 'PUT', body: { view_recon: 'inherit' },
+  const restoredToGroup = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.adminCookie, method: 'PUT', body: { permissions: { ...ROLE_PERMISSIONS.sales } },
   });
-  assert.equal(inherited.status, 200);
+  assert.equal(restoredToGroup.status, 200);
   const restored = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
   assert.equal(restored.user.permissions.view_recon, true);
   assert.equal(Object.hasOwn(restored.user.permissionOverrides, 'view_recon'), false);
@@ -106,7 +110,9 @@ test('role status group and override changes cannot remove the last valid admini
   const cases = [
     ['/api/sales-crm/users/USR-ADMIN', 'PATCH', { role: 'manager', permissionGroupId: fx.managerGroupId }],
     ['/api/sales-crm/users/USR-ADMIN', 'PATCH', { active: false }],
-    ['/api/sales-crm/users/USR-ADMIN/permission-overrides', 'PUT', { manage_users: 'deny' }],
+    ['/api/sales-crm/users/USR-ADMIN/permission-overrides', 'PUT', {
+      permissions: { ...ROLE_PERMISSIONS.admin, manage_users: false },
+    }],
     [`/api/sales-crm/permission-groups/${fx.adminGroupId}`, 'PATCH', { permissions: { ...ROLE_PERMISSIONS.admin, view_users: false } }],
   ];
   for (const [route, method, body] of cases) {

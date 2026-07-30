@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260730-issue147">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260730-issue148">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -435,7 +435,7 @@
             <span>权限组</span><strong id="accessPermissionGroupCount">—</strong><small>角色权限基线</small>
           </article>
           <article class="access-summary-card">
-            <span>个人例外</span><strong id="accessOverrideUserCount">—</strong><small>存在单独覆盖</small>
+            <span>个人调整</span><strong id="accessOverrideUserCount">—</strong><small>存在单独设置</small>
           </article>
           <article class="access-summary-card">
             <span>归档账号</span><strong id="accessArchivedUserCount">—</strong><small>保留历史记录</small>
@@ -456,7 +456,7 @@
         <section id="accessAccountsPanel" class="access-workspace-panel" role="tabpanel" aria-labelledby="accessAccountsTab">
           <article class="panel access-panel access-user-panel">
             <div class="panel-head">
-              <div><p class="eyebrow">TEAM ACCOUNTS</p><h2>成员账号</h2><p>编辑账号和个人权限属于高频操作；其他账号操作收纳在“更多操作”中。</p></div>
+              <div><p class="eyebrow">TEAM ACCOUNTS</p><h2>成员账号</h2><p>常用账号操作直接展示；个人权限只需选择允许或拒绝。</p></div>
               <span id="activeUserPanelCount" class="panel-note"></span>
             </div>
             <div id="userTable" class="data-table access-user-table"></div>
@@ -480,7 +480,7 @@
           </article>
           <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
             <div class="panel-head">
-              <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组定义基线；个人例外只能追加授权或恢复组默认。</p></div>
+              <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组提供基础范围；个人调整只能追加授权或恢复权限组设置。</p></div>
               <div class="top-actions">
                 <button id="newFilterDefinitionBtn" class="button secondary" type="button" disabled>新增筛选定义</button>
                 <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
@@ -494,7 +494,7 @@
             <p id="filterPermissionStatus" class="panel-note" role="status" aria-live="polite">进入本页后加载当前配置</p>
             <div id="filterPermissionTable" class="data-table"></div>
             <div class="form-actions">
-              <button id="filterPermissionRestore" class="button secondary hidden" type="button">恢复组默认</button>
+              <button id="filterPermissionRestore" class="button secondary hidden" type="button">恢复权限组设置</button>
               <button id="filterPermissionSave" class="button primary" type="button">保存配置</button>
             </div>
           </article>
@@ -565,6 +565,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260730-issue147"></script>
+  <script src="/sales-assets/app.js?v=20260730-issue148"></script>
 </body>
 </html>
