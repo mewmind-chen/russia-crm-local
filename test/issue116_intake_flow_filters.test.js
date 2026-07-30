@@ -61,6 +61,11 @@ function createDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL
     );
+    CREATE TABLE customer_pool (
+      customer_id TEXT PRIMARY KEY,
+      company_name TEXT NOT NULL DEFAULT '',
+      nickname TEXT NOT NULL DEFAULT ''
+    );
     CREATE TABLE tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -77,6 +82,11 @@ function createDb() {
       ('B-B','screened','2026-07-27 08:00:00');
     INSERT INTO sales_users(id,name) VALUES
       ('U-ONE','One'),('U-TWO','Two');
+    INSERT INTO customer_pool(customer_id,company_name,nickname) VALUES
+      ('C-PENDING','Pending One',''),('C-APPROVED','Approved One',''),
+      ('C-ASSIGNED-ONE','Assigned One',''),('C-CLAIMED-ONE','Claimed One',''),
+      ('C-RETURNED-ONE','Returned One',''),('C-REJECTED-TWO','Rejected Two',''),
+      ('C-DUPLICATE','Duplicate Hidden','');
   `);
   const insert = db.prepare(`INSERT INTO crm_intake_items
     (id,batch_id,external_customer_id,company_name,country,website,industry,

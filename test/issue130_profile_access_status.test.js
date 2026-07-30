@@ -54,6 +54,7 @@ test('intake profile reports not-in-CRM and outside-scope states explicitly', as
     inCrm: false,
     crmAccessible: false,
     status: 'not_in_crm',
+    canEditNickname: true,
   });
 
   response = await fx.request('/api/sales-crm/intake/INTAKE-OUTSIDE/profile', { cookie });
@@ -66,6 +67,7 @@ test('intake profile reports not-in-CRM and outside-scope states explicitly', as
     inCrm: true,
     crmAccessible: false,
     status: 'outside_scope',
+    canEditNickname: true,
   });
 
   response = await fx.request('/api/sales-crm/intake?page=1&pageSize=100', { cookie });

@@ -95,6 +95,7 @@ test('recycle profile returns complete read-only history and causes no business 
     inCrm: true,
     crmAccessible: false,
     accountId: 'CRM-WU',
+    canEditNickname: true,
   });
   assert.deepEqual(body.recycle, {
     kind: 'sales_return',
