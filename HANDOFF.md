@@ -107,10 +107,28 @@ TradePulse CRM 原“快速更新”入口依赖顶栏的国家、负责人和�
 
 ### 发布状态
 
-- 功能代码、本交接文档和测试已在隔离 worktree 完成。
-- 当前尚未提交、创建 PR、合并或部署；下一步按本文件“下一步计划”执行。
-- 部署完成后需在本节补充功能提交、PR、合并 SHA、CI、不可变 release、回滚点、
-  本机/公网健康检查和 Issue 关闭证据。
+- 功能提交：`6d8990093d0235e2287688a046565c6170faf3e1`
+  （`feat: refactor customer progress workflow`）。
+- 功能 PR：[PR #155](https://github.com/mewmind-chen/russia-crm-local/pull/155)，
+  已于 `2026-07-30T16:51:49Z` 合并。
+- PR CI：[Actions #30563082820](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30563082820)
+  第 1 次运行通过，耗时 3 分 28 秒，校验的 head SHA 与功能提交一致。
+- 合并提交：`7bae80d627cd3ef687cb7d82c4b20ca66fa2a08c`。
+- `main` CI：[Actions #30563384975](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30563384975)
+  第 1 次运行通过，耗时 3 分 48 秒，目标 SHA 与合并提交完全一致。
+- 自动部署：`2026-07-30T16:53:57.411Z` 成功；不可变 release 为
+  `/Users/ylf/Desktop/projects/tradepulse-production/releases/7bae80d627cd`。
+- 回滚点：`/Users/ylf/Desktop/projects/tradepulse-production/releases/002afd329689`。
+- 本机与公网 `/healthz` 均返回 `ok=true`、`database=ok` 和完整合并 SHA；
+  `https://crm.newmindchen.com/` 返回 HTTP 200，并引用
+  `20260731-issue149` 版本的 CSS/JS 资产。
+- Issue [#149](https://github.com/mewmind-chen/russia-crm-local/issues/149)
+  已于 `2026-07-30T16:51:51Z` 由 `Closes #149` 自动关闭。
+- GitHub Actions 有一条非阻塞注解：`actions/checkout@v4` 和
+  `actions/setup-node@v4` 的 Node.js 20 运行时已弃用，运行器自动使用 Node.js 24；
+  不影响本次 CI 结果。
+- 本文档的最终发布证据通过独立文档 PR 补入；该后续提交不改变 Issue #149
+  的运行时代码或上述首次功能发布证据。
 
 ## 已修改文件
 
@@ -153,19 +171,16 @@ TradePulse CRM 原“快速更新”入口依赖顶栏的国家、负责人和�
 
 ## 未完成事项
 
-- 必做事项仅剩 GitHub 发布、CI、合并、自动部署和生产验收。
-- 上线后需把最终发布证据回填到 `HANDOFF.md`；建议使用独立文档 PR，避免改变首次功能
-  release 的代码证据。
-- 未发现需要继续开发的 Issue #149 功能缺口。
+- Issue #149 需求、功能发布和生产验收均已完成，没有遗留的必做开发项。
+- GitHub Actions 的 Node.js 20 弃用注解可在后续基础设施维护中通过升级 action
+  主版本处理，不影响本 Issue。
+- 未发现需要继续开发的功能或安全缺口。
 
 ## 下一步计划
 
-1. 审查最终 diff，提交 `codex/issue-149-progress-modal` 并推送。
-2. 用 GitHub CLI 创建包含 `Closes #149` 的 ready PR。
-3. 等待 PR CI 全部通过后合并，确认 Issue #149 自动关闭。
-4. 等待 `main` CI 和自动部署完成，记录合并 SHA、release 与回滚点。
-5. 验证本机和公网 `/healthz`、首页 HTTP 200、Issue #149 CSS/JS 缓存版本。
-6. 用独立文档 PR 回填最终发布证据，再次确认文档合并后的部署健康。
+1. 正常观察生产错误日志和活动反应配置审计。
+2. 后续修改活动、RFQ、AI proposal 或生产快照同步时，继续运行 Issue #149 专项和全量测试。
+3. 如需消除 CI 注解，单独升级 GitHub Actions 版本，不与本次已完成的业务需求混合。
 
 ## 注意事项
 
