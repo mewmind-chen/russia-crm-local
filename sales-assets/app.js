@@ -4771,6 +4771,7 @@
     const accountFacts = [
       ['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'],
       ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source],
+      ['成立年份', account.established_year || '未填写'],
       ['产品重点', account.product_focus],
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
@@ -5501,19 +5502,20 @@
   function openNewCustomerModal() {
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     const canLeaveUnassigned = can('view_all_customers') && can('manage_intake');
-    openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two">
+    const ownerOptions = `${canLeaveUnassigned ? '<optgroup label="操作"><option value="__unassigned__">暂不分配</option></optgroup>' : ''}<optgroup label="销售人员">${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
+    openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two customer-intake-form">
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label>公司名称<input name="companyName" placeholder="公司名称或官网至少填写一项"></label>
       <label>官网<input name="website" type="url" placeholder="https://example.com"></label>
       <label>国家（可选）<input name="country"></label><label>城市<input name="city"></label>
       <label>行业<input name="industry" placeholder="工业控制、汽车电子等"></label><label>客户类型<select name="customerType"><option>终端制造商</option><option>EMS/代工厂</option><option>贸易商</option><option>维修企业</option><option>方案公司</option></select></label>
       <label>客户来源<select name="source"><option>公司指派</option><option>销售自行搜索</option><option>展会</option><option>LinkedIn</option><option>海关数据</option><option>老客户介绍</option></select></label>
-      <label>负责人<select name="ownerId" id="newCustomerOwner">${canLeaveUnassigned ? '<option value="">不分配</option>' : ''}${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
-      <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>潜在金额（USD）<input name="potentialValue" type="number" min="0"></label>
+      <label>负责人<select name="ownerId" id="newCustomerOwner">${ownerOptions}</select></label>
+      <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" inputmode="numeric" placeholder="例如 2008"></label>
       <label>优先级<select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label><label>首次行动时间<input name="nextActionAt" type="datetime-local" value="${dateInput(1)}"></label>
       <label class="span-2">下一步<input name="nextAction" value="完成首次触达"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" id="newCustomerSubmit">创建客户</button></div>
-    </form>`);
+    </form>`, 'customer-intake-modal');
   }
 
   function openQuoteModal(customerId, options = {}) {
@@ -5659,10 +5661,11 @@
       ? state.data.users.find(user => user.id === account.owner_id)
       : null;
     const canAssign = can('edit_customer') && can('view_all_customers') && can('manage_intake');
+    const ownerOptions = `<optgroup label="操作"><option value="__unassigned__" ${account.owner_id ? '' : 'selected'}>暂不分配</option></optgroup><optgroup label="销售人员">${currentOwner ? `<option value="${esc(currentOwner.id)}" selected>${esc(currentOwner.name)}（当前负责人）</option>` : ''}${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
     openModal('调整阶段和评级', 'STAGE & RATING', `<form id="stageRatingForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
-      <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}><option value="" ${account.owner_id ? '' : 'selected'}>不分配</option>${currentOwner ? `<option value="${esc(currentOwner.id)}" selected>${esc(currentOwner.name)}（当前负责人）</option>` : ''}${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
+      <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
@@ -5682,6 +5685,7 @@
       <label>行业<input name="industry" value="${esc(account.industry)}"></label>
       <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, account.customer_type, '请选择客户类型')}</select></label>
       <label>来源<select name="source">${selectedOptions(options.sources, account.source, '请选择客户来源')}</select></label>
+      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(account.established_year || '')}"></label>
       <label class="span-2">重点产品<input name="productFocus" value="${esc(account.product_focus)}"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存资料</button></div>
     </form>`);
@@ -5700,6 +5704,7 @@
       <label class="span-2">官网<input name="website" type="url" value="${esc(master.website)}" placeholder="https://example.com"></label>
       <label>行业<input name="industry" value="${esc(master.industry)}"></label>
       <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, master.customerType, '请选择客户类型')}</select></label>
+      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(master.establishedYear || '')}"></label>
       <label>评级<input name="rating" value="${esc(master.rating)}"></label>
       <label class="span-2">重点产品<input name="productFocus" value="${esc(master.products)}"></label>
       <label class="span-2">客户简介<textarea name="description">${esc(master.description)}</textarea></label>
@@ -6091,7 +6096,8 @@
             : result.enrichment?.reasonCode
               ? `资料补全未启动：${result.enrichment.reasonCode}`
               : '资料补全状态已记录';
-          await refresh(`客户已创建并分配 · ${result.externalCustomerId} · ${enrichmentState}`);
+          const assignmentState = payload.ownerId === '__unassigned__' ? '客户已创建，暂未分配' : '客户已创建并分配';
+          await refresh(`${assignmentState} · ${result.externalCustomerId} · ${enrichmentState}`);
           openCustomerProfile(result.externalCustomerId);
         } catch (error) {
           if (error.code === 'CUSTOMER_DUPLICATE' && error.details?.canOpenExistingCustomer
@@ -6260,6 +6266,13 @@
         const payload = formPayload(form);
         const customerId = payload.customerId;
         delete payload.customerId;
+        const account = state.data.accounts.find(item => item.id === customerId);
+        if (payload.ownerId === '__unassigned__' && account?.owner_id) {
+          if (!window.confirm('负责人将被清空，客户会进入CRM未分配范围，全部历史记录继续保留。确认继续？')) return;
+          payload.unassignReason = String(window.prompt('请填写暂不分配原因（必填）', '') || '').trim();
+          if (payload.unassignReason.length < 2) throw new Error('转入CRM未分配范围必须填写至少2个字符的原因');
+          payload.unassignConfirmed = true;
+        }
         payload.nextActionAt = apiTime(payload.nextActionAt);
         await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         await refresh('阶段和评级已调整');
