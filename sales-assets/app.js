@@ -3791,6 +3791,20 @@
         `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`,
       ]),
     );
+    const duplicateReviews = state.data.duplicateReviews || [];
+    $('#duplicateReviewCount').textContent = `${duplicateReviews.length} 条待核验`;
+    $('#duplicateReviewTable').innerHTML = table(
+      ['员工提交', '疑似已有客户', '匹配依据', '操作'],
+      duplicateReviews.map(review => {
+        const candidates = review.candidates || [];
+        return [
+          `<div class="company-cell"><strong>${esc(review.input?.companyName || '未填公司名')}</strong><span>${esc(review.input?.website || '未填官网')} · ${esc(review.input?.country || '未填国家')}</span></div>`,
+          `<select data-duplicate-review-candidate="${esc(review.id)}">${candidates.map(candidate => `<option value="${esc(candidate.customerId)}">${esc(candidate.companyName)} · ${esc(candidate.ownerName || '未分配')} · ${esc(stageLabel(candidate.customerStage))}</option>`).join('')}</select>`,
+          candidates.map(candidate => `${candidate.matchedBy === 'fuzzy_domain' ? '官网域名相似' : '公司名称相似'} ${Math.round(Number(candidate.score || 0) * 100)}%`).join('<br>'),
+          `<div class="assignment-actions"><button class="text-button danger-text" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_same">确认同一客户</button><button class="text-button" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_distinct">确认不是同一客户</button></div>`,
+        ];
+      }),
+    );
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
     $('#migrationReviewCount').textContent = `${state.data.migrationReview?.length || 0} 条待确认`;
     $('#migrationReviewTable').innerHTML = table(
@@ -5488,6 +5502,7 @@
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     const canLeaveUnassigned = can('view_all_customers') && can('manage_intake');
     openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two">
+      <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label>公司名称<input name="companyName" placeholder="公司名称或官网至少填写一项"></label>
       <label>官网<input name="website" type="url" placeholder="https://example.com"></label>
       <label>国家（可选）<input name="country"></label><label>城市<input name="city"></label>
@@ -6064,14 +6079,30 @@
         payload.website = String(payload.website || '').trim();
         if (!payload.companyName && !payload.website) throw new Error('公司名称或官网至少填写一项');
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
-        const enrichmentState = result.enrichment?.state === 'pending_dispatch'
-          ? '资料补全已排队'
-          : result.enrichment?.reasonCode
-            ? `资料补全未启动：${result.enrichment.reasonCode}`
-            : '资料补全状态已记录';
-        await refresh(`客户已创建并分配 · ${result.externalCustomerId} · ${enrichmentState}`);
-        openCustomerProfile(result.externalCustomerId);
+        try {
+          const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
+          if (result.reviewRequired) {
+            closeModal();
+            await refresh(result.message || '资料已提交管理层核验。');
+            return;
+          }
+          const enrichmentState = result.enrichment?.state === 'pending_dispatch'
+            ? '资料补全已排队'
+            : result.enrichment?.reasonCode
+              ? `资料补全未启动：${result.enrichment.reasonCode}`
+              : '资料补全状态已记录';
+          await refresh(`客户已创建并分配 · ${result.externalCustomerId} · ${enrichmentState}`);
+          openCustomerProfile(result.externalCustomerId);
+        } catch (error) {
+          if (error.code === 'CUSTOMER_DUPLICATE' && error.details?.canOpenExistingCustomer
+              && error.details?.existingCustomerId) {
+            closeModal();
+            toast(error.message);
+            openCustomerProfile(error.details.existingCustomerId);
+            return;
+          }
+          throw error;
+        }
       } else if (form.id === 'quoteForm') {
         const payload = formPayload(form);
         const fromTodayTask = payload.todayTaskSource === 'alerts';
@@ -6890,6 +6921,26 @@
     if (event.target.closest('#stopImpersonationBtn')) {
       try { await stopIdentityInspection(); }
       catch (error) { toast(error.message); }
+    }
+    const duplicateReview = event.target.closest('[data-duplicate-review]');
+    if (duplicateReview) {
+      const reviewId = duplicateReview.dataset.duplicateReview;
+      const resolution = duplicateReview.dataset.resolution;
+      const candidateCustomerId = document.querySelector(
+        `[data-duplicate-review-candidate="${CSS.escape(reviewId)}"]`,
+      )?.value || '';
+      const confirmed = window.confirm(resolution === 'confirmed_same'
+        ? '确认为同一客户后，本次新增或线索分配将被终止。继续？'
+        : '确认不是同一客户后，该资料将被放行。继续？');
+      if (confirmed) {
+        try {
+          await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
+            method: 'POST',
+            body: JSON.stringify({ resolution, candidateCustomerId }),
+          });
+          await refresh(resolution === 'confirmed_same' ? '已确认为同一客户' : '已放行为新客户');
+        } catch (error) { toast(error.message); }
+      }
     }
     const resolveReview = event.target.closest('[data-resolve-review]');
     if (resolveReview) {
