@@ -4772,12 +4772,11 @@
       ['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'],
       ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source],
       ['成立年份', account.established_year || '未填写'],
-      ['产品重点', account.product_focus],
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
       ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
-      ['官网', account.website], ['客户编号', account.external_customer_id],
-      ['客户分组', account.current_pool], ['联系人质量', account.best_contact_level],
+      ['官网', account.website],
+      ['联系人质量', account.best_contact_level],
     ];
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `

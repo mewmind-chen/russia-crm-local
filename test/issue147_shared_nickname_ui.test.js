@@ -81,6 +81,6 @@ test('a visible nickname action uses the stable master id and synchronizes all l
 test('nickname actions start hidden and the Issue 147 assets are cache-busted', () => {
   assert.match(html, /id="customerProfileNickname" class="button secondary hidden"/);
   assert.match(html, /id="drawerNicknameBtn" class="button secondary hidden"/);
-  assert.match(html, /app\.css\?v=20260731-issue159/);
-  assert.match(html, /app\.js\?v=20260731-issue159/);
+  assert.match(html, /app\.css\?v=20260731-issue160/);
+  assert.match(html, /app\.js\?v=20260731-issue160/);
 });
