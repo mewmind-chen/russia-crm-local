@@ -1,197 +1,125 @@
-# Issue #149 开发交接
+# Issue #157 开发交接
 
 更新时间：2026-07-31
 
-Issue：[重构“记录新进展”：客户搜索、紧凑表单与自定义客户反应](https://github.com/mewmind-chen/russia-crm-local/issues/149)
+Issue：[修复今日待办操作闭环：超时线索、补充计划与管理者协助可直接处理并完结](https://github.com/mewmind-chen/russia-crm-local/issues/157)
 
 ## 项目背景
 
-TradePulse CRM 原“快速更新”入口依赖顶栏的国家、负责人和周期全局筛选，并在弹窗内
-长期展示动作类型、渠道及询价扩展字段。Issue #149 将其改为独立的“记录新进展”
-工作流：先按昵称、正式名称或客户编号搜索有权客户，再用十个稳定进展类型填写紧凑表单；
-询价资料只在第二步出现。客户反应由真实管理员维护，历史记录保存稳定 ID 和当时文字快照。
+管理员、老板和主管原先能在“今日待办”看到异常提醒，但部分唯一建议动作只打开普通客户
+详情或无定位地跳转到分配中心，无法直接完成业务处理。Issue #157 将今日待办改为可执行入口：
+超时未领取线索可重新分配或退回线索池，缺少下一步计划可独立补计划，管理者协助请求可
+填写结果并办结。待办是否消失始终由后端业务状态决定。
 
-本次同时清理顶栏隐式筛选依赖，保持现有权限范围、阶段推进和 AI 人工确认边界，并要求
-手机、平板和桌面均无嵌套或横向滚动。
-
-## 分支与工作区
+## 分支与发布方式
 
 - 仓库：`mewmind-chen/russia-crm-local`
-- 开发分支：`codex/issue-149-progress-modal`
-- 隔离 worktree：
-  `/Users/ylf/Desktop/projects/tradepulse-development/worktrees/issue-149-progress-modal`
-- 开发基线：`origin/main@002afd3296891e1803eb27a444ad3b60136c8a7d`
-- 主工作区：`/Users/ylf/Desktop/projects/russia-crm-local`
+- 功能分支：`codex/issue-157-today-task-actions`
+- 功能基线：`origin/main@37e885814e2131b7699e95f9a94af2086cf623ea`
+- 功能提交：`1c4b853ce5e477e6c3f7847227892bdf0458cefc`
+- 功能 PR：[PR #162](https://github.com/mewmind-chen/russia-crm-local/pull/162)
+- 合并提交：`f066b134fa9c9a1d5d33f0e347ae3ba927cc8a4b`
 - 发布方式：PR 合并 `main` 后由 macOS 不可变发布脚本自动部署
 
-主工作区包含用户自己的未提交改动，不要在其中 reset、checkout 或覆盖文件。本 Issue
-始终在上述隔离 worktree 中开发和发布。
+生产目录未被手工修改。自动部署器只接受 `origin/main`，先验证、备份，再切换不可变
+release 并执行健康检查。
 
-## 当前进度
+## 已完成功能
 
-### 已完成
+### 1. 超时未领取线索
 
-1. 顶栏与客户选择
+- “处理超时线索”在当前页面打开紧凑弹窗，显示客户、负责人、分配时间和超时时长。
+- 可搜索启用中的销售人员并重新分配；新负责人获得新的 24 小时领取期限。
+- 原负责人领取资格立即失效，新负责人可正常领取。
+- 可退回线索池，负责人和领取时间清空，固定记录原因“超过24小时未领取”。
+- intake 与已关联 CRM account 在同一事务中更新，不删除客户、线索或历史负责人数据。
+- `crm_intake_decisions` 和 `crm_audit_log` 保留原负责人、处理人、处理方式、新负责人和时间。
 
-   - 顶栏仅保留通知、新增 CRM 客户和记录新进展。
-   - 删除工作区标签及国家、负责人、周期全局筛选和全部 JavaScript 隐式依赖。
-   - 新接口按昵称、正式名称、外部客户编号或 CRM ID 搜索，并同时执行
-     `record_activity` 权限和客户范围过滤。
-   - 搜索结果昵称优先，展示正式名称、稳定客户编号和负责人；手工客户回退显示 CRM ID。
-   - 顶栏、客户详情和抽屉入口统一复用同一弹窗，详情入口自动预选当前客户。
+### 2. 独立补充下一步计划
 
-2. 紧凑进展表单
+- “立即补计划”打开独立弹窗，展示客户、当前负责人和阶段。
+- 下一步计划和执行时间必填，只更新客户计划字段，不伪造客户活动或客户新进展。
+- 销售仅能为自己负责的客户补计划；管理员和经理仅能处理授权范围内客户。
+- 管理者代填时审计记录标记实际操作人、客户负责人和 delegated 状态。
+- 保存后由最新后端状态重新计算待办；其他未解决原因仍保留并提升为主要原因。
 
-   - 固定十个进展选项：邮件、电话、WhatsApp、Telegram、LinkedIn、客户回复、
-     视频会议、收到询价、商务谈判、暂停/流失。
-   - 服务端固定映射 `progressType → activity_type / channel / stage`，不信任客户端伪造渠道。
-   - 客户反应为可选下拉；0 个有效选项时销售端不显示，真实管理员仍保留配置入口。
-   - 文本区初始两行，最多自然增长至约五行，之后只在文本区内部滚动。
-   - “需要经理协助”使用稳定 18×18 原生复选框和独立说明。
-   - 收到询价后进入第二步补充编号、BOM、金额、完整度和产品类别，最终只调用一次活动写接口。
-   - 前端提交锁和服务端幂等键共同防止双击、超时重试导致重复活动或重复 RFQ。
+### 3. 管理者协助办结
 
-3. 自定义客户反应
+- “处理协助请求”显示客户、申请人、申请时间和最近一条真实的管理协助原因。
+- 管理者必须填写处理意见或协助结果，完成后清除待介入状态。
+- 处理结果写入真实客户时间线，相关销售可在客户历史中查看。
+- 时间线、客户状态、审计和幂等结果在同一事务中完成；任一步失败全部回滚。
 
-   - 新表 `crm_activity_reaction_options` 保存稳定 ID、名称、排序、启用状态和审计字段。
-   - 默认安装六项：已完成、有兴趣、需要跟进、未接通、暂无回复、明确拒绝。
-   - 真实且未处于身份检查的管理员可新增、改名、排序和软移除；每种变更写专门审计。
-   - 活动同时保存 `reaction_option_id` 与 `reaction_label_snapshot`，改名或移除不会改写历史。
-   - 名称拒绝空值、超长、重复、`Cc` 控制字符和 `Cf` 格式控制字符。
-   - 打开配置页会保存当前客户、字段、AI 草稿和 RFQ 步骤；完成、关闭或按 Escape 都恢复草稿。
+### 4. 今日待办一致性
 
-4. 数据、迁移与导出
+- 所有现有原因均映射到真实业务入口：超时线索、补计划、经理协助、报价或记录新进展。
+- 每条待办携带后端 `actionKind` 和 `allowedActions` 能力标记；前端仍保留角色和权限防御。
+- 成功后刷新 bootstrap、顶部及侧栏数量、四个严重程度汇总和当前列表。
+- 当前严重程度标签保持不变，不做前端乐观删除。
+- 保存失败、权限拒绝或状态冲突时保留待办并显示后端错误。
+- 稳定幂等键和提交锁防止双击、网络重试造成重复分配或重复时间线。
 
-   - 活动新增 `progress_key`、反应 ID/快照和 `stage_before`。
-   - 旧 WhatsApp、Telegram、LinkedIn 活动迁移为稳定
-     `whatsapp / telegram / linkedin` 键，迁移可重复执行。
-   - JSON 导出升级为 schemaVersion 2，并携带活动客户编号、稳定进展和反应快照。
-   - CSV 支持 `dataset=activities`，默认客户 CSV 行为保持不变。
-   - CSV 对首个非空白字符为 `= + - @` 的单元格前置单引号，防止表格公式注入。
-   - 生产客户快照同步仅在源表和目标表同时存在时才清空复制表；旧源库缺少新反应表时
-     不会删除目标默认配置。
-   - 同步替换活动数据时会清理陈旧活动幂等响应，避免重放不存在的 activityId。
+### 5. 权限与数据范围
 
-5. AI 兼容
+- 新路由 `POST /api/sales-crm/today-tasks/actions` 要求 `view_alerts`，身份检查期间阻止写入。
+- 重新分配/退回要求管理员或经理角色及 `manage_intake`。
+- 补计划要求 `record_activity` 和客户数据范围。
+- 完成协助要求管理员或经理角色、`view_team`、`view_alerts` 和客户数据范围。
+- 无权限统一返回 `403`；过期或已变化的业务状态返回 `409`，不写入部分结果。
 
-   - AI 仍只生成待人工确认草稿，不直接写业务状态。
-   - 客户反应改为可选自由文本提示，不再硬编码旧六项枚举，也不再作为确认必填字段。
-   - AI 反应只有与当前配置精确匹配时才选择；未匹配时清空并提示人工选择。
-   - 不支持的活动类型/渠道不再静默回退到邮件或 WhatsApp，而是清空必填进展并提示重新选择。
-   - 手工客户没有稳定外部编号时隐藏 AI 入口，并在调用层再次拒绝。
-   - AI proposal 重试优先重放首次结果，不依赖后来已改名或移除的反应，并返回原始阶段变化。
+## 测试与验证
 
-6. 权限与事务
+- 本地最终完整回归：`807/807`，0 失败，耗时约 33.5 秒。
+- Issue #157 后端专项：8 项通过，覆盖三条闭环、权限拒绝、幂等、冲突和事务回滚。
+- Issue #157 UI 专项：6 项通过，覆盖动作路由、紧凑弹窗、错误保留、数量刷新和权限能力。
+- 既有 access control、今日待办、业务筛选回归：24 项通过。
+- `node --check` 通过 `lib/sales_crm.js`、`lib/business_page_filters.js` 和
+  `sales-assets/app.js`；`git diff --check` 通过。
+- 浏览器实测桌面及 `390x844`：三类弹窗均位于视口内，无横向溢出，按钮和必填字段可用。
+- PR CI：[Actions #30631247968](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30631247968)
+  第 1 次运行成功，校验 SHA 为 `1c4b853ce5e4`，耗时 3 分 45 秒。
+- `main` CI：[Actions #30631622308](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30631622308)
+  第 1 次运行成功，校验 SHA 为 `f066b134fa9c`，耗时 5 分 6 秒。
 
-   - 搜索、反应读取和活动写入均要求 `record_activity`。
-   - 客户搜索和直接写入共享相同 account scope，越权客户不会泄露或落库。
-   - 反应管理只允许真实管理员，身份检查期间由路由策略统一阻止。
-   - 活动、客户阶段/下次行动、RFQ、proposal 确认和幂等完成标记在同一立即事务中。
-   - 任一步失败时整体回滚；严格布尔校验经理协助字段。
-   - 新增反应快照别名已加入联系人敏感字段脱敏，避免低权限导出泄露。
+## 生产发布证据
 
-7. 验证
-
-   - 最终全量测试：`793/793`，0 失败。
-   - Issue #149 与 AI、同步专项：`39/39`；独立综合审查相关回归：`55/55`。
-   - `lib/sales_crm.js`、`lib/access_control.js`、`sales-assets/app.js`、
-     `scripts/sync-production-customer-data.js`、AI action proposal 与 prompt 文件均通过
-     `node --check`。
-   - `git diff --check` 通过。
-   - 浏览器实测 `375×812`、`768×1024`、`1024×768`、`1440×900`、
-     `1920×1080`：弹窗完全位于视口内，文档、弹窗、表单均无横向溢出。
-   - 浏览器确认复选框始终 18×18，七行文本高度约 120px 且 `overflow-y:auto`。
-   - 浏览器确认客户搜索、配置页草稿恢复和 RFQ 第二步；临时数据库只新增
-     1 条活动、1 条 RFQ 和 1 条幂等记录，控制台无错误。
-   - 多代理独立综合审查最终结论：无阻塞问题。
-
-### 发布状态
-
-- 功能提交：`6d8990093d0235e2287688a046565c6170faf3e1`
-  （`feat: refactor customer progress workflow`）。
-- 功能 PR：[PR #155](https://github.com/mewmind-chen/russia-crm-local/pull/155)，
-  已于 `2026-07-30T16:51:49Z` 合并。
-- PR CI：[Actions #30563082820](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30563082820)
-  第 1 次运行通过，耗时 3 分 28 秒，校验的 head SHA 与功能提交一致。
-- 合并提交：`7bae80d627cd3ef687cb7d82c4b20ca66fa2a08c`。
-- `main` CI：[Actions #30563384975](https://github.com/mewmind-chen/russia-crm-local/actions/runs/30563384975)
-  第 1 次运行通过，耗时 3 分 48 秒，目标 SHA 与合并提交完全一致。
-- 自动部署：`2026-07-30T16:53:57.411Z` 成功；不可变 release 为
-  `/Users/ylf/Desktop/projects/tradepulse-production/releases/7bae80d627cd`。
-- 回滚点：`/Users/ylf/Desktop/projects/tradepulse-production/releases/002afd329689`。
-- 本机与公网 `/healthz` 均返回 `ok=true`、`database=ok` 和完整合并 SHA；
-  `https://crm.newmindchen.com/` 返回 HTTP 200，并引用
-  `20260731-issue149` 版本的 CSS/JS 资产。
-- Issue [#149](https://github.com/mewmind-chen/russia-crm-local/issues/149)
-  已于 `2026-07-30T16:51:51Z` 由 `Closes #149` 自动关闭。
-- GitHub Actions 有一条非阻塞注解：`actions/checkout@v4` 和
-  `actions/setup-node@v4` 的 Node.js 20 运行时已弃用，运行器自动使用 Node.js 24；
-  不影响本次 CI 结果。
-- 本文档的最终发布证据通过独立文档 PR 补入；该后续提交不改变 Issue #149
-  的运行时代码或上述首次功能发布证据。
+- PR #162 于 `2026-07-31T12:42:47Z` 合并，Issue #157 于下一秒自动关闭。
+- 自动部署于 `2026-07-31T12:45:14.235Z` 成功。
+- 当前 release：`/Users/ylf/Desktop/projects/tradepulse-production/releases/f066b134fa9c`。
+- 回滚 release：`/Users/ylf/Desktop/projects/tradepulse-production/releases/37e885814e21`。
+- 上线前自动备份：
+  `/Users/ylf/Desktop/projects/tradepulse-production/state/backups/crm-before-f066b134fa9c-20260731T124511Z-51749.db`。
+- 备份数据库和当前生产数据库 `PRAGMA quick_check` 均返回 `ok`。
+- 本机 `http://127.0.0.1:3000/healthz` 与公网
+  `https://crm.newmindchen.com/healthz` 均返回 `ok=true`、`database=ok` 和完整合并 SHA。
+- 公网首页返回 HTTP 200，线上 `sales-assets/app.js` 已包含“处理超时线索”、
+  “补充下一步计划”和“处理协助请求”入口。
+- 部署状态没有 `lastFailedSha` 或失败阶段。
+- GitHub Actions 仍有一条非阻塞 Node.js 20 弃用注解，运行器自动使用 Node.js 24；
+  与前次发布一致，不影响本次结果。
 
 ## 已修改文件
 
-- `lib/access_control.js`
-  - 新反应配置路由权限和身份检查阻断策略。
-- `lib/sales_crm.js`
-  - 搜索、稳定进展映射、反应配置/审计/迁移、活动事务/幂等、导出和脱敏。
-- `lib/ai_stations/action_proposal.js`
-- `lib/ai_stations/prompts/v1.js`
-- `lib/ai_stations/schemas/action_proposal.v1.json`
-  - 自定义反应可选契约及稳定进展兼容。
-- `sales-crm.html`
-  - 精简顶栏、统一文案和 Issue #149 资产版本。
-- `sales-assets/app.js`
-  - 搜索选择器、紧凑表单、RFQ 第二步、反应管理、草稿恢复、AI 兼容和提交锁。
-- `sales-assets/app.css`
-  - 弹窗、选择器、反应管理、复选框、文本区和五档响应式约束。
-- `scripts/sync-production-customer-data.js`
-  - 新反应配置复制、旧源缺表保护和陈旧幂等清理。
-- `test/issue149_progress_backend.test.js`
-- `test/issue149_reaction_options.test.js`
-- `test/issue149_progress_ui.test.js`
-  - Issue #149 后端、配置、幂等、迁移、安全和 UI 专项测试。
-- `test/ai_action_proposal.test.js`
-- `test/development_customer_sync.test.js`
-  - AI 可选反应、重试与生产同步边界回归。
-- `test/a3_06_sales_execution_gate.test.js`
-- `test/access_control.test.js`
-- `test/ai_next_action.test.js`
-- `test/customer_nickname.test.js`
-- `test/issue62_ux.test.js`
-- `test/sales_access_ui.test.js`
-  - 既有行为适配新的进展请求与界面契约。
-- `test/issue112_tag_semantics.test.js`
-- `test/issue116_research_filter_component.test.js`
-- `test/issue147_shared_nickname_ui.test.js`
-  - 更新共享 CRM 资产缓存版本断言。
-- `HANDOFF.md`
-  - 本交接文档。
+- `lib/access_control.js`：新动作路由权限与身份检查阻断。
+- `lib/business_page_filters.js`：超时 intake 动作能力、授权过滤和待办汇总。
+- `lib/sales_crm.js`：三类动作事务、审计、幂等、状态冲突和待办上下文。
+- `sales-assets/app.js`：所有待办动作路由、三个弹窗、提交锁、错误和成功刷新。
+- `sales-assets/app.css`：紧凑弹窗与窄屏布局。
+- `test/access_control.test.js`：高风险路由策略回归。
+- `test/issue157_today_task_actions.test.js`：后端闭环和安全专项。
+- `test/issue157_today_task_ui.test.js`：前端契约与响应式专项。
 
 ## 未完成事项
 
-- Issue #149 需求、功能发布和生产验收均已完成，没有遗留的必做开发项。
-- GitHub Actions 的 Node.js 20 弃用注解可在后续基础设施维护中通过升级 action
-  主版本处理，不影响本 Issue。
-- 未发现需要继续开发的功能或安全缺口。
-
-## 下一步计划
-
-1. 正常观察生产错误日志和活动反应配置审计。
-2. 后续修改活动、RFQ、AI proposal 或生产快照同步时，继续运行 Issue #149 专项和全量测试。
-3. 如需消除 CI 注解，单独升级 GitHub Actions 版本，不与本次已完成的业务需求混合。
+- Issue #157 功能、发布和生产验收均已完成，没有遗留的必做开发项。
+- GitHub Actions Node.js 20 弃用注解可在后续基础设施维护中单独处理。
 
 ## 注意事项
 
-- 不要修改或重置主工作区中的用户改动。
-- 生产部署只接受 `main`，不要直接修改生产目录或手工替换 `current`。
-- 不要恢复已删除的顶栏全局筛选或用其隐式限制记录新进展。
-- `progressType` 是公开稳定键；客户端不能自行控制其 activity type、channel 或阶段映射。
-- 反应 option ID 是配置身份，snapshot 是历史显示文字；改名和软移除不能改写旧活动。
-- 反应管理必须保持真实管理员限制，并在身份检查期间阻止写入。
-- activity、阶段、RFQ、proposal 确认和幂等结果必须继续处于同一事务。
-- 普通活动前端必须继续发送随机 `idempotencyKey`；AI 活动以 proposal job 作为重试键。
-- 生产快照同步不能在旧源缺表时清空目标新表，替换活动时必须清理陈旧幂等响应。
-- CSV 导出新增自由文本字段时必须继续经过 `csvCell` 公式中和。
-- AI 无法映射当前配置时应要求人工选择，不得静默回退到另一个进展类型或反应。
+- 生产只部署 `origin/main`，不要直接修改生产目录或手工替换 `current`。
+- 待办完成状态必须继续由后端业务状态计算，不能增加前端忽略或仅隐藏功能。
+- 重新分配必须同时更新 intake 和关联 account，并重新生成 24 小时领取期限。
+- 补计划与记录客户新进展是两种业务动作，不要用虚假 activity 代替计划更新。
+- 管理协助结果必须保留真实时间线、处理人和审计记录。
+- 所有写动作必须继续执行角色权限、客户范围、身份检查和幂等保护。
+- SQLite 恢复属于人工操作，必须停止服务后执行；自动部署器不得自动恢复数据库。
