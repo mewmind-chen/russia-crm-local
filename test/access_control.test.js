@@ -221,6 +221,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /migration-review/:reviewId',
     'POST /password',
     'POST /permission-groups',
+    'POST /today-tasks/actions',
     'POST /users',
     'POST /users/:userId/archive',
     'POST /users/:userId/password-reset',
