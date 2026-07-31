@@ -27,7 +27,8 @@
 |---|---|---|---|
 | `manage_intake` | intake scan/settings/assign/reassign/bulk; team intake state | also `view_intake`; self claim/return/reject requires item ownership | manager without manage_intake cannot claim another item |
 | `create_customer` | `POST /api/sales-crm/accounts` | explicit permission | Sales write policy coverage |
-| `edit_customer` | account patch; Legacy update/tag; contacts | target must be in account scope; contacts also require `view_contacts` | scoped manager cannot mutate another owner |
+| `edit_customer` | account patch; Legacy update/tag | target must be in account scope | scoped manager cannot mutate another owner |
+| `manage_customer_contacts` | 新增、编辑、归档客户联系人 | 同时要求 `view_contacts` 且客户在当前账号范围内；销售和关闭全量客户权限的管理者只能维护本人客户 | 直接接口越权返回 403；重新分配后联系人随稳定客户编号保留 |
 | `record_activity` | `POST /api/sales-crm/activities` | allowed account ID | Sales write policy coverage |
 | `record_quote` | `POST /api/sales-crm/quotes` | allowed account ID | Sales write policy coverage |
 | `record_order` | `POST /api/sales-crm/orders` | allowed account ID | Sales write policy coverage |

@@ -232,6 +232,14 @@
     .detail-item.span-3 { grid-column: span 3; }
     .detail-item span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; font-weight: 650; }
     .detail-item strong, .detail-item a, .detail-item p { color: var(--text); margin: 0; overflow-wrap: anywhere; }
+    .contact-asset-list { display: grid; gap: 10px; }
+    .contact-asset-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; background: #fff; }
+    .contact-asset-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .contact-asset-head h3, .contact-asset-head p { margin: 0; }
+    .contact-asset-meta, .contact-asset-methods, .contact-asset-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .contact-asset-methods { color: var(--text); font-size: 13px; }
+    .contact-editor { border: 1px solid var(--primary); border-radius: 8px; padding: 14px; background: var(--primary-soft); }
+    .contact-editor[hidden] { display: none; }
     .recon-empty-state { min-height: 320px; display: grid; place-items: center; align-content: center; gap: 10px; padding: 32px; text-align: center; }
     .recon-empty-state .line-icon { width: 34px; height: 34px; fill: none; stroke: var(--primary); stroke-width: 1.7; stroke-linecap: round; }
     .recon-empty-state h3, .recon-empty-state p { margin: 0; }
@@ -1234,5 +1242,6 @@
     function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
     function escapeAttr(v){return escapeHtml(v).replace(/`/g,'&#096;')}
   </script>
+  <script src="/profile-contacts.js" defer></script>
 </body>
 </html>

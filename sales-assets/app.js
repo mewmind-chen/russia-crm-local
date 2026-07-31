@@ -4815,12 +4815,12 @@
         <div class="insight-body">${companyEvaluations.length ? companyEvaluations.map(evaluationCard).join('') : '<div class="empty">暂无经理评价</div>'}</div>
       </section>
       <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">CONTACT INTELLIGENCE</p><h3>对接人评价</h3></div>${canEvaluate ? '<button class="button secondary tiny" data-add-contact>＋ 新增对接人</button>' : ''}</div>
+        <div class="insight-head"><div><p class="eyebrow">CONTACT INTELLIGENCE</p><h3>对接人评价</h3></div></div>
         <div class="insight-body">${contacts.length ? contacts.map(contact => {
           const contactEvaluations = evaluations.filter(item => item.subjectType === 'contact' && item.subjectId === contact.id);
           return `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name)}</strong><span>${esc(contact.title || '职位未标注')} · ${esc(contact.department || contact.contactLevel || '')}</span></div>${canEvaluate ? `<button class="text-button" data-evaluate-contact="${esc(contact.id)}">评价此人</button>` : ''}</div>
             ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
-        }).join('') : '<div class="empty">暂无对接人，可由管理者新增</div>'}</div>
+        }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
       </section>
       <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span></div>
       <div class="timeline">${timeline.map(event => {

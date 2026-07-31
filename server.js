@@ -77,6 +77,9 @@ if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
   app.get('/tradelead-v2.html', (_req, res) => res.sendFile(path.join(__dirname, 'tradelead-v2.html')));
 }
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
+app.get('/profile-contacts.js', requireUnifiedUser, (_req, res) => {
+  res.type('application/javascript').sendFile(path.join(__dirname, 'profile-contacts.js'));
+});
 registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   const permissions = req.accessContext.permissions;
