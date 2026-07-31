@@ -216,6 +216,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /ai/sales-coaching/:salesUserId/run',
     'POST /data-maintenance/execute',
     'POST /data-maintenance/preview',
+    'POST /duplicate-reviews/:reviewId/resolve',
     'POST /filter-permissions',
     'POST /impersonation/start',
     'POST /migration-review/:reviewId',
