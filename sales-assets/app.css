@@ -521,3 +521,28 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
   body[data-app="sales"] .top-actions{grid-column:1/-1}
   body[data-app="sales"] .nav button{min-height:44px}
 }
+
+/* Issue #157: executable today-task actions */
+.today-task-modal{width:min(560px,calc(100vw - 32px));max-width:calc(100vw - 32px)}
+.today-task-form{min-width:0}
+.today-task-facts{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;overflow:hidden;border:1px solid var(--line);border-radius:9px;background:var(--line)}
+.today-task-facts>div{min-width:0;display:grid;gap:4px;background:#fff;padding:10px 12px}
+.today-task-facts span,.today-task-request span{color:var(--muted);font-size:10px;font-weight:700}
+.today-task-facts strong{min-width:0;font-size:12px;overflow-wrap:anywhere}
+.today-task-owner-picker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:11px}
+.today-task-owner-picker label{min-width:0}
+.today-task-owner-picker input,.today-task-owner-picker select{box-sizing:border-box;width:100%;min-width:0}
+.today-task-request{display:grid;gap:5px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-subtle)}
+.today-task-request p{margin:0;color:var(--ink);font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.today-task-form-error{min-height:18px;margin:0;color:var(--red);font-size:11px;line-height:1.5}
+.today-task-actions{flex-wrap:wrap}
+.today-task-context{display:grid;gap:3px;padding:9px 11px;border:1px solid #cbded5;border-radius:8px;background:var(--brand-subtle)}
+.today-task-context strong{font-size:12px}
+.today-task-context span{color:var(--muted);font-size:10px}
+@media(max-width:600px){
+  .today-task-modal{width:calc(100vw - 20px);max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}
+  .today-task-modal .modal-head,.today-task-modal .modal-body{padding:14px}
+  .today-task-facts,.today-task-owner-picker{grid-template-columns:minmax(0,1fr)}
+  .today-task-actions{display:grid;grid-template-columns:1fr}
+  .today-task-actions .button,.today-task-form .form-actions .button{min-height:44px}
+}

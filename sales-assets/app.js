@@ -10,7 +10,7 @@
   let dataTableResizeObserver = null;
   const emptyAuthorizedListState = () => ({
     rows: [], page: 0, pageSize: 50, total: 0, authorizedTotal: 0,
-    hasMore: false, loading: false, loaded: false, error: '',
+    hasMore: false, loading: false, loaded: false, error: '', summary: null,
     requestEpoch: 0, initializeEpoch: 0, filterMount: null, filterController: null,
   });
   const state = {
@@ -566,6 +566,7 @@
         error.details = result;
         if (error.code === 'IMPERSONATION_ENDED') handleImpersonationEnded();
         else if (error.status === 403
+          && !options.preserveOnForbidden
           && !['IMPERSONATION_ACTION_BLOCKED', 'FILTER_NOT_AUTHORIZED'].includes(error.code)) {
           clearForbiddenState();
         }
@@ -824,7 +825,9 @@
     if (!config || !meta?.filterController || (meta.loading && !reset)) return;
     if (reset) {
       meta.rows = [];
-      Object.assign(meta, { page: 0, total: 0, authorizedTotal: 0, hasMore: false, loaded: false });
+      Object.assign(meta, {
+        page: 0, total: 0, authorizedTotal: 0, hasMore: false, loaded: false, summary: null,
+      });
     }
     const requestEpoch = ++meta.requestEpoch;
     meta.loading = true;
@@ -852,6 +855,7 @@
         hasMore: result.hasMore,
         loaded: true,
         error: '',
+        summary: result.summary || result.meta?.summary || meta.summary || null,
       });
       if (result.schema
           && String(result.schema.permissionVersion) !== String(payload.permissionVersion)) {
@@ -3124,17 +3128,118 @@
     }).join('');
   }
 
+  function normalizeTodayTaskAction(value) {
+    return String(value || '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[\s:/.-]+/g, '_')
+      .toLowerCase();
+  }
+
+  function todayTaskAllowedActionTokens(value, result = new Set()) {
+    if (typeof value === 'string') {
+      result.add(normalizeTodayTaskAction(value));
+    } else if (Array.isArray(value)) {
+      value.forEach(item => todayTaskAllowedActionTokens(item, result));
+    } else if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([key, item]) => {
+        if (item) result.add(normalizeTodayTaskAction(key));
+        if (typeof item === 'string' || Array.isArray(item) || (item && typeof item === 'object')) {
+          todayTaskAllowedActionTokens(item, result);
+        }
+      });
+    }
+    return result;
+  }
+
+  function todayTaskActionAllowed(item, accepted, fallback) {
+    if (item?.allowedActions === undefined || item?.allowedActions === null) return Boolean(fallback);
+    const tokens = todayTaskAllowedActionTokens(item.allowedActions);
+    if (!normalizeTodayTaskAction(item.actionKind) && tokens.size === 0) return Boolean(fallback);
+    return Boolean(fallback)
+      && accepted.some(action => tokens.has(normalizeTodayTaskAction(action)));
+  }
+
+  function todayTaskActionKind(item) {
+    const explicit = normalizeTodayTaskAction(item?.actionKind);
+    const aliases = {
+      resolve_overdue_lead: 'overdue-lead',
+      overdue_lead: 'overdue-lead',
+      add_next_plan: 'next-plan',
+      next_plan: 'next-plan',
+      complete_manager_assistance: 'manager-assistance',
+      manager_assistance: 'manager-assistance',
+      record_quote: 'quote',
+      quote: 'quote',
+      record_activity: 'activity',
+      activity: 'activity',
+    };
+    if (aliases[explicit]) return aliases[explicit];
+    const code = String(item?.code || '').toUpperCase();
+    if (['UNCLAIMED', 'UNCLAIMED_LEAD'].includes(code)) return 'overdue-lead';
+    if (code === 'NO_NEXT') return 'next-plan';
+    if (code === 'MANAGER_NEEDED') return 'manager-assistance';
+    if (code === 'RFQ_UNQUOTED') return 'quote';
+    if ([
+      'INTAKE_IDLE', 'OVERDUE', 'REPLY_IDLE', 'POST_MANAGER_IDLE',
+      'MEETING_NO_RFQ', 'QUOTE_IDLE', 'STALE',
+    ].includes(code)) return 'activity';
+    return '';
+  }
+
+  function todayTaskActionMarkup(item) {
+    const kind = todayTaskActionKind(item);
+    const role = state.data?.user?.role;
+    const allowed = {
+      'overdue-lead': todayTaskActionAllowed(
+        item,
+        ['resolve_overdue_lead', 'reassign', 'return_to_pool'],
+        ['admin', 'manager'].includes(role) && can('manage_intake') && !state.data?.impersonation,
+      ),
+      'next-plan': todayTaskActionAllowed(
+        item,
+        ['add_next_plan'],
+        can('record_activity') && !state.data?.impersonation,
+      ),
+      'manager-assistance': todayTaskActionAllowed(
+        item,
+        ['complete_manager_assistance'],
+        ['admin', 'manager'].includes(role) && can('view_team') && !state.data?.impersonation,
+      ),
+      quote: todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote')),
+      activity: todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity')),
+    }[kind];
+    if (!kind) return '<span class="subtle">暂无对应操作</span>';
+    if (!allowed) return '<span class="subtle">当前账号无权处理</span>';
+    const labels = {
+      'overdue-lead': '处理超时线索',
+      'next-plan': '立即补计划',
+      'manager-assistance': '处理协助请求',
+    };
+    return `<button class="text-button" type="button" data-today-task-action="${esc(kind)}" data-today-task-id="${esc(item.id)}">${esc(labels[kind] || item.action || '立即处理')} →</button>`;
+  }
+
   function renderAlerts() {
     const meta = state.authorizedBusinessLists.alerts;
     const all = meta.loaded ? meta.rows : [];
-    const reasonCount = all.reduce((sum, item) => sum + Number(item.reasonCount || 1), 0);
+    const summary = meta.summary || {};
+    const summarizedReasons = summary.reasons ?? summary.reasonCount ?? summary.totalReasons;
+    const reasonCount = Number(
+      summarizedReasons ?? all.reduce((sum, item) => sum + Number(item.reasonCount || 1), 0),
+    );
+    const reasonText = summarizedReasons === undefined && meta.hasMore
+      ? `已加载 ${reasonCount} 个异常原因，列表已按客户或线索去重`
+      : `${reasonCount} 个异常原因，已按客户或线索去重`;
     const counts = {
-      immediate: all.filter(item => item.urgency === 'immediate').length,
-      today: all.filter(item => item.urgency === 'today').length,
-      attention: all.filter(item => item.urgency === 'attention').length,
+      immediate: Number(summary.immediate ?? summary.immediateCount
+        ?? all.filter(item => item.urgency === 'immediate').length),
+      today: Number(summary.today ?? summary.todayCount
+        ?? all.filter(item => item.urgency === 'today').length),
+      attention: Number(summary.attention ?? summary.attentionCount
+        ?? all.filter(item => item.urgency === 'attention').length),
     };
+    const objectCount = Number(summary.objects ?? summary.objectCount ?? summary.total ?? meta.total ?? all.length);
     $('#alertSummary').innerHTML = [
-      ['待处理对象', all.length, `${reasonCount} 个异常原因，已按客户或线索去重`],
+      ['待处理对象', objectCount, reasonText],
       ['立即处理', counts.immediate, '询价、经理介入或领取时限事项'],
       ['今天完成', counts.today, '超期、缺少下一步或未首次触达'],
       ['需要关注', counts.attention, '存在阶段停滞风险'],
@@ -3153,9 +3258,9 @@
           `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
           `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${item.intakeItemId ? `${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}未开发线索 · 待领取` : `${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
           `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
-          esc(due), esc(account?.owner_name || userById(item.ownerId)?.name || ''), item.intakeItemId
-            ? `<button class="text-button" data-intake-profile="${esc(item.intakeItemId)}">${esc(item.action)} →</button>`
-            : `<button class="text-button" data-open-customer="${item.customerId}">${esc(item.action)} →</button>`,
+          esc(due),
+          esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
+          todayTaskActionMarkup(item),
         ];
         row._attrs = item.intakeItemId
           ? `data-intake-profile="${esc(item.intakeItemId)}"`
@@ -4730,6 +4835,174 @@
     if (dialog) dialog.className = 'modal';
   }
 
+  function todayTaskById(taskId) {
+    return state.authorizedBusinessLists.alerts.rows.find(item => String(item.id) === String(taskId));
+  }
+
+  function todayTaskFactGrid(facts) {
+    return `<div class="today-task-facts">${facts.map(([label, value]) =>
+      `<div><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}</div>`;
+  }
+
+  function todayTaskErrorMarkup() {
+    return '<p class="today-task-form-error" data-today-task-error role="alert" aria-live="polite"></p>';
+  }
+
+  function todayTaskCandidates() {
+    return (state.data?.todayTaskAssignmentCandidates || [])
+      .filter(item => item && item.id)
+      .map(item => ({
+        id: String(item.id),
+        name: String(item.name || item.displayName || item.id),
+        detail: String(item.detail || item.teamName || item.countries?.join(' / ') || ''),
+      }));
+  }
+
+  function renderTodayTaskCandidateOptions(query = '') {
+    const select = $('#todayTaskOwner');
+    if (!select) return;
+    const selected = select.value;
+    const keyword = String(query || '').trim().toLocaleLowerCase();
+    const rows = todayTaskCandidates().filter(item =>
+      !keyword || `${item.name} ${item.detail} ${item.id}`.toLocaleLowerCase().includes(keyword));
+    select.innerHTML = rows.length
+      ? `<option value="">请选择新负责人</option>${rows.map(item =>
+        `<option value="${esc(item.id)}">${esc(item.name)}${item.detail ? ` · ${esc(item.detail)}` : ''}</option>`).join('')}`
+      : '<option value="">没有匹配的启用中销售人员</option>';
+    if (rows.some(item => item.id === selected)) select.value = selected;
+  }
+
+  function openOverdueLeadTaskModal(item) {
+    if (!item.intakeItemId) return toast('该超时线索缺少稳定编号，请刷新后重试');
+    const canReassign = todayTaskActionAllowed(
+      item,
+      ['resolve_overdue_lead', 'reassign', 'resolve_overdue_lead_reassign'],
+      ['admin', 'manager'].includes(state.data?.user?.role)
+        && can('manage_intake') && !state.data?.impersonation,
+    );
+    const canReturn = todayTaskActionAllowed(
+      item,
+      ['resolve_overdue_lead', 'return_to_pool', 'resolve_overdue_lead_return_to_pool'],
+      ['admin', 'manager'].includes(state.data?.user?.role)
+        && can('manage_intake') && !state.data?.impersonation,
+    );
+    if (!canReassign && !canReturn) return toast('当前账号无权处理该超时线索');
+    const overdue = Number(item.maxOverdueHours ?? item.overdueHours ?? 0);
+    openModal('处理超时线索', '直接重新分配或退回线索池', `
+      <form id="todayTaskOverdueForm" class="form-grid today-task-form" data-today-task-form>
+        <input type="hidden" name="intakeItemId" value="${esc(item.intakeItemId)}">
+        <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+        ${todayTaskFactGrid([
+          ['客户', accountDisplayName(item)],
+          ['当前负责人', item.ownerName || userById(item.ownerId)?.name || item.ownerId],
+          ['分配时间', item.assignedAt ? shortDate(item.assignedAt, true) : '未记录'],
+          ['超时时长', overdue ? `${Math.floor(overdue)} 小时` : '已超过领取期限'],
+        ])}
+        ${canReassign ? `<div class="today-task-owner-picker">
+          <label>搜索启用中的销售人员<input id="todayTaskOwnerSearch" type="search" autocomplete="off" placeholder="输入姓名、编号或团队"></label>
+          <label>新负责人<select id="todayTaskOwner" name="ownerId"></select></label>
+        </div>` : ''}
+        ${todayTaskErrorMarkup()}
+        <div class="form-actions today-task-actions">
+          <button type="button" class="button secondary" data-close-modal>取消</button>
+          ${canReturn ? '<button class="button secondary" type="submit" data-resolution="return_to_pool">确认退回</button>' : ''}
+          ${canReassign ? '<button class="button primary" type="submit" data-resolution="reassign">确认重新分配</button>' : ''}
+        </div>
+      </form>`, 'today-task-modal');
+    renderTodayTaskCandidateOptions();
+  }
+
+  function openNextPlanTaskModal(item) {
+    if (!todayTaskActionAllowed(
+      item,
+      ['add_next_plan'],
+      can('record_activity') && !state.data?.impersonation,
+    )) {
+      return toast('当前账号无权为该客户补充计划');
+    }
+    const account = state.data.accounts.find(row => row.id === item.customerId);
+    openModal('补充下一步计划', '只补计划，不虚构客户新进展', `
+      <form id="todayTaskPlanForm" class="form-grid two today-task-form" data-today-task-form>
+        <input type="hidden" name="customerId" value="${esc(item.customerId)}">
+        <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+        <div class="span-2">${todayTaskFactGrid([
+          ['客户', accountDisplayName(account || item)],
+          ['当前负责人', item.ownerName || account?.owner_name || userById(item.ownerId)?.name],
+          ['当前阶段', stageLabel(item.stage || account?.stage)],
+        ])}</div>
+        <label class="span-2">下一步计划<input name="nextAction" maxlength="500" required placeholder="例如：确认 BOM 明细并准备报价"></label>
+        <label class="span-2">计划执行时间<input name="nextActionAt" type="datetime-local" value="${dateInput(1)}" required></label>
+        <div class="span-2">${todayTaskErrorMarkup()}</div>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">保存并完成待办</button></div>
+      </form>`, 'today-task-modal');
+  }
+
+  function managerRequestValue(request, keys) {
+    for (const key of keys) {
+      if (request?.[key] !== undefined && request?.[key] !== null && request?.[key] !== '') {
+        return request[key];
+      }
+    }
+    return '';
+  }
+
+  function openManagerAssistanceTaskModal(item) {
+    if (!todayTaskActionAllowed(
+      item,
+      ['complete_manager_assistance'],
+      ['admin', 'manager'].includes(state.data?.user?.role)
+        && can('view_team') && !state.data?.impersonation,
+    )) return toast('当前账号无权完成该协助请求');
+    const account = state.data.accounts.find(row => row.id === item.customerId);
+    const request = item.managerRequest || {};
+    const requester = managerRequestValue(request, [
+      'requesterName', 'applicantName', 'requestedByName', 'userName', 'requesterId',
+    ]);
+    const requestedAt = managerRequestValue(request, ['requestedAt', 'createdAt', 'occurredAt']);
+    const reason = managerRequestValue(request, [
+      'summary', 'reason', 'content', 'progressContent', 'detail',
+    ]) || item.detail;
+    openModal('处理协助请求', '记录处理意见并明确完成协助', `
+      <form id="todayTaskManagerForm" class="form-grid today-task-form" data-today-task-form>
+        <input type="hidden" name="customerId" value="${esc(item.customerId)}">
+        <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+        ${todayTaskFactGrid([
+          ['客户', accountDisplayName(account || item)],
+          ['申请人', requester || '未记录'],
+          ['申请时间', requestedAt ? shortDate(requestedAt, true) : '未记录'],
+        ])}
+        <div class="today-task-request"><span>申请协助时的进展或原因</span><p>${esc(reason || '未记录具体原因')}</p></div>
+        <label>处理意见或协助结果<textarea name="result" rows="4" maxlength="4000" required placeholder="填写本次处理意见、已完成的协助和后续安排"></textarea></label>
+        ${todayTaskErrorMarkup()}
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">完成协助</button></div>
+      </form>`, 'today-task-modal');
+  }
+
+  async function openTodayTaskAction(item) {
+    if (!item) return toast('待办已更新，请刷新后重试');
+    const kind = todayTaskActionKind(item);
+    if (kind === 'overdue-lead') return openOverdueLeadTaskModal(item);
+    if (kind === 'next-plan') return openNextPlanTaskModal(item);
+    if (kind === 'manager-assistance') return openManagerAssistanceTaskModal(item);
+    if (kind === 'quote') {
+      if (!todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote'))) {
+        return toast('当前账号没有记录报价权限');
+      }
+      return openQuoteModal(item.customerId, { fromTodayTask: true });
+    }
+    if (kind === 'activity') {
+      if (!todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity'))) {
+        return toast('当前账号没有记录进展权限');
+      }
+      openActivityModal.todayTaskContext = {
+        todayTaskTitle: item.title,
+        todayTaskAction: item.action,
+      };
+      return openActivityModal(item.customerId);
+    }
+    toast('该待办暂时没有可执行操作');
+  }
+
   async function loadActivityReactions({ force = false, admin = false } = {}) {
     if (!force && state.activityReactionsLoaded && !admin) return state.activityReactions;
     const path = admin ? '/activity-reactions/admin' : '/activity-reactions';
@@ -5065,6 +5338,8 @@
   }
 
   async function openActivityModal(customerId = '') {
+    const options = openActivityModal.todayTaskContext || {};
+    openActivityModal.todayTaskContext = null;
     if (!can('record_activity')) return toast('当前账号没有记录进展权限');
     try {
       await loadActivityReactions({ force: true });
@@ -5081,11 +5356,13 @@
       <form id="activityForm" class="activity-progress-form">
         <input type="hidden" name="customerId" value="${esc(state.activitySelectedCustomer?.id || '')}">
         <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+        ${options.todayTaskTitle ? '<input type="hidden" name="todayTaskSource" value="alerts">' : ''}
         <input type="hidden" name="activityType" value="email">
         <input type="hidden" name="channel" value="email">
         <input type="hidden" name="outcome" value="">
         <input type="hidden" name="proposalJobId" value="">
         <section id="activityMainStep" class="activity-main-step">
+          ${options.todayTaskTitle ? `<div class="today-task-context"><strong>${esc(options.todayTaskTitle)}</strong><span>${esc(options.todayTaskAction || '请记录完成该待办的真实客户进展')}</span></div>` : ''}
           <div id="activityCustomerPicker" class="activity-customer-picker"></div>
           <div class="activity-primary-grid">
             <div class="activity-field">
@@ -5224,10 +5501,11 @@
     </form>`);
   }
 
-  function openQuoteModal(customerId) {
+  function openQuoteModal(customerId, options = {}) {
     openModal('记录报价', 'QUOTATION', `<form id="quoteForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+      ${options.fromTodayTask ? '<input type="hidden" name="todayTaskSource" value="alerts">' : ''}
       <label>报价金额<input name="amount" type="number" min="0" required></label><label>币种<select name="currency"><option>USD</option><option>EUR</option><option>CNY</option></select></label>
       <label>预计毛利率 %<input name="grossMargin" type="number" step=".1" value="8"></label><label>报价后跟进时间<input name="nextFollowAt" type="datetime-local" value="${dateInput(3)}"></label>
       <label class="span-2 check"><input name="lossLeader" type="checkbox"> 首单低价/亏本引流报价</label>
@@ -5590,6 +5868,46 @@
     closeModal();
     if (message) toast(message);
   }
+
+  async function refreshTodayTasksAfterAction(message) {
+    await refresh();
+    await loadAuthorizedBusinessPage('alerts', { reset: true });
+    $$('#alertTabs button').forEach(button => {
+      button.classList.toggle('active', button.dataset.severity === state.alertSeverity);
+    });
+    toast(message);
+  }
+
+  async function submitTodayTaskAction(form, body, message) {
+    if (form.dataset.submitting === 'true') return;
+    const errorEl = form.querySelector('[data-today-task-error]');
+    const buttons = Array.from(form.querySelectorAll('button'));
+    const submitter = form._todayTaskSubmitter;
+    const originalSubmitterText = submitter?.textContent || '';
+    form.dataset.submitting = 'true';
+    if (errorEl) errorEl.textContent = '';
+    buttons.forEach(button => { button.disabled = true; });
+    if (submitter) submitter.textContent = '处理中…';
+    try {
+      await api('/api/sales-crm/today-tasks/actions', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        preserveOnForbidden: true,
+      });
+      await refreshTodayTasksAfterAction(message);
+    } catch (error) {
+      if (errorEl) errorEl.textContent = error.message;
+      throw error;
+    } finally {
+      form.dataset.submitting = 'false';
+      if (form.isConnected) {
+        buttons.forEach(button => { button.disabled = false; });
+        if (submitter) submitter.textContent = originalSubmitterText;
+      }
+      form._todayTaskSubmitter = null;
+    }
+  }
+
   function formPayload(form) {
     const data = Object.fromEntries(new FormData(form).entries());
     form.querySelectorAll('input[type=checkbox]').forEach(input => { data[input.name] = input.checked; });
@@ -5663,6 +5981,43 @@
           method: 'POST', body: JSON.stringify({ name }),
         });
         await reloadActivityReactionAdmin('客户反应已新增');
+      } else if (form.id === 'todayTaskOverdueForm') {
+        const payload = formPayload(form);
+        const resolution = event.submitter?.dataset.resolution || '';
+        form._todayTaskSubmitter = event.submitter;
+        if (!['reassign', 'return_to_pool'].includes(resolution)) {
+          throw new Error('请选择重新分配或退回线索池');
+        }
+        if (resolution === 'reassign' && !payload.ownerId) throw new Error('请选择新负责人');
+        await submitTodayTaskAction(form, {
+          actionType: 'resolve_overdue_lead',
+          intakeItemId: payload.intakeItemId,
+          resolution,
+          ...(resolution === 'reassign' ? { ownerId: payload.ownerId } : {}),
+          idempotencyKey: payload.idempotencyKey,
+        }, resolution === 'reassign' ? '超时线索已重新分配' : '超时线索已退回线索池');
+      } else if (form.id === 'todayTaskPlanForm') {
+        const payload = formPayload(form);
+        form._todayTaskSubmitter = event.submitter;
+        if (!String(payload.nextAction || '').trim()) throw new Error('请填写下一步计划');
+        if (!payload.nextActionAt) throw new Error('请选择计划执行时间');
+        await submitTodayTaskAction(form, {
+          actionType: 'add_next_plan',
+          customerId: payload.customerId,
+          nextAction: String(payload.nextAction || '').trim(),
+          nextActionAt: apiTime(payload.nextActionAt),
+          idempotencyKey: payload.idempotencyKey,
+        }, '下一步计划已保存，待办已更新');
+      } else if (form.id === 'todayTaskManagerForm') {
+        const payload = formPayload(form);
+        form._todayTaskSubmitter = event.submitter;
+        if (!String(payload.result || '').trim()) throw new Error('请填写处理意见或协助结果');
+        await submitTodayTaskAction(form, {
+          actionType: 'complete_manager_assistance',
+          customerId: payload.customerId,
+          result: String(payload.result || '').trim(),
+          idempotencyKey: payload.idempotencyKey,
+        }, '协助结果已记录，待办已完成');
       } else if (form.id === 'activityForm') {
         if (state.activitySubmitting) return;
         const payload = formPayload(form);
@@ -5677,6 +6032,8 @@
         state.activitySubmitting = true;
         submitButtons.forEach(button => { button.disabled = true; });
         try {
+          const fromTodayTask = payload.todayTaskSource === 'alerts';
+          delete payload.todayTaskSource;
           payload.nextActionAt = apiTime(payload.nextActionAt);
           payload.bomLines = Number(payload.bomLines || 0);
           payload.expectedValue = Number(payload.expectedValue || 0);
@@ -5692,9 +6049,11 @@
           const stageBefore = result.stageBefore || result.previousStage || '';
           const stageAfter = result.stageAfter || result.stage || '';
           const stageChanged = result.stageChanged ?? Boolean(stageBefore && stageAfter && stageBefore !== stageAfter);
-          await refresh(stageChanged
+          const message = stageChanged
             ? `进展已记录，客户阶段已更新为“${stageLabel(stageAfter)}”`
-            : '进展已记录，客户阶段未发生变化');
+            : '进展已记录，客户阶段未发生变化';
+          if (fromTodayTask) await refreshTodayTasksAfterAction(message);
+          else await refresh(message);
         } finally {
           state.activitySubmitting = false;
           if (form.isConnected) submitButtons.forEach(button => { button.disabled = false; });
@@ -5715,9 +6074,12 @@
         openCustomerProfile(result.externalCustomerId);
       } else if (form.id === 'quoteForm') {
         const payload = formPayload(form);
+        const fromTodayTask = payload.todayTaskSource === 'alerts';
+        delete payload.todayTaskSource;
         payload.nextFollowAt = apiTime(payload.nextFollowAt);
         await api('/api/sales-crm/quotes', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh('报价已记录，客户进入已报价阶段');
+        if (fromTodayTask) await refreshTodayTasksAfterAction('报价已记录，客户进入已报价阶段');
+        else await refresh('报价已记录，客户进入已报价阶段');
       } else if (form.id === 'orderForm') {
         const payload = formPayload(form);
         payload.nextActionAt = apiTime(payload.nextActionAt);
@@ -6016,6 +6378,10 @@
     } catch (error) {
       if (form.id === 'loginForm') $('#loginError').textContent = error.message;
       else {
+        if (form.matches('[data-today-task-form]')) {
+          const status = form.querySelector('[data-today-task-error]');
+          if (status) status.textContent = error.message;
+        }
         toast(error.message);
         if (form.id === 'drawerAiForm') {
           const button = form.querySelector('button[type=submit]');
@@ -6058,6 +6424,10 @@
     const definitionEditor = event.target.closest('[data-edit-filter-definition]');
     if (definitionEditor) openFilterDefinitionEditor(definitionEditor.dataset.editFilterDefinition);
     if (event.target.closest('#newFilterDefinitionBtn')) openFilterDefinitionCreator();
+    const todayTaskAction = event.target.closest('[data-today-task-action]');
+    if (todayTaskAction) {
+      await openTodayTaskAction(todayTaskById(todayTaskAction.dataset.todayTaskId));
+    }
     const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
     if (recycleCustomer
       && (!event.target.closest('button,a,input,select,textarea')
@@ -6563,6 +6933,9 @@
   });
 
   document.addEventListener('input', event => {
+    if (event.target.id === 'todayTaskOwnerSearch') {
+      renderTodayTaskCandidateOptions(event.target.value);
+    }
     if (event.target.id === 'recycleSearch') {
       clearTimeout(loadRecycleBin.timer);
       loadRecycleBin.timer = setTimeout(() => void loadRecycleBin(), 250);
