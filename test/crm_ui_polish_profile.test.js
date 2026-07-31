@@ -15,15 +15,17 @@ function functionSource(name, nextName) {
   return match[0];
 }
 
-test('embedded customer profile uses four definition groups', () => {
+test('embedded customer profile uses focused definition groups', () => {
   const details = functionSource('renderPoolDetails', 'renderTagEditor');
 
-  assert.equal((details.match(/renderDetailSection\(/g) || []).length, 4);
+  assert.equal((details.match(/renderDetailSection\(/g) || []).length, 6);
   for (const heading of [
     '身份与地区',
-    '业务画像与产品需求',
+    '业务画像',
+    '产品关注',
     '联系渠道',
-    '合规、来源与生命周期',
+    '合规信息',
+    '来源与记录',
   ]) {
     assert.match(details, new RegExp(heading));
   }
@@ -31,8 +33,9 @@ test('embedded customer profile uses four definition groups', () => {
   assert.match(workbench, /function renderDetailValue\(value,\s*raw\s*=\s*false\)/);
   assert.match(workbench, /function renderDetailSection\(title,\s*rows\)/);
   assert.match(workbench, /function readableProductText\(value\)/);
+  assert.match(workbench, /function renderProductFocus\(value\)/);
   assert.match(workbench, /JSON\.parse\(raw\)/);
-  assert.match(details, /readableProductText\(c\.products\)/);
+  assert.match(details, /renderProductFocus\(c\.products\)/);
   assert.match(workbench, /\.detail-definition-grid\s*\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(workbench, /\.detail-empty\s*\{[^}]*color:\s*var\(--muted\)/);
 });

@@ -39,8 +39,8 @@ test('issue 128 profile consumes the three-state sanction and lifecycle API cont
 
   assert.match(details, /customerSanctionStatus\(c\)/);
   assert.doesNotMatch(details, /riskStatus|compliance|sanctioned/);
-  assert.match(details, /c\.createdAt\?formatDateTime\(c\.createdAt\):'未知'/);
-  assert.match(details, /c\.updatedAt\?formatDateTime\(c\.updatedAt\):'未知'/);
+  assert.match(details, /c\.recordCreatedAt\|\|c\.createdAt\?formatDateTime\(c\.recordCreatedAt\|\|c\.createdAt\):'未知'/);
+  assert.match(details, /c\.recordUpdatedAt\|\|c\.updatedAt\?formatDateTime\(c\.recordUpdatedAt\|\|c\.updatedAt\):'未知'/);
   assert.match(sanctionStatus, /\['受制裁','未制裁','未知'\]\.includes\(status\)/);
   assert.match(sanctionStatus, /state\.customerPool\.find/);
   assert.match(reconPanel, /sn=renderSanctionTag\(c\)/);
@@ -85,12 +85,13 @@ test('issue 128 profile fields are retained in grouped responsive sections', () 
   const poolDetails = functionSource('renderPoolDetails', 'renderTagEditor');
 
   for (const field of [
-    '客户ID', '官网', '俄文名称', '英文名称', '国家/城市', '客户类型', '行业',
-    '当前池子', '简介', '产品需求', '邮箱', '电话', 'INN', '制裁状态',
+    '官网', '俄文名称', '英文名称', '国家/城市', '客户类型', '行业',
+    '企业简介', '重点产品', '邮箱', '电话', 'INN', '制裁状态',
     '联系人数量', '深度报告', '来源文件', '创建时间', '最后修改时间',
   ]) {
     assert.match(poolDetails, new RegExp(field), `${field} should remain visible`);
   }
+  assert.doesNotMatch(poolDetails, /客户ID|当前池子/);
 
   assert.match(poolDetails, /renderDetailSection/);
   assert.match(workbench, /\.detail-section/);
