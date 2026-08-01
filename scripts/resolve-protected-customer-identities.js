@@ -367,6 +367,14 @@ function resolveOnDatabase(db, options) {
     Number(unresolved.unresolved || 0),
     Number(rawReport.unresolved || 0),
   );
+  const leadWarningCount = Math.max(
+    Number(unresolved.leadWarnings || 0),
+    Number(rawReport.leadWarnings || 0),
+  );
+  const blockingUnresolved = Math.max(
+    Number(unresolved.blockingUnresolved || 0),
+    Number(rawReport.blockingUnresolved || 0),
+  );
   return {
     ok: true,
     mode: options.apply ? 'apply' : 'preview',
@@ -374,7 +382,9 @@ function resolveOnDatabase(db, options) {
     resolution,
     gate: {
       unresolved: unresolvedCount,
-      canEnter172B: unresolvedCount === 0,
+      leadWarnings: leadWarningCount,
+      blockingUnresolved,
+      canEnter172B: blockingUnresolved === 0,
       rawConflicts: rawReport.conflicts.length,
       auditUnresolved: rawReport.unresolved,
       reportVersion: rawReport.reportVersion,

@@ -1904,7 +1904,7 @@
           ? '具名联系人与联系方式完备'
           : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const businessColumns = [
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span><span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong><span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
           `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
@@ -2011,6 +2011,7 @@
           customer_type: pool.customerType,
           industry: pool.industry,
           customerTags: pool.tags || [],
+          identityWarning: profile.identityWarning || null,
           in_crm: Boolean(profile.profileAccess?.inCrm),
           can_edit_nickname: Boolean(profile.profileAccess?.canEditNickname),
           profileAccess: profile.profileAccess || null,
@@ -2041,6 +2042,7 @@
             customer_type: master.customerType,
             industry: master.industry,
             customerTags: master.tags || item.customerTags || [],
+            identityWarning: profile.identityWarning || item.identityWarning || null,
             in_crm: Boolean(profile.profileAccess?.inCrm),
             can_edit_nickname: Boolean(profile.profileAccess?.canEditNickname),
             profileAccess: profile.profileAccess || null,
@@ -2106,6 +2108,12 @@
       industry: lead?.industry,
       customerTags: lead?.customerTags || [],
     });
+    if (lead?.identityWarning?.active) {
+      $('#customerProfileTags').insertAdjacentHTML(
+        'beforeend',
+        `<span class="pill amber">${esc(lead.identityWarning.label || '名称待核验')}</span>`,
+      );
+    }
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
     $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));

@@ -82,5 +82,5 @@ test('nickname actions start hidden and the Issue 147 assets are cache-busted', 
   assert.match(html, /id="customerProfileNickname" class="button secondary hidden"/);
   assert.match(html, /id="drawerNicknameBtn" class="button secondary hidden"/);
   assert.match(html, /app\.css\?v=20260801-issue168/);
-  assert.match(html, /app\.js\?v=20260801-issue168/);
+  assert.match(html, /app\.js\?v=20260801-issue184-warning/);
 });
