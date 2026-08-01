@@ -208,7 +208,7 @@ test('activity stores a stable reaction id and immutable text snapshot across re
 
   const exported = await fx.requestJson('/api/sales-crm/export', { cookie: fx.adminCookie });
   const exportedActivity = exported.activities.find(item => item.id === saved.body.activityId);
-  assert.equal(exported.schemaVersion, 2);
+  assert.equal(exported.schemaVersion, 3);
   assert.equal(exportedActivity.externalCustomerId, 'RU-9002');
   assert.equal(exportedActivity.progressType, 'reply');
   assert.equal(exportedActivity.activityType, 'reply');
