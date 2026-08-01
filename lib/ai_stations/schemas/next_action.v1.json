@@ -16,7 +16,11 @@
   "properties": {
     "version": { "const": "v1" },
     "nextAction": { "type": "string", "maxLength": 1000 },
-    "nextActionAt": { "type": "string", "maxLength": 80 },
+    "nextActionAt": {
+      "type": "string",
+      "maxLength": 19,
+      "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$"
+    },
     "managerRequired": { "type": "boolean" },
     "reason": { "type": "string", "maxLength": 2000 },
     "missingFields": {

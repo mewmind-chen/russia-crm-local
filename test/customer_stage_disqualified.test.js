@@ -105,11 +105,19 @@ test('stage updates validate values and disqualification clears follow-up withou
   const restored = await fx.request('/api/sales-crm/accounts/CRM-WU', {
     cookie: fx.adminCookie,
     method: 'PATCH',
-    body: { stage: 'qualified' },
+    body: {
+      stage: 'qualified',
+      nextAction: '重新确认客户需求',
+      nextActionAt: '2099-08-08 09:00:00',
+    },
   });
   assert.equal(restored.status, 200);
   assert.deepEqual(
     fx.db.prepare("SELECT stage,next_action,next_action_at FROM crm_accounts WHERE id='CRM-WU'").get(),
-    { stage: 'qualified', next_action: '', next_action_at: '' },
+    {
+      stage: 'qualified',
+      next_action: '重新确认客户需求',
+      next_action_at: '2099-08-08 01:00:00',
+    },
   );
 });

@@ -18,7 +18,7 @@ function output(overrides = {}) {
     outcome: '有兴趣',
     summary: '客户确认正在整理BOM，预计本周提供。',
     nextAction: '周五追踪BOM',
-    nextActionAt: '2026-07-31 09:00:00',
+    nextActionAt: '2099-07-31 09:00:00',
     missingFields: [],
     evidenceIds: [],
     confidence: 0.91,
@@ -40,6 +40,11 @@ test('action_proposal is a strict review-only auxiliary contract', () => {
     userContent: '客户回复说周五发送BOM',
   });
   assert.match(prompt.systemPolicy, /Never create an activity or change CRM state/);
+  assert.match(prompt.systemPolicy, /Asia\/Shanghai/);
+  assert.match(prompt.systemPolicy, /YYYY-MM-DD HH:mm:ss/);
+  assert.equal(validateStationOutput('action_proposal', 'v1', output({
+    nextActionAt: '2099-07-31T01:00:00Z',
+  }), { evidenceIds: [] }).ok, false);
   assert.equal(prompt.untrustedUserContent, '客户回复说周五发送BOM');
 });
 
@@ -102,7 +107,7 @@ test('natural-language result becomes an async proposal and confirmation writes 
     outcome: '有兴趣',
     summary: '客户确认正在整理BOM，预计本周提供。',
     nextAction: '周五追踪BOM',
-    nextActionAt: '2026-07-31 09:00:00',
+    nextActionAt: '2099-07-31 09:00:00',
   };
   const confirmed = await fx.request('/api/sales-crm/activities', {
     cookie: fx.cookie, method: 'POST', body: payload,

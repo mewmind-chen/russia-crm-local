@@ -298,7 +298,7 @@ test('adding a next plan writes no fake activity, audits delegated work, and pro
   assert.deepEqual(
     fx.db.prepare(`SELECT next_action,next_action_at FROM crm_accounts
       WHERE id='CRM-OTHER'`).get(),
-    { next_action: request.nextAction, next_action_at: request.nextActionAt },
+    { next_action: request.nextAction, next_action_at: '2099-08-02 01:30:00' },
   );
   assert.equal(
     fx.db.prepare("SELECT COUNT(*) count FROM crm_activities WHERE customer_id='CRM-OTHER'").get().count,
@@ -319,7 +319,7 @@ test('adding a next plan writes no fake activity, audits delegated work, and pro
       actorId: 'USR-ADMIN',
       delegated: true,
       nextAction: request.nextAction,
-      nextActionAt: request.nextActionAt,
+      nextActionAt: '2099-08-02 01:30:00',
     },
   );
   const afterTask = taskFor((await bootstrap(fx, fx.adminCookie)).body, { customerId: 'CRM-OTHER' });
@@ -574,7 +574,10 @@ test('required fields are validated with 400 and stale business state returns 40
   for (const payload of invalid) {
     const result = await act(fx, fx.adminCookie, payload);
     assert.equal(result.response.status, 400, JSON.stringify(payload));
-    assert.equal(result.body.code, 'TODAY_TASK_INVALID');
+    assert.equal(
+      result.body.code,
+      payload.nextActionAt === 'not-a-date' ? 'NEXT_ACTION_AT_INVALID' : 'TODAY_TASK_INVALID',
+    );
   }
   assert.equal(fxValue(fx, "SELECT status FROM crm_intake_items WHERE id='INTAKE-OTHER'", 'status'), 'assigned');
   assert.equal(fxValue(fx, "SELECT next_action FROM crm_accounts WHERE id='CRM-OTHER'", 'next_action'), '');

@@ -10,12 +10,16 @@ const { getStation, renderPrompt } = require('../lib/ai_stations/prompt_registry
 const { validateStationOutput } = require('../lib/ai_stations/contracts');
 const { createAIStationWorker } = require('../lib/ai_stations/worker');
 const { buildAlerts } = require('../lib/sales_crm');
+const {
+  normalizeConfirmedNextActionAt,
+  resolveBusinessTimezone,
+} = require('../lib/ai_stations/next_action');
 
 function output(overrides = {}) {
   return {
     version: 'v1',
     nextAction: '确认客户 BOM 完成时间并安排技术评审',
-    nextActionAt: '2026-07-28 09:00:00',
+    nextActionAt: '2099-07-28 09:00:00',
     managerRequired: false,
     reason: '客户已回复并准备 BOM，应在承诺窗口内推进需求确认。',
     missingFields: [],
@@ -53,11 +57,43 @@ test('next_action is a strict human-review contract', () => {
     evidence: [],
   });
   assert.match(prompt.systemPolicy, /Never update CRM state or schedule reminders/);
+  assert.match(prompt.systemPolicy, /Asia\/Shanghai/);
+  assert.match(prompt.systemPolicy, /YYYY-MM-DD HH:mm:ss/);
+  assert.equal(validateStationOutput('next_action', 'v1', output({
+    nextActionAt: '2099-07-28T01:00:00Z',
+  }), { evidenceIds: [] }).ok, false);
+});
+
+test('confirmed AI times accept business-local, Z, and explicit offset without double shifting', () => {
+  const options = {
+    env: { CRM_BUSINESS_TIMEZONE: 'Asia/Shanghai' },
+    now: '2026-08-01T00:00:00.000Z',
+  };
+  assert.equal(normalizeConfirmedNextActionAt('2099-07-28 09:00:00', options),
+    '2099-07-28 01:00:00');
+  assert.equal(normalizeConfirmedNextActionAt('2099-07-28T01:00:00Z', options),
+    '2099-07-28 01:00:00');
+  assert.equal(normalizeConfirmedNextActionAt('2099-07-28T09:00:00+08:00', options),
+    '2099-07-28 01:00:00');
+  assert.equal(resolveBusinessTimezone({}), 'Asia/Shanghai');
+  assert.throws(
+    () => resolveBusinessTimezone({ CRM_BUSINESS_TIMEZONE: 'Not/A-Timezone' }),
+    error => error.statusCode === 500 && error.code === 'BUSINESS_TIMEZONE_INVALID',
+  );
 });
 
 test('activity event creates an async next-action proposal and adoption is idempotent', async t => {
+  const previousGate = process.env.CRM_DEFERRED_PLAN_WRITES_ENABLED;
+  process.env.CRM_DEFERRED_PLAN_WRITES_ENABLED = 'true';
   const fx = await fixture();
-  t.after(() => fx.close());
+  t.after(async () => {
+    try {
+      await fx.close();
+    } finally {
+      if (previousGate === undefined) delete process.env.CRM_DEFERRED_PLAN_WRITES_ENABLED;
+      else process.env.CRM_DEFERRED_PLAN_WRITES_ENABLED = previousGate;
+    }
+  });
 
   const created = await fx.request('/api/sales-crm/activities', {
     cookie: fx.cookie,
@@ -69,7 +105,7 @@ test('activity event creates an async next-action proposal and adoption is idemp
       outcome: '有兴趣',
       summary: '客户确认正在整理 BOM。',
       nextAction: '人工临时计划',
-      nextActionAt: '2026-07-27 09:00:00',
+      nextActionAt: '2099-07-27 09:00:00',
     },
   });
   assert.equal(created.status, 200);
@@ -95,7 +131,7 @@ test('activity event creates an async next-action proposal and adoption is idemp
 
   const payload = {
     nextAction: '确认客户 BOM 完成时间并安排技术评审',
-    nextActionAt: '2026-07-28 09:00:00',
+    nextActionAt: '2099-07-28T09:00:00+08:00',
     managerRequired: false,
   };
   const adopted = await fx.request(`/api/sales-crm/ai/jobs/${job.id}/next-action/adopt`, {
@@ -105,7 +141,8 @@ test('activity event creates an async next-action proposal and adoption is idemp
   assert.equal((await adopted.json()).deduplicated, false);
   const account = fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OWN');
   assert.equal(account.next_action, payload.nextAction);
-  assert.equal(account.next_action_at, payload.nextActionAt);
+  assert.equal(account.next_action_at, '2099-07-28 01:00:00');
+  assert.equal(account.next_action_time_basis, 'utc');
 
   const repeated = await fx.request(`/api/sales-crm/ai/jobs/${job.id}/next-action/adopt`, {
     cookie: fx.cookie, method: 'POST', body: payload,
@@ -114,6 +151,10 @@ test('activity event creates an async next-action proposal and adoption is idemp
   assert.equal((await repeated.json()).deduplicated, true);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_ai_next_action_consumptions WHERE job_id=?')
     .get(job.id).count, 1);
+  assert.deepEqual(fx.db.prepare(`SELECT source,source_event_id sourceEventId
+    FROM crm_next_plan_events WHERE source='ai_next_action_adoption'`).all(), [
+    { source: 'ai_next_action_adoption', sourceEventId: job.id },
+  ]);
   assert.equal(fx.db.prepare('SELECT state FROM crm_ai_jobs WHERE id=?').get(job.id).state, 'succeeded');
 });
 
@@ -126,7 +167,7 @@ test('RFQ and quote events enqueue one proposal each without blocking business w
     method: 'POST',
     body: {
       customerId: 'CRM-OWN', progressType: 'rfq', reactionOptionId: 'REACTION-FOLLOW-UP',
-      summary: '收到正式询价', nextAction: '准备报价', nextActionAt: '2026-07-27 09:00:00',
+      summary: '收到正式询价', nextAction: '准备报价', nextActionAt: '2099-07-27 09:00:00',
       reference: 'RFQ-A3-03', bomLines: 20, expectedValue: 12000, completeness: 85,
     },
   });
@@ -140,7 +181,7 @@ test('RFQ and quote events enqueue one proposal each without blocking business w
     method: 'POST',
     body: {
       customerId: 'CRM-OWN', rfqId: rfq.id, amount: 11000, currency: 'USD',
-      nextFollowAt: '2026-07-30 09:00:00',
+      nextFollowAt: '2099-07-30 09:00:00',
     },
   });
   const quoteBody = await quoteResponse.json();
@@ -157,7 +198,7 @@ test('another salesperson cannot adopt a proposal and missing fields remain revi
     cookie: fx.cookie, method: 'POST',
     body: {
       customerId: 'CRM-OWN', activityType: 'meeting', channel: 'video', outcome: '已完成',
-      summary: '完成需求会议', nextAction: '待定', nextActionAt: '2026-07-27 09:00:00',
+      summary: '完成需求会议', nextAction: '待定', nextActionAt: '2099-07-27 09:00:00',
     },
   });
   const jobId = (await created.json()).nextActionJobId;
@@ -176,7 +217,7 @@ test('another salesperson cannot adopt a proposal and missing fields remain revi
   const forbidden = await fx.request(`/api/sales-crm/ai/jobs/${jobId}/next-action/adopt`, {
     cookie: await fx.login('other@example.com', 'Password123!'),
     method: 'POST',
-    body: { nextAction: '越权修改', nextActionAt: '2026-08-01 09:00:00' },
+    body: { nextAction: '越权修改', nextActionAt: '2099-08-01 09:00:00' },
   });
   assert.equal(forbidden.status, 403);
 
@@ -195,7 +236,7 @@ test('revoked contact permission hides and blocks an existing next-action result
     cookie: fx.cookie, method: 'POST',
     body: {
       customerId: 'CRM-OWN', activityType: 'reply', channel: 'email', outcome: '有兴趣',
-      summary: '客户披露了采购计划', nextAction: '待确认', nextActionAt: '2026-07-27 09:00:00',
+      summary: '客户披露了采购计划', nextAction: '待确认', nextActionAt: '2099-07-27 09:00:00',
     },
   });
   const jobId = (await created.json()).nextActionJobId;
@@ -216,7 +257,7 @@ test('revoked contact permission hides and blocks an existing next-action result
   assert.equal((await results.json()).nextAction.result, null);
   const adoption = await fx.request(`/api/sales-crm/ai/jobs/${jobId}/next-action/adopt`, {
     cookie: fx.cookie, method: 'POST',
-    body: { nextAction: '不应采纳', nextActionAt: '2026-08-01 09:00:00' },
+    body: { nextAction: '不应采纳', nextActionAt: '2099-08-01 09:00:00' },
   });
   assert.equal(adoption.status, 403);
 });
