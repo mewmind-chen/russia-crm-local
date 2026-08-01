@@ -104,6 +104,13 @@ test('unknown browser route and action are denied by default', () => {
     policyForSalesRequest('POST', '/ai/jobs/JOB-1/feedback'),
     SALES_ROUTE_POLICIES['POST /ai/jobs/:jobId/feedback'],
   );
+  for (const [path, key] of [
+    ['/protected-customers/batches/BATCH-1/commit', 'POST /protected-customers/batches/:batchId/commit'],
+    ['/protected-customers/batches/BATCH-1/rollback', 'POST /protected-customers/batches/:batchId/rollback'],
+    ['/protected-customers/RU-1001/activate', 'POST /protected-customers/:externalCustomerId/activate'],
+  ]) {
+    assert.deepEqual(policyForSalesRequest('POST', path), SALES_ROUTE_POLICIES[key], key);
+  }
 });
 
 test('every browser API has an explicit permission policy or separate token boundary', () => {
@@ -128,6 +135,10 @@ test('every browser API has an explicit permission policy or separate token boun
     'POST /accounts/:customerId/return', 'POST /accounts/:customerId/trash',
     'POST /accounts/:customerId/restore', 'POST /accounts/:customerId/reassign',
     'PATCH /accounts/:customerId',
+    'GET /protected-customers', 'POST /protected-customers/batches/preview',
+    'POST /protected-customers/batches/:batchId/commit',
+    'POST /protected-customers/:externalCustomerId/activate',
+    'POST /protected-customers/batches/:batchId/rollback',
     'POST /activities', 'POST /quotes', 'POST /orders', 'POST /users',
     'POST /users/:userId/password-reset', 'POST /users/:userId/archive', 'POST /users/:userId/restore',
     'DELETE /users/:userId', 'PATCH /users/:userId', 'GET /permission-groups', 'POST /permission-groups',
@@ -185,6 +196,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'GET /data-maintenance/capabilities',
     'GET /data-maintenance/runs',
     'GET /protected-customer-conflicts',
+    'GET /protected-customers',
     'PATCH /activity-reactions/:reactionId',
     'PATCH /ai/features/:featureKey',
     'PATCH /filter-permissions/definitions/:filterKey',
@@ -224,6 +236,10 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /password',
     'POST /permission-groups',
     'POST /protected-customer-conflicts/:conflictId/resolve',
+    'POST /protected-customers/:externalCustomerId/activate',
+    'POST /protected-customers/batches/:batchId/commit',
+    'POST /protected-customers/batches/:batchId/rollback',
+    'POST /protected-customers/batches/preview',
     'POST /today-tasks/actions',
     'POST /users',
     'POST /users/:userId/archive',
