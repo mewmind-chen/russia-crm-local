@@ -162,6 +162,7 @@ test('manager pages expose authorized safe fields while sales cannot see their s
   assert.deepEqual(schemaKeys(db, user('sales'), 'manager_tasks'), []);
   assert.deepEqual(schemaKeys(db, user('sales'), 'manager_risks'), []);
   assert.deepEqual(schemaKeys(db, user('sales'), 'manager_metrics'), []);
+  assert.ok(schemaKeys(db, user('manager'), 'manager_metrics').includes('recipient'));
 
   const salesNotificationKeys = schemaKeys(db, user('sales'), 'notifications');
   for (const key of [
@@ -221,5 +222,33 @@ test('manager page catalog migration upgrades old page mappings once', () => {
   const migratedVersion = getFilterPermissionVersion(db);
   installFilterAuthorization(db, { now: '2026-08-01 14:00:00' });
   assert.equal(getFilterPermissionVersion(db), migratedVersion);
+  db.close();
+});
+
+test('manager metric recipient catalog migration upgrades existing catalogs once', () => {
+  const db = createDb();
+  const migrationKey = 'issue196-manager-metric-recipient-v1';
+  db.prepare('DELETE FROM filter_catalog_migrations WHERE migration_key=?').run(migrationKey);
+  const row = db.prepare(
+    "SELECT pages_json FROM filter_definitions WHERE filter_key='recipient'",
+  ).get();
+  const legacyPages = JSON.parse(row.pages_json).filter(page => page !== 'manager_metrics');
+  db.prepare("UPDATE filter_definitions SET pages_json=? WHERE filter_key='recipient'")
+    .run(JSON.stringify(legacyPages));
+
+  const beforeVersion = getFilterPermissionVersion(db);
+  installFilterAuthorization(db, { now: '2026-08-01 15:00:00' });
+  assert.equal(getFilterPermissionVersion(db), beforeVersion + 1);
+  const recipient = listFilterDefinitions(db).find(item => item.key === 'recipient');
+  assert.ok(recipient.pages.includes('manager_metrics'));
+  assert.ok(db.prepare(
+    'SELECT 1 FROM filter_catalog_migrations WHERE migration_key=?',
+  ).get(migrationKey));
+
+  const migratedVersion = getFilterPermissionVersion(db);
+  installFilterAuthorization(db, { now: '2026-08-01 16:00:00' });
+  assert.equal(getFilterPermissionVersion(db), migratedVersion);
+  assert.equal(db.prepare(`SELECT COUNT(*) count FROM filter_catalog_migrations
+    WHERE migration_key=?`).get(migrationKey).count, 1);
   db.close();
 });

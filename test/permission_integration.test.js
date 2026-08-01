@@ -482,7 +482,7 @@ test('intake assignment rejects owners who are not active sales users', async t 
   assert.equal(fx.db.prepare("SELECT assigned_owner_id FROM crm_intake_items WHERE id='INTAKE-OTHER'").get().assigned_owner_id, 'U-OTHER');
 });
 
-test('explicit permissions are authoritative even when the account role is sales', async t => {
+test('explicit permissions remain authoritative except role-locked intake management', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   fx.setUserPermissions('U-OTHER', {
@@ -493,11 +493,17 @@ test('explicit permissions are authoritative even when the account role is sales
     manage_evaluations: true,
   });
   const cookie = await fx.login('other@example.com', 'Password123!');
+  const batchesBefore = Number(
+    fx.db.prepare('SELECT COUNT(*) count FROM crm_intake_batches').get().count,
+  );
 
   const scan = await fx.request('/api/sales-crm/intake/scan', {
     cookie, method: 'POST', body: { force: true },
   });
-  assert.notEqual(scan.status, 403);
+  assert.equal(scan.status, 403);
+  assert.equal(Number(
+    fx.db.prepare('SELECT COUNT(*) count FROM crm_intake_batches').get().count,
+  ), batchesBefore);
 
   const contact = await fx.request('/api/sales-crm/contacts', {
     cookie, method: 'POST', body: { customerId: 'CRM-OTHER', name: 'Authorized Contact' },

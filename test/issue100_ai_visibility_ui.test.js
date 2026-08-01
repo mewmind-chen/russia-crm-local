@@ -22,7 +22,9 @@ test('one effective AI station gate controls every business AI surface', () => {
 });
 
 test('disabled intake rendering removes AI headers, cells and the third decision track', () => {
-  assert.match(app, /const intakeHeaders = showAI[\s\S]*?\['线索资料 \/ 客户标签', '联系质量 \/ 联系人', '负责人 \/ 阻断原因', '状态 \/ 时限', '操作'\]/);
+  assert.match(app, /const intakeHeaders = \[[\s\S]*?\.\.\.\(showAI \? \['Fit \/ readiness \/ 优先级'\] : \[\]\)/);
+  assert.match(app, /\.\.\.\(showAssignmentAI \? \['候选销售排名'\] : \[\]\)/);
+  assert.match(app, /salesView \? '负责人' : '负责人 \/ 阻断原因'/);
   assert.match(app, /const row = showAI\s*\? \[businessColumns\[0\], \.\.\.aiColumns, \.\.\.businessColumns\.slice\(1\)\]\s*: businessColumns/);
   assert.match(app, /<div class="decision-review-grid \$\{showAI \? '' : 'without-ai'\}">/);
   assert.match(css, /\.decision-review-grid\.without-ai\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/);
@@ -36,7 +38,7 @@ test('disabled customer, evaluation and notification views omit historical AI pr
   assert.match(app, /\.\.\.\(customerAIEnabled\(\) \? \[\['评价标签'/);
   assert.match(app, /const customerTags = Array\.isArray\(account\?\.customerTags\) \? account\.customerTags : \[\]/);
   assert.doesNotMatch(app, /const ai = customerAIEnabled\(\) && account\?\.id\s*\? labelsForAccount\(account\.id\)/);
-  assert.match(app, /customerAIEnabled\(\) \|\| !aiNotificationCodes\.has/);
+  assert.match(app, /function notificationRowsAllowedByAIGate\(rows\) \{[\s\S]*?const aiEnabled = customerAIEnabled\(\);[\s\S]*?const packEnabled = salesPackEnabled\(\);[\s\S]*?!aiNotificationCodes\.has[\s\S]*?!salesPackNotificationCodes\.has/);
   assert.match(app, /visiblePermissionDefinitions\(\)/);
   assert.match(app, /visible\.manage_evaluations = '维护经理评价'/);
 });

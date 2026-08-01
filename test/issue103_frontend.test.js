@@ -50,7 +50,7 @@ test('Issue #103 detailed filters use the intake API and customer-tag wording', 
 
 test('Issue #103 preserves the AI gate and applies one return eligibility rule everywhere', () => {
   assert.match(js, /const showAI = customerAIEnabled\(\)/);
-  assert.match(js, /const intakeHeaders = showAI/);
+  assert.match(js, /const intakeHeaders = \[[\s\S]*?\.\.\.\(showAI \? \['Fit \/ readiness \/ 优先级'\] : \[\]\)/);
   assert.match(js, /function canReturnCustomer\(account\)/);
   assert.match(js, /!\['assigned', 'claimed'\]\.includes\(String\(account\.assignment_status \|\| ''\)\)/);
   assert.match(js, /const canReturn = canReturnCustomer\(account\)/);

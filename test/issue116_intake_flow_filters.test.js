@@ -12,10 +12,10 @@ const {
   queryIntakeFlowPage,
 } = require('../lib/intake_flow_filters');
 
-function user(id = 'U-ONE', permissions = {}) {
+function user(id = 'U-ONE', permissions = {}, role = 'sales') {
   return {
     id,
-    role: 'sales',
+    role,
     permissions: {
       view_intake: true,
       view_contacts: true,
@@ -160,7 +160,7 @@ test('manager-wide and assigned-owner scopes preserve current intake visibility'
   assert.deepEqual(ids(db, personal), ['I-ASSIGNED-ONE', 'I-CLAIMED-ONE', 'I-RETURNED-ONE']);
 
   const manager = buildIntakeFlowFilterScope(
-    user('U-MANAGER', { manage_intake: true }),
+    user('U-MANAGER', { manage_intake: true }, 'manager'),
     'intake',
     ast('intake'),
   );
@@ -173,7 +173,7 @@ test('manager-wide and assigned-owner scopes preserve current intake visibility'
 
 test('lead-flow keeps actual assigned, claimed, returned, and rejected status semantics', () => {
   const db = createDb();
-  const manager = user('U-MANAGER', { manage_intake: true });
+  const manager = user('U-MANAGER', { manage_intake: true }, 'manager');
   assert.deepEqual(ids(db, buildIntakeFlowFilterScope(manager, 'lead_flow', ast('lead_flow'))), [
     'I-ASSIGNED-ONE', 'I-CLAIMED-ONE', 'I-REJECTED-TWO', 'I-RETURNED-ONE',
   ]);
@@ -186,7 +186,7 @@ test('lead-flow keeps actual assigned, claimed, returned, and rejected status se
 
 test('authorized AST compiles search, facets, date, booleans, owner, and source batch safely', () => {
   const db = createDb();
-  const manager = user('U-MANAGER', { manage_intake: true });
+  const manager = user('U-MANAGER', { manage_intake: true }, 'manager');
   const scope = buildIntakeFlowFilterScope(manager, 'intake', ast('intake', [
     { key: 'search', operator: 'contains', value: 'Assigned' },
     { key: 'country', operator: 'in', values: ['DE'] },
@@ -208,7 +208,7 @@ test('authorized AST compiles search, facets, date, booleans, owner, and source 
 
 test('tag values are OR within one category and AND across categories', () => {
   const db = createDb();
-  const manager = user('U-MANAGER', { manage_intake: true });
+  const manager = user('U-MANAGER', { manage_intake: true }, 'manager');
   const withinCategory = buildIntakeFlowFilterScope(manager, 'intake', ast('intake', [
     { key: 'tag_customer_type', operator: 'in', values: ['Manufacturer', 'Distributor'] },
   ]));
@@ -228,7 +228,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
   const db = createDb();
   const result = queryIntakeFlowPage(
     db,
-    user('U-MANAGER', { manage_intake: true }),
+    user('U-MANAGER', { manage_intake: true }, 'manager'),
     'intake',
     ast('intake'),
     { page: 2, pageSize: 2 },
@@ -241,7 +241,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
 
   const first = queryIntakeFlowPage(
     db,
-    user('U-MANAGER', { manage_intake: true }),
+    user('U-MANAGER', { manage_intake: true }, 'manager'),
     'intake',
     ast('intake'),
     { page: 1, pageSize: 999 },
@@ -273,7 +273,7 @@ test('filter options expose only requested authorized fields and the same row sc
 
   const managerStatus = intakeFlowFilterOptions(
     db,
-    user('U-MANAGER', { manage_intake: true }),
+    user('U-MANAGER', { manage_intake: true }, 'manager'),
     'intake',
     ['status'],
   ).status;

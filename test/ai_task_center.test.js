@@ -82,6 +82,9 @@ test('task detail exposes safe attempts, result evidence and timeline without qu
   const fx = await fixtures.seededFixture({
     managerViewAll: false,
     permissions: { view_customers: true, use_ai_assistant: true },
+    appOptions: {
+      salesCrm: { aiStationsEnabled: true, customerEnrichmentEnabled: true },
+    },
   });
   t.after(() => fx.close());
   const context = buildCustomerContext(fx.db, {

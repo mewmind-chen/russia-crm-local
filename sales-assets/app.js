@@ -8,8 +8,8 @@
   const dataTablesNeedingHintReset = new Set();
   let dataTableOverflowFrame = 0;
   let dataTableResizeObserver = null;
-  const emptyAuthorizedListState = () => ({
-    rows: [], page: 0, pageSize: 50, total: 0, authorizedTotal: 0,
+  const emptyAuthorizedListState = (pageSize = 50) => ({
+    rows: [], page: 0, pageSize, total: 0, authorizedTotal: 0,
     hasMore: false, loading: false, loaded: false, error: '', summary: null,
     requestEpoch: 0, initializeEpoch: 0, filterMount: null, filterController: null,
   });
@@ -80,13 +80,17 @@
     customerAiTimer: null,
     customerAiPollCount: 0,
     selectedCustomerIds: new Set(),
-    notificationStatus: 'unread',
+    notificationStatus: '',
     recycleKind: 'sales_return',
     recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
     recycleCustomerDetail: null,
     authorizedBusinessLists: Object.fromEntries([
       'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
-    ].map(pageKey => [pageKey, emptyAuthorizedListState()])),
+      'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications',
+    ].map(pageKey => [pageKey, emptyAuthorizedListState(pageKey === 'manager_tasks' ? 20 : 50)])),
+    managerTaskPage: 1,
+    managerTaskPageSize: 20,
+    managerMetricRange: 30,
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -151,6 +155,8 @@
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
     pipeline: ['PIPELINE CONTROL', '推进管道'],
     alerts: ['TODAY TASKS', '今日待办'],
+    managerTasks: ['MANAGER INTERVENTION', '主管任务'],
+    managerMetrics: ['DEFERRED PLAN METRICS', '延期统计'],
     notifications: ['CRM NOTIFICATIONS', '通知中心'],
     aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
@@ -163,6 +169,7 @@
   const viewPermissions = {
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'manage_customer_recycle',
+    managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_customers',
     aiTasks: 'view_customers', protectedCustomers: 'manage_protected_customers', maintenance: 'manage_data_maintenance',
   };
@@ -335,6 +342,35 @@
       .map(part => [part.type, part.value]));
     return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
   }
+  function setFutureDateTimeConstraint(input, now = new Date()) {
+    if (!input) return null;
+    const reference = now instanceof Date ? now : new Date(now);
+    const validReference = Number.isNaN(reference.getTime()) ? new Date() : reference;
+    input.min = businessDateInput(new Date(validReference.getTime() + 60000));
+    input.dataset.futureDatetime = 'true';
+    if (input.dataset.futureValidationBound !== 'true') {
+      const validate = () => validateFutureDateTime(input);
+      input.addEventListener('input', validate);
+      input.addEventListener('change', validate);
+      input.dataset.futureValidationBound = 'true';
+    }
+    validateFutureDateTime(input, validReference);
+    return input;
+  }
+  function validateFutureDateTime(input, now = new Date()) {
+    if (!input) return false;
+    const reference = now instanceof Date ? now : new Date(now);
+    const validReference = Number.isNaN(reference.getTime()) ? new Date() : reference;
+    const value = String(input.value || '').trim();
+    const valid = !value || value > businessDateInput(validReference);
+    input.setCustomValidity(valid ? '' : '下一步时间必须晚于当前时间');
+    input.setAttribute('aria-invalid', String(!valid));
+    return valid;
+  }
+  function constrainFutureDateTimes(root = document) {
+    return Array.from(root?.querySelectorAll?.('input[type="datetime-local"][data-future-datetime]') || [])
+      .map(input => setFutureDateTimeConstraint(input));
+  }
   function storedPlanDateInput(value) {
     return storedPlanDateInputWithBasis(value, 'utc');
   }
@@ -476,8 +512,18 @@
   function customerAIEnabled() {
     return Boolean(state.data?.features?.aiStations);
   }
+  function customerEnrichmentEnabled() {
+    return customerAIEnabled() && Boolean(state.data?.features?.customerEnrichment);
+  }
+  function customerEnrichmentAutoTriggerEnabled() {
+    return customerEnrichmentEnabled()
+      && Boolean(state.data?.features?.customerEnrichmentAutoTrigger);
+  }
   function salesPackEnabled() {
     return customerAIEnabled() && Boolean(state.data?.features?.salesPack);
+  }
+  function canViewAssignmentDecisions() {
+    return state.data?.user?.role !== 'sales' && can('manage_intake');
   }
   const aiPermissionKeys = new Set([
     'use_ai_assistant', 'cancel_ai_tasks', 'bulk_manage_ai_tasks',
@@ -487,6 +533,44 @@
     'SALES_PACK_READY', 'SALES_PACK_FAILED', 'MANAGER_ANOMALY_READY',
     'SALES_COACHING_READY', 'AI_TASK_READY', 'AI_TASK_FAILED',
   ]);
+  const salesPackNotificationCodes = new Set(['SALES_PACK_READY', 'SALES_PACK_FAILED']);
+  function notificationRowsAllowedByAIGate(rows) {
+    const values = Array.isArray(rows) ? rows : [];
+    const aiEnabled = customerAIEnabled();
+    const packEnabled = salesPackEnabled();
+    if (aiEnabled && packEnabled) return values;
+    return values.filter(item => {
+      const code = String(item.code || '').toUpperCase();
+      if (!aiEnabled) return !aiNotificationCodes.has(code);
+      return !salesPackNotificationCodes.has(code);
+    });
+  }
+  function stripDisabledAINotificationState() {
+    if (customerAIEnabled() && salesPackEnabled()) return;
+    const meta = state.authorizedBusinessLists.notifications;
+    meta.rows = notificationRowsAllowedByAIGate(meta.rows);
+    if (state.data?.notifications) {
+      state.data.notifications = notificationRowsAllowedByAIGate(state.data.notifications);
+    }
+    if (meta.loaded) {
+      const unread = meta.rows.filter(item => item.status === 'unread').length;
+      const failed = meta.rows.filter(item =>
+        item.wecomDeliveryStatus === 'failed' || item.wecomStatus === 'failed').length;
+      meta.total = meta.rows.length;
+      meta.authorizedTotal = meta.rows.length;
+      meta.hasMore = false;
+      meta.summary = { total: meta.rows.length, unread, failed };
+    }
+    const controller = meta.filterController;
+    if (!controller) return;
+    const schema = controller.getSchema();
+    const codeField = schema.fields.find(field => field.key === 'notification_code');
+    if (!codeField) return;
+    codeField.options = (codeField.options || []).filter(option =>
+      notificationRowsAllowedByAIGate([{ code: option.value }]).length > 0);
+    if (meta.filterMount) meta.filterMount.updateSchema(schema);
+    else controller.updateSchema(schema);
+  }
   function visiblePermissionDefinitions() {
     const definitions = state.data?.permissionDefinitions || {};
     if (customerAIEnabled()) return definitions;
@@ -823,13 +907,29 @@
       root: '#recycleAuthorizedFilters', button: '#recycleAuthorizedLoadMore',
       count: '#recycleAuthorizedResultCount', render: renderRecycleBin,
     },
+    manager_tasks: {
+      root: '#managerTaskFilters', count: '#managerTaskResultCount',
+      endpoint: '/manager-tasks', pageSize: 20, render: renderManagerTasks,
+    },
+    manager_risks: {
+      root: '#managerRiskFilters', button: '#managerRiskLoadMore', count: '#managerRiskResultCount',
+      endpoint: '/manager-risks', render: renderManagerRisks,
+    },
+    manager_metrics: {
+      root: '#managerMetricFilters', button: '#managerMetricLoadMore', count: '#managerMetricResultCount',
+      endpoint: '/manager-metrics', render: renderManagerMetrics,
+    },
+    notifications: {
+      root: '#notificationsAuthorizedFilters', button: '#notificationsAuthorizedLoadMore',
+      count: '#notificationResultCount', render: renderNotifications,
+    },
   };
 
   function resetAuthorizedBusinessLists() {
     for (const [pageKey, meta] of Object.entries(state.authorizedBusinessLists)) {
       meta.filterMount?.destroy();
       state.authorizedBusinessLists[pageKey] = {
-        ...emptyAuthorizedListState(),
+        ...emptyAuthorizedListState(authorizedBusinessConfig[pageKey]?.pageSize || 50),
         requestEpoch: Number(meta.requestEpoch || 0) + 1,
         initializeEpoch: Number(meta.initializeEpoch || 0) + 1,
       };
@@ -859,6 +959,8 @@
         hasMore: meta.hasMore,
         loading: meta.loading,
       };
+    } else if (pageKey === 'notifications') {
+      state.data.notifications = meta.rows;
     }
   }
 
@@ -889,7 +991,13 @@
     if (reset) {
       meta.rows = [];
       Object.assign(meta, {
-        page: 0, total: 0, authorizedTotal: 0, hasMore: false, loaded: false, summary: null,
+        page: 0,
+        pageSize: config.pageSize || meta.pageSize,
+        total: 0,
+        authorizedTotal: 0,
+        hasMore: false,
+        loaded: false,
+        summary: null,
       });
     }
     const requestEpoch = ++meta.requestEpoch;
@@ -907,7 +1015,8 @@
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
-      const result = await api(`/api/sales-crm/lists/${pageKey}?${params}`, { timeoutMs: 12000 });
+      const endpoint = config.endpoint || `/lists/${pageKey}`;
+      const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
       meta.rows = reset ? result.rows : [...meta.rows, ...result.rows];
       Object.assign(meta, {
@@ -920,8 +1029,8 @@
         error: '',
         summary: result.summary || result.meta?.summary || meta.summary || null,
       });
-      if (result.schema
-          && String(result.schema.permissionVersion) !== String(payload.permissionVersion)) {
+      if (result.schema && (pageKey === 'notifications'
+          || String(result.schema.permissionVersion) !== String(payload.permissionVersion))) {
         meta.filterController.updateSchema(result.schema);
       }
     } catch (error) {
@@ -942,6 +1051,16 @@
         updateAuthorizedBusinessMeta(pageKey);
       }
     }
+  }
+
+  function notificationStatusFromApplied(payload) {
+    const status = (payload?.filters || []).find(filter => filter.field === 'notification_status');
+    const values = Array.isArray(status?.value) ? status.value.map(String) : [];
+    return values.length === 1 && ['unread', 'read'].includes(values[0]) ? values[0] : '';
+  }
+
+  function syncNotificationStatusFromController(controller) {
+    state.notificationStatus = notificationStatusFromApplied(controller?.serialize('applied'));
   }
 
   async function initializeAuthorizedBusinessFilters(pageKey, { force = false } = {}) {
@@ -971,12 +1090,18 @@
       const controller = window.TradePulseFilterComponent.createFilterController({
         pageKey,
         schema: result.schema,
-        onApply: () => {
+        onApply: payload => {
           if (['intake', 'lead_flow'].includes(pageKey)) state.selectedIntakeIds.clear();
+          if (pageKey === 'notifications') {
+            state.notificationStatus = notificationStatusFromApplied(payload);
+          }
           void loadAuthorizedBusinessPage(pageKey, { reset: true });
         },
       });
       meta.filterController = controller;
+      if (pageKey === 'notifications') {
+        syncNotificationStatusFromController(controller);
+      }
       meta.filterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
         controller,
         resultMeta: { total: meta.total, shown: meta.rows.length },
@@ -1176,9 +1301,13 @@
   function renderAll() {
     if ($('#navCustomerCount')) $('#navCustomerCount').textContent = state.data.accounts.length;
     if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.length;
-    const unreadNotifications = (state.data.notifications || [])
-      .filter(item => (customerAIEnabled() || !aiNotificationCodes.has(String(item.code || '').toUpperCase()))
-        && item.user_id === state.data.user.id && item.status === 'unread').length;
+    const notificationMeta = state.authorizedBusinessLists.notifications;
+    const notificationRows = notificationMeta.loaded ? notificationMeta.rows : (state.data.notifications || []);
+    const unreadNotifications = notificationMeta.loaded && notificationMeta.summary
+      ? Number(notificationMeta.summary.unread || 0)
+      : notificationRowsAllowedByAIGate(notificationRows)
+        .filter(item => (item.recipientId || item.user_id) === state.data.user.id
+          && item.status === 'unread').length;
     if ($('#navNotificationCount')) $('#navNotificationCount').textContent = unreadNotifications;
     if ($('#topNotificationCount')) {
       $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
@@ -1196,6 +1325,9 @@
     renderUnifiedRecon();
     renderPipeline();
     renderAlerts();
+    renderManagerTasks();
+    renderManagerMetrics();
+    renderManagerTaskSettings();
     renderNotifications();
     renderInsightsHub();
     renderTeam();
@@ -1894,7 +2026,7 @@
     $$('[data-authorized-intake-page]').forEach(button => {
       button.classList.toggle('active', button.dataset.authorizedIntakePage === state.intakeAuthorizedPage);
     });
-    const salesView = !can('manage_intake');
+    const salesView = !canViewAssignmentDecisions();
     const stats = intake.stats;
     const tabCounts = {
       '': Number(stats.pending || 0) + Number(stats.approved || 0) + Number(stats.assigned || 0)
@@ -1919,7 +2051,10 @@
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
     const filterCount = activeIntakeFilterCount();
     $('#intakeFilterToggle').textContent = filterCount ? `详细筛选 ${filterCount}` : '详细筛选';
-    $('#intakeModeLabel').innerHTML = `<span class="intake-mode">${intake.settings.enabled ? '自动同步已启用' : '自动同步已停用'} · 手动分配不限条数</span>`;
+    $('#intakeModeLabel').classList.toggle('hidden', salesView);
+    $('#intakeModeLabel').innerHTML = salesView
+      ? ''
+      : `<span class="intake-mode">${intake.settings.enabled ? '自动同步已启用' : '自动同步已停用'} · 手动分配不限条数</span>`;
     renderIntakeActiveFilters();
     const summary = salesView ? [
       ['今日收到线索', stats.todayImported, '领取前保留在线索池'],
@@ -1948,9 +2083,16 @@
     const selectedVisibleCount = assignableItems.filter(item => state.selectedIntakeIds.has(item.id)).length;
     renderIntakeAssignmentBar();
     const showAI = customerAIEnabled();
-    const intakeHeaders = showAI
-      ? ['线索资料 / 客户标签', 'Fit / readiness / 优先级', '候选销售排名', '联系质量 / 联系人', '负责人 / 阻断原因', '状态 / 时限', '操作']
-      : ['线索资料 / 客户标签', '联系质量 / 联系人', '负责人 / 阻断原因', '状态 / 时限', '操作'];
+    const showAssignmentAI = showAI && !salesView;
+    const intakeHeaders = [
+      '线索资料 / 客户标签',
+      ...(showAI ? ['Fit / readiness / 优先级'] : []),
+      ...(showAssignmentAI ? ['候选销售排名'] : []),
+      '联系质量 / 联系人',
+      salesView ? '负责人' : '负责人 / 阻断原因',
+      '状态 / 时限',
+      '操作',
+    ];
     if (canManualAssign) {
       intakeHeaders.unshift('<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>');
     }
@@ -1964,7 +2106,7 @@
         else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
         else actions = '—';
         const signals = intakeSignals(item);
-        const layers = intakeDecisionLayers(item);
+        const layers = showAssignmentAI ? intakeDecisionLayers(item) : null;
         const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
         const sources = [
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
@@ -1982,13 +2124,13 @@
         const businessColumns = [
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
-          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong><span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span></div>`,
+          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong>${salesView ? '' : `<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span>`}</div>`,
           `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
           actions,
         ];
         const aiColumns = [
           `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
-          `<div class="ranked-candidates">${layers.ai}</div>`,
+          ...(showAssignmentAI ? [`<div class="ranked-candidates">${layers.ai}</div>`] : []),
         ];
         const row = showAI
           ? [businessColumns[0], ...aiColumns, ...businessColumns.slice(1)]
@@ -2263,6 +2405,7 @@
   }
 
   function renderCustomerEnrichment() {
+    if (!customerEnrichmentEnabled()) return '';
     const payload = state.customerEnrichment || state.customerEnrichmentLastSuccess;
     if (!payload?.run) {
       return `<section class="customer-enrichment"><div class="customer-enrichment-empty">
@@ -2352,7 +2495,7 @@
   }
 
   function renderSalesPack(payload) {
-    if (!salesPackEnabled() && !payload?.result && !payload?.job) return '';
+    if (!salesPackEnabled()) return '';
     const job = payload?.job;
     const result = payload?.result;
     const status = payload?.stale ? ['资料已变化', 'amber'] : (aiJobLabels[job?.state] || ['未生成', 'gray']);
@@ -2391,16 +2534,22 @@
     const value = result.value || {};
     const editable = job?.state === 'needs_review' && can('record_activity') && can('use_ai_assistant')
       && !state.data?.impersonation;
-    return `<section class="next-action-suggestion">
+    const markup = `<section class="next-action-suggestion">
       <div class="sales-pack-title"><strong>下一步建议</strong><span class="pill ${status[1]}">${esc(status[0])}</span><small>置信度 ${Math.round(Number(value.confidence || 0) * 100)}%</small></div>
       <p>${esc(value.reason || '')}</p>
       <div class="next-action-suggestion-fields">
         <label>下一步动作<input id="nextActionSuggestion" value="${esc(value.nextAction || '')}" ${editable ? '' : 'readonly'}></label>
-        <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" value="${esc(suggestedPlanDateInput(value.nextActionAt))}" ${editable ? '' : 'readonly'}></label>
+        <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" data-future-datetime value="${esc(suggestedPlanDateInput(value.nextActionAt))}" ${editable ? '' : 'readonly'}></label>
         <label class="check"><input id="nextActionSuggestionManager" type="checkbox" ${value.managerRequired ? 'checked' : ''} ${editable ? '' : 'disabled'}> 需要经理介入</label>
       </div>
       ${editable ? `<div class="next-action-suggestion-actions"><button class="button primary tiny" type="button" data-adopt-next-action="${esc(job.id)}">采纳下一步建议</button><span>采纳前可编辑；不会自动修改客户。</span></div>` : ''}
     </section>`;
+    queueMicrotask(() => {
+      const input = $('#nextActionSuggestionAt');
+      setFutureDateTimeConstraint(input);
+      if (input && !input.readOnly) validateFutureDateTime(input);
+    });
+    return markup;
   }
 
   function renderCustomerAI() {
@@ -2414,10 +2563,12 @@
     const salesPackJob = salesPack?.job;
     const nextAction = payload?.nextAction;
     const nextActionJob = nextAction?.job;
-    const enrichment = state.customerEnrichment || state.customerEnrichmentLastSuccess;
+    const enrichment = customerEnrichmentEnabled()
+      ? state.customerEnrichment || state.customerEnrichmentLastSuccess
+      : null;
     actions.innerHTML = [
       nextActionJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(nextActionJob.id)}">下一步任务</button>` : '',
-      salesPackJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(salesPackJob.id)}">资料包任务</button>` : '',
+      salesPackEnabled() && salesPackJob ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(salesPackJob.id)}">资料包任务</button>` : '',
       job ? `<button class="button secondary tiny" type="button" data-open-ai-task="${esc(job.id)}">评分任务</button>` : '',
     ].join('');
     if (state.customerAiLoading && !payload && !enrichment) {
@@ -2427,12 +2578,14 @@
     const result = payload?.result;
     const canRun = can('use_ai_assistant') && !state.data?.impersonation;
     const canRunSalesPack = canRun && salesPackEnabled() && ['view_contacts', 'view_recon'].every(can);
-    const canStartEnrichment = canRun && ['run_recon', 'view_recon', 'view_contacts'].every(can);
+    const canStartEnrichment = canRun && customerEnrichmentEnabled()
+      && ['run_recon', 'view_recon', 'view_contacts'].every(can);
     const run = enrichment?.run;
     if (canStartEnrichment && (!run || ENRICHMENT_TERMINAL_STATES.has(run.state))) {
       actions.insertAdjacentHTML('afterbegin', `<button class="button secondary tiny" type="button" data-retry-enrichment ${state.customerEnrichmentPending ? 'disabled' : ''}>${run ? '重新补全' : '开始补全'}</button>`);
     }
-    if (run && !ENRICHMENT_TERMINAL_STATES.has(run.state) && can('cancel_ai_tasks') && !state.data?.impersonation) {
+    if (customerEnrichmentEnabled() && run && !ENRICHMENT_TERMINAL_STATES.has(run.state)
+        && can('cancel_ai_tasks') && !state.data?.impersonation) {
       actions.insertAdjacentHTML('afterbegin', `<button class="button secondary tiny" type="button" data-cancel-enrichment="${esc(run.id)}" ${state.customerEnrichmentPending ? 'disabled' : ''}>取消补全</button>`);
     }
     const retryable = ['retry_wait', 'dead_letter', 'blocked', 'cancelled'].includes(job?.state);
@@ -2452,15 +2605,19 @@
       actions.insertAdjacentHTML('afterbegin', `<button class="button ${packRetryable ? 'secondary' : 'primary'} tiny" type="button" ${state.customerAiPending ? 'disabled' : ''} ${packRetryable ? `data-retry-ai-job="${esc(salesPackJob.id)}"` : 'data-run-sales-pack'}>${label}</button>`);
     }
     body.innerHTML = `${renderNextActionSuggestion(nextAction)}${renderSalesPack(salesPack)}${renderCustomerFit(payload)}${renderCustomerEnrichment()}`;
+    constrainFutureDateTimes(body);
   }
 
   function scheduleCustomerAIPoll() {
     clearTimeout(state.customerAiTimer);
     state.customerAiTimer = null;
     const fitPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.job?.state);
-    const salesPackPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.salesPack?.job?.state);
+    const salesPackPending = salesPackEnabled()
+      && ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.salesPack?.job?.state);
     const nextActionPending = ['queued', 'running', 'retry_wait', 'cancel_requested'].includes(state.customerAi?.nextAction?.job?.state);
-    const enrichmentState = (state.customerEnrichment || state.customerEnrichmentLastSuccess)?.run?.state;
+    const enrichmentState = customerEnrichmentEnabled()
+      ? (state.customerEnrichment || state.customerEnrichmentLastSuccess)?.run?.state
+      : '';
     const enrichmentPending = enrichmentState && !ENRICHMENT_TERMINAL_STATES.has(enrichmentState);
     if ((!fitPending && !salesPackPending && !nextActionPending && !enrichmentPending) || !state.customerProfileExternalId
         || state.customerAiPollCount >= CUSTOMER_AI_MAX_POLLS) return;
@@ -2479,12 +2636,17 @@
     try {
       const [fit, enrichment] = await Promise.allSettled([
         api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/results`),
-        api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment`),
+        customerEnrichmentEnabled()
+          ? api(`/api/sales-crm/ai/customers/${encodeURIComponent(customerId)}/enrichment`)
+          : Promise.resolve(null),
       ]);
       if (state.customerProfileExternalId !== customerId) return;
       if (fit.status === 'fulfilled') state.customerAi = fit.value;
       else state.customerAiError = fit.reason?.message || '评分读取失败';
-      if (enrichment.status === 'fulfilled') {
+      if (!customerEnrichmentEnabled()) {
+        state.customerEnrichment = null;
+        state.customerEnrichmentLastSuccess = null;
+      } else if (enrichment.status === 'fulfilled') {
         state.customerEnrichment = enrichment.value;
         state.customerEnrichmentLastSuccess = enrichment.value;
       } else {
@@ -2502,7 +2664,7 @@
 
   async function retryCustomerEnrichment() {
     const customerId = state.customerProfileExternalId;
-    if (!customerAIEnabled() || !customerId || state.customerEnrichmentPending) return;
+    if (!customerEnrichmentEnabled() || !customerId || state.customerEnrichmentPending) return;
     state.customerEnrichmentPending = true;
     state.customerAiPollCount = 0;
     renderCustomerAI();
@@ -2520,7 +2682,7 @@
   }
 
   async function cancelCustomerEnrichment(runId) {
-    if (!customerAIEnabled() || !runId || state.customerEnrichmentPending) return;
+    if (!customerEnrichmentEnabled() || !runId || state.customerEnrichmentPending) return;
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
@@ -2537,7 +2699,8 @@
   }
 
   async function reviewCustomerEnrichmentProposal(proposalId, decision) {
-    if (!customerAIEnabled() || !proposalId || !['accepted', 'rejected'].includes(decision) || state.customerEnrichmentPending) return;
+    if (!customerEnrichmentEnabled() || !proposalId
+        || !['accepted', 'rejected'].includes(decision) || state.customerEnrichmentPending) return;
     state.customerEnrichmentPending = true;
     renderCustomerAI();
     try {
@@ -2608,8 +2771,12 @@
 
   async function adoptNextAction(jobId) {
     if (!customerAIEnabled() || !jobId || state.customerAiPending) return;
+    const nextActionAtInput = $('#nextActionSuggestionAt');
     const nextAction = $('#nextActionSuggestion')?.value.trim() || '';
-    const nextActionAt = apiTime($('#nextActionSuggestionAt')?.value || '');
+    if (!validateFutureDateTime(nextActionAtInput)) {
+      return toast('下一步时间必须晚于当前时间');
+    }
+    const nextActionAt = apiTime(nextActionAtInput?.value || '');
     if (!nextAction || !nextActionAt) return toast('请填写下一步动作和计划时间');
     state.customerAiPending = true;
     renderCustomerAI();
@@ -3402,38 +3569,235 @@
     renderManagerAnomalies();
   }
 
-  function notificationAccount(notification) {
-    return state.data.accounts.find(account =>
-      account.id === notification.customer_id || account.external_customer_id === notification.customer_id);
+  const managerTaskReasonLabels = {
+    consecutive_deferred: '连续暂未确定',
+    first_contact_silence: '首次触达后沉默',
+    planned_action_overdue: '计划动作超时',
+  };
+  const managerTaskStatusLabels = {
+    open: '待处理', overdue: '已逾期', escalated: '已升级老板', completed: '已完成',
+  };
+
+  function managerTaskRows(pageKey) {
+    const meta = state.authorizedBusinessLists[pageKey];
+    if (meta?.loaded) return meta.rows;
+    return pageKey === 'manager_tasks' ? (state.data?.managerTasks || []) : [];
+  }
+
+  function managerTaskName(task) {
+    return task.nickname || task.companyName
+      || accountDisplayName(state.data?.accounts?.find(account =>
+        account.id === task.accountId || account.external_customer_id === task.customerId))
+      || task.customerId;
+  }
+
+  function managerTaskButton(task, label = '查看并处理') {
+    return `<button class="text-button" type="button" data-manager-task-id="${esc(task.id)}">${esc(label)} →</button>`;
+  }
+
+  function renderManagerTasks() {
+    const root = $('#managerTaskList');
+    if (!root) return;
+    if (!can('resolve_manager_tasks')) {
+      root.innerHTML = '';
+      return;
+    }
+    const meta = state.authorizedBusinessLists.manager_tasks;
+    const rows = managerTaskRows('manager_tasks');
+    const taskSummary = meta.loaded
+      ? (meta.summary || { total: 0, open: 0, overdue: 0, escalated: 0, completed: 0 })
+      : {
+        total: rows.length,
+        open: rows.filter(task => task.status === 'open').length,
+        overdue: rows.filter(task => task.status === 'overdue').length,
+        escalated: rows.filter(task => task.status === 'escalated').length,
+        completed: rows.filter(task => task.status === 'completed').length,
+      };
+    const summary = $('#managerTaskSummary');
+    if (summary) {
+      const values = [
+        ['待处理', Number(taskSummary.open || 0)],
+        ['已逾期', Number(taskSummary.overdue || 0)],
+        ['已升级老板', Number(taskSummary.escalated || 0)],
+        ['当前筛选任务', Number(taskSummary.total || 0)],
+      ];
+      summary.innerHTML = values.map(([label, value]) =>
+        `<article><span>${esc(label)}</span><strong>${Number(value)}</strong></article>`).join('');
+    }
+    const maxPage = Math.max(1, Math.ceil(rows.length / state.managerTaskPageSize));
+    state.managerTaskPage = Math.min(state.managerTaskPage, maxPage);
+    const start = (state.managerTaskPage - 1) * state.managerTaskPageSize;
+    const visible = rows.slice(start, start + state.managerTaskPageSize);
+    root.innerHTML = meta.loading && !meta.loaded
+      ? '<div class="empty">正在读取主管任务…</div>'
+      : visible.length
+        ? visible.map(task => `<article class="manager-task-card">
+          <header class="manager-task-heading"><div><h3>${esc(managerTaskName(task))}</h3><p>${esc(task.customerId)}</p></div><span class="pill ${task.status === 'overdue' || task.status === 'escalated' ? 'red' : task.status === 'completed' ? 'gray' : 'amber'}">${esc(managerTaskStatusLabels[task.status] || task.status)}</span></header>
+          <dl><div class="manager-task-fact"><dt>负责人</dt><dd>${esc(task.ownerName || userById(task.ownerId)?.name || task.ownerId || '未记录')}</dd></div>
+          <div class="manager-task-fact"><dt>触发原因</dt><dd>${esc(managerTaskReasonLabels[task.reason] || task.reason)}</dd></div>
+          <div class="manager-task-fact"><dt>处理期限</dt><dd>${esc(shortDate(task.dueAt, true))}<small>${esc(shortDate(task.triggeredAt, true))} 触发</small></dd></div></dl>
+          <footer class="manager-task-actions">${managerTaskButton(task)}</footer>
+        </article>`).join('')
+        : `<div class="empty">${esc(meta.error || '当前授权范围内没有主管任务')}</div>`;
+    const page = $('#managerTaskPage');
+    if (page) page.textContent = `第 ${state.managerTaskPage} 页 · 已加载 ${rows.length} / ${Number(meta.total || rows.length)}`;
+    if ($('#managerTaskPrev')) $('#managerTaskPrev').disabled = state.managerTaskPage <= 1;
+    if ($('#managerTaskNext')) {
+      $('#managerTaskNext').disabled = state.managerTaskPage >= maxPage && !meta.hasMore;
+    }
+  }
+
+  function renderManagerRisks() {
+    const root = $('#managerRiskList');
+    if (!root) return;
+    if (!can('resolve_manager_tasks')) {
+      root.innerHTML = '';
+      return;
+    }
+    const meta = state.authorizedBusinessLists.manager_risks;
+    const rows = managerTaskRows('manager_risks');
+    root.innerHTML = meta.loading && !meta.loaded
+      ? '<div class="empty">正在读取客户风险…</div>'
+      : rows.length
+        ? rows.map(task => `<article class="manager-risk-card">
+          <div><strong>${esc(managerTaskName(task))}</strong><span>${esc(managerTaskReasonLabels[task.reason] || task.reason)} · ${esc(managerTaskStatusLabels[task.status] || task.status)}</span></div>
+          <div><span>负责人 ${esc(task.ownerName || task.ownerId || '未记录')}</span><span>期限 ${esc(shortDate(task.dueAt, true))}</span></div>
+          ${managerTaskButton(task, '查看历史')}
+        </article>`).join('')
+        : `<div class="empty">${esc(meta.error || '当前没有待复盘客户')}</div>`;
+  }
+
+  function metricSummary(rows) {
+    const counts = {
+      activeCustomers: 0, deferredRecords: 0, thresholdCustomers: 0,
+      deferredCustomers: 0,
+      plannedAfterDeferredCustomers: 0, onTimeActionCustomers: 0,
+      firstTouchSilentCustomers: 0, unimprovedAfterInterventionCustomers: 0,
+    };
+    rows.forEach(row => Object.keys(counts).forEach(key => {
+      counts[key] += Number(row.counts?.[key] || 0);
+    }));
+    const rate = (value, total) => total ? Math.round(value / total * 10000) / 100 : 0;
+    return {
+      counts,
+      sampleSize: counts.activeCustomers,
+      planRate: rate(counts.plannedAfterDeferredCustomers, counts.deferredCustomers),
+      onTimeRate: rate(counts.onTimeActionCustomers, counts.plannedAfterDeferredCustomers),
+    };
+  }
+
+  async function drillDownManagerMetric(ownerId) {
+    const metricController = state.authorizedBusinessLists.manager_metrics.filterController;
+    if (!metricController || !ownerId) return;
+    await initializeAuthorizedBusinessFilters('manager_risks');
+    const riskController = state.authorizedBusinessLists.manager_risks.filterController;
+    if (!riskController) return toast('客户风险筛选暂不可用');
+    const riskFields = new Set(riskController.getSchema().fields.map(field => field.key));
+    if (!riskFields.has('owner')) return toast('当前账号未获授权使用负责人下钻');
+    const applied = metricController.serialize('applied');
+    riskController.clearAll({ apply: false });
+    for (const filter of applied.filters || []) {
+      if (filter.field === 'metric_window' || filter.field === 'owner'
+          || !riskFields.has(filter.field)) continue;
+      riskController.setDraft(filter.field, filter.value);
+    }
+    riskController.setDraft('owner', [String(ownerId)]);
+    riskController.apply();
+    $('#managerRiskFilters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderManagerMetrics() {
+    const root = $('#managerMetricList');
+    if (!root) return;
+    if (!can('resolve_manager_tasks')) {
+      root.innerHTML = '';
+      return;
+    }
+    const meta = state.authorizedBusinessLists.manager_metrics;
+    const rows = (meta.loaded ? meta.rows : (state.data?.managerMetrics?.sales || []).map(row => ({
+      ...row, rangeDays: state.data?.managerMetrics?.rangeDays || 30,
+    }))).filter(row => Number(row.rangeDays) === state.managerMetricRange);
+    $$('[data-manager-range]').forEach(button => {
+      const active = Number(button.dataset.managerRange) === state.managerMetricRange;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    const serverSummary = meta.summary?.ranges?.[String(state.managerMetricRange)];
+    const summary = meta.loaded
+      ? {
+        counts: serverSummary?.counts || metricSummary([]).counts,
+        sampleSize: Number(serverSummary?.sampleSize || 0),
+        planRate: Number(serverSummary?.ratios?.planFormationRate || 0),
+        onTimeRate: Number(serverSummary?.ratios?.onTimeActionRate || 0),
+      }
+      : metricSummary(rows);
+    if ($('#managerMetricSummary')) {
+      $('#managerMetricSummary').innerHTML = [
+        ['活跃客户样本', summary.sampleSize],
+        ['延期记录', summary.counts.deferredRecords],
+        ['达到客户阈值', summary.counts.thresholdCustomers],
+        ['延期后形成计划率', `${summary.planRate}%`],
+        ['计划后按时动作率', `${summary.onTimeRate}%`],
+        ['首次触达后沉默', summary.counts.firstTouchSilentCustomers],
+        ['介入后仍未改善', summary.counts.unimprovedAfterInterventionCustomers],
+      ].map(([label, value]) => `<article><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`).join('');
+    }
+    root.innerHTML = meta.loading && !meta.loaded
+      ? '<div class="empty">正在读取延期统计…</div>'
+      : rows.length
+        ? rows.map(row => `<article class="manager-metric-card">
+          <header><div><strong>${esc(row.actorName || row.actorId)}</strong><span>近 ${Number(row.rangeDays)} 天 · 样本 ${Number(row.sampleSize || 0)}</span></div>${row.needsManagerReview ? '<span class="pill amber">需要主管复盘</span>' : '<span class="pill gray">样本未达阈值</span>'}</header>
+          <dl><div><dt>延期客户</dt><dd>${Number(row.counts?.deferredCustomers || 0)} · ${Number(row.ratios?.deferredCustomerRate || 0)}%</dd></div><div><dt>延期后形成计划</dt><dd>${Number(row.counts?.plannedAfterDeferredCustomers || 0)} · ${Number(row.ratios?.planFormationRate || 0)}%</dd></div><div><dt>计划后按时动作</dt><dd>${Number(row.counts?.onTimeActionCustomers || 0)} · ${Number(row.ratios?.onTimeActionRate || 0)}%</dd></div><div><dt>沉默 / 未改善</dt><dd>${Number(row.counts?.firstTouchSilentCustomers || 0)} / ${Number(row.counts?.unimprovedAfterInterventionCustomers || 0)}</dd></div></dl>
+          <p>${row.unavailable?.reasons?.length ? `<span class="subtle">${esc(row.unavailable.reasons.join('、'))}</span>` : ''}<button class="text-button" type="button" data-manager-metric-owner="${esc(row.actorId)}">查看该销售客户风险</button></p>
+        </article>`).join('')
+        : `<div class="empty">${esc(meta.error || `近 ${state.managerMetricRange} 天暂无统计数据`)}</div>`;
+    renderManagerRisks();
+  }
+
+  function notificationAccount(customerId) {
+    return state.data.accounts.find(row =>
+      row.id === customerId || row.external_customer_id === customerId);
   }
 
   function renderNotifications() {
     const root = $('#notificationList');
     if (!root) return;
-    const all = (state.data.notifications || []).filter(item =>
-      customerAIEnabled() || !aiNotificationCodes.has(String(item.code || '').toUpperCase()));
-    const own = all.filter(item => item.user_id === state.data.user.id);
-    const unread = own.filter(item => item.status === 'unread');
-    const failed = own.filter(item => item.wecom_delivery_status === 'failed' || item.wecom_status === 'failed');
-    const teamUnread = all.filter(item => item.user_id !== state.data.user.id && item.status === 'unread');
+    const meta = state.authorizedBusinessLists.notifications;
+    const all = notificationRowsAllowedByAIGate(meta.loaded ? meta.rows : []);
+    const summary = meta.loaded && meta.summary
+      ? meta.summary
+      : {
+        total: all.length,
+        unread: all.filter(item => item.status === 'unread').length,
+        failed: all.filter(item =>
+          item.wecomDeliveryStatus === 'failed' || item.wecomStatus === 'failed').length,
+      };
     $('#notificationSummary').innerHTML = [
-      ['我的未读', unread.length, '需要查看的新消息', unread.length ? 'alert' : ''],
-      ['我的通知', own.length, '当前账号最近 100 条', ''],
-      ['渠道降级', failed.length, failed.length ? '企微失败，网页通知仍可处理' : '网页投递正常', failed.length ? 'warn' : ''],
-      ...(can('view_all_customers') ? [['团队未读', teamUnread.length, '仅查看，不代替接收人标记已读', '']] : []),
+      ['我的未读', Number(summary.unread || 0), '需要查看的新消息', Number(summary.unread) ? 'alert' : ''],
+      ['我的通知', Number(summary.total || 0), '当前账号授权范围', ''],
+      ['渠道降级', Number(summary.failed || 0), Number(summary.failed) ? '企微失败，网页通知仍可处理' : '网页投递正常', Number(summary.failed) ? 'warn' : ''],
     ].map(([label, value, note, cls]) => `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
-    const rows = all.filter(item => !state.notificationStatus || item.status === state.notificationStatus);
-    $('#notificationResultCount').textContent = `显示 ${rows.length} / ${all.length} 条`;
+    $('#notificationResultCount').textContent = meta.loading && !meta.loaded
+      ? '正在读取授权结果…'
+      : `已显示 ${all.length} / ${Number(meta.total || all.length)} 条`;
+    const statusAuthorized = Boolean(meta.filterController?.getSchema().fields
+      .some(field => field.key === 'notification_status'));
+    const tabs = $('#notificationTabs');
+    if (tabs) tabs.classList.toggle('hidden', Boolean(meta.filterController) && !statusAuthorized);
+    if (meta.filterController && !statusAuthorized) state.notificationStatus = '';
     $$('#notificationTabs [data-notification-status]').forEach(button => {
+      button.disabled = Boolean(meta.filterController) && !statusAuthorized;
       button.classList.toggle('active', button.dataset.notificationStatus === state.notificationStatus);
     });
-    root.innerHTML = rows.length ? rows.map(item => {
-      const account = notificationAccount(item);
-      const isOwn = item.user_id === state.data.user.id;
+    root.innerHTML = meta.loading && !meta.loaded
+      ? '<div class="empty">正在读取通知…</div>'
+      : all.length ? all.map(item => {
+      const account = notificationAccount(item.customerId);
+      const isOwn = !item.recipientId || item.recipientId === state.data.user.id;
       const isUnread = item.status === 'unread';
-      const channelFailed = item.wecom_delivery_status === 'failed' || item.wecom_status === 'failed';
+      const channelFailed = item.wecomDeliveryStatus === 'failed' || item.wecomStatus === 'failed';
       const severity = item.severity === 'critical' ? 'red' : item.severity === 'warning' ? 'amber' : '';
-      const recipient = isOwn ? '发给我' : `发给 ${item.recipient_name || item.user_id || '团队成员'}`;
+      const recipient = isOwn ? '发给我' : `发给 ${item.recipientName || '团队成员'}`;
       const action = account
         ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
         : item.code === 'MANAGER_ANOMALY_READY'
@@ -3447,25 +3811,26 @@
           <div class="notification-title"><span class="pill ${severity}">${esc(item.title)}</span><strong>${esc(accountDisplayName(account))}</strong></div>
           ${accountIdentity(account) ? `<small>${esc(accountIdentity(account))}</small>` : ''}
           <p>${esc(item.detail || '暂无详细说明')}</p>
-          <small>${esc(recipient)} · ${shortDate(item.created_at, true)}${channelFailed ? ' · 企微失败，网页可用' : ''}</small>
+          <small>${esc(recipient)} · ${shortDate(item.createdAt, true)}${channelFailed ? ' · 企微失败，网页可用' : ''}</small>
         </div>
         <div class="notification-actions">
           ${action}
           ${isOwn && isUnread ? `<button class="icon-button notification-read" type="button" data-notification-read="${esc(item.id)}" title="标记已读" aria-label="标记已读">✓</button>` : ''}
         </div>
       </article>`;
-    }).join('') : `<div class="empty">${state.notificationStatus === 'unread' ? '当前没有未读通知' : '暂无通知'}</div>`;
+    }).join('') : `<div class="empty">${esc(meta.error || (state.notificationStatus === 'unread' ? '当前没有未读通知' : '暂无通知'))}</div>`;
   }
 
   async function markNotificationRead(notificationId, options = {}) {
-    const notification = (state.data.notifications || []).find(item => item.id === notificationId);
+    const notification = state.authorizedBusinessLists.notifications.rows
+      .find(item => item.id === notificationId);
     if (!notification) return;
-    if (notification.user_id === state.data.user.id && notification.status === 'unread') {
+    if ((!notification.recipientId || notification.recipientId === state.data.user.id)
+        && notification.status === 'unread') {
       await api(`/api/sales-crm/notifications/${encodeURIComponent(notificationId)}/read`, {
         method: 'POST', body: '{}',
       });
-      notification.status = 'read';
-      notification.read_at = new Date().toISOString();
+      await loadAuthorizedBusinessPage('notifications', { reset: true });
       renderAll();
     }
     if (options.customerId) openCustomer(options.customerId);
@@ -3583,6 +3948,7 @@
 
   function renderInsightsHub() {
     if (!can('view_insights')) return;
+    const showAI = customerAIEnabled();
     const authorizedMeta = state.authorizedBusinessLists.insights;
     if (authorizedMeta.loaded || authorizedMeta.loading) {
       const rows = authorizedMeta.rows || [];
@@ -3598,8 +3964,8 @@
       $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
         <article class="insight-hub-card">
           <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(accountDisplayName(item))}</h3><p>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
-          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>经理评价：</strong>${esc(item.evaluationText || item.aiSummary || '已有评价')}` : '尚未填写企业经营评价'}</div>
-          <div><div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div><p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
+          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>经理评价：</strong>${esc(item.evaluationText || (showAI ? item.aiSummary : '') || '已有评价')}` : '尚未填写企业经营评价'}</div>
+          <div>${showAI ? `<div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
           <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>
         </article>`).join('') : '<div class="empty">没有符合条件的客户</div>';
       return;
@@ -3952,6 +4318,120 @@
     );
   }
 
+  function renderManagerTaskSettings() {
+    const panel = $('#managerTaskSettingsPanel');
+    const form = $('#managerTaskSettingsForm');
+    if (!panel || !form) return;
+    const user = state.data?.user || {};
+    const allowed = user.role === 'admin' && isRealAdmin()
+      && can('manage_manager_task_settings');
+    panel.classList.toggle('hidden', !allowed);
+    if (!allowed) return;
+    const settings = state.data?.managerTaskSettings;
+    if (!settings) {
+      $('#managerTaskSettingsStatus').textContent = '正在读取主管介入规则…';
+      return;
+    }
+    if (form.dataset.dirty === 'true'
+        && form.dataset.settingsVersion === String(settings.version)) return;
+    $('#managerTaskSettingsVersion').textContent = `v${Number(settings.version)}`;
+    $('#managerTaskSettingsUpdatedAt').textContent = shortDate(settings.updatedAt, true);
+    const rules = settings.rules || {};
+    const grid = $('#managerTaskSettingsGrid');
+    if (grid) {
+      grid.innerHTML = [
+        ['consecutiveDeferred', '连续暂未确定', '次', 'Count', rules.consecutiveDeferred],
+        ['firstContactSilence', '首次触达后无二次动作', '天', 'Days', rules.firstContactSilence],
+        ['plannedActionOverdue', '计划动作超时', '小时', 'Hours', rules.plannedActionOverdue],
+      ].map(([key, label, unit, suffix, rule]) => `<fieldset class="manager-task-rule manager-rule-row">
+        <div class="manager-task-rule-head"><div><strong>${esc(label)}</strong><span>达到阈值后创建主管介入任务</span></div><label class="check"><input name="${key}Enabled" type="checkbox" ${rule?.enabled ? 'checked' : ''}><span>启用</span></label></div>
+        <div class="manager-task-rule-fields"><label>阈值（${esc(unit)}）<input name="${key}${suffix}" type="number" min="1" step="1" value="${Number(rule?.value || 1)}" required></label></div>
+      </fieldset>`).join('') + `<fieldset class="manager-task-rule manager-rule-row manager-anomaly-rule">
+        <div class="manager-task-rule-head"><div><strong>销售维度复盘</strong><span>只用于统计，不创建客户任务</span></div><label class="check"><input name="salesAnomalyEnabled" type="checkbox" ${rules.salesAnomaly?.enabled ? 'checked' : ''}><span>启用</span></label></div>
+        <div class="manager-task-rule-fields"><label>活跃客户 M<input name="minActiveCustomers" type="number" min="1" step="1" value="${Number(rules.salesAnomaly?.minActiveCustomers || 10)}" required></label>
+        <label>异常客户 K<input name="minAnomalousCustomers" type="number" min="1" step="1" value="${Number(rules.salesAnomaly?.minAnomalousCustomers || 3)}" required></label>
+        <label>比例 R %<input name="anomalyRatioPercent" type="number" min="0.01" max="100" step="0.01" value="${Number(rules.salesAnomaly?.ratioPercent || 30)}" required></label></div>
+      </fieldset>`;
+    }
+    const recipientRoot = $('#managerTaskSettingsRecipientList');
+    if (recipientRoot) {
+      const selected = new Set((settings.recipientIds || []).map(String));
+      const recipients = (state.data.users || []).filter(user =>
+        user.active && !user.archived && ['admin', 'manager'].includes(user.role)
+        && user.permissions?.resolve_manager_tasks);
+      recipientRoot.innerHTML = recipients.length
+        ? recipients.map(user => `<label class="check manager-task-recipient manager-recipient-option">
+          <input name="recipientIds" type="checkbox" value="${esc(user.id)}" ${selected.has(String(user.id)) ? 'checked' : ''}>
+          <span><strong>${esc(user.name)}</strong><small>${esc(roleLabel(user.role))}</small></span>
+        </label>`).join('')
+        : '<span class="subtle">暂无在职且有主管任务权限的接收人</span>';
+    }
+    $('#managerTaskSettingsStatus').textContent = `当前版本 v${Number(settings.version)} · 仅影响后续新判断`;
+    form.dataset.settingsVersion = String(settings.version);
+    form.dataset.dirty = 'false';
+  }
+
+  async function loadManagerTaskSettings() {
+    if (!isRealAdmin() || !can('manage_manager_task_settings')) return;
+    const response = await api('/api/sales-crm/manager-task-settings', {
+      method: 'GET', preserveOnForbidden: true,
+    });
+    state.data.managerTaskSettings = response.settings;
+    renderManagerTaskSettings();
+  }
+
+  async function saveManagerTaskSettings(form) {
+    const payload = formPayload(form);
+    const recipientIds = Array.from(form.querySelectorAll('input[name="recipientIds"]:checked'))
+      .map(input => input.value);
+    const status = $('#managerTaskSettingsStatus');
+    const button = $('#managerTaskSettingsSave');
+    if (button) button.disabled = true;
+    if (status) status.textContent = '正在保存主管介入规则…';
+    try {
+      const response = await api('/api/sales-crm/manager-task-settings', {
+        method: 'PATCH',
+        preserveOnForbidden: true,
+        body: JSON.stringify({
+          expectedVersion: Number(form.dataset.settingsVersion),
+          patch: {
+            consecutiveDeferred: {
+              enabled: Boolean(payload.consecutiveDeferredEnabled),
+              value: Number(payload.consecutiveDeferredCount),
+            },
+            firstContactSilence: {
+              enabled: Boolean(payload.firstContactSilenceEnabled),
+              value: Number(payload.firstContactSilenceDays),
+            },
+            plannedActionOverdue: {
+              enabled: Boolean(payload.plannedActionOverdueEnabled),
+              value: Number(payload.plannedActionOverdueHours),
+            },
+            salesAnomaly: {
+              enabled: Boolean(payload.salesAnomalyEnabled),
+              minActiveCustomers: Number(payload.minActiveCustomers),
+              minAnomalousCustomers: Number(payload.minAnomalousCustomers),
+              ratioPercent: Number(payload.anomalyRatioPercent),
+            },
+            recipientIds,
+          },
+        }),
+      });
+      state.data.managerTaskSettings = response.settings;
+      form.dataset.dirty = 'false';
+      renderManagerTaskSettings();
+      if (status) status.textContent = `已保存 v${Number(response.settings.version)} · ${shortDate(response.settings.updatedAt, true)}`;
+      toast('主管介入规则已保存');
+    } catch (error) {
+      if (status) status.textContent = error.code === 'MANAGER_SETTINGS_VERSION_CONFLICT'
+        ? '规则版本已变化，请刷新确认后再保存；当前输入已保留'
+        : `${error.message}；当前输入已保留`;
+      throw error;
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   function switchAccessSection(section, { focus = false } = {}) {
     const allowedSections = ['accounts', 'permissions', 'governance'];
     const nextSection = allowedSections.includes(section) ? section : 'accounts';
@@ -4031,7 +4511,23 @@
     state.data.features.customerEnrichment = Boolean(features.customer_enrichment?.effectiveEnabled);
     state.data.features.customerEnrichmentAutoTrigger = Boolean(features.customer_enrichment_auto_trigger?.effectiveEnabled);
     state.data.features.salesPack = Boolean(features.sales_pack?.effectiveEnabled);
+    if (!customerEnrichmentAutoTriggerEnabled()) {
+      state.data.features.customerEnrichmentAutoTrigger = false;
+    }
+    if (!customerEnrichmentEnabled()) {
+      state.customerEnrichment = null;
+      state.customerEnrichmentLastSuccess = null;
+      state.customerEnrichmentError = '';
+      state.customerEnrichmentPending = false;
+    }
+    if (!salesPackEnabled() && state.customerAi) {
+      state.customerAi = { ...state.customerAi, salesPack: null };
+    }
+    state.aiTasks.items = (state.aiTasks.items || []).filter(task =>
+      (task.taskType !== 'sales_pack' || salesPackEnabled())
+      && (!task.enrichmentTask || customerEnrichmentEnabled()));
     if (!customerAIEnabled()) state.customerFilters.evaluationTags = [];
+    stripDisabledAINotificationState();
     applyUser();
     populateFilters();
     renderAll();
@@ -4095,12 +4591,20 @@
     state.aiFeaturesError = '';
     renderAIFeatures();
     try {
+      const previousAIEnabled = customerAIEnabled();
+      const previousSalesPackEnabled = salesPackEnabled();
       const response = await api(`/api/sales-crm/ai/features/${encodeURIComponent(key)}`, {
         method: 'PATCH',
         body: JSON.stringify({ enabled }),
       });
       state.aiFeatures = response.features || state.aiFeatures;
       syncBootstrapFeatures(state.aiFeatures);
+      const notificationGateChanged = previousAIEnabled !== customerAIEnabled()
+        || previousSalesPackEnabled !== salesPackEnabled();
+      if (notificationGateChanged
+          && state.authorizedBusinessLists.notifications.filterMount) {
+        await initializeAuthorizedBusinessFilters('notifications', { force: true });
+      }
       toast(`${aiFeatureLabels[key] || key}已${enabled ? '开启' : '关闭'}`);
     } catch (error) {
       state.aiFeaturesError = assistantRuntimeError(error.message || '无法更新 AI 功能开关');
@@ -5193,10 +5697,12 @@
       return toast('当前线索不在可见范围内');
     }
     const signals = intakeSignals(item);
-    const layers = intakeDecisionLayers(item);
+    const showAssignmentDecisions = canViewAssignmentDecisions();
+    const showAI = customerAIEnabled();
+    const showAssignmentAI = showAI && showAssignmentDecisions;
+    const layers = showAssignmentDecisions ? intakeDecisionLayers(item) : null;
     state.selectedCustomerId = '';
     state.recycleCustomerDetail = null;
-    const showAI = customerAIEnabled();
     state.drawerAiContext = {
       companyName: item.company_name || '',
       intakeItemId: item.id,
@@ -5207,7 +5713,7 @@
         `产品重点：${item.product_focus || '未标注'}`,
         ...(showAI ? [`Fit：${signals.fitScore} / ${signals.fitGrade}；readiness：${signals.readiness}；优先级：${signals.priority}`] : []),
         `联系人等级：${item.contact_level || 'L0'}；分配状态：${intakeStatusLabel(item.status)}`,
-        `分配依据：${item.decision_reason || '暂无'}`,
+        ...(showAssignmentDecisions ? [`分配依据：${item.decision_reason || '暂无'}`] : []),
       ].join('\n'),
       view: state.view,
     };
@@ -5227,24 +5733,24 @@
       <div class="next-step"><div><span class="eyebrow">ASSIGNMENT STATUS</span><p>${esc(item.status === 'assigned' ? '公司已分配，领取后进入 CRM 并开始跟进。' : '查看客户资料与匹配依据。')}</p></div><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span></div>
       <div class="account-facts">
         ${[
-          ['负责人', item.assigned_owner_name || (showAI ? item.suggested_owner_name : '')],
+          ['负责人', item.assigned_owner_name || (showAssignmentAI ? item.suggested_owner_name : '')],
           ...(showAI ? [['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority]] : []),
           ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)],
           ...(item.status === 'returned' ? [['退回原因', item.return_reason || '未填写']] : []),
         ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
-      <section class="decision-review">
+      ${showAssignmentDecisions ? `<section class="decision-review">
         <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>${showAI ? '分配三层裁决' : '分配裁决'}</h3></div>${showAI ? `<span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span>` : ''}</div>
         <div class="decision-review-grid ${showAI ? '' : 'without-ai'}">${showAI ? layers.ai : ''}${layers.rule}${layers.manual}</div>
         <div class="decision-audit"><span class="eyebrow">AUDIT TRAIL</span>${intakeAuditMarkup(item)}</div>
-      </section>
+      </section>` : ''}
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER PROFILE</p><h3>客户资料</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
         <div class="master-profile-grid">
           <div><span>企业与地区</span><p>${esc([item.company_name, item.country].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>联系人</span><p>${esc([item.contact_name, item.contact_title, item.contact_methods].filter(Boolean).join(' · ') || '暂无具名联系人')}</p></div>
-          <div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>
+          ${showAssignmentDecisions ? `<div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>` : ''}
           ${item.status === 'returned' ? `<div><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
           <div><span>筛选证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : '暂无关联证据'}</p></div>
         </div>
@@ -5589,7 +6095,7 @@
     }
     const account = state.data.accounts.find(row => row.id === item.customerId);
     openModal('补充下一步计划', '只补计划，不虚构客户新进展', `
-      <form id="todayTaskPlanForm" class="form-grid two today-task-form" data-today-task-form>
+      <form id="todayTaskPlanForm" class="form-grid two today-task-form deferred-plan-form" data-today-task-form data-plan-mode="explicit">
         <input type="hidden" name="customerId" value="${esc(item.customerId)}">
         <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
         <div class="span-2">${todayTaskFactGrid([
@@ -5597,11 +6103,149 @@
           ['当前负责人', item.ownerName || account?.owner_name || userById(item.ownerId)?.name],
           ['当前阶段', stageLabel(item.stage || account?.stage)],
         ])}</div>
-        <label class="span-2">下一步计划<input name="nextAction" maxlength="500" required placeholder="例如：确认 BOM 明细并准备报价"></label>
-        <label class="span-2">计划执行时间<input name="nextActionAt" type="datetime-local" value="${dateInput(1)}" required></label>
+        <div id="planModeTabs" class="segmented span-2 plan-mode-tabs" role="tablist" aria-label="下一步计划状态">
+          <button class="active" type="button" role="tab" aria-selected="true" data-plan-mode="explicit">已有明确计划</button>
+          <button type="button" role="tab" aria-selected="false" data-plan-mode="deferred">暂未确定</button>
+        </div>
+        <div id="explicitPlanFields" class="span-2 form-grid two explicit-plan-fields">
+          <label class="span-2">下一步计划<input name="nextAction" maxlength="500" required placeholder="例如：确认 BOM 明细并准备报价"></label>
+          <label class="span-2">计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(1)}" required></label>
+        </div>
+        <div id="deferredPlanFields" class="span-2 form-grid two deferred-plan-fields hidden">
+          <label class="span-2">再次复查时间<input name="reviewAt" type="datetime-local" data-future-datetime value="${dateInput(1)}"></label>
+          <label class="span-2">当前情况 / 卡点（选填）<textarea name="reason" maxlength="500" rows="3" placeholder="例如：等待客户内部确认预算，本周五再次复查"></textarea></label>
+        </div>
         <div class="span-2">${todayTaskErrorMarkup()}</div>
-        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">保存并完成待办</button></div>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit" data-plan-submit>保存并完成待办</button></div>
       </form>`, 'today-task-modal');
+    $$('#todayTaskPlanForm [data-future-datetime]')
+      .forEach(input => {
+        setFutureDateTimeConstraint(input);
+        validateFutureDateTime(input);
+      });
+  }
+
+  function setNextPlanMode(mode) {
+    const form = $('#todayTaskPlanForm');
+    if (!form || !['explicit', 'deferred'].includes(mode)) return;
+    form.dataset.planMode = mode;
+    $$('#planModeTabs [data-plan-mode]').forEach(button => {
+      const selected = button.dataset.planMode === mode;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+    $('#explicitPlanFields')?.classList.toggle('hidden', mode !== 'explicit');
+    $('#deferredPlanFields')?.classList.toggle('hidden', mode !== 'deferred');
+    const nextAction = form.elements.nextAction;
+    const nextActionAt = form.elements.nextActionAt;
+    const reviewAt = form.elements.reviewAt;
+    if (nextAction) nextAction.required = mode === 'explicit';
+    if (nextActionAt) nextActionAt.required = mode === 'explicit';
+    if (reviewAt) reviewAt.required = mode === 'deferred';
+    const submit = form.querySelector('[data-plan-submit]');
+    if (submit) submit.textContent = mode === 'explicit' ? '保存并完成待办' : '保存暂未确定状态';
+    [nextActionAt, reviewAt].filter(Boolean).forEach(input => validateFutureDateTime(input));
+  }
+
+  async function openManagerTaskDetail(taskId) {
+    if (!can('resolve_manager_tasks') || !taskId) return toast('当前账号无权处理主管任务');
+    openModal('主管任务详情', 'MANAGER INTERVENTION', '<div class="empty">正在读取任务事实和客户风险历史…</div>', 'manager-task-modal');
+    try {
+      const result = await api(`/api/sales-crm/manager-tasks/${encodeURIComponent(taskId)}`, {
+        preserveOnForbidden: true,
+      });
+      const task = result.task || {};
+      const account = result.account || {};
+      const risk = result.risk || {};
+      const interventions = result.interventions || [];
+      const evidence = Object.entries(task.evidence || {});
+      const history = risk.history || [];
+      const candidateRows = [
+        ...(state.data.todayTaskAssignmentCandidates || []),
+        ...(state.data.assignmentCandidates || []),
+        ...(state.data.users || []).filter(user =>
+          user.active && !user.archived && user.role === 'sales'),
+      ];
+      const sales = [...new Map(candidateRows.filter(user => user?.id)
+        .map(user => [String(user.id), { id: String(user.id), name: String(user.name || user.displayName || user.id) }])).values()];
+      const managerTaskActions = [
+        ...(can('edit_customer') ? [
+          ['plan_formed', '形成明确计划'],
+          ['terminal_stage', '正式终止跟进'],
+        ] : []),
+        ...(can('manage_intake') ? [['reassigned', '重新分配负责人']] : []),
+        ...(can('edit_customer') && can('record_activity')
+          ? [['manager_advice', '记录主管建议并安排动作']] : []),
+        ['escalate_owner', '升级老板处理'],
+      ];
+      openModal(`主管任务 · ${account.companyName || task.customerId}`, managerTaskReasonLabels[task.reason] || task.reason, `
+        <div class="manager-task-detail">
+          <div class="manager-task-detail-grid">
+            <div><span class="manager-risk-label">客户</span><strong>${esc(account.companyName || task.customerId)}</strong><p>${esc(account.externalCustomerId || task.customerId)}</p></div>
+            <div><span class="manager-risk-label">当前负责人</span><strong>${esc(userById(account.ownerId)?.name || account.ownerId || '未记录')}</strong><p>${esc(stageLabel(account.stage))}</p></div>
+            <div><span class="manager-risk-label">触发 / 到期</span><strong>${esc(shortDate(task.triggeredAt, true))}</strong><p>${esc(shortDate(task.dueAt, true))}</p></div>
+            <div><span class="manager-risk-label">完成条件</span><strong>${esc(task.completionCondition || '必须形成真实业务变化')}</strong><p>${esc(managerTaskStatusLabels[task.status] || task.status)}</p></div>
+          </div>
+          <section><h3>触发证据</h3><div class="manager-evidence-list">${evidence.length
+            ? evidence.map(([key, value]) => `<div><span>${esc(key)}</span><strong>${esc(typeof value === 'object' ? JSON.stringify(value) : value)}</strong></div>`).join('')
+            : '<span class="subtle">未记录补充证据</span>'}</div></section>
+          <section id="managerRiskDetail" class="manager-risk-detail">
+            <h3>客户计划风险历史</h3>
+            <div class="manager-risk-facts">
+              <div><span>当前连续暂未确定</span><strong>${Number(risk.currentConsecutiveDeferredCount || 0)} 次</strong></div>
+              <div><span>累计暂未确定</span><strong>${Number(risk.cumulativeDeferredCount || 0)} 次</strong></div>
+              <div><span>无明确计划持续</span><strong>${Number(risk.unplannedDurationDays || 0)} 天</strong></div>
+              <div><span>首次达到阈值</span><strong>${esc(risk.thresholdAt ? shortDate(risk.thresholdAt, true) : '尚未达到')}</strong></div>
+            </div>
+            <div class="manager-history-list">${history.length ? history.map(item => `<article>
+              <strong>${esc(shortDate(item.createdAt, true))} · 复查 ${esc(shortDate(item.reviewAt, true))}</strong>
+              <p>${esc(item.reason || '未填写卡点')}</p>
+              <small>记录人 ${esc(userById(item.actorId)?.name || item.actorId || '未记录')} · 当时负责人 ${esc(userById(item.ownerIdSnapshot)?.name || item.ownerIdSnapshot || '未记录')} · ${esc(item.source || 'manual')}</small>
+            </article>`).join('') : '<span class="subtle">暂无暂未确定记录</span>'}</div>
+          </section>
+          <section><h3>主管介入记录</h3><div class="manager-history-list">${interventions.length ? interventions.map(item => `<article>
+            <strong>${esc(item.action || '主管处理')} · ${esc(shortDate(item.created_at || item.createdAt, true))}</strong>
+            <p>${esc(item.note || item.difficulty || '已形成业务变化')}</p>
+            <small>${esc(userById(item.actor_id || item.actorId)?.name || item.actor_id || item.actorId || '未记录')}</small>
+          </article>`).join('') : '<span class="subtle">暂无介入记录</span>'}</div></section>
+          ${task.status === 'completed' ? '<div class="recommendation">该任务已通过真实业务变化完结，仅保留历史查看。</div>' : `
+          <form id="managerTaskResolveForm" class="manager-task-resolve-form">
+            <input type="hidden" name="taskId" value="${esc(task.id)}">
+            <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+            <label>处理方式<select id="managerTaskAction" name="action" required>
+              ${managerTaskActions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+            </select></label>
+            <div id="managerTaskActionFields" class="manager-action-fields" data-action-contract="nextAction nextActionAt ownerId difficulty"
+              data-sales-options="${esc(sales.map(user => `${user.id}\t${user.name}`).join('\n'))}"></div>
+            <p id="managerResolveStatus" class="today-task-form-error" role="alert" aria-live="polite"></p>
+            <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认并记录业务变化</button></div>
+          </form>`}
+        </div>`, 'manager-task-modal');
+      setManagerTaskAction(managerTaskActions[0][0]);
+    } catch (error) {
+      closeModal();
+      toast(error.message);
+    }
+  }
+
+  function setManagerTaskAction(action) {
+    const form = $('#managerTaskResolveForm');
+    const root = $('#managerTaskActionFields');
+    if (!form || !root) return;
+    const nextAt = esc(dateInput(1));
+    const salesOptions = String(root.dataset.salesOptions || '').split('\n').filter(Boolean)
+      .map(row => row.split('\t'));
+    const fields = {
+      plan_formed: `<label>明确的下一步计划<input name="nextAction" maxlength="500" required placeholder="例如：确认 BOM 后提交正式报价"></label><label>计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${nextAt}" required></label>`,
+      terminal_stage: `<label>终止阶段<select name="stage" required><option value="lost">已丢失</option><option value="disqualified">不合格客户</option></select></label><label>终止说明（选填）<textarea name="note" maxlength="500"></textarea></label>`,
+      reassigned: `<label>新负责人<select name="ownerId" required><option value="">请选择在职销售</option>${salesOptions.map(([id, name]) => `<option value="${esc(id)}">${esc(name || id)}</option>`).join('')}</select></label>`,
+      manager_advice: `<label>主管建议<textarea name="note" maxlength="500" required placeholder="记录给销售的具体建议"></textarea></label><label>下一步计划<input name="nextAction" maxlength="500" required></label><label>计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${nextAt}" required></label>`,
+      escalate_owner: `<label>需要老板处理的难点<textarea name="difficulty" maxlength="500" required placeholder="说明具体困难和需要的决策"></textarea></label>`,
+    };
+    root.innerHTML = fields[action] || fields.plan_formed;
+    constrainFutureDateTimes(root);
+    const status = $('#managerResolveStatus');
+    if (status) status.textContent = '';
   }
 
   function managerRequestValue(request, keys) {
@@ -6045,7 +6689,7 @@
           </label>
           <div class="activity-primary-grid">
             <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
-            <label>下次跟进时间<input name="nextActionAt" type="datetime-local" value="${dateInput(2)}"></label>
+            <label>下次跟进时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(2)}"></label>
           </div>
           <label class="activity-manager-check">
             <input name="managerRequired" type="checkbox">
@@ -6077,6 +6721,7 @@
     renderActivityCustomerPicker({ focusSearch: !state.activitySelectedCustomer });
     setProgressType('email');
     resizeActivitySummary($('#activitySummary'));
+    constrainFutureDateTimes($('#activityForm'));
   }
 
   function renderActivityReactionAdminModal() {
@@ -6164,10 +6809,11 @@
       <label>客户来源<select name="source"><option>公司指派</option><option>销售自行搜索</option><option>展会</option><option>LinkedIn</option><option>海关数据</option><option>老客户介绍</option></select></label>
       <label>负责人<select name="ownerId" id="newCustomerOwner">${ownerOptions}</select></label>
       <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" inputmode="numeric" placeholder="例如 2008"></label>
-      <label>优先级<select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label><label>首次行动时间<input name="nextActionAt" type="datetime-local" value="${dateInput(1)}"></label>
+      <label>优先级<select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label><label>首次行动时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(1)}"></label>
       <label class="span-2">下一步<input name="nextAction" value="完成首次触达"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" id="newCustomerSubmit">创建客户</button></div>
     </form>`, 'customer-intake-modal');
+    constrainFutureDateTimes($('#customerForm'));
   }
 
   function openQuoteModal(customerId, options = {}) {
@@ -6176,10 +6822,11 @@
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       ${options.fromTodayTask ? '<input type="hidden" name="todayTaskSource" value="alerts">' : ''}
       <label>报价金额<input name="amount" type="number" min="0" required></label><label>币种<select name="currency"><option>USD</option><option>EUR</option><option>CNY</option></select></label>
-      <label>预计毛利率 %<input name="grossMargin" type="number" step=".1" value="8"></label><label>报价后跟进时间<input name="nextFollowAt" type="datetime-local" value="${dateInput(3)}"></label>
+      <label>预计毛利率 %<input name="grossMargin" type="number" step=".1" value="8"></label><label>报价后跟进时间<input name="nextFollowAt" type="datetime-local" data-future-datetime value="${dateInput(3)}"></label>
       <label class="span-2 check"><input name="lossLeader" type="checkbox"> 首单低价/亏本引流报价</label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存报价</button></div>
     </form>`);
+    constrainFutureDateTimes($('#quoteForm'));
   }
   function openOrderModal(customerId) {
     const quotes = state.data.quotes.filter(item => item.customer_id === customerId)
@@ -6189,10 +6836,11 @@
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label class="span-2">关联报价<select name="quoteId" required>${quotes.map(quote => `<option value="${esc(quote.id)}">${esc(quote.id)} · ${money(quote.amount)} ${esc(quote.currency || 'USD')} · ${esc(quote.status || 'sent')}</option>`).join('')}</select></label>
       <label>订单金额<input name="amount" type="number" min="0" required></label><label>币种<select name="currency"><option>USD</option><option>EUR</option><option>CNY</option></select></label>
-      <label>实际毛利率 %<input name="grossMargin" type="number" step=".1" value="5"></label><label>下一次经营动作<input name="nextActionAt" type="datetime-local" value="${dateInput(14)}"></label>
+      <label>实际毛利率 %<input name="grossMargin" type="number" step=".1" value="5"></label><label>下一次经营动作<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(14)}"></label>
       <label class="span-2 check"><input name="isRepeat" type="checkbox"> 这是复购订单</label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">确认订单</button></div>
     </form>`);
+    constrainFutureDateTimes($('#orderForm'));
   }
   function groupOptions(role, selected = '') {
     return (state.data.permissionGroups || []).filter(group => group.role === role)
@@ -6321,9 +6969,10 @@
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
-      <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
+      <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存调整</button></div>
     </form>`);
+    constrainFutureDateTimes($('#stageRatingForm'));
   }
 
   function openCustomerProfileEditModal(customerId) {
@@ -6529,13 +7178,21 @@
 
   async function refresh(message = '') {
     const previous = state.data;
+    const previousAIEnabled = Boolean(previous?.features?.aiStations);
+    const previousSalesPackEnabled = previousAIEnabled && Boolean(previous?.features?.salesPack);
     const next = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
     for (const config of Object.values(researchConfig)) {
       if (previous?.[config.dataKey]?.length) next[config.dataKey] = previous[config.dataKey];
     }
     state.data = next;
+    const aiGateChanged = previousAIEnabled !== customerAIEnabled()
+      || previousSalesPackEnabled !== salesPackEnabled();
+    stripDisabledAINotificationState();
     populateFilters();
     renderAll();
+    if (aiGateChanged && state.authorizedBusinessLists.notifications.filterMount) {
+      await initializeAuthorizedBusinessFilters('notifications', { force: true });
+    }
     renderImpersonationBanner();
     closeModal();
     if (message) toast(message);
@@ -6613,6 +7270,10 @@
     event.preventDefault();
     const form = event.target;
     try {
+      const invalidFuture = Array.from(form.querySelectorAll('[data-future-datetime]'))
+        .filter(input => !input.disabled && !input.closest('.hidden'))
+        .find(input => !validateFutureDateTime(input));
+      if (invalidFuture) throw new Error('下一步时间必须晚于当前时间');
       if (form.id === 'loginForm') {
         if (state.loginPending) return;
         state.loginPending = true;
@@ -6717,18 +7378,88 @@
           ...(resolution === 'reassign' ? { ownerId: payload.ownerId } : {}),
           idempotencyKey: payload.idempotencyKey,
         }, resolution === 'reassign' ? '超时线索已重新分配' : '超时线索已退回线索池');
+      } else if (form.id === 'managerTaskSettingsForm') {
+        if (!isRealAdmin() || !can('manage_manager_task_settings')) {
+          throw new Error('只有真实管理员可以修改主管介入规则');
+        }
+        await saveManagerTaskSettings(form);
+      } else if (form.id === 'managerTaskResolveForm') {
+        const payload = formPayload(form);
+        const supported = ['plan_formed', 'terminal_stage', 'reassigned', 'manager_advice', 'escalate_owner'];
+        if (!supported.includes(payload.action)) throw new Error('请选择有效的主管处理方式');
+        const body = {
+          type: payload.action,
+          idempotencyKey: payload.idempotencyKey,
+        };
+        if (['plan_formed', 'manager_advice'].includes(payload.action)) {
+          if (!String(payload.nextAction || '').trim()) throw new Error('请填写明确的下一步计划');
+          if (!validateFutureDateTime(form.elements.nextActionAt)) {
+            throw new Error('下一步时间必须晚于当前时间');
+          }
+          body.nextAction = String(payload.nextAction).trim();
+          body.nextActionAt = apiTime(payload.nextActionAt);
+        }
+        if (payload.action === 'manager_advice') {
+          if (!String(payload.note || '').trim()) throw new Error('请填写主管建议');
+          body.note = String(payload.note).trim();
+        }
+        if (payload.action === 'terminal_stage') {
+          body.stage = payload.stage;
+          body.note = String(payload.note || '').trim();
+        }
+        if (payload.action === 'reassigned') {
+          if (!payload.ownerId) throw new Error('请选择新的在职销售负责人');
+          body.ownerId = payload.ownerId;
+        }
+        if (payload.action === 'escalate_owner') {
+          if (!String(payload.difficulty || '').trim()) throw new Error('请说明需要老板处理的难点');
+          body.difficulty = String(payload.difficulty).trim();
+        }
+        const status = $('#managerResolveStatus');
+        if (status) status.textContent = '正在保存业务变化…';
+        await api(`/api/sales-crm/manager-tasks/${encodeURIComponent(payload.taskId)}/resolve`, {
+          method: 'POST',
+          preserveOnForbidden: true,
+          body: JSON.stringify(body),
+        });
+        closeModal();
+        await refresh();
+        await Promise.all([
+          loadAuthorizedBusinessPage('manager_tasks', { reset: true }),
+          loadAuthorizedBusinessPage('manager_risks', { reset: true }),
+          loadAuthorizedBusinessPage('manager_metrics', { reset: true }),
+        ]);
+        toast(payload.action === 'escalate_owner' ? '任务已升级老板处理' : '主管处理已记录，业务状态已更新');
       } else if (form.id === 'todayTaskPlanForm') {
         const payload = formPayload(form);
         form._todayTaskSubmitter = event.submitter;
-        if (!String(payload.nextAction || '').trim()) throw new Error('请填写下一步计划');
-        if (!payload.nextActionAt) throw new Error('请选择计划执行时间');
-        await submitTodayTaskAction(form, {
-          actionType: 'add_next_plan',
-          customerId: payload.customerId,
-          nextAction: String(payload.nextAction || '').trim(),
-          nextActionAt: apiTime(payload.nextActionAt),
-          idempotencyKey: payload.idempotencyKey,
-        }, '下一步计划已保存，待办已更新');
+        const mode = form.dataset.planMode || 'explicit';
+        if (mode === 'explicit') {
+          if (!String(payload.nextAction || '').trim()) throw new Error('请填写下一步计划');
+          if (!payload.nextActionAt) throw new Error('请选择计划执行时间');
+          if (!validateFutureDateTime(form.elements.nextActionAt)) throw new Error('下一步时间必须晚于当前时间');
+          // submitTodayTaskAction posts this path to /api/sales-crm/today-tasks/actions.
+          await submitTodayTaskAction(form, {
+            actionType: 'add_next_plan',
+            customerId: payload.customerId,
+            nextAction: String(payload.nextAction || '').trim(),
+            nextActionAt: apiTime(payload.nextActionAt),
+            idempotencyKey: payload.idempotencyKey,
+          }, '下一步计划已保存，待办已更新');
+        } else {
+          if (!payload.reviewAt) throw new Error('请选择再次复查时间');
+          if (!validateFutureDateTime(form.elements.reviewAt)) throw new Error('下一步时间必须晚于当前时间');
+          await api(`/accounts/${encodeURIComponent(payload.customerId)}/deferred-plan`, {
+            method: 'POST',
+            preserveOnForbidden: true,
+            body: JSON.stringify({
+              reviewAt: apiTime(payload.reviewAt),
+              reason: String(payload.reason || '').trim(),
+              idempotencyKey: payload.idempotencyKey,
+            }),
+          });
+          await refreshTodayTasksAfterAction('已记录暂未确定状态，将在复查时间重新提醒');
+        }
       } else if (form.id === 'todayTaskManagerForm') {
         const payload = formPayload(form);
         form._todayTaskSubmitter = event.submitter;
@@ -7127,6 +7858,10 @@
           const status = form.querySelector('[data-today-task-error]');
           if (status) status.textContent = error.message;
         }
+        if (form.id === 'managerTaskResolveForm') {
+          const status = $('#managerResolveStatus');
+          if (status) status.textContent = `${error.message}；当前输入已保留`;
+        }
         toast(error.message);
         if (form.id === 'drawerAiForm') {
           const button = form.querySelector('button[type=submit]');
@@ -7149,6 +7884,63 @@
     if (go) switchView(go.dataset.go);
     const accessSection = event.target.closest('[data-access-section]');
     if (accessSection) switchAccessSection(accessSection.dataset.accessSection);
+    const planMode = event.target.closest('#planModeTabs [data-plan-mode]');
+    if (planMode) setNextPlanMode(planMode.dataset.planMode);
+    const managerMetric = event.target.closest('[data-manager-metric-owner]');
+    if (managerMetric) await drillDownManagerMetric(managerMetric.dataset.managerMetricOwner);
+    const managerTask = event.target.closest('[data-manager-task-id]');
+    if (managerTask) await openManagerTaskDetail(managerTask.dataset.managerTaskId);
+    if (event.target.closest('#managerTaskPrev') && state.managerTaskPage > 1) {
+      state.managerTaskPage -= 1;
+      renderManagerTasks();
+    }
+    if (event.target.closest('#managerTaskNext')) {
+      const meta = state.authorizedBusinessLists.manager_tasks;
+      let maxPage = Math.max(1, Math.ceil(managerTaskRows('manager_tasks').length / state.managerTaskPageSize));
+      if (state.managerTaskPage >= maxPage && meta.hasMore) {
+        await loadAuthorizedBusinessPage('manager_tasks', { reset: false });
+        maxPage = Math.max(1, Math.ceil(managerTaskRows('manager_tasks').length / state.managerTaskPageSize));
+      }
+      if (state.managerTaskPage < maxPage) state.managerTaskPage += 1;
+      renderManagerTasks();
+    }
+    if (event.target.closest('#managerTaskRefresh')) {
+      state.managerTaskPage = 1;
+      await loadAuthorizedBusinessPage('manager_tasks', { reset: true });
+    }
+    if (event.target.closest('#managerMetricRefresh')) {
+      await Promise.all([
+        loadAuthorizedBusinessPage('manager_metrics', { reset: true }),
+        loadAuthorizedBusinessPage('manager_risks', { reset: true }),
+      ]);
+    }
+    const managerRange = event.target.closest('[data-manager-range]');
+    if (managerRange) {
+      state.managerMetricRange = Number(managerRange.dataset.managerRange) === 90 ? 90 : 30;
+      const metricController = state.authorizedBusinessLists.manager_metrics.filterController;
+      if (metricController) {
+        metricController.setDraft('metric_window', [String(state.managerMetricRange)]);
+        metricController.apply();
+      }
+      renderManagerMetrics();
+    }
+    if (event.target.closest('#managerTaskExport')) {
+      if (!can('export_data')) toast('当前账号没有导出权限');
+      else {
+        const payload = state.authorizedBusinessLists.manager_tasks.filterController?.serialize('applied')
+          || { filters: [], permissionVersion: '' };
+        const params = new URLSearchParams({
+          permissionVersion: String(payload.permissionVersion || ''),
+          filters: JSON.stringify(componentPayloadToRaw(payload)),
+        });
+        const link = document.createElement('a');
+        link.href = `/api/sales-crm/manager-tasks/export?${params}`;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    }
     if (event.target.closest('[data-filter-permission-entry]')) {
       await runFilterPermissionAction(async () => {
         switchAccessSection('permissions');
@@ -7721,6 +8513,10 @@
   });
 
   document.addEventListener('change', event => {
+    if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
+    if (event.target.closest('#managerTaskSettingsForm')) {
+      event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
+    }
     if (event.target.matches('#assistantRuntimeMode')) void setAssistantRuntimeMode(event.target.value);
     if (event.target.matches('[data-ai-feature]')) void setAIFeature(event.target.dataset.aiFeature, event.target.checked);
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
@@ -7751,6 +8547,9 @@
   });
 
   document.addEventListener('input', event => {
+    if (event.target.closest('#managerTaskSettingsForm')) {
+      event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
+    }
     if (event.target.id === 'todayTaskOwnerSearch') {
       renderTodayTaskCandidateOptions(event.target.value);
     }
@@ -7763,10 +8562,25 @@
   document.addEventListener('click', event => {
     const tab = event.target.closest('[data-notification-status]');
     if (tab) {
-      state.notificationStatus = tab.dataset.notificationStatus;
-      renderNotifications();
+      const controller = state.authorizedBusinessLists.notifications.filterController;
+      const statusAuthorized = Boolean(controller?.getSchema().fields
+        .some(field => field.key === 'notification_status'));
+      if (!controller || !statusAuthorized) {
+        state.notificationStatus = '';
+        renderNotifications();
+        return;
+      }
+      const requestedStatus = String(tab.dataset.notificationStatus || '');
+      if (requestedStatus) {
+        if (controller.setDraft('notification_status', [requestedStatus])) controller.apply();
+      } else {
+        controller.clearField('notification_status', { apply: true });
+      }
     }
-    if (event.target.closest('#notificationRefresh')) void refresh('通知已刷新').catch(error => toast(error.message));
+    if (event.target.closest('#notificationRefresh')) {
+      void loadAuthorizedBusinessPage('notifications', { reset: true })
+        .then(() => toast('通知已刷新')).catch(error => toast(error.message));
+    }
   });
 
   function switchView(view, pushHistory = true) {
@@ -7801,6 +8615,9 @@
     if (canonicalView === 'users' && can('manage_users') && !state.data.impersonation) {
       void loadFilterPermissionAdmin().catch(error => toast(error.message));
     }
+    if (canonicalView === 'users' && isRealAdmin() && can('manage_manager_task_settings')) {
+      void loadManagerTaskSettings().catch(error => toast(error.message));
+    }
     if (researchConfig[canonicalView] && !state.research[canonicalView].filterMount) {
       void initializeResearchFilters(canonicalView);
     }
@@ -7817,8 +8634,16 @@
       alerts: 'alerts',
       insights: 'insights',
       recycleBin: 'recycle_bin',
+      notifications: 'notifications',
     }[canonicalView];
     if (businessPageKey) void initializeAuthorizedBusinessFilters(businessPageKey);
+    if (canonicalView === 'managerTasks') {
+      void initializeAuthorizedBusinessFilters('manager_tasks');
+    }
+    if (canonicalView === 'managerMetrics') {
+      void initializeAuthorizedBusinessFilters('manager_metrics');
+      void initializeAuthorizedBusinessFilters('manager_risks');
+    }
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     if (canonicalView === 'protectedCustomers' && !state.protectedCustomers.loaded) {
       void loadProtectedWorkspace();

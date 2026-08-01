@@ -28,7 +28,8 @@ test('six remaining business lists mount the shared authorized filter component'
   assert.match(app, /function initializeAuthorizedBusinessFilters\(pageKey/);
   assert.match(app, /function loadAuthorizedBusinessPage\(pageKey/);
   assert.match(app, /createFilterController\(\{/);
-  assert.match(app, /\/api\/sales-crm\/lists\/\$\{pageKey\}/);
+  assert.match(app, /const endpoint = config\.endpoint \|\| `\/lists\/\$\{pageKey\}`/);
+  assert.match(app, /await api\(`\$\{endpoint\}\?\$\{params\}`/);
 });
 
 test('authorized business lists have independent pagination, version conflict, and stale response state', () => {
