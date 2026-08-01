@@ -830,6 +830,38 @@ test('scoped Sales bootstrap notifications stay within the account scope', async
   assert.deepEqual(body.notifications.map(row => row.id).sort(), ['NOTE-GLOBAL', 'NOTE-OWN']);
 });
 
+test('Sales bootstrap hides intake-only notifications after intake permission is revoked', async t => {
+  const fx = await fixtures.seededFixture();
+  t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', {
+    view_customers: true,
+    view_contacts: true,
+    view_intake: false,
+  });
+  const insert = fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,wecom_status,created_at,read_at)
+    VALUES (?,?,?,?,?,?,?,?,?,'pending',?,'')`);
+  insert.run('NOTE-ACCOUNT-AFTER-INTAKE-REVOKE', 'U-OTHER', 'CRM-OTHER',
+    'ACCOUNT_VISIBLE', 'info', '本人客户通知', 'account-visible-detail', 'unread',
+    'account-after-intake-revoke', '2026-08-01 10:00:00');
+  insert.run('NOTE-INTAKE-AFTER-REVOKE', 'U-OTHER', 'BR-9004',
+    'INTAKE_HIDDEN', 'critical', '线索通知', 'intake-hidden-detail', 'unread',
+    'intake-after-revoke', '2026-08-01 09:00:00');
+  const cookie = await fx.login('other@example.com', 'Password123!');
+
+  const response = await fx.request('/api/sales-crm/bootstrap', { cookie });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.deepEqual(body.intake.items, []);
+  assert.equal(body.notifications.some(row => row.id === 'NOTE-ACCOUNT-AFTER-INTAKE-REVOKE'), true);
+  const serialized = JSON.stringify(body.notifications);
+  for (const secret of [
+    'NOTE-INTAKE-AFTER-REVOKE', 'BR-9004', 'INTAKE_HIDDEN', 'intake-hidden-detail',
+  ]) {
+    assert.equal(serialized.includes(secret), false, secret);
+  }
+});
+
 test('contact-restricted Sales bootstrap strips company evaluation narratives', async t => {
   const fx = await fixtures.seededFixture({ permissions: { view_insights: true, view_contacts: false } });
   t.after(() => fx.close());

@@ -146,7 +146,9 @@ test('runtime AI shutdown removes business AI payloads and fails closed while ke
   assert.equal(restoredIntake.arbitration.candidateSnapshotId, 'SNAP-HIDDEN');
   assert.equal(restoredIntake.arbitration.aiRecommendation.confidence, 0.99);
   assert.equal(restoredEvaluation.aiSummary, 'AI 历史总结');
-  assert.equal(restored.notifications.some(item => item.code === 'SALES_PACK_READY'), true);
+  assert.equal(restored.notifications.some(item => item.code === 'SALES_PACK_READY'), false);
+  const restoredRecipient = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.cookie });
+  assert.equal(restoredRecipient.notifications.some(item => item.code === 'SALES_PACK_READY'), true);
 
   const restoredProfile = await fx.requestJson('/api/sales-crm/profile/RU-9002', {
     cookie: fx.adminCookie,
