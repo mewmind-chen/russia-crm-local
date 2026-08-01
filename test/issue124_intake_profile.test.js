@@ -25,13 +25,14 @@ test('visible unclaimed intake master is readable but CRM operations remain unav
      email,phone,sales_ready_contact_count,contact_last_checked_at)
     VALUES ('BR-9010','Read Only Master','俄罗斯','https://readonly.example','工业控制','制造商',
       'Master description','MCU','hidden@readonly.example','+7-hidden',7,'2026-07-28 09:00:00')`).run();
-  fx.db.prepare(`INSERT INTO crm_intake_items
-    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,report_url,created_at,updated_at)
-    VALUES ('INTAKE-MASTER','BATCH-TEST','BR-9010','Read Only Master','assigned','U-OTHER','/reports/read-only',?,?)`)
-    .run(now, now);
   fx.db.prepare(`INSERT INTO crm_accounts
     (id,external_customer_id,company_name,owner_id,stage,assignment_status,created_at,updated_at)
     VALUES ('CRM-READONLY','BR-9010','Read Only Master','U-WU','qualified','claimed',?,?)`)
+    .run(now, now);
+  // Account-first insertion simulates historical dirty data without firing the forward sync trigger.
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,report_url,created_at,updated_at)
+    VALUES ('INTAKE-MASTER','BATCH-TEST','BR-9010','Read Only Master','assigned','U-OTHER','/reports/read-only',?,?)`)
     .run(now, now);
   fx.db.prepare(`INSERT INTO crm_manager_evaluations
     (id,customer_id,subject_type,evaluation_text,author_id,author_name,ai_status,ai_labels_json,created_at,updated_at)
