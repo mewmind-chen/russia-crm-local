@@ -182,6 +182,46 @@ test('supplement_and_retry remains unresolved and explicitly blocks the #172-B g
   assert.equal(output.gate.canEnter172B, false);
 });
 
+test('CLI zero-source confirmation uses a tombstone and keeps audit and list gates aligned', t => {
+  const dir = fs.mkdtempSync(path.join(TEST_TEMP_ROOT, 'crm-identity-resolution-zero-source-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const databasePath = path.join(dir, 'snapshot.db');
+  const conflict = createConflictDatabase(databasePath);
+  const retryArgs = resolutionArgs(databasePath, conflict, ['--apply']);
+  retryArgs[retryArgs.indexOf('link_existing')] = 'supplement_and_retry';
+  retryArgs.splice(retryArgs.indexOf('--target-external-customer-id'), 2);
+  const retry = run(retryArgs);
+  assert.equal(retry.status, 0, retry.stderr);
+  const retryOutput = JSON.parse(retry.stdout);
+
+  const db = new Database(databasePath);
+  db.prepare(`UPDATE customer_pool SET nickname='Distinct First'
+    WHERE customer_id='RU-1001'`).run();
+  db.prepare(`UPDATE crm_accounts SET nickname='Distinct Second'
+    WHERE external_customer_id='RU-2002'`).run();
+  db.close();
+  const confirmArgs = resolutionArgs(databasePath, {
+    ...conflict,
+    expectedVersion: retryOutput.resolution.expectedVersion,
+  }, ['--apply']);
+  confirmArgs[confirmArgs.indexOf('link_existing')] = 'confirm_new';
+  const confirmed = run(confirmArgs);
+
+  assert.equal(confirmed.status, 0, confirmed.stderr);
+  const output = JSON.parse(confirmed.stdout);
+  assert.equal(output.resolution.decision, 'confirm_new');
+  assert.equal(output.gate.unresolved, 0);
+  assert.equal(output.gate.auditUnresolved, 0);
+  assert.equal(output.gate.canEnter172B, true);
+  const verified = new Database(databasePath, { readonly: true });
+  t.after(() => verified.close());
+  assert.equal(verified.prepare(`SELECT COUNT(*) count FROM crm_customer_identity_registry
+    WHERE normalized_name='shared alias'`).get().count, 0);
+  assert.equal(verified.prepare(`SELECT COUNT(*) count
+    FROM crm_customer_identity_name_tombstones
+    WHERE normalized_name='shared alias' AND released_at=''`).get().count, 1);
+});
+
 test('CLI keeps #172-B blocked when an earlier resolution loses integrity', t => {
   const mutations = [
     db => db.prepare('DELETE FROM crm_customer_identity_conflict_audit').run(),
