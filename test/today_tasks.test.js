@@ -82,6 +82,61 @@ test('intake alerts are grouped independently by intake item id', () => {
   assert.equal(grouped[0].intakeItemId, 'L2');
 });
 
+test('intake and CRM alerts with the same stable customer identity share one task', () => {
+  const grouped = groupAlerts([
+    {
+      id: 'LEAD-RU-0096', intakeItemId: 'INTAKE-96', externalCustomerId: 'RU-0096',
+      companyName: 'Stable Identity Customer', code: 'UNCLAIMED_LEAD', title: '未领取',
+      action: '处理超时线索', customerPriority: 'A', overdueHours: 48,
+    },
+    {
+      id: 'NO-NEXT-CRM-96', customerId: 'CRM-96', externalCustomerId: 'RU-0096',
+      companyName: 'Stable Identity Customer', code: 'NO_NEXT', title: '缺少下一步',
+      action: '补充计划', customerPriority: 'A', overdueHours: 0,
+    },
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].externalCustomerId, 'RU-0096');
+  assert.equal(grouped[0].reasonCount, 2);
+  assert.deepEqual(grouped[0].reasons.map(reason => reason.code), ['UNCLAIMED_LEAD', 'NO_NEXT']);
+});
+
+test('historical duplicate CRM IDs never share one external-identity task target', () => {
+  const grouped = groupAlerts([
+    {
+      id: 'INTAKE-RU-0097', intakeItemId: 'INTAKE-97', externalCustomerId: 'RU-0097',
+      companyName: 'Ambiguous Identity', code: 'UNCLAIMED_LEAD', title: '未领取',
+      action: '处理超时线索', customerPriority: 'A', overdueHours: 48,
+    },
+    {
+      id: 'NO-NEXT-CRM-97-A', customerId: 'CRM-97-A', externalCustomerId: 'RU-0097',
+      companyName: 'Ambiguous Identity A', code: 'NO_NEXT', title: '缺少下一步',
+      action: '补充计划', customerPriority: 'A', overdueHours: 0,
+    },
+    {
+      id: 'OVERDUE-CRM-97-A', customerId: 'CRM-97-A', externalCustomerId: 'RU-0097',
+      companyName: 'Ambiguous Identity A', code: 'OVERDUE', title: '已超期',
+      action: '完成跟进', customerPriority: 'A', overdueHours: 3,
+    },
+    {
+      id: 'NO-NEXT-CRM-97-B', customerId: 'CRM-97-B', externalCustomerId: 'RU-0097',
+      companyName: 'Ambiguous Identity B', code: 'NO_NEXT', title: '缺少下一步',
+      action: '补充计划', customerPriority: 'B', overdueHours: 0,
+    },
+  ]);
+
+  assert.equal(grouped.length, 3);
+  assert.deepEqual(
+    grouped.map(item => [item.intakeItemId, item.customerId, item.reasonCount]),
+    [
+      ['INTAKE-97', '', 1],
+      ['', 'CRM-97-A', 2],
+      ['', 'CRM-97-B', 1],
+    ],
+  );
+});
+
 test('grouped task ordering is deterministic by urgency, grade, overdue age, and update time', () => {
   const reasons = [
     ['C1', 'A', 10, '2026-07-25'],
