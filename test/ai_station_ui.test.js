@@ -121,7 +121,7 @@ test('notification center exposes unread counts, scoped read actions and custome
   assert.match(app, /function renderNotifications\(\)/);
   assert.match(app, /\/api\/sales-crm\/notifications\/\$\{encodeURIComponent\(notificationId\)\}\/read/);
   assert.match(app, /data-notification-customer/);
-  assert.match(app, /只能标记|notification\.user_id === state\.data\.user\.id/);
+  assert.match(app, /!notification\.recipientId\s*\|\|\s*notification\.recipientId === state\.data\.user\.id/);
   assert.match(css, /\.notification-item/);
   assert.match(css, /@media\(max-width:780px\)\{\.notification-button/);
 });

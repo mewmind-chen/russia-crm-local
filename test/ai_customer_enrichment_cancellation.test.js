@@ -63,6 +63,12 @@ test('legacy queue schema carries durable cancellation timestamps', async t => {
 
 test('cancelling a completed adapter cancels queued legacy work through the authorized API', async t => {
   const fx = await fixtures.seededFixture({
+    appOptions: {
+      salesCrm: {
+        aiStationsEnabled: true,
+        customerEnrichmentEnabled: true,
+      },
+    },
     permissions: { view_customers: true, cancel_ai_tasks: true },
   });
   t.after(() => fx.close());

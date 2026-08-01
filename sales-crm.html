@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260801-issue190">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260801-issue196">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -60,6 +60,8 @@
           <button data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
+          <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管介入任务</span></button>
+          <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>延期与介入统计</span></button>
           <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>销售能力</span></button>
           <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
@@ -358,6 +360,7 @@
 
       <section id="notificationsView" class="view">
         <div id="notificationSummary" class="metric-grid"></div>
+        <div id="notificationsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="section-intro notification-intro">
             <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
@@ -365,12 +368,69 @@
           </div>
           <div class="toolbar">
             <div class="segmented" id="notificationTabs">
-              <button class="active" data-notification-status="unread">未读</button>
-              <button data-notification-status="">全部</button>
+              <button data-notification-status="unread">未读</button>
+              <button class="active" data-notification-status="">全部</button>
             </div>
             <span id="notificationResultCount" class="toolbar-count"></span>
           </div>
           <div id="notificationList" class="notification-list" aria-live="polite"></div>
+          <div class="load-more-row"><button id="notificationsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="notifications">继续加载</button></div>
+        </article>
+      </section>
+
+      <section id="managerTasksView" class="view manager-workspace-view">
+        <div id="managerTaskSummary" class="metric-grid manager-task-summary" aria-live="polite"></div>
+        <div class="section-intro manager-workspace-intro">
+          <div><p class="eyebrow">MANAGER INTERVENTION</p><h2>主管介入任务</h2><p>按授权范围处理延期计划、首次触达停滞和已计划动作超时。</p></div>
+          <div class="manager-workspace-actions">
+            <button id="managerTaskRefresh" class="button secondary" type="button">刷新</button>
+            <button id="managerTaskExport" class="button secondary" type="button" data-permission="export_data">导出当前结果</button>
+          </div>
+        </div>
+        <div id="managerTaskFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <article class="panel manager-task-panel">
+          <div class="toolbar manager-task-toolbar">
+            <span id="managerTaskResultCount" class="toolbar-count">进入页面后加载授权任务</span>
+          </div>
+          <div id="managerTaskList" class="data-table manager-task-list" aria-live="polite"></div>
+          <nav class="manager-task-pagination" aria-label="主管任务分页">
+            <button id="managerTaskPrev" class="button secondary" type="button">上一页</button>
+            <span id="managerTaskPage" aria-live="polite">第 1 页</span>
+            <button id="managerTaskNext" class="button secondary" type="button">下一页</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="managerMetricsView" class="view manager-workspace-view">
+        <div class="section-intro manager-workspace-intro">
+          <div><p class="eyebrow">DEFERRED PLAN REVIEW</p><h2>延期与介入统计</h2><p>查看计划形成、按时执行、首次触达停滞和主管介入后的改善情况。</p></div>
+          <div class="manager-metric-controls">
+            <div id="managerMetricRange" class="segmented manager-metric-range" role="group" aria-label="统计周期">
+              <button class="active" data-manager-range="30" type="button">近 30 天</button>
+              <button data-manager-range="90" type="button">近 90 天</button>
+            </div>
+            <button id="managerMetricRefresh" class="button secondary" type="button">刷新</button>
+          </div>
+        </div>
+        <div id="managerMetricSummary" class="metric-grid manager-metric-summary" aria-live="polite"></div>
+        <div id="managerMetricFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <article class="panel manager-metric-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">TEAM METRICS</p><h2>团队计划质量</h2><p>数量、比例和样本量使用同一授权筛选口径。</p></div>
+            <span id="managerMetricResultCount" class="panel-note"></span>
+          </div>
+          <div id="managerMetricList" class="data-table manager-metric-list" aria-live="polite"></div>
+          <div class="load-more-row"><button id="managerMetricLoadMore" class="button secondary hidden" type="button">继续加载</button></div>
+        </article>
+
+        <div id="managerRiskFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <article class="panel manager-risk-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">CUSTOMER DRILLDOWN</p><h2>客户延期风险</h2><p>逐个查看连续次数、累计次数、持续天数、阈值时间和历史记录。</p></div>
+            <span id="managerRiskResultCount" class="panel-note"></span>
+          </div>
+          <div id="managerRiskList" class="manager-risk-list" aria-live="polite"></div>
+          <div class="load-more-row"><button id="managerRiskLoadMore" class="button secondary hidden" type="button">继续加载</button></div>
         </article>
       </section>
 
@@ -510,6 +570,27 @@
               <p id="aiFeatureStatus" class="assistant-runtime-status" role="status" aria-live="polite"></p>
               <div id="aiFeatureRows" class="ai-feature-rows"></div>
             </section>
+          <article id="managerTaskSettingsPanel" class="panel access-panel manager-task-settings-panel hidden" data-permission="manage_manager_task_settings">
+            <div class="panel-head">
+              <div><p class="eyebrow">MANAGER TASK RULES</p><h2>主管介入规则</h2><p>管理员设置触发阈值和具体接收人；规则变更保留版本与审计时间。</p></div>
+              <div class="manager-task-settings-meta">
+                <span>版本 <strong id="managerTaskSettingsVersion">—</strong></span>
+                <span>更新于 <time id="managerTaskSettingsUpdatedAt">—</time></span>
+              </div>
+            </div>
+            <form id="managerTaskSettingsForm" class="manager-task-settings-form" data-permission="manage_manager_task_settings">
+              <div id="managerTaskSettingsGrid" class="manager-task-settings-grid" aria-live="polite"></div>
+              <fieldset class="manager-task-recipients">
+                <legend>任务接收人</legend>
+                <p>仅选择实际负责介入的主管或管理员，可同时选择多人。</p>
+                <div id="managerTaskSettingsRecipientList" class="manager-task-recipient-list"></div>
+              </fieldset>
+              <div class="manager-task-settings-footer">
+                <p id="managerTaskSettingsStatus" class="manager-task-settings-status" role="status" aria-live="polite">进入本页后读取当前规则</p>
+                <button id="managerTaskSettingsSave" class="button primary" type="submit">保存主管介入规则</button>
+              </div>
+            </form>
+          </article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">DUPLICATE REVIEW</p><h2>疑似重复客户核验</h2></div><span id="duplicateReviewCount" class="panel-note"></span></div><div id="duplicateReviewTable" class="data-table"></div></article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
@@ -621,6 +702,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260801-issue192"></script>
+  <script src="/sales-assets/app.js?v=20260801-issue196"></script>
 </body>
 </html>
