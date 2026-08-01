@@ -10,8 +10,12 @@ const {
 } = require('../lib/access_control');
 
 const routeCases = [
-  ['GET', '/activity-correction-targets', { permissions: ['correct_own_activity'] }],
-  ['GET', '/activity-corrections', { permissions: ['correct_own_activity'] }],
+  ['GET', '/activity-correction-targets', {
+    anyPermissions: ['correct_own_activity', 'manage_activity_corrections'],
+  }],
+  ['GET', '/activity-corrections', {
+    anyPermissions: ['correct_own_activity', 'manage_activity_corrections'],
+  }],
   ['POST', '/activity-corrections', {
     permissions: ['correct_own_activity'], blockedWhileImpersonating: true,
   }],

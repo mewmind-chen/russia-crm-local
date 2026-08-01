@@ -250,6 +250,7 @@ test('Issue 171 export requires both relation endpoints to be inside authorized 
     'Other Fixture',
     'CORR-171-CROSS-SCOPE',
     'PROP-171-CROSS-SCOPE',
+    'ACT-171-CROSS-REPLACEMENT',
     'CROSS_SCOPE_SECRET_REASON',
     'CROSS_SCOPE_SECRET_ACTIVITY',
   ]) {
@@ -261,6 +262,22 @@ test('Issue 171 export requires both relation endpoints to be inside authorized 
     'activityCorrectionProposals must exist before scope can be verified');
   assert.deepEqual(payload.activityCorrections.map(row => row.correctionId), [CORRECTION_ID]);
   assert.deepEqual(payload.activityCorrectionProposals.map(row => row.proposalId), [PROPOSAL_ID]);
+});
+
+test('Issue 171 operational APIs redact cross-scope correction counterparts', async () => {
+  for (const path of ['/api/sales-crm/bootstrap', '/api/sales-crm/profile/RU-9002']) {
+    const response = await fx.request(path, { cookie: managerCookie });
+    assert.equal(response.status, 200, path);
+    const serialized = JSON.stringify(await response.json());
+    for (const secret of [
+      'ACT-171-CROSS-REPLACEMENT',
+      'CRM-OTHER',
+      'RU-9003',
+      'CROSS_SCOPE_SECRET_ACTIVITY',
+    ]) {
+      assert.equal(serialized.includes(secret), false, `${path} leaked ${secret}`);
+    }
+  }
 });
 
 test('Issue 171 activity CSV adds correction audit columns', async () => {
