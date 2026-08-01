@@ -124,9 +124,9 @@ test('today task UI exposes three levels, one action, reason tags, and cache-bus
   const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
   const css = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.css'), 'utf8');
-  assert.match(html, /data-severity="immediate">立即处理/);
-  assert.match(html, /data-severity="today">今天完成/);
-  assert.match(html, /data-severity="attention">需要关注/);
+  assert.match(html, /data-severity="immediate">[\s\S]*?立即处理[\s\S]*?立即/);
+  assert.match(html, /data-severity="today">[\s\S]*?今天完成[\s\S]*?今天/);
+  assert.match(html, /data-severity="attention">[\s\S]*?需要关注[\s\S]*?关注/);
   assert.match(html, /app\.css\?v=[^"]+/);
   assert.match(html, /app\.js\?v=[^"]+/);
   assert.match(js, /同一对象只显示一行|reasonCount|otherReasons/);

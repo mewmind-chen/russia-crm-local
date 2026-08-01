@@ -3186,6 +3186,48 @@
     return '';
   }
 
+  function todayTaskDueText(item) {
+    return item.dueAt
+      ? `${shortDate(item.dueAt, true)}${item.maxOverdueHours ? ` · 已超期 ${Math.floor(item.maxOverdueHours)} 小时` : ''}`
+      : '未设置计划时间';
+  }
+
+  function todayTaskContext(item, account) {
+    const identity = accountIdentity(account || item);
+    return item.intakeItemId
+      ? [identity, '未开发线索', '待领取'].filter(Boolean).join(' · ')
+      : [identity, account?.country || '', stageLabel(item.stage)].filter(Boolean).join(' · ');
+  }
+
+  function renderTodayTaskMobileCard(item, account) {
+    const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
+    const otherReasons = item.otherReasons || [];
+    const other = otherReasons.length
+      ? otherReasons.map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('')
+      : '<span class="subtle">无</span>';
+    const context = todayTaskContext(item, account);
+    const target = item.intakeItemId
+      ? `data-intake-profile="${esc(item.intakeItemId)}"`
+      : `data-customer="${esc(item.customerId)}"`;
+    return `<article class="today-task-mobile-card" ${target}>
+      <div class="today-task-mobile-head">
+        <span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>
+        <span class="today-task-mobile-count">${Number(item.reasonCount || 1)} 个原因</span>
+      </div>
+      <div class="today-task-mobile-customer">
+        <strong>${esc(accountDisplayName(account || item))}</strong>
+        <span>${esc(context)}</span>
+      </div>
+      <dl class="today-task-mobile-facts">
+        <div><dt>主要原因</dt><dd>${esc(item.title)}</dd></div>
+        <div><dt>其他原因</dt><dd class="today-task-mobile-reasons">${other}</dd></div>
+        <div><dt>计划时间</dt><dd>${esc(todayTaskDueText(item))}</dd></div>
+        <div><dt>当前负责人</dt><dd>${esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || '未分配')}</dd></div>
+      </dl>
+      <div class="today-task-mobile-action">${todayTaskActionMarkup(item)}</div>
+    </article>`;
+  }
+
   function todayTaskActionMarkup(item) {
     const kind = todayTaskActionKind(item);
     const role = state.data?.user?.role;
@@ -3245,20 +3287,17 @@
       ['需要关注', counts.attention, '存在阶段停滞风险'],
     ].map(([label, value, text]) => `<article class="alert-kpi"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></article>`).join('');
     const rows = all.filter(item => !state.alertSeverity || item.urgency === state.alertSeverity);
-    $('#alertTable').innerHTML = table(
+    const desktopTable = table(
       ['等级', '客户', '主要原因 / 其他原因', '计划时间', '负责人', '唯一建议动作'],
       rows.map(item => {
         const account = state.data.accounts.find(row => row.id === item.customerId);
         const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
         const other = (item.otherReasons || []).map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('');
-        const due = item.dueAt
-          ? `${shortDate(item.dueAt, true)}${item.maxOverdueHours ? ` · 已超期 ${Math.floor(item.maxOverdueHours)} 小时` : ''}`
-          : '未设置计划时间';
         const row = [
           `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
-          `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${item.intakeItemId ? `${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}未开发线索 · 待领取` : `${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account?.country || '')} · ${esc(stageLabel(item.stage))}`}</span></div>`,
+          `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${esc(todayTaskContext(item, account))}</span></div>`,
           `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
-          esc(due),
+          esc(todayTaskDueText(item)),
           esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
           todayTaskActionMarkup(item),
         ];
@@ -3268,6 +3307,14 @@
         return row;
       }),
     );
+    const mobileCards = rows.length
+      ? rows.map(item => renderTodayTaskMobileCard(
+        item,
+        state.data.accounts.find(account => account.id === item.customerId),
+      )).join('')
+      : '<div class="empty">暂无符合条件的数据</div>';
+    $('#alertTable').innerHTML = `<div class="today-task-desktop-table"><div class="data-table">${desktopTable}</div></div>
+      <div class="today-task-mobile-list">${mobileCards}</div>`;
     renderManagerAnomalies();
   }
 
