@@ -1,26 +1,26 @@
-# Open Issues Controlled Dual-Track Execution Design
+# 现有 Issue 受控双轨并行执行设计
 
-## Goal
+## 目标
 
-Resolve the currently open CRM Issues, excluding #104, without losing any confirmed requirement and without allowing parallel branches to create an unsafe merge or production migration sequence.
+处理当前所有仍处于打开状态的 CRM Issue（明确排除 #104），确保已经确认的需求一项不漏，同时避免并行分支造成难以控制的合并冲突或生产数据库迁移风险。
 
-The approved operating model is controlled dual-track parallelism:
+已确认采用“受控双轨并行”模式：
 
-- Independent analysis, tests, backend foundations, and frontend work may run concurrently when file ownership and contracts are explicit.
-- Integration, database changes, and production deployment pass through serialized gates in dependency order.
-- Every downstream branch rebases immediately after its prerequisite merges.
-- One integration owner controls merge order, production rollout, and rollback decisions.
+- 当文件归属和接口契约清晰时，允许独立的分析、测试、后端基础和前端工作并行开展。
+- 集成、数据库变更和生产部署必须按照依赖顺序通过串行门禁。
+- 每个下游分支都要在前置 PR 合并后立即 rebase。
+- 由一名集成负责人统一控制合并顺序、生产上线和回滚决定。
 
-## Baseline
+## 基线
 
-- Repository: `mewmind-chen/russia-crm-local`
-- Planning baseline: `origin/main` at `47a882e06f87b16d2959a13d2a3fdb26b8831a32`
-- Production release observed during assessment: the same SHA
-- Open Issues in scope: #96, #168, #169, #170, #171, #172, #173, and the newly extracted #174
-- Explicitly excluded: #104
-- Open pull requests at assessment time: none
+- 仓库：`mewmind-chen/russia-crm-local`
+- 规划基线：`origin/main`，提交 `47a882e06f87b16d2959a13d2a3fdb26b8831a32`
+- 评估时观察到的生产版本：同一提交
+- 本轮范围内的开放 Issue：#96、#168、#169、#170、#171、#172、#173，以及新拆分出的 #174
+- 明确排除：#104
+- 评估时开放 PR 数量：0
 
-The production application is concentrated in several large shared files:
+生产应用主要集中在以下几个大型共享文件中：
 
 - `lib/sales_crm.js`
 - `sales-assets/app.js`
@@ -28,266 +28,266 @@ The production application is concentrated in several large shared files:
 - `sales-crm.html`
 - `lib/access_control.js`
 
-Logical independence therefore does not imply conflict-free merging. The design uses short-lived branches, strict ownership during parallel work, and serialized merge gates.
+因此，业务逻辑上互相独立，并不代表合并时不会冲突。本设计通过短生命周期分支、并行期间严格的文件归属，以及串行合并门禁来控制风险。
 
-## Scope And Requirement Ownership
+## 范围与需求归属
 
-### Issue #169: Customer Contact Lead Terminology
+### Issue #169：客户联系人线索术语
 
-Rename only the contact-discovery concept from "负责人线索" to "客户联系人线索" and remove ambiguous contact-module wording.
+只把联系人挖掘相关概念从“负责人线索”改为“客户联系人线索”，并清除联系人模块中有歧义的相关文案。
 
-Preserve:
+必须保留：
 
-- The `view_contacts` permission key.
-- Existing routes, APIs, schemas, and role defaults.
-- Internal sales-owner terminology where "负责人" genuinely means the assigned salesperson.
+- `view_contacts` 权限键不变。
+- 现有路由、API、数据库结构和角色默认权限不变。
+- 当“负责人”确实表示内部销售负责人时，原有术语保持不变。
 
-This is the first merge because it is a small vocabulary contract that later permission and UI work should consume.
+该 Issue 最先合并，因为它是一个较小的术语契约，后续权限和界面修改都应基于这套统一用语。
 
-### Issue #96: Intake And CRM State Invariant
+### Issue #96：线索进入 CRM 后的状态唯一性
 
-Ensure one stable customer cannot remain both an actionable intake lead and an active CRM customer. This Issue owns:
+确保同一个稳定客户不能同时保留为可操作的线索池记录和活跃 CRM 客户。该 Issue 负责：
 
-- Repair of the intake/CRM synchronization invariant, including the `assigned` state.
-- Audited cleanup of existing conflicting production records.
-- Stable-customer grouping of today-task reasons after permission scoping.
-- Consistent task counts across the sidebar, dashboard, top summary, and task list.
-- Prevention of duplicate assignment and duplicate task actions.
+- 修复线索池与 CRM 的状态同步规则，包括当前遗漏的 `assigned` 状态。
+- 对生产环境中已有冲突数据进行带审计的清理。
+- 在权限范围过滤后，按照稳定客户编号合并今日待办原因。
+- 保证侧栏、仪表盘、顶部汇总和待办列表的数字一致。
+- 防止同一个客户被重复分配或产生重复待办操作。
 
-Read-only assessment found three production conflicts: `RU-0019`, `RU-0027`, and `RU-0029`. The migration must preserve historical assignment evidence while removing their active intake assignment state.
+只读评估发现生产环境存在 3 条冲突数据：`RU-0019`、`RU-0027` 和 `RU-0029`。迁移必须保留历史分配证据，同时清除其当前仍处于活跃状态的线索分配字段。
 
-### Issue #168: Mobile Today-Task Closure
+### Issue #168：今日待办移动端操作闭环
 
-Make the final today-task model usable on desktop and 320, 375, 390, and 430 pixel widths. This Issue owns:
+确保最终版今日待办模型在桌面端以及 320、375、390、430 像素宽度下都可以正常使用。该 Issue 负责：
 
-- Responsive task rendering.
-- Access to all valid task actions without horizontal page overflow.
-- Refresh behavior after an action.
-- Desktop regression coverage.
+- 响应式待办展示。
+- 所有合法操作都能使用，页面不出现横向溢出。
+- 完成操作后的即时刷新。
+- 桌面端回归测试。
 
-It does not define task identity or backend grouping; those contracts come from #96. It may be developed concurrently with #96 under frontend-only ownership, but it merges after #96 and rebases onto the corrected contract.
+该 Issue 不负责定义待办身份或后端分组规则，这些契约由 #96 提供。它可以在严格限定为前端文件的前提下与 #96 并行开发，但必须先合并 #96，再把 #168 rebase 到修正后的契约上，然后才能合并。
 
-### Issue #172: Protected Customers And Global Nickname Identity
+### Issue #172：合作客户保护名单与全局昵称唯一
 
-Establish the identity and visibility contract used by all later customer operations. This Issue owns:
+建立后续所有客户操作都必须遵循的身份和可见性契约。该 Issue 负责：
 
-- An administrator-only protected-customer list.
-- Stable Alpha nickname matching.
-- Company-wide uniqueness across current and historical nicknames.
-- Previewed and auditable batch import, activation, and eligible rollback.
-- Preservation of the stable customer number during activation.
-- Complete exclusion of protected customers from sales search, assignment, tasks, notifications, workload, metrics, and ordinary exports.
-- Generic non-disclosing duplicate responses to unauthorized users.
+- 仅管理员可访问的合作客户保护名单。
+- 使用 Alpha 昵称进行稳定匹配。
+- 当前昵称和历史昵称在全公司范围内唯一。
+- 可预览、可审计的批量导入、激活，以及满足条件时的回滚。
+- 激活时保留原有稳定客户编号。
+- 保护客户完全不出现在销售搜索、分配、待办、通知、工作量、统计和普通导出中。
+- 对无权用户返回不泄露保护客户信息的通用重复提示。
 
-The design uses a normalized name registry mapped to one stable external customer ID. A protected customer remains a customer master plus a protection record and does not receive a CRM account row until activation.
+设计采用“标准化名称注册表”，每个标准化名称只能映射到一个稳定外部客户编号。保护客户保留客户主档和保护记录，在正式激活之前不创建 CRM 客户记录。
 
-#172 is divided into three mergeable increments:
+#172 拆成三个可以独立合并的增量：
 
-1. Preflight scanner, canonical normalization, identity registry, migration conflict report, and permission/API contracts.
-2. Import preview/commit/rollback, activation, exact/fuzzy privacy, concurrency protection, and uniqueness enforcement after conflicts are resolved.
-3. Administrator UI, template/download, authorized mapping export, and responsive tests.
+1. 预检扫描器、统一名称标准化、身份注册表、迁移冲突报告，以及权限/API 契约。
+2. 导入预览/提交/回滚、激活、精确与模糊匹配隐私、并发保护；冲突解决后再启用唯一性强制约束。
+3. 管理员界面、模板下载、授权映射导出和响应式测试。
 
-### Issue #170: Deferred Planning And Manager Intervention
+### Issue #170：暂未确定计划与主管介入
 
-Implement a truthful alternative to inventing a next step. This Issue owns:
+当销售暂时没有真实下一步时，允许记录真实状态，而不是被迫编造计划。该 Issue 负责：
 
-- "已有明确计划" and "暂未确定" states.
-- Mandatory future review time for an undetermined plan.
-- Future-time validation in every frontend and backend plan entry point using one explicit business timezone.
-- Configurable thresholds, enable/disable controls, minimum samples, ratios, and recipients.
-- One open manager task per customer and reason, with real completion actions and escalation to the owner.
-- Customer and salesperson measures, including plan formation and timely real action after a plan.
-- Terminal-stage behavior and explicit reactivation requirements.
-- Immutable actor and owner snapshots, audit, notifications, and role-scoped drill-down.
+- “已有明确计划”和“暂未确定”两种状态。
+- 选择暂未确定时，必须填写未来的再次复查时间。
+- 使用统一、明确的业务时区，对所有前端和后端计划入口执行未来时间校验。
+- 可配置的阈值、启用/停用开关、最低样本数、比例和接收人。
+- 同一客户、同一原因只保留一个未完结主管任务，并支持真实处理和升级老板。
+- 客户维度和销售维度统计，包括形成计划以及计划后按时发生真实动作。
+- 终止阶段停止普通提醒，以及重新激活时的明确要求。
+- 不可变的操作人和当时负责人快照、审计、通知，以及按角色权限下钻。
 
-This feature uses additive event, task, and configuration tables. Historical missing plans are not retroactively treated as deferred-plan events.
+该功能使用只增不删的事件表、任务表和配置表。历史上缺少计划的记录不得被追溯解释为“暂未确定”事件。
 
-### Issue #171: Correct Misfiled Customer Activity
+### Issue #171：更正误填客户的跟进记录
 
-Allow an authorized salesperson to correct an activity or supported milestone recorded against the wrong customer while preserving history. This Issue owns:
+允许有权限的销售把误记到错误客户的跟进或受支持业务里程碑更正到正确客户，同时保留完整历史。该 Issue 负责：
 
-- Immutable original records marked superseded for operational calculations.
-- Linked effective replacement records.
-- Atomic and idempotent correction of source and destination customers.
-- Creator, owner, target-scope, manager, and administrator authorization.
-- Audit, notification, timeline, export, retry, and concurrency behavior.
-- Recalculation of stage, latest activity, next plan, alerts, manager tasks, and statistics from effective history.
-- Stable linkage between activity records and RFQ, quote, or order records before those milestones are correctable.
+- 原记录保持不可变，在业务计算中标记为已被替代。
+- 创建与原记录关联的有效替代记录。
+- 对来源客户和目标客户执行原子、幂等的更正。
+- 校验创建人、当前负责人、目标客户数据范围、主管和管理员权限。
+- 覆盖审计、通知、时间线、导出、重试和并发行为。
+- 根据有效历史重新计算阶段、最近活动、下一步计划、提醒、主管任务和统计。
+- 在允许更正 RFQ、报价或订单等里程碑前，先建立活动记录与对应业务记录之间的稳定关联。
 
-#171 must consume both #172's protected-customer identity contract and #170's deferred-plan and manager-task state. It is divided into:
+#171 必须同时使用 #172 的保护客户身份契约，以及 #170 的暂未确定和主管任务状态。它拆成三个增量：
 
-1. Effective-activity schema, commerce linkage, deterministic account-state rebuild, and effective-only reader behavior.
-2. Correction transaction/API, authorization, audit, notification, export, rollback, and idempotency.
-3. Timeline, target search, confirmation UI, refresh persistence, and responsive end-to-end coverage.
+1. 有效活动结构、业务记录关联、确定性的客户状态重算，以及所有读取逻辑只计算有效记录。
+2. 更正事务/API、权限、审计、通知、导出、回滚和幂等。
+3. 时间线、目标客户搜索、确认界面、刷新持久性和响应式端到端测试。
 
-### Issue #174: Team Status
+### Issue #174：团队状态
 
-#174 contains all implementation previously added to #173 for the new Team Status information architecture. It owns:
+#174 完整承接此前追加到 #173 中的“团队状态”功能开发范围。该 Issue 负责：
 
-- Rename of the existing "销售能力" entry to "团队状态".
-- Business Progress, Sales Capability, and Collaboration Support views.
-- Preservation of the current sales score ring, capability breakdowns, personal funnel, strengths, weaknesses, coaching suggestions, sample count, and insufficient-sample state.
-- Fact-based collaboration generated from real manager tasks, interventions, reassignments, plans, outcomes, and escalations.
-- A short audited entry for assistance that occurred outside the system.
-- Owner, manager, and salesperson scope rules.
-- Desktop and mobile behavior, drill-down, filtering, empty states, errors, and source distinction.
+- 把现有“销售能力”入口改名为“团队状态”。
+- 提供“业务推进”“销售能力”“协作支持”三个栏目。
+- 完整保留现有销售综合得分环、能力分项、个人漏斗、优势、短板、辅导建议、样本数量和“样本不足”状态。
+- 根据真实主管任务、介入、重新分配、计划、处理结果和升级，自动形成事实协作记录。
+- 为系统外发生的协助提供简短、可审计的补记入口。
+- 落实老板、主管和销售的数据范围规则。
+- 覆盖桌面端和移动端、下钻、筛选、空状态、错误状态和数据来源区分。
 
-It must not create a manager leaderboard, a manager score, or employee judgments based on login time, clicks, text length, or raw action counts. It depends on #170 and is implemented after #171 so all effective-history calculations are stable.
+该 Issue 不得建立主管排行榜或主管评分，也不得根据登录时长、点击次数、文字长度或单纯动作数量评价员工。它依赖 #170，并安排在 #171 之后实施，确保所有有效历史计算已经稳定。
 
-### Issue #173: Final Cross-Role Acceptance Gate
+### Issue #173：最终三角色端到端验收门禁
 
-#173 remains the final end-to-end gate rather than a feature implementation branch. It validates:
+#173 保留为最终端到端验收门禁，不再承担大型功能开发。它负责验证：
 
-- A salesperson recording a real customer action and plan.
-- A manager understanding, acting on, completing, or escalating a task.
-- An owner understanding recent 7-day, 30-day, and since-last-view team state.
-- Permissions, duplicate submission, refresh recovery, failed-input preservation, and stable customer identity.
-- Desktop and mobile screenshots.
-- API/database state before and after representative actions.
-- Findings and evidence from all prerequisite Issues, including #174.
+- 销售记录一次真实客户动作和下一步计划。
+- 主管看懂待办、采取真实动作、完结或升级问题。
+- 老板看懂最近 7 天、30 天以及自上次查看以来的团队状态。
+- 权限、重复提交、刷新恢复、失败时保留输入和稳定客户身份。
+- 桌面端和移动端截图。
+- 代表性操作前后的 API 和数据库状态对照。
+- 所有前置 Issue 的发现和证据，包括 #174。
 
-Any defect discovered during #173 is fixed in a focused PR linked to its owning Issue or to #173 if it is purely cross-flow integration.
+#173 中发现的缺陷必须通过聚焦 PR 修复：能够明确归属已有 Issue 的，关联回原 Issue；纯跨流程集成问题则关联 #173。
 
-## Dependency Graph
+## 依赖关系图
 
 ```text
-#169 terminology
+#169 术语统一
   |
-  +--> #96 backend invariant --------+
-  |                                  |
-  +--> #168 frontend/mobile ---------+  merge #96, rebase, merge #168
-                                     |
-                                     v
-                         #172 identity/protection A -> B -> C
-                                     |
-                                     v
-                         #170 deferred-plan A -> B -> C
-                                     |
-                                     v
-                         #171 correction A -> B -> C
-                                     |
-                                     v
-                              #174 Team Status
-                                     |
-                                     v
-                         #173 final cross-role acceptance
+  +--> #96 后端状态唯一性 ------+
+  |                              |
+  +--> #168 前端/移动端 --------+  先合并 #96，rebase 后合并 #168
+                                 |
+                                 v
+                      #172 身份/保护名单 A -> B -> C
+                                 |
+                                 v
+                      #170 暂未确定计划 A -> B -> C
+                                 |
+                                 v
+                      #171 跟进更正 A -> B -> C
+                                 |
+                                 v
+                           #174 团队状态
+                                 |
+                                 v
+                      #173 最终三角色端到端验收
 ```
 
-## Controlled Dual-Track Model
+## 受控双轨模型
 
-### Track A: Stable Data And Workflow Contracts
+### 轨道 A：稳定数据与业务契约
 
-Track A owns the backend invariants and data model:
+轨道 A 负责后端状态约束和数据模型：
 
-1. #96 intake/CRM invariant and audited repair.
-2. #172 normalized identity registry and protected-customer lifecycle.
-3. #170 deferred-plan events, manager tasks, settings, notifications, and metrics.
-4. #171 effective activity, account rebuild, and correction transaction.
+1. #96 线索池/CRM 状态唯一性和带审计的数据修复。
+2. #172 标准化身份注册表和保护客户生命周期。
+3. #170 暂未确定事件、主管任务、设置、通知和统计。
+4. #171 有效活动、客户状态重算和更正事务。
 
-Only one Issue in this track may be in integration or migration work at a time. Later Issues may prepare tests and designs but cannot merge code against a provisional predecessor contract.
+轨道 A 同一时间只能有一个 Issue 进入集成或迁移阶段。后续 Issue 可以提前准备测试和设计，但不能基于尚未确定的前置契约合并代码。
 
-### Track B: User Interface And Acceptance
+### 轨道 B：用户界面与验收
 
-Track B owns bounded UI work against an approved backend contract:
+轨道 B 基于已经批准的后端契约，负责边界明确的界面工作：
 
-1. #168 mobile today-task presentation while #96 backend work proceeds.
-2. #172 administrator UI after #172 backend APIs stabilize.
-3. #170 workflow UI after its state and route contracts stabilize.
-4. #171 correction UI after its service contract stabilizes.
-5. #174 Team Status UI and drill-down after all metric/event contracts stabilize.
-6. #173 cross-role acceptance evidence.
+1. #96 进行后端开发时，并行处理 #168 的今日待办移动端展示。
+2. #172 后端 API 稳定后处理管理员界面。
+3. #170 状态和路由契约稳定后处理业务流程界面。
+4. #171 服务契约稳定后处理更正界面。
+5. 所有指标和事件契约稳定后处理 #174 团队状态界面和下钻。
+6. 最后由 #173 整理并验证三角色端到端证据。
 
-Track B may start test fixtures and layout work early. It must rebase before integration and must not duplicate backend policy in the browser.
+轨道 B 可以提前准备测试数据和页面布局，但集成前必须 rebase，而且不能在浏览器中重复实现本应由后端负责的业务规则。
 
-## Parallel Work Matrix
+## 并行工作矩阵
 
-| Work pair | Allowed concurrently | Merge rule |
+| 工作组合 | 是否允许并行 | 合并规则 |
 | --- | --- | --- |
-| #96 backend and #168 frontend | Yes, with strict file ownership | Merge #96 first; rebase and test #168 |
-| #172 identity preflight and #96/#168 | Preparation and isolated backend tests only | Integrate #172 after #96; UI after #168 |
-| #170 and #172 | Design/tests may overlap | Merge all #172 contracts before #170 implementation |
-| #171 and #172 | State-machine design/tests only | Full #171 implementation waits for #172 |
-| #171 and #170 | No shared backend implementation | Merge #170 before #171 |
-| #174 and #170/#171 | Prototype and acceptance cases only | Data/API implementation waits for both |
-| #173 and earlier Issues | Acceptance script preparation only | Execute and close last |
+| #96 后端与 #168 前端 | 可以，但必须严格限定文件归属 | 先合并 #96；#168 rebase 并重新测试后再合并 |
+| #172 身份预检与 #96/#168 | 只允许准备和独立后端测试 | #96 后再集成 #172；#168 后再集成 #172 UI |
+| #170 与 #172 | 设计和测试可以重叠 | #172 全部契约合并后才能实现 #170 |
+| #171 与 #172 | 只允许状态机设计和测试准备 | #171 完整实现必须等待 #172 |
+| #171 与 #170 | 不允许共享后端实现并行 | 先合并 #170，再实现和合并 #171 |
+| #174 与 #170/#171 | 只允许原型和验收用例准备 | 数据/API 实现等待两者完成 |
+| #173 与其他前置 Issue | 只允许提前准备验收脚本 | 最后执行和关闭 |
 
-Parallel agents receive explicit file and contract ownership. No agent may modify a shared integration file outside its assigned boundary without notifying the integration owner.
+并行代理必须获得明确的文件和接口契约归属。未通知集成负责人，不得修改分配边界以外的共享集成文件。
 
-## Branch And Pull Request Rules
+## 分支与 PR 规则
 
-- Create each branch from the current `origin/main`, never from the stale primary checkout or production release directory.
-- Use one branch per listed increment when an Issue is split into A/B/C.
-- Each pull request links its Issue and lists its predecessor SHA.
-- Before review, fetch and rebase onto the latest `origin/main` after all prerequisites merge.
-- Do not stack long-lived branches across more than one unmerged prerequisite.
-- The integration owner reviews migrations, route contracts, permission changes, and shared-file conflicts.
-- A PR is mergeable only when focused tests and the full test suite pass on the rebased commit.
-- Merge commits or squash commits may follow repository convention, but the production release SHA must map unambiguously to the merged source.
+- 每个分支都从当前最新 `origin/main` 创建，不能从落后的主检出目录或生产 release 目录创建。
+- Issue 被拆成 A/B/C 时，每个增量使用独立分支。
+- 每个 PR 都要关联对应 Issue，并写明其前置提交 SHA。
+- 评审前先 fetch；所有前置 PR 合并后，rebase 到最新 `origin/main`。
+- 不允许一个长期分支跨越两个以上尚未合并的前置依赖。
+- 集成负责人重点审查迁移、路由契约、权限修改和共享文件冲突。
+- 只有在 rebase 后的提交上通过聚焦测试和全量测试，PR 才能合并。
+- 可以按照仓库惯例使用 merge commit 或 squash，但生产 release SHA 必须能够明确对应到已合并源码。
 
-## Database And Migration Design
+## 数据库与迁移设计
 
-All migrations are expand-only during this sequence:
+本轮所有迁移都遵循只增不删原则：
 
-- Add tables, columns, indexes, and compatible triggers before enabling new writes.
-- Do not drop or rebuild live tables in an ordinary deployment.
-- Do not reinterpret historical absence as a new event.
-- Make every migration idempotent and test it against both an empty database and a production database copy.
-- Run SQLite backup, integrity check, foreign-key check, and feature-specific preflight immediately before deployment.
+- 先增加表、字段、索引和向后兼容的触发器，再启用新写入路径。
+- 普通部署期间不得删除或重建生产表。
+- 不得把历史数据的“缺少记录”重新解释为新事件。
+- 每个迁移都必须幂等，并同时在空数据库和生产数据库副本上测试。
+- 部署前立即执行 SQLite 备份、完整性检查、外键检查和当前功能专用预检。
 
-#96 must explicitly replace faulty trigger definitions; `CREATE TRIGGER IF NOT EXISTS` is insufficient. Cleanup writes require before/after audit records for the three known conflicts.
+#96 必须显式替换错误的触发器定义，使用 `CREATE TRIGGER IF NOT EXISTS` 无法修复已存在的错误触发器。3 条已知冲突数据的清理必须保存修改前后审计记录。
 
-#172 must not create a startup unique index until normalized duplicate preflight reports zero unresolved cross-table and historical conflicts. Name enforcement becomes database-backed only after conflict resolution.
+#172 在标准化重复预检仍存在未解决的跨表或历史冲突时，不得在服务启动阶段创建唯一索引。只有冲突全部解决后，才能启用数据库层的名称唯一约束。
 
-#170 and #171 initially deploy with new write paths disabled when rollback to old code would misinterpret new records. Enable writes only after schema, permission, and read-path smoke tests pass.
+#170 和 #171 首次部署时，如果旧代码无法正确理解新记录，则新写入路径必须先保持关闭。只有数据库结构、权限和读取路径冒烟测试通过后，才允许启用写入。
 
-The current deploy process backs up SQLite but code rollback does not automatically restore the database. After enabling incompatible new writes, rollback requires a deliberate compatibility or data-restore procedure, not only switching the release symlink.
+当前部署流程会先备份 SQLite，但代码回滚只切换 release 链接，不会自动恢复数据库。启用与旧版本不兼容的新写入后，回滚必须使用明确的兼容方案或数据恢复方案，不能只切换代码版本。
 
-## Test And Verification Gates
+## 测试与验证门禁
 
-Each increment follows test-first implementation. The implementation plan will name exact tests and commands, but every merge gate includes:
+每个增量都采用测试先行。详细实施计划会列出精确测试文件和命令，但每个合并门禁至少包含：
 
-1. Focused unit and integration tests for the Issue.
-2. Permission tests for administrator, owner, manager, salesperson, archived user, and unauthorized direct API access where applicable.
-3. Two-connection concurrency and retry tests for identity, correction, and task uniqueness.
-4. Failure injection around multi-write transactions.
-5. Full repository test suite with serialized database-sensitive tests when required.
-6. Browser verification at desktop and 320/375/390/430 pixel widths for UI Issues.
-7. No page-level horizontal overflow, clipped actions, console errors, or hidden permission bypass.
-8. Production-database-copy migration and data-count verification before a migration PR is deployable.
+1. 当前 Issue 的聚焦单元测试和集成测试。
+2. 按功能需要覆盖管理员、老板、主管、销售、已归档用户，以及未授权直接访问 API 的权限测试。
+3. 身份唯一、跟进更正和任务唯一性必须进行双数据库连接并发和重试测试。
+4. 多步骤写事务必须进行故障注入测试。
+5. 运行仓库全量测试；数据库敏感测试在需要时串行执行。
+6. 所有界面 Issue 都要在桌面端以及 320/375/390/430 像素宽度下进行浏览器验证。
+7. 不允许出现页面级横向溢出、操作被裁切、控制台错误或隐藏的权限绕过。
+8. 包含迁移的 PR 在允许部署前，必须通过生产数据库副本迁移和数据计数验证。
 
-## Merge And Release Gates
+## 合并与发布门禁
 
-The serialized merge order is:
+固定串行合并顺序：
 
-1. #169.
-2. #96.
-3. #168 after rebase.
-4. #172-A, #172-B, #172-C.
-5. #170-A, #170-B, #170-C.
-6. #171-A, #171-B, #171-C.
-7. #174.
-8. #173 acceptance fixes and final evidence.
+1. #169。
+2. #96。
+3. #168 rebase 后合并。
+4. #172-A、#172-B、#172-C。
+5. #170-A、#170-B、#170-C。
+6. #171-A、#171-B、#171-C。
+7. #174。
+8. #173 验收中发现的修复，以及最终证据。
 
-Production deployments follow the same order. A merge does not automatically authorize deployment of the next stage until the current release passes:
+生产部署遵循同一顺序。当前阶段合并完成，并不自动代表可以部署下一阶段；每次 release 必须先通过：
 
-- Expected `/healthz` SHA locally and publicly.
-- Process and reverse-proxy health.
-- SQLite `integrity_check` and `foreign_key_check`.
-- Feature-specific database counts and audit rows.
-- Role-scoped API smoke tests.
-- Controlled real-action smoke test for newly enabled writes.
-- Browser checks for the changed desktop and mobile flows.
-- Monitoring of logs and task/notification duplication after deployment.
+- 本地和公网 `/healthz` 返回预期 SHA。
+- 应用进程和反向代理健康。
+- SQLite `integrity_check` 和 `foreign_key_check`。
+- 当前功能相关的数据库计数和审计记录正确。
+- 按角色数据范围执行 API 冒烟测试。
+- 对新启用的写操作执行受控真实操作冒烟测试。
+- 检查本次修改涉及的桌面端和移动端流程。
+- 上线后观察日志、待办和通知是否出现重复。
 
-If a gate fails, pause later merges and deployments. Roll back code only when the database remains backward compatible; otherwise disable the feature flag or execute the documented data rollback under a maintenance window.
+任一门禁失败，都必须暂停后续合并和部署。只有数据库仍向后兼容时才可直接回滚代码；否则应先关闭功能开关，或在维护窗口执行已记录的数据回滚。
 
-## Completion Definition
+## 完成定义
 
-This program is complete only when:
+只有同时满足以下条件，本轮工作才算完成：
 
-- #96, #168, #169, #170, #171, #172, and #174 meet their own acceptance criteria.
-- #173 passes all three role workflows with the required screenshots, timing, permission, failure, retry, and data evidence.
-- Production reports the intended final SHA and healthy database checks.
-- No confirmed requirement from the source Issues or comments is omitted from its owner Issue or final acceptance matrix.
-- #104 remains unchanged and excluded.
+- #96、#168、#169、#170、#171、#172 和 #174 分别满足自身验收标准。
+- #173 的三条角色流程通过，并提供要求的截图、耗时、权限、失败、重试和数据证据。
+- 生产环境报告预期最终 SHA，数据库检查健康。
+- 原 Issue 正文和评论中所有已确认需求，都能在其归属 Issue 或最终验收矩阵中找到，不存在遗漏。
+- #104 保持不变并明确排除。
 
