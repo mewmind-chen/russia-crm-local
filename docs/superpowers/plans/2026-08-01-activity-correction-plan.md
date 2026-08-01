@@ -1,6 +1,6 @@
 # Issue #171 跟进记录更正实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行约束：** 本轮不使用或依赖任何 `superpowers:*` 技能。步骤使用 checkbox（`- [ ]`）跟踪。
 
 **目标：** 允许销售更正误填客户的跟进记录和已建立稳定链接的业务里程碑，同时保留不可变审计并原子重算两个客户。
 
@@ -11,11 +11,14 @@
 ## 全局约束
 
 - 依赖 #172 和 #170 全部合并并验证。
+- 计划基线为 `d0bdd104f924b736d8e653938c7899ede2272318`；执行时 fetch/rebase 当时最新 `origin/main`。
 - 创建人权限与当前 owner 权限分开判断；目标客户搜索必须遵守 #172 保护和数据范围。
-- RFQ/quote/order 没有稳定 activity link 时不得更正，不允许按时间猜关联。
+- 销售可直接更正本人创建的普通活动，以及能够通过稳定 activity link 或唯一确定 CRM 里程碑映射的简单 RFQ/quote/order；不得按时间或相似文本猜关联。无法确定映射、管理员锁定、他人记录或会产生不可自动判定阶段冲突时，进入 manager/admin 审批，不得统一拒绝或静默移动。
 - 启用真实 correction 写入后，旧代码会重复计算原/替代记录；上线前必须确认回滚兼容或保留写开关关闭。
 - `CRM_ACTIVITY_CORRECTIONS_ENABLED` 默认 `false`；首次部署完成有效历史读取和权限冒烟后再启用。
-- 权限键固定为 `correct_own_activity`（admin/manager/sales 默认允许，但仍要求原记录创建人）和 `manage_activity_corrections`（仅 admin 默认允许）。
+- 权限键固定为 `correct_own_activity`（admin/manager/sales 默认允许，但普通路径仍要求原记录创建人）和 `manage_activity_corrections`（admin/manager 默认允许，sales 默认拒绝）。manager 只处理授权客户范围，真实 admin 可处理全公司及归档创建人记录。
+- 所有更正目标、审批队列和历史列表消费 #116 authorized filter schema；销售不得看到分配规则、分配原因、候选、排除原因或额度。
+- AI hard/effective gate 关闭时，AI context、异常/辅导字段、来源、下钻和导出全部隐藏；有效活动和手工更正的非 AI 业务读取继续工作。
 
 ---
 
@@ -53,7 +56,7 @@
 
 - [ ] **步骤 3：写业务链接测试**
 
-新 RFQ/quote/order 创建后必须有稳定 activity link；旧记录没有 link 时返回明确“该历史里程碑暂不支持更正”，不得按 timestamp 自动绑定。
+新 RFQ/quote/order 创建后必须有稳定 activity link；旧简单里程碑只有在稳定编号和唯一业务关系可确定映射时允许创建 link 并继续更正。缺少 link 且不能唯一映射时创建待审批 correction proposal，明确提示“需要主管或管理员确认”，不得按 timestamp 自动绑定。
 
 - [ ] **步骤 4：实现 schema 和 reader**
 
@@ -93,12 +96,13 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 **接口：**
 
 - `correctActivity(db,user,{originalActivityId,targetCustomerId,reason,idempotencyKey}) -> {correctionId,original,replacement}`。
+- `proposeActivityCorrection(db,user,payload) -> {proposalId,status}`，`reviewActivityCorrection(db,user,{proposalId,decision,reason,expectedVersion}) -> result`。
 - `searchCorrectionTargets(db,user,query) -> scoped rows`。
 - `rebuildAccountDerivedState` 在同一事务中对来源和目标各调用一次。
 
 - [ ] **步骤 1：写授权失败测试**
 
-持有 `correct_own_activity` 的创建人可更正；当前 owner 但非创建人不可更正；持有 `manage_activity_corrections` 的管理员可处理归档创建人；普通用户不能改他人记录；目标越权返回不枚举 403；锁定、已更正、同客户、空 reason 均拒绝。
+持有 `correct_own_activity` 的创建人可更正普通活动和可确定映射的简单里程碑；当前 owner 但非创建人不可走直接路径；持有 `manage_activity_corrections` 的 manager 可审批授权范围内的他人/锁定/不确定冲突，admin 可审批全公司及归档创建人；目标越权返回不枚举 403。已更正、同客户、空 reason 均拒绝，锁定或不确定阶段冲突进入审批而不是直接移动。
 
 - [ ] **步骤 2：写事务故障注入测试**
 
@@ -112,11 +116,17 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 创建 `crm_activity_corrections`，对 original/replacement 加 UNIQUE；`BEGIN IMMEDIATE` 中复制有效字段、写 source/target stable IDs、actor、reason、timestamps，标记 original superseded，重算两个客户并写 audit；`.env.example` 增加 `CRM_ACTIVITY_CORRECTIONS_ENABLED=false`，路由在关闭时返回明确的 503 功能未启用错误。
 
-- [ ] **步骤 5：实现权限安全通知和导出**
+- [ ] **步骤 5：实现 manager/admin 审批闭环**
 
-通知 relation 保存两个 stable IDs，但 recipient query 按 scope；JSON export 提升 schema version，CSV 增加 correction/original/replacement IDs 和有效状态；无权 export 不出现目标客户。
+审批页显示原客户、目标客户、原活动/里程碑、稳定映射证据、阶段冲突、创建人、当前 owner 和理由。批准时在同一更正事务中写 reviewer、decision、版本和审计；拒绝不改变两个客户业务状态。manager 受 row scope，admin 全量；重复审批返回同一结果或稳定 409。
 
-- [ ] **步骤 6：测试和 PR #171-B**
+- [ ] **步骤 6：实现权限安全通知、失败恢复和导出**
+
+通知 relation 保存两个 stable IDs，但 recipient query 按 scope；本人更正或审批完成后通知对应主管和老板，按 correction/proposal/recipient/type 唯一去重。通知派发失败不得回滚已提交更正，进入可重试 outbox；重复派发不重复通知。JSON export 提升 schema version，CSV 增加 correction/original/replacement/proposal/reviewer IDs 和有效状态；无权 export 不出现目标客户或分配细节。
+
+- [ ] **步骤 7：接入 authorized filter schema 并测试 PR #171-B**
+
+目标搜索、审批列表、更正历史、计数、分页和导出使用同一授权筛选口径；权限撤销使旧 cursor/filter state 失效。增加 manager/admin 审批、通知去重、outbox 重试、admin 全量、AI-off 和销售分配原因脱敏测试。
 
 ```bash
 node --test test/issue171_correction_authorization.test.js test/issue171_correction_transaction.test.js test/issue171_correction_export.test.js test/permission_integration.test.js
@@ -144,7 +154,7 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 2：实现三步确认流程**
 
-步骤为选择目标、填写理由、最终确认；确认页明确来源客户、目标客户、活动时间和业务影响。未链接里程碑显示只读不支持原因。
+步骤为选择目标、填写理由、最终确认；确认页明确来源客户、目标客户、活动时间和业务影响。可确定映射的简单里程碑直接进入确认；不确定映射、锁定或阶段冲突提交主管/管理员审批，并保留当前输入和 proposal 状态。
 
 - [ ] **步骤 3：实现错误与刷新行为**
 
@@ -152,9 +162,9 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 4：桌面/移动端验证**
 
-在 1280/430/390/375/320px 完成一条普通 activity 更正、一次重复请求、一次越权目标；确认无横向溢出、无双计数，审计可见。
+在 1280/430/390/375/320px 完成普通 activity、更正简单里程碑、提交审批、manager/admin 决策、重复请求和越权目标；确认无横向溢出、无双计数，审计可见。验证 authorized filters、AI-off 隐藏和销售分配原因脱敏。
 
-- [ ] **步骤 5：测试、提交并关闭 #171**
+- [ ] **步骤 5：测试、提交和 PR #171-C**
 
 ```bash
 node --test test/issue171_correction_ui.test.js test/issue171_correction_authorization.test.js test/issue171_correction_transaction.test.js
@@ -162,5 +172,5 @@ npm test -- --test-concurrency=1
 git add sales-assets/app.js sales-assets/app.css sales-crm.html test/issue171_correction_ui.test.js
 git commit -m "feat: add audited activity correction workflow"
 git push -u origin codex/issue-171c-correction-ui
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-171c-correction-ui --title "feat: add audited activity correction workflow" --body "Closes #171. 提供更正时间线、目标搜索、确认和响应式回归。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-171c-correction-ui --title "feat: add audited activity correction workflow" --body "Refs #171. 提供更正时间线、目标搜索、主管审批、通知恢复和响应式回归。"
 ```

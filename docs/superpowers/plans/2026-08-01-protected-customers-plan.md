@@ -1,6 +1,6 @@
 # Issue #172 合作客户保护名单实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行约束：** 本轮不使用或依赖任何 `superpowers:*` 技能。步骤使用 checkbox（`- [ ]`）跟踪。
 
 **目标：** 建立管理员保护名单、Alpha/当前/历史昵称全公司唯一、批次预览导入、激活保号和销售端完全隔离。
 
@@ -11,7 +11,9 @@
 ## 全局约束
 
 - 依赖 #96 已合并并在生产验证。
+- 计划基线为 `d0bdd104f924b736d8e653938c7899ede2272318`；执行时 fetch/rebase 当时最新 `origin/main`。
 - `manage_protected_customers` 是独立权限，只给 admin 默认允许；不能由 `view_all_customers` 推导。
+- 真实 admin 拥有完整保护名单、匹配依据、冲突裁决和产品管理能力；身份检查时不得借真实 admin 身份越过目标账号权限。
 - 冲突未清零前不得在启动路径创建唯一索引。
 - 销售搜索、错误、模糊候选、任务、通知、统计和普通导出不得泄露 Alpha 名称或保护状态。
 - `CRM_PROTECTED_CUSTOMERS_WRITES_ENABLED` 默认 `false`；首次部署只验证 schema、读取和权限，生产冒烟通过后再改为 `true` 并重启。
@@ -79,7 +81,49 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 ---
 
-### Task 2：#172-B 批次导入、激活、唯一性和隔离
+### Task 2：#172-R 管理员受审计冲突裁决
+
+**文件：**
+
+- 创建：`lib/protected_customer_conflicts.js`
+- 创建：`scripts/resolve-protected-customer-identities.js`
+- 修改：`lib/sales_crm.js: protected identity conflict routes`
+- 创建：`test/issue172_identity_conflict_resolution.test.js`
+
+**接口：**
+
+- `listProtectedIdentityConflicts(db,user,{status,query,page}) -> scoped rows`。
+- `resolveProtectedIdentityConflict(db,user,{conflictId,decision,targetExternalCustomerId,details,expectedVersion}) -> resolution`。
+- 决策固定为 `link_existing`、`confirm_new`、`supplement_and_retry`；每次决策保存原始来源、候选稳定编号、前后值、actor、时间、版本和理由。
+
+- [ ] **步骤 1：写冲突裁决失败测试**
+
+覆盖跨 pool/account/Alpha/当前昵称/历史昵称冲突；非 admin 和身份检查返回 403；过期版本返回 409；不得自动猜测合并。`link_existing` 必须复用稳定编号，`confirm_new` 只有在标准名不再冲突时成功，补资料后可重跑。
+
+- [ ] **步骤 2：实现管理员裁决事务和审计**
+
+在 `BEGIN IMMEDIATE` 中锁定冲突版本，保存 resolution、别名/稳定编号映射和完整审计。原始扫描证据不可覆盖；重复相同决策幂等返回，冲突决策不得产生两个 registry owner。
+
+- [ ] **步骤 3：实现安全 CLI 和重跑**
+
+CLI 必须显式传绝对数据库路径、conflict ID、decision 和 expected version；默认只预览，`--apply` 才写入。每轮裁决后重新运行 audit，只有 `unresolved=0` 才输出可进入 #172-B 的 gate 结果。
+
+- [ ] **步骤 4：测试和 PR #172-R**
+
+```bash
+node --test test/issue172_identity_conflict_resolution.test.js test/issue172_identity_migration.test.js test/permission_integration.test.js
+npm test -- --test-concurrency=1
+git add lib/protected_customer_conflicts.js scripts/resolve-protected-customer-identities.js lib/sales_crm.js test/issue172_identity_conflict_resolution.test.js
+git commit -m "feat: resolve protected customer identity conflicts"
+git push -u origin codex/issue-172r-identity-conflict-resolution
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-172r-identity-conflict-resolution --title "feat: resolve protected customer identity conflicts" --body "Refs #172. 提供管理员受审计裁决、补资料和 unresolved 重跑门禁。"
+```
+
+预期：生产副本 `unresolved=0` 并保留裁决审计后，才允许开始 #172-B 写入实现和启用。
+
+---
+
+### Task 3：#172-B 批次导入、激活、唯一性和隔离
 
 **文件：**
 
@@ -103,9 +147,11 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 管理员可预览、提交、激活和条件回滚；保护客户没有 account；激活保留 pool customer ID 且只创建一个 account；重复提交/激活返回相同结果。
 
+批次语义固定为“有效行成功、错误行拒绝”：预览冻结每行 normalized input 和版本；提交时逐行验证并在同一批次结果中记录 `imported/rejected`，错误行不得回滚已验证正确行，正确行也不得掩盖错误原因；重复提交不得重复创建或重复计数。
+
 - [ ] **步骤 2：写隔离和隐私测试**
 
-保护客户不出现在 intake、线索池、分配、CRM 搜索、今日待办、通知、dashboard、pipeline、team 和普通 export；销售 exact/fuzzy response 只返回通用重复提示，不包含姓名、score、状态或 owner；直接 API 403。
+保护客户不出现在 intake、线索池、分配、CRM 搜索、今日待办、通知、dashboard、pipeline、team 和普通 export；销售 exact match 只返回“已有跟进人”，fuzzy match 只返回“资料已提交管理层核验”，不得包含姓名、score、状态、owner、分配原因、候选或额度；保护管理 API 直接返回 403。
 
 - [ ] **步骤 3：写双连接竞态测试**
 
@@ -131,12 +177,12 @@ npm test -- --test-concurrency=1
 git add lib/protected_customers.js lib/sales_crm.js lib/access_control.js lib/ai_stations/enrichment/dedupe.js lib/ai_stations/enrichment/intake.js test/issue172_protected_customer_lifecycle.test.js test/issue172_protected_customer_concurrency.test.js test/issue172_protected_customer_privacy.test.js
 git commit -m "feat: protect customer identities and activation"
 git push -u origin codex/issue-172b-protected-customer-lifecycle
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-172b-protected-customer-lifecycle --title "feat: protect customer identities and activation" --body "Refs #172. 依赖 #172-A，提供批次、隔离、激活、唯一性和并发保护。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-172b-protected-customer-lifecycle --title "feat: protect customer identities and activation" --body "Refs #172. 依赖 #172-A/R 且 unresolved=0，提供批次、隔离、激活、唯一性和并发保护。"
 ```
 
 ---
 
-### Task 3：#172-C 管理员界面和授权导出
+### Task 4：#172-C 管理员界面和授权导出
 
 **文件：**
 
@@ -147,11 +193,11 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 1：写 UI/权限失败测试**
 
-管理员看到保护名单、模板、预览、冲突分组、提交、激活、回滚和映射导出；主管/销售不显示入口，直接路由 403；普通导出不含 Alpha 名称。
+管理员看到保护名单、模板、预览、冲突分组、关联已有、确认新建、补资料、重跑、提交、激活、回滚和映射导出；主管/销售不显示入口，直接路由 403；普通导出不含 Alpha 名称。
 
 - [ ] **步骤 2：实现管理工作区**
 
-复用“用户与权限/数据维护”导航模式；预览表显示行号、标准化结果、冲突原因、可执行状态；提交/激活/回滚有 pending、success、error，失败保留输入。
+复用“用户与权限/数据维护”导航模式。持久列表至少显示 Alpha 昵称、CRM 昵称、正式公司名称、国家/地区、保护状态、稳定 CRM 客户编号、创建/导入时间，并可按 Alpha 昵称、CRM 昵称、正式公司名称和客户编号搜索。管理员可查看和补充资料；预览表显示行号、标准化结果、冲突原因、可执行状态；冲突裁决、提交、激活、回滚有 pending、success、error，失败保留输入。
 
 - [ ] **步骤 3：实现管理员专用映射导出**
 
@@ -161,7 +207,7 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 在 1280/430/390/375/320px 预览一批数据，激活一条临时保护客户；确认稳定编号不变，CRM/待办只出现一次，sales scope 不泄露其保护历史。
 
-- [ ] **步骤 5：提交并关闭 #172**
+- [ ] **步骤 5：测试、提交和 PR #172-C**
 
 ```bash
 node --test test/issue172_protected_customer_ui.test.js test/issue172_protected_customer_privacy.test.js test/permission_integration.test.js
@@ -169,5 +215,5 @@ npm test -- --test-concurrency=1
 git add sales-crm.html sales-assets/app.js sales-assets/app.css test/issue172_protected_customer_ui.test.js
 git commit -m "feat: add protected customer admin workspace"
 git push -u origin codex/issue-172c-protected-customer-ui
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-172c-protected-customer-ui --title "feat: add protected customer admin workspace" --body "Closes #172. 依赖 #172-A/B，提供管理员保护名单界面、授权导出和移动端回归。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-172c-protected-customer-ui --title "feat: add protected customer admin workspace" --body "Refs #172. 依赖 #172-A/R/B，提供管理员保护名单界面、冲突裁决、授权导出和移动端回归。"
 ```

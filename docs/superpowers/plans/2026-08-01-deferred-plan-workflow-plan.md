@@ -1,6 +1,6 @@
 # Issue #170 暂未确定计划与主管介入实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行约束：** 本轮不使用或依赖任何 `superpowers:*` 技能。步骤使用 checkbox（`- [ ]`）跟踪。
 
 **目标：** 支持“已有明确计划/暂未确定”真实状态、统一未来时间校验、可配置主管任务、升级、通知、统计和桌面/移动端闭环。
 
@@ -11,11 +11,15 @@
 ## 全局约束
 
 - 依赖 #172 全部合并并验证。
+- 计划基线为 `d0bdd104f924b736d8e653938c7899ede2272318`；执行时 fetch/rebase 当时最新 `origin/main`。
 - 历史缺少计划不追溯生成 deferred 事件。
 - 同客户同原因只能有一个 open 主管任务。
 - 暂停/流失/不对口停止普通跟进提醒；重新激活必须设置新阶段、真实计划和未来时间。
 - 不提供无业务状态意义的“忽略”或“直接完成”。
 - `CRM_DEFERRED_PLAN_WRITES_ENABLED` 默认 `false`；首次部署完成 schema、读取、权限和时区冒烟后再启用。
+- 不建立销售分配组；管理提醒接收人选择具体 manager/admin 账号。真实 admin 作为老板视角读取全公司汇总和全部明细，仍受认证、审计、feature hard gate 和数据完整性约束。
+- 所有主管任务、统计和下钻列表消费 #116 authorized filter schema；销售响应不得包含分配规则、分配原因、候选销售、排除原因或额度。
+- AI hard/effective gate 关闭时，AI 建议入口、字段、来源、下钻和导出全部隐藏；手工计划与暂未确定流程继续可用。
 
 ---
 
@@ -38,7 +42,7 @@
 
 - [ ] **步骤 1：写所有时间入口失败测试**
 
-覆盖今日待办补计划、记录新进展、新增客户、编辑客户、采纳 AI 建议、报价后跟进和订单后经营动作；过去时间和等于当前时间均返回 400、“下一步时间必须晚于当前时间”；历史 `occurredAt` 可按权限补录。
+覆盖七类入口：今日待办补计划、记录新进展、新增客户、编辑客户、采纳 AI 建议、报价后跟进和订单后经营动作；过去时间和等于当前时间均返回 400、“下一步时间必须晚于当前时间”；历史 `occurredAt` 可按权限补录。AI gate 关闭时采纳入口和数据不得出现，直接调用也不得绕过 hard gate。
 
 运行：`node --test test/issue170_future_time_validation.test.js`。
 
@@ -104,7 +108,7 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 3：创建配置、任务、介入表**
 
-创建 `crm_manager_task_settings`、`crm_manager_task_settings_audit`、`crm_manager_tasks`、`crm_manager_interventions`；任务包含 stable customer ID、owner/actor snapshot、reason、evidence、due time、completion condition、status、result、timestamps，唯一约束覆盖 open customer/reason。每次修改开关、阈值或接收人都写旧值、新值、actor 和时间。
+创建 `crm_manager_task_settings`、`crm_manager_task_settings_audit`、`crm_manager_tasks`、`crm_manager_interventions`；任务包含 stable customer ID、owner/actor snapshot、reason、evidence、due time、completion condition、status、result、timestamps、settings version 和判断时间，唯一约束覆盖 open customer/reason。每次修改开关、阈值或接收人都写旧值、新值、actor 和时间。设置新版本只作用于修改后的新判断，不追溯改写、关闭或重新归类已有任务；已有任务保留触发时版本和阈值快照。
 
 - [ ] **步骤 4：实现真实完结动作**
 
@@ -112,9 +116,13 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 5：实现通知和统计**
 
-通知去重并按 recipient scope 发送；统计同时显示原始数量、比例、样本数、延期后形成计划率、计划后按时有效动作率、首次触达后沉默数、介入后仍未改善数。结果只标记“需要主管复盘”。
+通知去重并按 recipient scope 发送；销售通知不含分配规则、原因、候选或额度。统计明确支持近 30 天和 90 天，并同时显示原始数量、比例、样本数、延期后形成计划率、计划后按时有效动作率、首次触达后沉默数、介入后仍未改善数。客户维度返回当前连续次数、历史累计次数、未形成明确计划的持续天数、每次 deferred 的 actor/owner snapshot/review time/source、达到阈值时间；销售维度按实际 actor 归属并支持逐条下钻。结果只标记“需要主管复盘”。
 
-- [ ] **步骤 6：测试和 PR #170-B**
+- [ ] **步骤 6：接入授权筛选和逐条下钻**
+
+主管任务、客户风险、销售 30/90 天统计和通知列表均从 authorized filter schema 解析可用字段，服务端在聚合前执行 row scope；列表、计数、分页、下钻和导出使用同一查询。admin 不受 filter allowlist 或团队行级范围限制；销售只能下钻本人及本人客户，不能从统计推断他人数据。
+
+- [ ] **步骤 7：测试和 PR #170-B**
 
 ```bash
 node --test test/issue170_manager_tasks.test.js test/issue170_manager_metrics.test.js test/issue170_manager_permissions.test.js test/today_tasks_integration.test.js
@@ -138,11 +146,11 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 1：写 UI 失败测试**
 
-缺少计划弹窗必须有“已有明确计划/暂未确定” segmented control；暂未确定显示必填复查时间和选填卡点；所有 `datetime-local` 使用统一 min/validation；主管 task 显示依据、期限、建议动作和完结条件；管理员设置显示三条客户触发规则、最低样本 M/K/R、启停开关和接收人。
+缺少计划弹窗必须有“已有明确计划/暂未确定” segmented control；暂未确定显示必填复查时间和选填卡点；所有 `datetime-local` 使用统一 min/validation；主管 task 显示依据、期限、建议动作和完结条件；管理员设置显示三条客户触发规则、最低样本 M/K/R、启停开关和接收人；统计可切换 30/90 天并下钻客户连续/累计记录、持续天数、阈值时间和逐条历史。
 
 - [ ] **步骤 2：实现统一未来时间输入**
 
-新增 `setFutureDateTimeConstraint(input,now)`、`validateFutureDateTime(input)`，所有六类计划入口调用。前端只提供即时反馈，服务端 Task 1 兜底。
+新增 `setFutureDateTimeConstraint(input,now)`、`validateFutureDateTime(input)`，七类未来计划入口全部调用。前端只提供即时反馈，服务端 Task 1 兜底。
 
 - [ ] **步骤 3：实现两条销售路径**
 
@@ -158,9 +166,9 @@ gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue
 
 - [ ] **步骤 6：浏览器与失败恢复测试**
 
-在桌面和 320/375/390/430px 完成两种销售路径和所有主管动作；模拟 400/403/500 确认输入保留；终止阶段客户不再显示普通待办。
+在桌面和 320/375/390/430px 完成两种销售路径、30/90 天统计下钻和所有主管动作；模拟 400/403/500 确认输入保留；终止阶段客户不再显示普通待办。分别验证 sales/manager/admin filter schema、admin 全量范围、AI-off 隐藏和销售分配原因脱敏。
 
-- [ ] **步骤 7：测试、提交并关闭 #170**
+- [ ] **步骤 7：测试、提交和 PR #170-C**
 
 ```bash
 node --test test/issue170_deferred_plan_ui.test.js test/issue168_today_task_mobile.test.js test/issue157_today_task_ui.test.js
@@ -168,5 +176,5 @@ npm test -- --test-concurrency=1
 git add sales-assets/app.js sales-assets/app.css sales-crm.html test/issue170_deferred_plan_ui.test.js
 git commit -m "feat: add truthful deferred-plan workflow UI"
 git push -u origin codex/issue-170c-deferred-plan-ui
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-170c-deferred-plan-ui --title "feat: add truthful deferred-plan workflow UI" --body "Closes #170. 覆盖暂未确定、未来时间、主管任务和桌面/移动端闭环。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-170c-deferred-plan-ui --title "feat: add truthful deferred-plan workflow UI" --body "Refs #170. 覆盖暂未确定、未来时间、主管任务、统计下钻和桌面/移动端闭环。"
 ```

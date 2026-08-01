@@ -1,6 +1,6 @@
 # 基础、#169、#96、#168 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行约束：** 本轮不使用或依赖任何 `superpowers:*` 技能。步骤使用 checkbox（`- [ ]`）跟踪。
 
 **目标：** 建立统一发布门禁，完成客户联系人线索术语、线索池/CRM 状态唯一性和今日待办移动端闭环。
 
@@ -11,6 +11,7 @@
 ## 全局约束
 
 - 继承总控计划全部约束。
+- 计划基线为 `d0bdd104f924b736d8e653938c7899ede2272318`；执行时 fetch/rebase 当时最新 `origin/main`。
 - #169 不修改 `view_contacts` key、API、schema 或角色权限布尔值。
 - #96 生产清理保留原分配历史和审计。
 - #168 不修改后端 alert identity、SQL 或权限规则。
@@ -25,7 +26,7 @@
 - 创建：`test/release_gate.test.js`
 - 修改：`README.md`
 
-**接口：** `verify-release-gate.sh <expected_sha> <db_path> <health_url>` 依次检查健康 JSON、release SHA、SQLite integrity 和 foreign keys，失败返回非零。
+**接口：** `verify-release-gate.sh --health-url <url> --expected-sha <full_sha> --database <absolute_db_path>` 依次检查健康 JSON、release SHA、SQLite integrity 和 foreign keys，失败返回非零。
 
 - [ ] **步骤 1：创建失败测试**
 
@@ -91,7 +92,7 @@ node --test test/issue169_contact_lead_copy.test.js test/sales_menu.test.js test
 git add sales-crm.html sales-assets/app.js Index.html lib/access_control.js README.md test/issue169_contact_lead_copy.test.js
 git commit -m "fix: clarify customer contact lead terminology"
 git push -u origin codex/issue-169-contact-lead-copy
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-169-contact-lead-copy --title "fix: clarify customer contact lead terminology" --body "Closes #169. 仅修改联系人模块术语，保留 view_contacts 和销售负责人语义。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-169-contact-lead-copy --title "fix: clarify customer contact lead terminology" --body "Refs #169. 仅修改联系人模块术语，保留 view_contacts 和销售负责人语义。"
 ```
 
 ---
@@ -159,7 +160,7 @@ node scripts/audit-intake-crm-conflicts.js --db "$production_copy"
 git add lib/sales_crm.js lib/business_page_filters.js scripts/audit-intake-crm-conflicts.js test/issue96_intake_crm_invariant.test.js test/today_tasks.test.js test/today_tasks_integration.test.js test/issue158_duplicate_protection.test.js test/issue157_today_task_actions.test.js
 git commit -m "fix: enforce one active intake or CRM state per customer"
 git push -u origin codex/issue-96-intake-crm-invariant
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-96-intake-crm-invariant --title "fix: enforce one active intake or CRM state per customer" --body "Closes #96. 修复 assigned 同步、稳定客户待办分组和生产冲突审计迁移。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-96-intake-crm-invariant --title "fix: enforce one active intake or CRM state per customer" --body "Refs #96. 修复 assigned 同步、稳定客户待办分组和生产冲突审计迁移。"
 ```
 
 合并并部署 #96，确认生产冲突为 0 后，才能合并 #168。
@@ -209,5 +210,5 @@ npm test -- --test-concurrency=1
 git add sales-assets/app.js sales-assets/app.css sales-crm.html test/issue168_today_task_mobile.test.js
 git commit -m "fix: close today-task workflow on mobile"
 git push -u origin codex/issue-168-today-task-mobile
-gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-168-today-task-mobile --title "fix: close today-task workflow on mobile" --body "Closes #168. 消费 #96 待办契约并完成移动和桌面回归。"
+gh pr create --repo mewmind-chen/russia-crm-local --base main --head codex/issue-168-today-task-mobile --title "fix: close today-task workflow on mobile" --body "Refs #168. 消费 #96 待办契约并完成移动和桌面回归。"
 ```
