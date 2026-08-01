@@ -116,16 +116,17 @@ function addDeferred(db, id, customerId, actorId, createdAt, overrides = {}) {
     overrides.reviewAt || utcText(Date.parse(`${createdAt.replace(' ', 'T')}Z`) + 86400000),
     overrides.reason || '等待客户确认',
     overrides.source || 'today_task',
-    `SRC-${id}`,
+    overrides.sourceEventId || `SRC-${id}`,
     createdAt,
   );
 }
 
-function addExplicit(db, id, customerId, actorId, createdAt, nextAt) {
+function addExplicit(db, id, customerId, actorId, createdAt, nextAt, overrides = {}) {
   db.prepare(`INSERT INTO crm_next_plan_events
     (id,customer_id,actor_id,owner_id_snapshot,next_action,next_action_at,source,source_event_id,created_at)
     VALUES (?,?,?,?,?,?,?,?,?)`).run(
-    id, customerId, actorId, actorId, '确认后续需求', nextAt, 'activity', `SRC-${id}`, createdAt,
+    id, customerId, actorId, actorId, '确认后续需求', nextAt,
+    overrides.source || 'activity', overrides.sourceEventId || `SRC-${id}`, createdAt,
   );
 }
 
@@ -366,6 +367,38 @@ test('customer risk preserves cumulative history, current chain duration, snapsh
     assert.equal(buildCustomerPlanRisk(db, {
       user: user('SALES-B', 'sales', {}), customerId: 'RISK', now: NOW,
     }).customerId, customerId);
+  } finally { db.close(); }
+});
+
+test('customer risk excludes superseded-source plans but retains marked immutable history', () => {
+  const db = memoryDb();
+  try {
+    db.exec("ALTER TABLE crm_activities ADD COLUMN superseded_at TEXT NOT NULL DEFAULT ''");
+    addSales(db, 'SALES-A');
+    const customerId = addAccount(db, 'RISK-EFFECTIVE', 'SALES-A');
+    addActivity(db, 'ACT-SUPERSEDED', 'RISK-EFFECTIVE', 'email', ago({ days: 21 }));
+    db.prepare("UPDATE crm_activities SET superseded_at=? WHERE id='ACT-SUPERSEDED'")
+      .run(ago({ days: 1 }));
+
+    addDeferred(db, 'D-SUPERSEDED', customerId, 'SALES-A', ago({ days: 20 }), {
+      source: 'activity', sourceEventId: 'ACT-SUPERSEDED',
+    });
+    addDeferred(db, 'D-EFFECTIVE', customerId, 'SALES-A', ago({ days: 10 }));
+    addExplicit(db, 'P-SUPERSEDED', customerId, 'SALES-A', ago({ days: 5 }), ago({ days: 4 }), {
+      sourceEventId: 'ACT-SUPERSEDED',
+    });
+
+    const risk = buildCustomerPlanRisk(db, {
+      user: admin(), customerId, now: NOW,
+    });
+    assert.equal(risk.state, 'deferred');
+    assert.equal(risk.currentConsecutiveDeferredCount, 1);
+    assert.equal(risk.cumulativeDeferredCount, 1);
+    assert.equal(risk.unplannedDurationDays, 10);
+    assert.deepEqual(risk.history.map(item => ({ id: item.id, effective: item.effective })), [
+      { id: 'D-SUPERSEDED', effective: false },
+      { id: 'D-EFFECTIVE', effective: true },
+    ]);
   } finally { db.close(); }
 });
 
