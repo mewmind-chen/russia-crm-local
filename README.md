@@ -18,7 +18,7 @@ CRM API → contact_recon_worker.py → Hermes + russia-contact-recon Skill
 - 前端分别展示任务状态、数据质量、合规状态和业务优先级。
 
 共享契约位于 `contracts/recon-result-v3.schema.json`。Legacy Markdown/YAML解析仍作为迁移期回退。
-负责人挖掘使用 `contracts/contact-recon-v1.schema.json`，评级由 CRM 服务端重新计算，不信任 Worker 自报等级。
+客户联系人挖掘使用 `contracts/contact-recon-v1.schema.json`，评级由 CRM 服务端重新计算，不信任 Worker 自报等级。
 
 ## Setup
 
@@ -98,12 +98,12 @@ npm run contact-recon:once
 npm run contact-recon:worker
 ```
 
-前端的“负责人线索”页可发起任务并查看人员、在职证据、可触达方式与下一步。等级口径：
+前端的“客户联系人线索”页可发起任务并查看人员、在职证据、可触达方式与下一步。等级口径：
 
-- L3：可交付给销售；具名相关负责人、当前在职证据、非通用直接联系方式及来源齐全。
+- L3：可交付给销售；具名相关联系人、当前在职证据、非通用直接联系方式及来源齐全。
 - L2：个人联系方式为推断或在职证据不足，必须人工验证，不直接交付销售。
 - L1：仅有具名员工或公司通用入口。
-- L0：未找到有效负责人线索。
+- L0：未找到有效客户联系人线索。
 
 历史数据分类预览与执行：
 
@@ -285,7 +285,7 @@ sqlite3 data/crm.db ".backup 'data/backups/crm-before-release.db'"
 - 历史结果标记为 `schema_version=legacy`，前端会显示Legacy证据口径。
 # TradePulse 统一外贸客户系统
 
-正式入口统一为 `/`。登录后，销售进入个人客户与今日任务，经理和管理员进入经营驾驶舱；客户池、Recon、负责人线索、每日分配、客户推进、经理评价与经营分析都在同一套导航内。
+正式入口统一为 `/`。登录后，销售进入个人客户与今日任务，经理和管理员进入经营驾驶舱；客户池、Recon、客户联系人线索、每日分配、客户推进、经理评价与经营分析都在同一套导航内。
 
 ## 正式数据切换
 
