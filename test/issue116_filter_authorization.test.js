@@ -136,6 +136,10 @@ test('install creates an idempotent versioned catalog with supported pages and s
     recycle_bin: ['manage_customer_recycle'],
     contacts: ['view_contacts'],
     recon: ['view_recon'],
+    manager_tasks: ['resolve_manager_tasks'],
+    manager_risks: ['resolve_manager_tasks'],
+    manager_metrics: ['resolve_manager_tasks'],
+    notifications: ['view_customers'],
   });
   assert.ok(FILTER_SOURCE_CATALOG.some(item => item.key === 'city'));
   const definitions = listFilterDefinitions(db);

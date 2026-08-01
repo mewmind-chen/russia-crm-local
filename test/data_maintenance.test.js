@@ -37,6 +37,9 @@ function seedMaintenanceData(fx) {
     VALUES ('EVAL-RESET','CRM-RESET','company','test','USR-ADMIN','Admin',?,?)`).run(now, now);
   fx.db.prepare(`INSERT INTO crm_notifications
     (id,customer_id,code,title,dedupe_key,created_at) VALUES ('NOTICE-RESET','CRM-RESET','TEST','test','notice-reset',?)`).run(now);
+  fx.db.prepare(`INSERT INTO crm_notifications
+    (id,customer_id,code,title,dedupe_key,created_at)
+    VALUES ('NOTICE-RESET-EXTERNAL','RU-9010','TEST','test external','notice-reset-external',?)`).run(now);
   fx.db.prepare(`INSERT INTO customer_pool(customer_id,company_name) VALUES ('RU-9010','Reset Target')`).run();
   fx.db.prepare(`INSERT INTO recon_jobs(job_id,customer_id,company_name,status,requested_at,updated_at)
     VALUES ('JOB-RESET','RU-9010','Reset Target','done',?,?)`).run(now, now);
@@ -62,7 +65,7 @@ test('data maintenance preview is scoped and execute backs up then resets assign
   const preview = await previewResponse.json();
   assert.deepEqual(preview.counts, {
     intakeItems: 1, accounts: 1, activities: 1, rfqs: 1, quotes: 1, orders: 1,
-    contacts: 1, evaluations: 1, notifications: 1, skippedByStatus: 0, conflicts: 0,
+    contacts: 1, evaluations: 1, notifications: 2, skippedByStatus: 0, conflicts: 0,
   });
   assert.equal(preview.confirmationText, '重置 1 条客户分配');
 
@@ -88,6 +91,7 @@ test('data maintenance preview is scoped and execute backs up then resets assign
     ['crm_activities', 'ACT-RESET'], ['crm_rfqs', 'RFQ-RESET'], ['crm_quotes', 'QUOTE-RESET'],
     ['crm_orders', 'ORDER-RESET'], ['crm_account_contacts', 'CONTACT-RESET'],
     ['crm_manager_evaluations', 'EVAL-RESET'], ['crm_notifications', 'NOTICE-RESET'],
+    ['crm_notifications', 'NOTICE-RESET-EXTERNAL'],
   ]) assert.equal(fx.db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE id=?`).get(id).n, 0, table);
   assert.equal(fx.db.prepare("SELECT COUNT(*) n FROM crm_accounts WHERE id='CRM-KEEP'").get().n, 1);
   assert.equal(fx.db.prepare("SELECT status FROM crm_intake_items WHERE id='INTAKE-KEEP'").get().status, 'claimed');
@@ -133,4 +137,95 @@ test('maintenance rejects empty scope, stale preview, non-admin and impersonatio
     body: { operation: 'reset_assignments', filters: { allAssigned: true } },
   });
   assert.equal(impersonated.status, 403);
+});
+
+function seedProtectedCustomerHistory(fx) {
+  const now = '2026-07-22 08:00:00';
+  fx.db.prepare(`INSERT INTO crm_manager_tasks
+    (id,idempotency_key,customer_id,reason,status,completion_condition,settings_version,
+     threshold_snapshot_json,evaluated_at,triggered_at,due_at,created_at,updated_at)
+    VALUES ('MT-RESET','manager-reset','RU-9010','consecutive_deferred','open',
+      '形成计划',1,'{}',?,?,?,?,?)`).run(now, now, '2026-07-25 08:00:00', now, now);
+  fx.db.prepare(`INSERT INTO crm_manager_interventions
+    (id,idempotency_key,task_id,actor_id,action,result_json,created_at)
+    VALUES ('MTI-RESET','manager-intervention-reset','MT-RESET','U-WU',
+      'marked_overdue','{}',?)`).run(now);
+  fx.db.prepare(`INSERT INTO crm_deferred_plan_events
+    (id,customer_id,actor_id,owner_id_snapshot,review_at,reason,source,source_event_id,created_at)
+    VALUES ('DPE-RESET','RU-9010','U-OTHER','U-OTHER','2026-07-25 08:00:00',
+      '等待确认','manual_deferred','maintenance-reset',?)`).run(now);
+  fx.db.prepare(`INSERT INTO crm_next_plan_events
+    (id,customer_id,actor_id,owner_id_snapshot,next_action,next_action_at,source,source_event_id,created_at)
+    VALUES ('NPE-RESET','RU-9010','U-OTHER','U-OTHER','确认采购计划',
+      '2026-07-25 08:00:00','manual','maintenance-reset-plan',?)`).run(now);
+}
+
+test('maintenance blocks protected manager and plan history during preview with stable details', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  seedMaintenanceData(fx);
+  seedProtectedCustomerHistory(fx);
+
+  const response = await fx.request('/api/sales-crm/data-maintenance/preview', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: { operation: 'reset_assignments', filters: { intakeItemIds: ['INTAKE-RESET'] } },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 409, body.error);
+  assert.equal(body.code, 'MAINTENANCE_PROTECTED_CUSTOMER_HISTORY');
+  assert.deepEqual(body.details.conflicts, [{
+    code: 'PROTECTED_CUSTOMER_HISTORY',
+    accountId: 'CRM-RESET',
+    externalCustomerId: 'RU-9010',
+    dependencies: [
+      { table: 'crm_manager_tasks', count: 1 },
+      { table: 'crm_manager_interventions', count: 1 },
+      { table: 'crm_deferred_plan_events', count: 1 },
+      { table: 'crm_next_plan_events', count: 1 },
+    ],
+  }]);
+  assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_data_maintenance_runs
+    WHERE operation='reset_assignments'`).get().count, 0);
+  assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM crm_accounts WHERE id='CRM-RESET'").get().count, 1);
+});
+
+test('maintenance rechecks protected history added after preview before backup or deletion', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  seedMaintenanceData(fx);
+  const previousBackupDir = process.env.CRM_BACKUP_DIR;
+  process.env.CRM_BACKUP_DIR = path.join(fx.dir, 'maintenance-protected-backups');
+  t.after(() => {
+    if (previousBackupDir === undefined) delete process.env.CRM_BACKUP_DIR;
+    else process.env.CRM_BACKUP_DIR = previousBackupDir;
+  });
+
+  const preview = await fx.requestJson('/api/sales-crm/data-maintenance/preview', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: { operation: 'reset_assignments', filters: { intakeItemIds: ['INTAKE-RESET'] } },
+  });
+  fx.db.prepare(`INSERT INTO crm_deferred_plan_events
+    (id,customer_id,actor_id,owner_id_snapshot,review_at,reason,source,source_event_id,created_at)
+    VALUES ('DPE-RACE','RU-9010','U-OTHER','U-OTHER','2026-07-25 08:00:00',
+      '等待确认','manual_deferred','maintenance-race','2026-07-22 08:30:00')`).run();
+
+  const response = await fx.request('/api/sales-crm/data-maintenance/execute', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: { previewId: preview.previewId, confirmationText: preview.confirmationText },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 409, body.error);
+  assert.equal(body.code, 'MAINTENANCE_PROTECTED_CUSTOMER_HISTORY');
+  assert.deepEqual(body.details.conflicts[0].dependencies, [
+    { table: 'crm_deferred_plan_events', count: 1 },
+  ]);
+  assert.equal(fs.existsSync(process.env.CRM_BACKUP_DIR), false);
+  assert.equal(fx.db.prepare("SELECT COUNT(*) count FROM crm_accounts WHERE id='CRM-RESET'").get().count, 1);
+  assert.equal(fx.db.prepare('SELECT status FROM crm_data_maintenance_runs WHERE id=?')
+    .get(preview.runId).status, 'failed');
+  assert.equal(fx.db.prepare('SELECT error_code FROM crm_data_maintenance_runs WHERE id=?')
+    .get(preview.runId).error_code, 'MAINTENANCE_PROTECTED_CUSTOMER_HISTORY');
 });
