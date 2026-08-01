@@ -110,6 +110,14 @@
     impersonationRecovery: false,
     maintenancePreview: null,
     maintenanceRuns: [],
+    protectedCustomers: {
+      items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
+      error: '', writeEnabled: null, batch: null, pendingAction: '', searchTimer: null,
+      conflicts: [], conflictStatus: 'unresolved', conflictTotal: 0, unresolved: 0,
+      leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
+      conflictPage: 1, conflictPageSize: 20, conflictTotalPages: 0, conflictHasMore: false,
+      conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+    },
     assistantRuntime: null,
     assistantRuntimeError: '',
     assistantRuntimePending: false,
@@ -149,13 +157,14 @@
     team: ['CAPABILITY REVIEW', '销售能力'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
+    protectedCustomers: ['PROTECTED CUSTOMERS', '合作客户保护'],
     maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
   const viewPermissions = {
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'manage_customer_recycle',
     notifications: 'view_customers',
-    aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
+    aiTasks: 'view_customers', protectedCustomers: 'manage_protected_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
@@ -242,6 +251,9 @@
   }
   function isRealAdmin() {
     return state.data?.user?.role === 'admin' && !state.data?.impersonation;
+  }
+  function canManageProtectedCustomers() {
+    return isRealAdmin() && can('manage_protected_customers');
   }
   function normalizeTagText(value) {
     return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
@@ -932,6 +944,7 @@
   function firstAllowedBusinessView() {
     return Object.keys(viewMeta).find(view =>
       !['aiTasks', 'customerProfile'].includes(view)
+      && (view !== 'protectedCustomers' || canManageProtectedCustomers())
       && can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
   }
 
@@ -962,6 +975,13 @@
       state.aiFeatures = null;
       state.aiFeaturesError = '';
       state.aiFeaturePending = '';
+      Object.assign(state.protectedCustomers, {
+        items: [], total: 0, loaded: false, loading: false, error: '', writeEnabled: null,
+        batch: null, pendingAction: '', conflicts: [], conflictTotal: 0, unresolved: 0,
+        leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
+        conflictPage: 1, conflictPageSize: 20, conflictTotalPages: 0, conflictHasMore: false,
+        conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+      });
       clearTimeout(state.managerAnomalies.timer);
       Object.assign(state.managerAnomalies, {
         items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
@@ -990,9 +1010,12 @@
         : viewPermissions[requestedView] || `view_${requestedView}`;
       state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
       const firstAllowedView = customerAIEnabled() && can('view_customers')
-        ? Object.keys(viewMeta).find(view => can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
+        ? Object.keys(viewMeta).find(view => (view !== 'protectedCustomers' || canManageProtectedCustomers())
+          && can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
         : firstAllowedBusinessView();
-      switchView(viewMeta[requestedView] && can(requestedPermission) ? requestedView : firstAllowedView, false);
+      const requestedAllowed = viewMeta[requestedView] && can(requestedPermission)
+        && (requestedView !== 'protectedCustomers' || canManageProtectedCustomers());
+      switchView(requestedAllowed ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
         if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId);
         else if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
@@ -1018,12 +1041,13 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    $('#nav [data-view="protectedCustomers"]')?.classList.toggle('hidden', !canManageProtectedCustomers());
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
       !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
     if (state.data.impersonation) {
-      $$('#nav [data-view="users"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
+      $$('#nav [data-view="users"], #nav [data-view="protectedCustomers"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
     }
     $$('#nav .nav-group').forEach(group => {
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
@@ -1126,6 +1150,7 @@
     renderTeam();
     renderMarkets();
     renderUsers();
+    renderProtectedWorkspace();
     renderMaintenance();
     renderAiGovernance();
     if (state.selectedCustomerId && state.data.accounts.some(item => item.id === state.selectedCustomerId)) renderDrawer();
@@ -4067,6 +4092,528 @@
     }
   }
 
+  const protectedStatusLabels = {
+    protected: '保护中', activated: '已激活', withdrawn: '已撤回',
+    previewed: '已预览', committing: '提交中', committed: '已提交', rolled_back: '已回滚',
+    ready: '可提交', imported: '已导入', rejected: '不可执行', retry: '待补充', resolved: '已解决', pending: '待处理',
+  };
+
+  function protectedStatusMarkup(status) {
+    const tone = ['rejected', 'withdrawn'].includes(status) ? 'red'
+      : ['previewed', 'ready', 'retry', 'pending'].includes(status) ? 'amber' : '';
+    return `<span class="pill ${tone}">${esc(protectedStatusLabels[status] || status || '未知')}</span>`;
+  }
+
+  function setProtectedInlineStatus(selector, status, message) {
+    const root = $(selector);
+    if (!root) return;
+    root.className = `${root.id === 'protectedImportStatus' ? 'protected-operation-status' : 'protected-inline-status'}${status ? ` ${status}` : ''}`;
+    root.textContent = message || '';
+  }
+
+  function protectedWritesAvailable() {
+    return state.protectedCustomers.writeEnabled === true;
+  }
+
+  function renderProtectedWriteGate() {
+    const gate = $('#protectedWriteGate');
+    if (!gate) return;
+    const enabled = protectedWritesAvailable();
+    gate.className = `protected-gate ${enabled ? 'is-enabled' : 'is-disabled'}`;
+    gate.textContent = enabled
+      ? '保护客户写入已启用。提交、裁决、激活、资料修改和回滚都会写入受保护数据，请核对后操作。'
+      : '生产写入未启用：当前可查看列表、下载模板和导出映射；预览、提交、裁决、激活、资料修改、重新扫描和回滚均已禁用。';
+    ['protectedPreviewBtn', 'protectedCsvBtn', 'protectedAddRowBtn', 'protectedRescanBtn'].forEach(id => {
+      const button = $(`#${id}`);
+      if (button) button.disabled = !enabled || Boolean(state.protectedCustomers.pendingAction);
+    });
+  }
+
+  function protectedImportRowMarkup(values = {}) {
+    const fields = [
+      ['alphaNickname', 'Alpha 昵称 *'], ['companyName', '正式公司名称'],
+      ['country', '国家/地区'], ['city', '城市'], ['website', '官网'], ['industry', '行业'],
+      ['customerType', '客户类型'], ['productFocus', '产品方向'],
+    ];
+    return `<div class="protected-import-row" data-protected-import-row>
+      ${fields.map(([name, label]) => `<label>${label}<input data-protected-field="${name}" value="${esc(values[name] || '')}" ${name === 'alphaNickname' ? 'autocomplete="off"' : ''}></label>`).join('')}
+      <button class="icon-button" type="button" data-remove-protected-row title="删除此行" aria-label="删除此行"><span data-tp-icon="close" aria-hidden="true"></span></button>
+    </div>`;
+  }
+
+  function addProtectedImportRow(values = {}) {
+    const root = $('#protectedImportRows');
+    if (!root || !protectedWritesAvailable()) return;
+    root.insertAdjacentHTML('beforeend', protectedImportRowMarkup(values));
+    uiFormat?.mountIcons?.(root.lastElementChild);
+  }
+
+  function collectProtectedImportRows() {
+    return $$('[data-protected-import-row]').map(row => {
+      const value = {};
+      row.querySelectorAll('[data-protected-field]').forEach(input => {
+        value[input.dataset.protectedField] = input.value.trim();
+      });
+      return value;
+    }).filter(row => Object.values(row).some(Boolean));
+  }
+
+  function protectedImportDraftKey() {
+    return `tradepulse.protectedCustomerDraft.${state.data?.user?.id || 'anonymous'}`;
+  }
+
+  function saveProtectedImportDraft() {
+    try { localStorage.setItem(protectedImportDraftKey(), JSON.stringify(collectProtectedImportRows())); }
+    catch (_error) { /* Browser storage is optional; the live form still retains its values. */ }
+  }
+
+  function loadProtectedImportDraft() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(protectedImportDraftKey()) || '[]');
+      return Array.isArray(rows) ? rows.filter(row => row && typeof row === 'object') : [];
+    } catch (_error) { return []; }
+  }
+
+  function parseProtectedCustomerCsv(text) {
+    const source = String(text || '').replace(/^\uFEFF/, '');
+    const records = [];
+    let record = [];
+    let field = '';
+    let quoted = false;
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      if (quoted) {
+        if (char === '"' && source[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else if (char === '"') quoted = false;
+        else field += char;
+      } else if (char === '"') {
+        if (field) throw new Error(`CSV 第 ${records.length + 1} 行的引号位置无效`);
+        quoted = true;
+      } else if (char === ',') {
+        record.push(field);
+        field = '';
+      } else if (char === '\n' || char === '\r') {
+        if (char === '\r' && source[index + 1] === '\n') index += 1;
+        record.push(field);
+        if (record.some(value => value.trim())) records.push(record);
+        record = [];
+        field = '';
+      } else field += char;
+    }
+    if (quoted) throw new Error('CSV 存在未闭合的双引号');
+    record.push(field);
+    if (record.some(value => value.trim())) records.push(record);
+    if (!records.length) throw new Error('CSV 文件为空');
+    const expected = ['alphaNickname', 'companyName', 'country', 'city', 'website', 'industry', 'customerType', 'productFocus'];
+    const headers = records[0].map(value => value.trim());
+    const duplicate = headers.find((header, index) => header && headers.indexOf(header) !== index);
+    if (duplicate) throw new Error(`CSV 表头重复：${duplicate}`);
+    const missing = expected.filter(header => !headers.includes(header));
+    if (missing.length) throw new Error(`CSV 缺少表头：${missing.join('、')}`);
+    const unknown = headers.filter(header => header && !expected.includes(header));
+    if (unknown.length) throw new Error(`CSV 包含未知表头：${unknown.join('、')}`);
+    const rows = records.slice(1).map((values, rowIndex) => {
+      if (values.length > headers.length && values.slice(headers.length).some(value => value.trim())) {
+        throw new Error(`CSV 第 ${rowIndex + 2} 行的列数超过表头`);
+      }
+      return Object.fromEntries(expected.map(header => [header, String(values[headers.indexOf(header)] || '').trim()]));
+    }).filter(row => Object.values(row).some(Boolean));
+    if (!rows.length) throw new Error('CSV 没有可导入的数据行');
+    return rows;
+  }
+
+  async function loadProtectedCustomerCsv(file) {
+    if (!file) return;
+    try {
+      const rows = parseProtectedCustomerCsv(await file.text());
+      const root = $('#protectedImportRows');
+      const existingRows = collectProtectedImportRows();
+      if (!existingRows.length) root.innerHTML = '';
+      rows.forEach(addProtectedImportRow);
+      saveProtectedImportDraft();
+      setProtectedInlineStatus('#protectedImportStatus', 'success', `已读取 ${file.name}：${rows.length} 行。请预览后再提交。`);
+    } catch (error) {
+      setProtectedInlineStatus('#protectedImportStatus', 'error', error.message);
+    } finally {
+      $('#protectedCsvInput').value = '';
+    }
+  }
+
+  function renderProtectedCustomers() {
+    const root = $('#protectedCustomerList');
+    if (!root) return;
+    const model = state.protectedCustomers;
+    $('#protectedListCount').textContent = `${model.total || 0} 个客户`;
+    if (model.loading) {
+      root.innerHTML = '<div class="empty">正在加载保护名单…</div>';
+      setProtectedInlineStatus('#protectedListStatus', 'pending', '正在读取受保护数据…');
+      return;
+    }
+    if (model.error) {
+      root.innerHTML = '<div class="empty">保护名单加载失败，请重试。</div>';
+      setProtectedInlineStatus('#protectedListStatus', 'error', model.error);
+      return;
+    }
+    setProtectedInlineStatus('#protectedListStatus', model.loaded ? 'success' : '', model.loaded ? `已加载 ${model.total} 个保护客户` : '');
+    if (!model.items.length) {
+      root.innerHTML = '<div class="empty">当前筛选范围内没有保护客户</div>';
+      return;
+    }
+    root.innerHTML = `<table><thead><tr><th>客户</th><th>正式公司名称</th><th>国家/地区</th><th>状态</th><th>稳定客户编号</th><th>创建/激活时间</th><th>操作</th></tr></thead><tbody>${model.items.map(item => `<tr>
+      <td data-label="客户"><div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div></td>
+      <td data-label="正式公司名称">${esc(item.companyName || '—')}</td>
+      <td data-label="国家/地区">${esc([item.country, item.city].filter(Boolean).join(' · ') || '—')}</td>
+      <td data-label="状态">${protectedStatusMarkup(item.status)}</td>
+      <td data-label="稳定客户编号"><strong>${esc(item.externalCustomerId || '—')}</strong><br><span class="subtle">批次 ${esc(item.batchId || '—')}</span></td>
+      <td data-label="创建/激活时间">${esc(shortDate(item.createdAt, true))}${item.activatedAt ? `<br><span class="subtle">激活 ${esc(shortDate(item.activatedAt, true))}</span>` : ''}</td>
+      <td data-label="操作"><div class="protected-row-actions">
+        <button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>
+        ${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}
+      </div></td>
+    </tr>`).join('')}</tbody></table>`;
+  }
+
+  function renderProtectedBatch() {
+    const root = $('#protectedBatchPreview');
+    if (!root) return;
+    const batch = state.protectedCustomers.batch;
+    root.classList.toggle('hidden', !batch);
+    if (!batch) return;
+    const pending = state.protectedCustomers.pendingAction;
+    const rows = Array.isArray(batch.rows) ? batch.rows : [];
+    root.innerHTML = `<div class="protected-batch-summary">
+      <div><strong>批次 ${esc(batch.batchId || '—')}</strong>${protectedStatusMarkup(batch.status)}<span>${rows.length} 行 · 已导入 ${Number(batch.imported || 0)} · 拒绝 ${Number(batch.rejected || 0)}</span></div>
+      <div class="protected-batch-actions">
+        <button class="button primary" type="button" data-protected-commit="${esc(batch.batchId)}" ${!protectedWritesAvailable() || pending || !rows.some(row => row.status === 'ready') ? 'disabled' : ''}>${pending === 'commit' ? '正在提交…' : '提交有效行'}</button>
+        <button class="button secondary" type="button" data-protected-rollback="${esc(batch.batchId)}" ${!protectedWritesAvailable() || pending || batch.status !== 'committed' || !Number(batch.imported || 0) ? 'disabled' : ''}>条件回滚</button>
+      </div>
+    </div>
+    <div class="protected-preview-table"><table><thead><tr><th>行号</th><th>Alpha 昵称</th><th>标准化结果</th><th>客户编号</th><th>状态</th><th>结果</th></tr></thead><tbody>${rows.map(row => `<tr>
+      <td data-label="行号">${Number(row.rowNumber || 0)}</td><td data-label="Alpha 昵称">${esc(row.alphaNickname || '—')}</td>
+      <td data-label="标准化结果">${esc(row.normalizedName || '—')}</td><td data-label="客户编号">${esc(row.externalCustomerId || '—')}</td>
+      <td data-label="状态">${protectedStatusMarkup(row.status)}</td><td data-label="结果">${esc(row.errorMessage || (row.status === 'ready' ? '唯一身份检查通过，可以提交' : row.status === 'imported' ? '已创建稳定客户编号' : '—'))}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function conflictDecisionOptions(item) {
+    const disabled = item.status === 'resolved' ? 'disabled' : '';
+    return `<option value="link_existing" ${disabled}>关联已有客户</option><option value="confirm_new" ${disabled}>确认为新身份</option><option value="supplement_and_retry" ${disabled}>补充资料后重试</option>`;
+  }
+
+  function protectedConflictCandidateIds(item, decision = 'link_existing') {
+    const current = Array.isArray(item?.externalCustomerIds) ? item.externalCustomerIds : [];
+    const previous = Array.isArray(item?.previousExternalCustomerIds) ? item.previousExternalCustomerIds : [];
+    const candidates = decision === 'confirm_new' && current.length === 0 ? previous : current;
+    return [...new Set(candidates)];
+  }
+
+  function protectedConflictTargetOptions(item, decision = 'link_existing') {
+    return '<option value="">请选择</option>' + protectedConflictCandidateIds(item, decision)
+      .map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join('');
+  }
+
+  function renderProtectedConflictPagination() {
+    const model = state.protectedCustomers;
+    const root = $('#protectedConflictPagination');
+    if (!root) return;
+    const totalPages = Math.max(1, Number(model.conflictTotalPages || 0));
+    root.classList.toggle('hidden', totalPages <= 1);
+    $('#protectedConflictPageText').textContent = `第 ${model.conflictPage} / ${totalPages} 页`;
+    $('#protectedConflictPrev').disabled = model.conflictsLoading || model.conflictPage <= 1;
+    $('#protectedConflictNext').disabled = model.conflictsLoading || !model.conflictHasMore;
+  }
+
+  function renderProtectedConflicts() {
+    const root = $('#protectedConflictList');
+    const navCount = $('#navProtectedConflictCount');
+    if (!root) return;
+    const model = state.protectedCustomers;
+    renderProtectedConflictPagination();
+    if (navCount) {
+      navCount.textContent = model.blockingUnresolved || 0;
+      navCount.classList.toggle('hidden', !model.blockingUnresolved);
+    }
+    if (model.conflictsLoading) {
+      root.innerHTML = '<div class="empty">正在扫描身份冲突…</div>';
+      setProtectedInlineStatus('#protectedConflictStatusText', 'pending', '正在根据最新客户身份数据重新计算…');
+      return;
+    }
+    if (model.conflictsError) {
+      root.innerHTML = '<div class="empty">身份冲突加载失败，请重试。</div>';
+      setProtectedInlineStatus('#protectedConflictStatusText', 'error', model.conflictsError);
+      return;
+    }
+    const summary = `待处理 ${model.unresolved} 项，其中线索提示 ${model.leadWarnings} 项、阻断冲突 ${model.blockingUnresolved} 项；${model.canEnter172B ? '当前无阻断冲突' : '需先处理阻断冲突'}`;
+    setProtectedInlineStatus('#protectedConflictStatusText', model.canEnter172B ? 'success' : 'error', summary);
+    if (!model.conflicts.length) {
+      root.innerHTML = '<div class="empty">当前筛选范围内没有身份冲突</div>';
+      return;
+    }
+    root.innerHTML = model.conflicts.map(item => {
+      const candidates = Array.isArray(item.externalCustomerIds) ? item.externalCustomerIds : [];
+      const previousCandidates = Array.isArray(item.previousExternalCustomerIds) ? item.previousExternalCustomerIds : [];
+      const previousOnly = previousCandidates.filter(id => !candidates.includes(id));
+      const resolved = item.status === 'resolved';
+      const warning = item.disposition === 'lead_warning';
+      return `<section class="protected-conflict-item" data-protected-conflict="${esc(item.conflictId)}">
+        <div class="protected-conflict-head"><div><strong>${esc(item.normalizedName || '未命名身份')}</strong><small>版本 ${esc(item.expectedVersion || '—')} · 更新 ${esc(shortDate(item.updatedAt, true))}</small></div>${protectedStatusMarkup(warning && !resolved ? 'retry' : item.status)}</div>
+        <div class="protected-conflict-evidence">${warning ? '<span class="pill amber">仅线索提示，不阻断后续</span>' : '<span class="pill red">阻断冲突</span>'}${candidates.map(id => `<span class="pill">当前 ${esc(id)}</span>`).join('')}${previousOnly.map(id => `<span class="pill amber">上一轮 ${esc(id)}</span>`).join('')}</div>
+        ${resolved ? `<div class="subtle">已执行：${esc(item.decision || '—')} · 归属 ${esc(item.targetExternalCustomerId || '—')} · ${esc(item.details?.reason || '')}</div>` : `<div class="protected-conflict-form">
+          <label>处理方式<select data-conflict-decision>${conflictDecisionOptions(item)}</select></label>
+          <label>稳定客户编号<select data-conflict-target>${protectedConflictTargetOptions(item)}</select></label>
+          <label>裁决理由<textarea data-conflict-reason placeholder="写明人工核验依据，补充资料时说明待补内容"></textarea></label>
+          <button class="button primary" type="button" data-resolve-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() ? 'disabled' : ''}>确认裁决</button>
+        </div><p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>`}
+      </section>`;
+    }).join('');
+  }
+
+  function renderProtectedWorkspace() {
+    if (!$('#protectedCustomersView') || !canManageProtectedCustomers()) return;
+    renderProtectedWriteGate();
+    renderProtectedCustomers();
+    renderProtectedBatch();
+    renderProtectedConflicts();
+    if (!$('#protectedImportRows').children.length && protectedWritesAvailable()) {
+      const draft = loadProtectedImportDraft();
+      if (draft.length) draft.forEach(addProtectedImportRow);
+      else addProtectedImportRow();
+    }
+  }
+
+  async function loadProtectedCustomers() {
+    if (!canManageProtectedCustomers()) return;
+    const model = state.protectedCustomers;
+    model.loading = true;
+    model.error = '';
+    renderProtectedCustomers();
+    try {
+      const params = new URLSearchParams({ status: model.status, query: model.query });
+      const result = await api(`/api/sales-crm/protected-customers?${params}`);
+      model.items = result.items || [];
+      model.total = Number(result.total || 0);
+      model.writeEnabled = result.writeEnabled === true;
+      model.loaded = true;
+    } catch (error) {
+      model.error = error.message || '保护名单加载失败';
+    } finally {
+      model.loading = false;
+      renderProtectedWorkspace();
+    }
+  }
+
+  function applyProtectedConflictResult(result) {
+    const model = state.protectedCustomers;
+    model.conflicts = result.items || [];
+    model.conflictTotal = Number(result.total || 0);
+    model.conflictPage = Number(result.page || 1);
+    model.conflictPageSize = Number(result.pageSize || 20);
+    model.conflictTotalPages = Number(result.totalPages || 0);
+    model.conflictHasMore = result.hasMore === true;
+    model.unresolved = Number(result.unresolved || 0);
+    model.leadWarnings = Number(result.leadWarnings || 0);
+    model.blockingUnresolved = Number(result.blockingUnresolved || 0);
+    model.canEnter172B = result.canEnter172B === true;
+  }
+
+  async function loadProtectedConflicts({ rescan = false } = {}) {
+    if (!canManageProtectedCustomers()) return;
+    const model = state.protectedCustomers;
+    const retainDraft = model.conflicts.length > 0;
+    model.conflictsLoading = true;
+    model.conflictsError = '';
+    if (retainDraft) setProtectedInlineStatus('#protectedConflictStatusText', 'pending', '正在根据最新客户身份数据重新计算…');
+    else renderProtectedConflicts();
+    renderProtectedConflictPagination();
+    let completed = false;
+    try {
+      const status = model.conflictStatus;
+      const page = model.conflictPage;
+      let result = rescan
+        ? await api('/api/sales-crm/protected-customer-conflicts/rescan', { method: 'POST', body: JSON.stringify({ status, page }) })
+        : await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams({ status, page: String(page) })}`);
+      const lastPage = Math.max(1, Number(result.totalPages || 0));
+      if (page > lastPage) {
+        model.conflictPage = lastPage;
+        result = await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams({ status, page: String(lastPage) })}`);
+      }
+      applyProtectedConflictResult(result);
+      completed = true;
+      if (rescan) toast('身份冲突已按最新资料重新扫描');
+    } catch (error) {
+      model.conflictsError = error.message || '身份冲突加载失败';
+    } finally {
+      model.conflictsLoading = false;
+      if (completed || !retainDraft) renderProtectedConflicts();
+      else setProtectedInlineStatus('#protectedConflictStatusText', 'error', model.conflictsError);
+      renderProtectedConflictPagination();
+    }
+  }
+
+  async function loadProtectedWorkspace() {
+    if (!canManageProtectedCustomers()) return;
+    await Promise.all([loadProtectedCustomers(), loadProtectedConflicts()]);
+  }
+
+  async function previewProtectedBatch() {
+    const rows = collectProtectedImportRows();
+    if (!rows.length) throw new Error('请至少填写一行保护客户资料');
+    const model = state.protectedCustomers;
+    model.pendingAction = 'preview';
+    setProtectedInlineStatus('#protectedImportStatus', 'pending', `正在检查 ${rows.length} 行资料…`);
+    renderProtectedWriteGate();
+    try {
+      model.batch = await api('/api/sales-crm/protected-customers/batches/preview', {
+        method: 'POST', body: JSON.stringify({ idempotencyKey: proposalRequestId(), rows }),
+      });
+      renderProtectedBatch();
+      setProtectedInlineStatus('#protectedImportStatus', 'success', `预览完成：${model.batch.rows?.length || 0} 行，拒绝 ${model.batch.rejected || 0} 行。`);
+      $('#protectedBatchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (error) {
+      setProtectedInlineStatus('#protectedImportStatus', 'error', error.message);
+      throw error;
+    } finally {
+      model.pendingAction = '';
+      renderProtectedWriteGate();
+      renderProtectedBatch();
+    }
+  }
+
+  async function commitProtectedBatch(batchId) {
+    const model = state.protectedCustomers;
+    model.pendingAction = 'commit';
+    setProtectedInlineStatus('#protectedImportStatus', 'pending', '正在逐行提交有效资料…');
+    renderProtectedBatch();
+    try {
+      model.batch = await api(`/api/sales-crm/protected-customers/batches/${encodeURIComponent(batchId)}/commit`, {
+        method: 'POST', body: JSON.stringify({ idempotencyKey: proposalRequestId() }),
+      });
+      setProtectedInlineStatus('#protectedImportStatus', 'success', `提交完成：导入 ${model.batch.imported || 0} 行，拒绝 ${model.batch.rejected || 0} 行。`);
+      await loadProtectedCustomers();
+    } catch (error) {
+      setProtectedInlineStatus('#protectedImportStatus', 'error', error.message);
+      throw error;
+    } finally {
+      model.pendingAction = '';
+      renderProtectedBatch();
+    }
+  }
+
+  async function rollbackProtectedBatch(batchId, reason) {
+    const model = state.protectedCustomers;
+    model.pendingAction = 'rollback';
+    setProtectedInlineStatus('#protectedImportStatus', 'pending', '正在检查回滚条件…');
+    renderProtectedBatch();
+    try {
+      await api(`/api/sales-crm/protected-customers/batches/${encodeURIComponent(batchId)}/rollback`, {
+        method: 'POST', body: JSON.stringify({ idempotencyKey: proposalRequestId(), reason }),
+      });
+      model.batch = { ...model.batch, status: 'rolled_back' };
+      setProtectedInlineStatus('#protectedImportStatus', 'success', '批次已回滚，稳定客户编号不会被复用。');
+      await loadProtectedCustomers();
+    } catch (error) {
+      setProtectedInlineStatus('#protectedImportStatus', 'error', error.message);
+      throw error;
+    } finally {
+      model.pendingAction = '';
+      renderProtectedBatch();
+    }
+  }
+
+  async function resolveProtectedConflict(button) {
+    const item = state.protectedCustomers.conflicts.find(row => row.conflictId === button.dataset.resolveProtectedConflict);
+    const root = button.closest('[data-protected-conflict]');
+    if (!item || !root) return;
+    const decision = root.querySelector('[data-conflict-decision]')?.value || '';
+    const targetExternalCustomerId = decision === 'supplement_and_retry' ? '' : root.querySelector('[data-conflict-target]')?.value || '';
+    const reason = root.querySelector('[data-conflict-reason]')?.value.trim() || '';
+    const message = root.querySelector('[data-conflict-message]');
+    button.disabled = true;
+    button.textContent = '正在裁决…';
+    if (message) { message.className = 'protected-operation-status pending'; message.textContent = '正在按最新证据提交裁决…'; }
+    try {
+      await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(item.conflictId)}/resolve`, {
+        method: 'POST', body: JSON.stringify({ decision, targetExternalCustomerId, details: { reason }, expectedVersion: item.expectedVersion }),
+      });
+      if (message) { message.className = 'protected-operation-status success'; message.textContent = '裁决已保存'; }
+      await loadProtectedConflicts();
+    } catch (error) {
+      if (message) { message.className = 'protected-operation-status error'; message.textContent = error.message; }
+      button.disabled = !protectedWritesAvailable();
+      button.textContent = '确认裁决';
+    }
+  }
+
+  async function downloadProtectedCsv(path, fallbackName) {
+    if (!canManageProtectedCustomers()) throw new Error('只有真实管理员可以下载保护客户文件');
+    const response = await fetch(`/api/sales-crm${path}`, { credentials: 'same-origin' });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || '文件下载失败');
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('content-disposition') || '';
+    const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallbackName;
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  }
+
+  async function openProtectedProfileModal(externalCustomerId) {
+    const result = await api(`/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}`);
+    const item = result.customer || {};
+    openModal(`保护资料 · ${item.alphaNickname || externalCustomerId}`, 'PROTECTED CUSTOMER PROFILE', `<form id="protectedProfileForm" class="form-grid">
+      <input type="hidden" name="externalCustomerId" value="${esc(externalCustomerId)}">
+      <div class="protected-modal-fields">
+        <label>正式公司名称<input name="companyName" value="${esc(item.companyName || '')}"></label>
+        <label>CRM 昵称<input value="${esc(item.crmNickname || '')}" disabled></label>
+        <label>国家/地区<input name="country" value="${esc(item.country || '')}"></label>
+        <label>城市<input name="city" value="${esc(item.city || '')}"></label>
+        <label class="span-2">官网<input name="website" value="${esc(item.website || '')}"></label>
+        <label>行业<input name="industry" value="${esc(item.industry || '')}"></label>
+        <label>客户类型<input name="customerType" value="${esc(item.customerType || '')}"></label>
+        <label class="span-2">产品方向<textarea name="productFocus">${esc(item.productFocus || '')}</textarea></label>
+        <p id="protectedProfileError" class="protected-modal-status"></p>
+      </div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>关闭</button>${item.status === 'protected' ? `<button class="button primary" type="submit" ${protectedWritesAvailable() ? '' : 'disabled'}>保存资料</button>` : ''}</div>
+    </form>`);
+  }
+
+  function openProtectedActivationModal(externalCustomerId) {
+    const item = state.protectedCustomers.items.find(row => row.externalCustomerId === externalCustomerId) || {};
+    const owners = state.data.users.filter(user => user.active && !user.archived && user.role === 'sales');
+    openModal(`激活分配 · ${item.alphaNickname || externalCustomerId}`, 'PROTECTED CUSTOMER ACTIVATION', `<form id="protectedActivationForm" class="form-grid">
+      <input type="hidden" name="externalCustomerId" value="${esc(externalCustomerId)}"><input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+      <div class="protected-modal-fields">
+        <label>销售负责人 *<select name="ownerId" required><option value="">请选择</option>${owners.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select></label>
+        <label>正式公司名称 *<input name="companyName" value="${esc(item.companyName || '')}" required></label>
+        <label>国家/地区<input name="country" value="${esc(item.country || '')}"></label><label>城市<input name="city" value="${esc(item.city || '')}"></label>
+        <label class="span-2">官网<input name="website" value="${esc(item.website || '')}"></label><label>行业<input name="industry" value="${esc(item.industry || '')}"></label>
+        <label>客户类型<input name="customerType" value="${esc(item.customerType || '')}"></label><label class="span-2">产品方向<input name="productFocus" value="${esc(item.productFocus || '')}"></label>
+        <label>优先级<select name="priority"><option value="A">A</option><option value="B" selected>B</option><option value="C">C</option></select></label><label>首次下一步<input name="nextAction" value="完成首次触达"></label>
+        <p id="protectedActivationError" class="protected-modal-status"></p>
+      </div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认激活并分配</button></div>
+    </form>`);
+  }
+
+  function openProtectedRollbackModal(batchId) {
+    openModal(`回滚保护批次 · ${batchId}`, 'CONDITIONAL ROLLBACK', `<form id="protectedRollbackForm" class="form-grid">
+      <input type="hidden" name="batchId" value="${esc(batchId)}">
+      <div class="maintenance-warning">只有尚未激活且不存在业务引用的保护客户可以回滚。回滚后稳定客户编号仍保留，不会重新分配。</div>
+      <label>回滚原因<textarea name="reason" required placeholder="填写合同取消、录入错误等可审计原因"></textarea></label>
+      <p id="protectedRollbackError" class="protected-modal-status"></p>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button danger" type="submit">确认条件回滚</button></div>
+    </form>`);
+  }
+
   function auditOperator(row) {
     if (row.real_user_id && row.effective_user_id && row.real_user_id !== row.effective_user_id) {
       return `${row.real_user_name || row.real_user_id} → ${row.effective_user_name || row.effective_user_id}`;
@@ -6023,6 +6570,55 @@
         await api('/api/sales-auth/login', { method: 'POST', body: JSON.stringify(formPayload(form)), timeoutMs: 10000 });
         setLoginState('workspace');
         await load({ fromLogin: true });
+      } else if (form.id === 'protectedProfileForm') {
+        const payload = formPayload(form);
+        const externalCustomerId = payload.externalCustomerId;
+        delete payload.externalCustomerId;
+        const submit = event.submitter;
+        if (submit) { submit.disabled = true; submit.textContent = '正在保存…'; }
+        $('#protectedProfileError').textContent = '';
+        try {
+          await api(`/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}`, {
+            method: 'PATCH', body: JSON.stringify(payload),
+          });
+          closeModal();
+          await loadProtectedCustomers();
+          toast('保护客户资料已更新');
+        } catch (error) {
+          $('#protectedProfileError').textContent = error.message;
+          if (submit) { submit.disabled = false; submit.textContent = '保存资料'; }
+        }
+      } else if (form.id === 'protectedActivationForm') {
+        const payload = formPayload(form);
+        const externalCustomerId = payload.externalCustomerId;
+        delete payload.externalCustomerId;
+        const submit = event.submitter;
+        if (submit) { submit.disabled = true; submit.textContent = '正在激活…'; }
+        $('#protectedActivationError').textContent = '';
+        try {
+          await api(`/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}/activate`, {
+            method: 'POST', body: JSON.stringify(payload),
+          });
+          closeModal();
+          await loadProtectedCustomers();
+          toast('保护客户已激活并分配');
+        } catch (error) {
+          $('#protectedActivationError').textContent = error.message;
+          if (submit) { submit.disabled = false; submit.textContent = '确认激活并分配'; }
+        }
+      } else if (form.id === 'protectedRollbackForm') {
+        const payload = formPayload(form);
+        const submit = event.submitter;
+        if (submit) { submit.disabled = true; submit.textContent = '正在检查并回滚…'; }
+        $('#protectedRollbackError').textContent = '';
+        try {
+          await rollbackProtectedBatch(payload.batchId, payload.reason);
+          closeModal();
+          toast('保护客户批次已回滚');
+        } catch (error) {
+          $('#protectedRollbackError').textContent = error.message;
+          if (submit) { submit.disabled = false; submit.textContent = '确认条件回滚'; }
+        }
       } else if (form.id === 'aiStrategyForm') {
         const payload = formPayload(form);
         payload.config = JSON.parse(payload.configJson || '{}');
@@ -6741,6 +7337,59 @@
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#newUserBtn')) openUserModal();
+    if (event.target.closest('#protectedTemplateBtn')) {
+      try { await downloadProtectedCsv('/protected-customers/template', 'protected-customer-template.csv'); }
+      catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#protectedExportBtn')) {
+      try {
+        const params = new URLSearchParams({
+          status: state.protectedCustomers.status,
+          query: state.protectedCustomers.query,
+        });
+        await downloadProtectedCsv(`/protected-customers/export?${params}`, 'protected-customer-mapping.csv');
+      } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#protectedCsvBtn')) $('#protectedCsvInput')?.click();
+    if (event.target.closest('#protectedAddRowBtn')) {
+      addProtectedImportRow();
+      saveProtectedImportDraft();
+    }
+    const removeProtectedRow = event.target.closest('[data-remove-protected-row]');
+    if (removeProtectedRow) {
+      removeProtectedRow.closest('[data-protected-import-row]')?.remove();
+      if (!$('#protectedImportRows').children.length && protectedWritesAvailable()) addProtectedImportRow();
+      saveProtectedImportDraft();
+    }
+    if (event.target.closest('#protectedPreviewBtn')) {
+      try { await previewProtectedBatch(); } catch (error) { toast(error.message); }
+    }
+    const commitProtected = event.target.closest('[data-protected-commit]');
+    if (commitProtected && window.confirm('只会提交预览中服务端标记为可执行的行。确认继续？')) {
+      try { await commitProtectedBatch(commitProtected.dataset.protectedCommit); }
+      catch (error) { toast(error.message); }
+    }
+    const rollbackProtected = event.target.closest('[data-protected-rollback]');
+    if (rollbackProtected) openProtectedRollbackModal(rollbackProtected.dataset.protectedRollback);
+    const protectedProfile = event.target.closest('[data-protected-profile]');
+    if (protectedProfile) {
+      try { await openProtectedProfileModal(protectedProfile.dataset.protectedProfile); }
+      catch (error) { toast(error.message); }
+    }
+    const protectedActivate = event.target.closest('[data-protected-activate]');
+    if (protectedActivate) openProtectedActivationModal(protectedActivate.dataset.protectedActivate);
+    if (event.target.closest('#protectedRefreshBtn')) await loadProtectedCustomers();
+    if (event.target.closest('#protectedRescanBtn')) await loadProtectedConflicts({ rescan: true });
+    if (event.target.closest('#protectedConflictPrev') && state.protectedCustomers.conflictPage > 1) {
+      state.protectedCustomers.conflictPage -= 1;
+      await loadProtectedConflicts();
+    }
+    if (event.target.closest('#protectedConflictNext') && state.protectedCustomers.conflictHasMore) {
+      state.protectedCustomers.conflictPage += 1;
+      await loadProtectedConflicts();
+    }
+    const resolveProtected = event.target.closest('[data-resolve-protected-conflict]');
+    if (resolveProtected) await resolveProtectedConflict(resolveProtected);
     if (event.target.closest('#customerExportBtn')) {
       const link = document.createElement('a');
       const payload = state.customerFilterController?.serialize('applied') || { filters: [] };
@@ -7082,6 +7731,9 @@
       ? 'view_intake'
       : viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
+    if (canonicalView === 'protectedCustomers' && !canManageProtectedCustomers()) {
+      return toast('只有真实管理员可以管理合作客户保护');
+    }
     state.view = canonicalView;
     state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
@@ -7117,6 +7769,9 @@
     }[canonicalView];
     if (businessPageKey) void initializeAuthorizedBusinessFilters(businessPageKey);
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
+    if (canonicalView === 'protectedCustomers' && !state.protectedCustomers.loaded) {
+      void loadProtectedWorkspace();
+    }
     closeDrawer();
     closeCustomerFilterPanel();
     document.body.classList.remove('sidebar-open');
@@ -7128,6 +7783,14 @@
   }
 
   document.addEventListener('input', event => {
+    if (event.target.matches('[data-protected-field]')) saveProtectedImportDraft();
+    if (event.target.id === 'protectedSearch') {
+      clearTimeout(state.protectedCustomers.searchTimer);
+      state.protectedCustomers.searchTimer = setTimeout(() => {
+        state.protectedCustomers.query = event.target.value.trim();
+        void loadProtectedCustomers();
+      }, 300);
+    }
     if (event.target.id === 'customerSearch') {
       clearTimeout(state.customerSearchTimer);
       state.customerSearchTimer = setTimeout(() => {
@@ -7144,6 +7807,25 @@
     if (event.target.id === 'activitySummary') resizeActivitySummary(event.target);
   });
   document.addEventListener('change', event => {
+    if (event.target.id === 'protectedCsvInput') void loadProtectedCustomerCsv(event.target.files?.[0]);
+    if (event.target.id === 'protectedStatus') {
+      state.protectedCustomers.status = event.target.value;
+      void loadProtectedCustomers();
+    }
+    if (event.target.id === 'protectedConflictStatus') {
+      state.protectedCustomers.conflictStatus = event.target.value;
+      state.protectedCustomers.conflictPage = 1;
+      void loadProtectedConflicts();
+    }
+    if (event.target.matches('[data-conflict-decision]')) {
+      const root = event.target.closest('[data-protected-conflict]');
+      const target = root?.querySelector('[data-conflict-target]');
+      if (target) {
+        const item = state.protectedCustomers.conflicts.find(row => row.conflictId === root.dataset.protectedConflict);
+        target.innerHTML = protectedConflictTargetOptions(item, event.target.value);
+        target.disabled = event.target.value === 'supplement_and_retry';
+      }
+    }
     if (event.target.id === 'customerSort') {
       void loadCustomerPage({ reset: true });
     }
