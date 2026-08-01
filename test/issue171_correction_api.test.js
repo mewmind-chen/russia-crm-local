@@ -82,6 +82,18 @@ test('Issue 171 API completes a direct correction and replays it idempotently', 
   assert.equal(first.correction.sourceCustomerId, 'CRM-WU');
   assert.equal(first.correction.targetCustomerId, 'CRM-OWN');
   assert.equal(first.correction.deduplicated, false);
+  const correctionActor = fx.db.prepare(`SELECT u.name FROM crm_activity_corrections c
+    JOIN sales_users u ON u.id=c.actor_id WHERE c.id=?`).get(first.correction.correctionId);
+  const stableIds = fx.db.prepare(`SELECT
+    (SELECT COALESCE(NULLIF(external_customer_id,''),id) FROM crm_accounts WHERE id='CRM-WU') source,
+    (SELECT COALESCE(NULLIF(external_customer_id,''),id) FROM crm_accounts WHERE id='CRM-OWN') target`).get();
+  const correctionNotification = fx.db.prepare(`SELECT detail FROM crm_notifications
+    WHERE code='ACTIVITY_CORRECTION_COMPLETED' ORDER BY created_at,id LIMIT 1`).get();
+  assert.ok(correctionNotification, 'direct correction must notify an authorized manager or administrator');
+  assert.ok(correctionNotification.detail.includes(`操作人：${correctionActor.name}`));
+  assert.ok(correctionNotification.detail.includes(`来源客户：${stableIds.source}`));
+  assert.ok(correctionNotification.detail.includes(`目标客户：${stableIds.target}`));
+  assert.ok(correctionNotification.detail.includes(`更正原因：${correctionBody().reason}`));
 
   const replayResponse = await fx.request(ROUTE, {
     cookie: fx.cookie, method: 'POST', body: correctionBody(),
@@ -343,6 +355,21 @@ test('Issue 171 manager proposal API exposes only safe revalidated mapping candi
   assert.equal(approvedResponse.status, 200, approved.error);
   assert.equal(approved.result.status, 'approved');
   assert.ok(approved.result.correctionId);
+  const completedRelations = fx.db.prepare(`SELECT recipient_id,COUNT(*) count
+    FROM crm_activity_correction_notification_relations
+    WHERE correction_id=? AND notification_type='completed'
+    GROUP BY recipient_id ORDER BY recipient_id`).all(approved.result.correctionId);
+  assert.ok(completedRelations.length > 0);
+  assert.ok(completedRelations.every(row => row.count === 1),
+    'approval must create one completed notification per recipient');
+  assert.ok(completedRelations.every(row => row.recipient_id !== 'U-MGR'),
+    'the reviewer must not receive a notification for their own approval');
+  const completedNotification = fx.db.prepare(`SELECT n.detail FROM crm_notifications n
+    JOIN crm_activity_correction_notification_relations r ON r.notification_id=n.id
+    WHERE r.correction_id=? AND r.notification_type='completed' LIMIT 1`)
+    .get(approved.result.correctionId);
+  assert.ok(completedNotification.detail.includes('操作人：Manager'));
+  assert.ok(completedNotification.detail.includes('更正原因：API ambiguous mapping'));
 
   fx.setUserPermissions('U-OTHER', { manage_activity_corrections: true });
   const salesCookie = await fx.login('other@example.com', 'Password123!');

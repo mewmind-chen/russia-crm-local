@@ -65,6 +65,25 @@
     activityReactionAdminRows: [],
     activityDraftBeforeReactionAdmin: null,
     activitySubmitting: false,
+    activityCorrection: {
+      draft: null, step: 1, originalActivityId: '', sourceCustomerId: '',
+      targetCustomerId: '', reason: '', idempotencyKey: '', returnFocus: null,
+      requestFingerprint: '',
+      targets: [], targetRows: [], targetPage: 1, targetPageSize: 10, targetTotal: 0,
+      targetAuthorizedTotal: 0,
+      targetHasMore: false, targetLoading: false, targetRequestEpoch: 0,
+      targetController: null, targetMount: null,
+      proposalRows: [], proposalPage: 1, proposalPageSize: 10, proposalTotal: 0,
+      proposalAuthorizedTotal: 0,
+      proposalHasMore: false, proposalLoading: false, proposalRequestEpoch: 0,
+      proposalController: null, proposalMount: null, proposalCustomerId: '',
+      historyRows: [], historyPage: 1, historyPageSize: 10, historyTotal: 0,
+      historyAuthorizedTotal: 0, historyHasMore: false, historyLoading: false,
+      historyRequestEpoch: 0, historyController: null, historyMount: null,
+      writeEnabled: null, statusRequestEpoch: 0,
+      reviewSubmitting: '', reviewKeys: new Map(), reviewDrafts: new Map(),
+    },
+    modalReturnFocus: null,
     drawerAiContext: null,
     drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
@@ -158,6 +177,7 @@
     managerTasks: ['MANAGER INTERVENTION', '主管任务'],
     managerMetrics: ['DEFERRED PLAN METRICS', '延期统计'],
     notifications: ['CRM NOTIFICATIONS', '通知中心'],
+    activityCorrections: ['ACTIVITY CORRECTIONS', '跟进归属更正'],
     aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
     team: ['CAPABILITY REVIEW', '销售能力'],
@@ -171,6 +191,7 @@
     recycleBin: 'manage_customer_recycle',
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_customers',
+    activityCorrections: 'manage_activity_corrections',
     aiTasks: 'view_customers', protectedCustomers: 'manage_protected_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -625,6 +646,7 @@
       items: [], loaded: false, loading: false, pendingUserId: '', error: '', pollCount: 0, timer: null,
     });
     resetResearchState();
+    resetActivityCorrectionState();
     setTimeout(() => load(), 0);
   }
 
@@ -654,6 +676,7 @@
       items: [], loaded: false, loading: false, pendingUserId: '', error: '', pollCount: 0, timer: null,
     });
     resetResearchState();
+    resetActivityCorrectionState();
     closeModal();
     toast('身份检查已结束，正在恢复管理员账号');
     setTimeout(() => { state.impersonationRecovery = false; void load(); }, 800);
@@ -1120,11 +1143,13 @@
   function firstAllowedBusinessView() {
     return Object.keys(viewMeta).find(view =>
       !['aiTasks', 'customerProfile'].includes(view)
+      && (view !== 'activityCorrections' || !state.data?.impersonation)
       && (view !== 'protectedCustomers' || canManageProtectedCustomers())
       && can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
   }
 
   async function load({ fromLogin = false } = {}) {
+    resetActivityCorrectionState();
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
       const bootstrapReactions = bootstrapActivityReactions(state.data);
@@ -1171,6 +1196,10 @@
       applyUser();
       populateFilters();
       renderAll();
+      if (!state.data.impersonation
+          && (can('correct_own_activity') || can('manage_activity_corrections'))) {
+        void loadActivityCorrectionWriteStatus();
+      }
       if (can('view_customers')) void initializeCustomerFilters();
       renderImpersonationBanner();
       if (can('manage_users') && !state.data.impersonation) {
@@ -1187,9 +1216,11 @@
       state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
       const firstAllowedView = customerAIEnabled() && can('view_customers')
         ? Object.keys(viewMeta).find(view => (view !== 'protectedCustomers' || canManageProtectedCustomers())
+          && (view !== 'activityCorrections' || !state.data?.impersonation)
           && can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
         : firstAllowedBusinessView();
       const requestedAllowed = viewMeta[requestedView] && can(requestedPermission)
+        && (requestedView !== 'activityCorrections' || !state.data?.impersonation)
         && (requestedView !== 'protectedCustomers' || canManageProtectedCustomers());
       switchView(requestedAllowed ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
@@ -1217,6 +1248,8 @@
     $('#userRole').textContent = ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[user.role];
     $('#userAvatar').textContent = user.name.slice(0, 1);
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
+    $('#nav [data-view="activityCorrections"]')?.classList.toggle('hidden',
+      !can('manage_activity_corrections') || Boolean(state.data.impersonation));
     $('#nav [data-view="protectedCustomers"]')?.classList.toggle('hidden', !canManageProtectedCustomers());
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
@@ -3798,8 +3831,12 @@
       const channelFailed = item.wecomDeliveryStatus === 'failed' || item.wecomStatus === 'failed';
       const severity = item.severity === 'critical' ? 'red' : item.severity === 'warning' ? 'amber' : '';
       const recipient = isOwn ? '发给我' : `发给 ${item.recipientName || '团队成员'}`;
-      const action = account
-        ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
+      const action = item.code === 'ACTIVITY_CORRECTION_REVIEW'
+        ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="activityCorrections">处理审批</button>`
+        : item.code === 'ACTIVITY_CORRECTION_COMPLETED' && account
+          ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看目标客户</button>`
+          : account
+            ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
         : item.code === 'MANAGER_ANOMALY_READY'
           ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="alerts">查看异常</button>`
           : item.code === 'SALES_COACHING_READY'
@@ -5896,6 +5933,789 @@
       <div class="form-actions">${recycleAction}</div>`;
   }
 
+  function correctionActivityId(event) {
+    if (event?.activity_id) return String(event.activity_id);
+    return String(event?.id || '').replace(/^activity:/, '');
+  }
+
+  function canStartActivityCorrection(event) {
+    const activityId = correctionActivityId(event);
+    const activity = (state.data?.activities || []).find(row => String(row.id) === activityId);
+    const role = String(state.data?.user?.role || '');
+    const authoredByUser = String(activity?.user_id || activity?.userId || event?.creatorId || event?.actorId || '')
+      === String(state.data?.user?.id || '');
+    const effective = activity && activity.effective !== false
+      && !activity.supersededAt && !activity.superseded_by && !activity.supersededBy
+      && !event?.superseded && event?.provenance?.kind !== 'superseded_original';
+    return Boolean(activityId && activity && effective && can('correct_own_activity')
+      && !state.data?.impersonation && (authoredByUser || role === 'admin')
+    );
+  }
+
+  function renderActivityTimelineItem(event) {
+    const meta = activityMeta[event.event_type] || [event.title || event.kind || '客户事件', '记'];
+    const provenance = event.provenance || {};
+    const replacementCustomerId = provenance.replacementCustomerId || provenance.targetCustomerId || '';
+    const replacementActivityId = provenance.replacementActivityId || '';
+    const originalCustomerId = provenance.originalCustomerId || provenance.sourceCustomerId || '';
+    const originalActivityId = provenance.originalActivityId || '';
+    const replacementCustomer = replacementCustomerId
+      ? (state.data?.accounts || []).find(row => [row.id, row.external_customer_id].map(String).includes(String(replacementCustomerId)))
+      : null;
+    const originalCustomer = originalCustomerId
+      ? (state.data?.accounts || []).find(row => [row.id, row.external_customer_id].map(String).includes(String(originalCustomerId)))
+      : null;
+    let provenanceMarkup = '';
+    if (provenance.kind === 'superseded_original' || event.superseded) {
+      provenanceMarkup = `<span class="activity-correction-provenance superseded">已更正 · ${replacementCustomerId && replacementActivityId && replacementCustomer ? `目标客户：${esc(accountDisplayName(replacementCustomer))}` : '目标记录信息受权限保护'}</span>`;
+    } else if (provenance.kind === 'replacement') {
+      provenanceMarkup = `<span class="activity-correction-provenance replacement">更正自${originalCustomerId && originalActivityId && originalCustomer ? `来源客户：${esc(accountDisplayName(originalCustomer))}` : '受保护的来源记录'} · 当前记录有效</span>`;
+    }
+    const activityId = correctionActivityId(event);
+    const correctionWriteReady = state.activityCorrection.writeEnabled === true;
+    const correctionEntry = canStartActivityCorrection(event)
+      ? `<button class="text-button activity-correction-entry" type="button" data-correct-activity="${esc(activityId)}" ${correctionWriteReady ? '' : `disabled aria-disabled="true" title="${state.activityCorrection.writeEnabled === false ? '更正功能尚未启用' : '正在检查更正功能状态'}"`}>更正归属客户</button>`
+      : '';
+    return `<div class="timeline-item ${event.superseded ? 'is-superseded' : ''}" data-timeline-kind="${esc(event.kind || 'activity')}">
+      <div class="activity-correction-timeline-head"><h4>${esc(event.title || meta[0])}</h4>${correctionEntry}</div>
+      <p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>
+      ${provenanceMarkup}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
+  }
+
+  function newActivityCorrectionIdempotencyKey() {
+    return `activity-correction-ui:${state.data?.user?.id || 'user'}:${crypto.randomUUID()}`;
+  }
+
+  function activityCorrectionIdempotencyKey(payload = {}) {
+    const fingerprint = JSON.stringify({
+      originalActivityId: String(payload.originalActivityId || ''),
+      targetCustomerId: String(payload.targetCustomerId || ''),
+      reason: String(payload.reason || '').trim(),
+    });
+    if (fingerprint !== state.activityCorrection.requestFingerprint
+        || !state.activityCorrection.idempotencyKey) {
+      state.activityCorrection.requestFingerprint = fingerprint;
+      state.activityCorrection.idempotencyKey = `activity-correction-ui:${state.data?.user?.id || 'user'}:${crypto.randomUUID()}`;
+    }
+    return state.activityCorrection.idempotencyKey;
+  }
+
+  function rotateActivityCorrectionIdempotencyKey() {
+    state.activityCorrection.idempotencyKey = newActivityCorrectionIdempotencyKey();
+  }
+
+  function openActivityCorrectionModal(activityId, trigger = document.activeElement) {
+    if (state.data?.impersonation || !can('correct_own_activity')) return toast('当前账号不能发起跟进归属更正');
+    if (state.activityCorrection.writeEnabled !== true) {
+      return toast(state.activityCorrection.writeEnabled === false
+        ? '更正功能尚未启用'
+        : '正在检查更正功能状态，请稍后重试');
+    }
+    const activity = (state.data?.activities || []).find(row => String(row.id) === String(activityId));
+    const event = (state.data?.timeline || []).find(row => correctionActivityId(row) === String(activityId));
+    if (!activity || !canStartActivityCorrection(event || { id: `activity:${activityId}` })) {
+      return toast('该跟进记录当前不能更正');
+    }
+    const returnFocus = trigger || document.activeElement;
+    Object.assign(state.activityCorrection, {
+      draft: { activity, event: event || null }, step: 1,
+      originalActivityId: String(activityId), sourceCustomerId: String(activity.customer_id || ''),
+      targetCustomerId: '', reason: '',
+      idempotencyKey: `activity-correction-ui:${state.data?.user?.id || 'user'}:${crypto.randomUUID()}`,
+      requestFingerprint: '', returnFocus, targets: [], targetRows: [], targetPage: 1, targetTotal: 0,
+    });
+    renderActivityCorrectionModal();
+    requestAnimationFrame(() => $('#activityCorrectionModal [autofocus]')?.focus());
+  }
+
+  function correctionStepMarkup(step) {
+    return `<ol class="activity-correction-steps" aria-label="更正步骤">
+      ${['选择正确客户', '填写更正原因', '确认更正'].map((label, index) => {
+        const number = index + 1;
+        return `<li class="${number === step ? 'active' : number < step ? 'done' : ''}" ${number === step ? 'aria-current="step"' : ''}><span>${number}</span>${label}</li>`;
+      }).join('')}</ol>`;
+  }
+
+  function correctionCustomerLabel(customer) {
+    return accountDisplayName(customer) || customer?.companyName || customer?.externalCustomerId || customer?.id || '未命名客户';
+  }
+
+  function renderActivityCorrectionTargetRows() {
+    const root = $('#activityCorrectionTargets');
+    if (!root) return;
+    const correction = state.activityCorrection;
+    root.innerHTML = correction.targetLoading && !correction.targets.length
+      ? '<div class="empty">正在读取授权客户…</div>'
+      : correction.targets.length
+        ? correction.targets.map(customer => `<button class="activity-correction-target ${String(customer.id) === correction.targetCustomerId ? 'selected' : ''}" type="button" data-correction-target="${esc(customer.id)}" aria-pressed="${String(customer.id) === correction.targetCustomerId}"><strong>${esc(correctionCustomerLabel(customer))}</strong><span>${esc([customer.externalCustomerId, stageLabel(customer.stage)].filter(Boolean).join(' · '))}</span></button>`).join('')
+        : '<div class="empty">当前筛选下没有可选客户</div>';
+    const count = $('#activityCorrectionTargetCount');
+    if (count) count.textContent = `已显示 ${correction.targets.length} / ${correction.targetTotal} 条（授权范围 ${correction.targetAuthorizedTotal} 条）`;
+    const more = $('#activityCorrectionTargetMore');
+    if (more) {
+      more.classList.toggle('hidden', !correction.targetHasMore);
+      more.disabled = correction.targetLoading;
+      more.textContent = correction.targetLoading ? '正在加载…' : '继续加载';
+    }
+    const next = $('#activityCorrectionNext');
+    if (next) next.disabled = !correction.targetCustomerId;
+  }
+
+  function renderActivityCorrectionModal() {
+    const correction = state.activityCorrection;
+    if (correction.step !== 1 && correction.targetMount) {
+      correction.targetMount.destroy();
+      correction.targetMount = null;
+      correction.targetController = null;
+      correction.targetRequestEpoch += 1;
+    }
+    const activity = correction.draft?.activity || {};
+    const source = (state.data?.accounts || []).find(row => String(row.id) === correction.sourceCustomerId) || {};
+    const target = correction.targets.find(row => String(row.id) === correction.targetCustomerId)
+      || (state.data?.accounts || []).find(row => String(row.id) === correction.targetCustomerId) || {};
+    const activityTime = activity.occurred_at || activity.occurredAt || '';
+    const step = correction.step;
+    const status = '<p id="activityCorrectionStatus" class="activity-correction-status" role="alert" aria-live="polite"></p>';
+    const stepAccessibility = 'aria-label="跟进归属更正三步流程"';
+    let content = '';
+    if (step === 1) {
+      content = `<form id="activityCorrectionTargetForm" class="activity-correction-step" data-correction-step="1" ${stepAccessibility}>
+        <div class="activity-correction-source"><span>来源客户</span><strong>${esc(correctionCustomerLabel(source))}</strong><small>活动时间：${shortDate(activityTime, true)}</small></div>
+        <div id="activityCorrectionTargetFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <div class="activity-correction-result-meta"><strong>选择正确客户</strong><span id="activityCorrectionTargetCount"></span></div>
+        <div id="activityCorrectionTargets" class="activity-correction-targets"></div>
+        <button id="activityCorrectionTargetMore" class="button secondary hidden" type="button">继续加载</button>
+        ${status}<div class="form-actions"><button class="button secondary" type="button" data-close-activity-correction>取消</button><button id="activityCorrectionNext" class="button primary" type="submit" disabled>下一步</button></div>
+      </form>`;
+    } else if (step === 2) {
+      content = `<form id="activityCorrectionReasonForm" class="activity-correction-step" data-correction-step="2">
+        <div class="activity-correction-route"><div><span>来源客户</span><strong>${esc(correctionCustomerLabel(source))}</strong></div><span aria-hidden="true">→</span><div><span>目标客户</span><strong>${esc(correctionCustomerLabel(target))}</strong></div></div>
+        <label>填写更正原因<textarea name="reason" maxlength="2000" required autofocus placeholder="说明为什么这条跟进属于另一客户">${esc(correction.reason)}</textarea></label>
+        ${status}<div class="form-actions"><button class="button secondary" type="button" data-correction-back="1">上一步</button><button class="button primary" type="submit">下一步</button></div>
+      </form>`;
+    } else {
+      content = `<form id="activityCorrectionConfirmForm" class="activity-correction-step" data-correction-step="3">
+        <div class="activity-correction-confirm"><div><span>来源客户</span><strong>${esc(correctionCustomerLabel(source))}</strong></div><div><span>目标客户</span><strong>${esc(correctionCustomerLabel(target))}</strong></div><div><span>活动时间</span><strong>${shortDate(activityTime, true)}</strong></div><div><span>更正原因</span><strong>${esc(correction.reason)}</strong></div></div>
+        <div class="activity-correction-impact"><strong>业务影响</strong><p>原记录保留为审计历史，新记录进入目标客户；客户阶段、待办与统计将按有效记录重新计算。</p></div>
+        ${correction.writeEnabled !== true ? `<div class="activity-correction-disabled">${correction.writeEnabled === false ? '更正功能尚未启用，当前只能查看历史和审批资料。' : '正在检查更正功能状态，请稍后再提交。'}</div>` : ''}
+        ${status}<div class="form-actions"><button class="button secondary" type="button" data-correction-back="2">上一步</button><button id="activityCorrectionSubmit" class="button primary" type="submit" autofocus ${correction.writeEnabled !== true ? 'disabled aria-disabled="true"' : ''}>确认更正</button></div>
+      </form>`;
+    }
+    openModal('更正跟进归属', 'ACTIVITY CORRECTION', `${correctionStepMarkup(step)}${content}`, 'activity-correction-modal');
+    $('#modal .modal')?.setAttribute('id', 'activityCorrectionModal');
+    if (step === 1) void initializeActivityCorrectionTargetFilters();
+  }
+
+  function closeActivityCorrectionModal() {
+    const returnFocus = state.activityCorrection.returnFocus || state.modalReturnFocus;
+    closeModal();
+    Object.assign(state.activityCorrection, {
+      draft: null, step: 1, originalActivityId: '', sourceCustomerId: '',
+      targetCustomerId: '', reason: '', idempotencyKey: '', returnFocus: null,
+      requestFingerprint: '',
+      targets: [], targetRows: [], targetPage: 1, targetTotal: 0,
+    });
+    if (returnFocus?.isConnected) requestAnimationFrame(() => returnFocus.focus());
+  }
+
+  function activityCorrectionQuery(controller, page, pageSize, extra = {}) {
+    const payload = controller?.serialize('applied') || { permissionVersion: '', filters: [] };
+    return new URLSearchParams({
+      page: String(page), pageSize: String(pageSize),
+      ...(controller ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
+      filters: JSON.stringify(componentPayloadToRaw(payload)), ...extra,
+    });
+  }
+
+  function clearActivityCorrectionTargetResults() {
+    const correction = state.activityCorrection;
+    correction.targetRequestEpoch += 1;
+    correction.targetMount?.destroy();
+    Object.assign(correction, {
+      targets: [], targetRows: [], targetPage: 1, targetTotal: 0,
+      targetAuthorizedTotal: 0, targetHasMore: false, targetLoading: false,
+      targetController: null, targetMount: null, targetCustomerId: '',
+      idempotencyKey: '', requestFingerprint: '',
+    });
+    const root = $('#activityCorrectionTargetFilters');
+    if (root) root.innerHTML = '';
+    renderActivityCorrectionTargetRows();
+  }
+
+  function clearActivityCorrectionProposalResults() {
+    const correction = state.activityCorrection;
+    correction.proposalRequestEpoch += 1;
+    correction.proposalMount?.destroy();
+    Object.assign(correction, {
+      proposalRows: [], proposalPage: 1, proposalTotal: 0,
+      proposalAuthorizedTotal: 0, proposalHasMore: false, proposalLoading: false,
+      proposalController: null, proposalMount: null, proposalCustomerId: '',
+      reviewSubmitting: '',
+    });
+    correction.reviewKeys.clear();
+    correction.reviewDrafts.clear();
+    const filters = $('#activityCorrectionProposalFilters');
+    if (filters) filters.innerHTML = '';
+    const list = $('#activityCorrectionProposalList');
+    if (list) list.innerHTML = '<div class="empty">进入页面后读取审批队列</div>';
+    const count = $('#activityCorrectionProposalCount');
+    if (count) count.textContent = '';
+    $('#activityCorrectionProposalMore')?.classList.add('hidden');
+  }
+
+  function clearActivityCorrectionHistoryResults() {
+    const correction = state.activityCorrection;
+    correction.historyRequestEpoch += 1;
+    correction.historyMount?.destroy();
+    Object.assign(correction, {
+      historyRows: [], historyPage: 1, historyTotal: 0,
+      historyAuthorizedTotal: 0, historyHasMore: false, historyLoading: false,
+      historyController: null, historyMount: null,
+    });
+    const filters = $('#activityCorrectionHistoryFilters');
+    if (filters) filters.innerHTML = '';
+    const list = $('#activityCorrectionHistoryList');
+    if (list) list.innerHTML = '<div class="empty">进入页面后读取更正历史</div>';
+    const count = $('#activityCorrectionHistoryCount');
+    if (count) count.textContent = '';
+    $('#activityCorrectionHistoryMore')?.classList.add('hidden');
+  }
+
+  function resetActivityCorrectionState() {
+    const correction = state.activityCorrection;
+    correction.statusRequestEpoch += 1;
+    clearActivityCorrectionTargetResults();
+    clearActivityCorrectionProposalResults();
+    clearActivityCorrectionHistoryResults();
+    Object.assign(correction, {
+      draft: null, step: 1, originalActivityId: '', sourceCustomerId: '',
+      targetCustomerId: '', reason: '', idempotencyKey: '', returnFocus: null,
+      requestFingerprint: '', writeEnabled: null,
+    });
+    const writeStatus = $('#activityCorrectionWriteStatus');
+    if (writeStatus) {
+      writeStatus.className = 'activity-correction-write-status';
+      writeStatus.textContent = '正在读取更正功能状态…';
+    }
+    const proposalStatus = $('#activityCorrectionProposalStatus');
+    if (proposalStatus) proposalStatus.textContent = '';
+    const historyStatus = $('#activityCorrectionHistoryStatus');
+    if (historyStatus) historyStatus.textContent = '';
+  }
+
+  function applyActivityCorrectionReadEnvelope(result = {}) {
+    if (typeof result.writeEnabled === 'boolean') {
+      const changed = state.activityCorrection.writeEnabled !== result.writeEnabled;
+      state.activityCorrection.writeEnabled = result.writeEnabled;
+      const status = $('#activityCorrectionWriteStatus');
+      if (status) {
+        status.classList.toggle('enabled', result.writeEnabled);
+        status.classList.toggle('disabled', !result.writeEnabled);
+        status.textContent = result.writeEnabled
+          ? '更正写入已启用。所有操作都会保留不可变审计记录。'
+          : '更正写入尚未启用。历史与审批资料保持可读，发起和审批按钮已停用。';
+      }
+      if (changed && state.selectedCustomerId) renderDrawer();
+    }
+    return result;
+  }
+
+  async function loadActivityCorrectionWriteStatus() {
+    const correction = state.activityCorrection;
+    const requestEpoch = ++correction.statusRequestEpoch;
+    try {
+      const params = new URLSearchParams({ page: '1', pageSize: '1', filters: '{}' });
+      const result = await api(`/activity-corrections?${params}`, { preserveOnForbidden: true });
+      if (requestEpoch !== correction.statusRequestEpoch) return null;
+      return applyActivityCorrectionReadEnvelope(result);
+    } catch (error) {
+      if (requestEpoch !== correction.statusRequestEpoch) return null;
+      if (error.status === 403) {
+        resetActivityCorrectionState();
+        return null;
+      }
+      const status = $('#activityCorrectionWriteStatus');
+      if (status) status.textContent = '暂时无法读取更正功能状态，写入入口保持停用。';
+      return null;
+    }
+  }
+
+  async function loadActivityCorrectionTargets({ reset = false } = {}) {
+    const correction = state.activityCorrection;
+    const requestEpoch = ++correction.targetRequestEpoch;
+    correction.targetLoading = true;
+    if (reset) { correction.targets = []; correction.targetRows = []; correction.targetPage = 1; }
+    renderActivityCorrectionTargetRows();
+    try {
+      const page = reset ? 1 : correction.targetPage + 1;
+      const payload = correction.targetController?.serialize('applied') || { permissionVersion: '', filters: [] };
+      const params = new URLSearchParams({
+        page: String(page), pageSize: String(correction.targetPageSize),
+        ...(correction.targetController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
+        filters: JSON.stringify(componentPayloadToRaw(payload)),
+        excludeCustomerId: correction.sourceCustomerId,
+      });
+      const result = await api(`/activity-correction-targets?${params}`, { preserveOnForbidden: true });
+      if (requestEpoch !== correction.targetRequestEpoch) return null;
+      applyActivityCorrectionReadEnvelope(result);
+      const rows = result.rows || result.customers || [];
+      correction.targets = reset ? rows : [...state.activityCorrection.targets, ...rows];
+      correction.targetRows = correction.targets;
+      correction.targetPage = Number(result.page || page);
+      correction.targetTotal = Number(result.total || 0);
+      correction.targetAuthorizedTotal = Number(result.authorizedTotal || 0);
+      correction.targetHasMore = Boolean(result.hasMore);
+      if (result.schema && correction.targetController) correction.targetController.updateSchema(result.schema);
+      correction.targetMount?.setResultMeta({ total: result.total, shown: correction.targets.length });
+      renderActivityCorrectionTargetRows();
+      if (correction.writeEnabled === false) {
+        const status = $('#activityCorrectionStatus');
+        if (status) status.textContent = '更正写入尚未启用；可以查看授权客户，但暂不能提交。';
+      }
+      return result;
+    } catch (error) {
+      if (requestEpoch !== correction.targetRequestEpoch) return null;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        const retainedReason = correction.reason;
+        correction.targetCustomerId = '';
+        correction.reason = retainedReason;
+        await initializeActivityCorrectionTargetFilters({ force: true });
+        return null;
+      }
+      if (error.status === 403) {
+        clearActivityCorrectionTargetResults();
+        const filters = $('#activityCorrectionTargetFilters');
+        if (filters && window.TradePulseFilterComponent) {
+          filters.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({
+            status: 'error', error: '当前账号无权读取可更正客户',
+          });
+        }
+      }
+      const status = $('#activityCorrectionStatus');
+      if (status) status.textContent = `${error.message}；当前选择与输入已保留。`;
+      return null;
+    } finally {
+      if (requestEpoch === correction.targetRequestEpoch) {
+        correction.targetLoading = false;
+        renderActivityCorrectionTargetRows();
+      }
+    }
+  }
+
+  async function initializeActivityCorrectionTargetFilters({ force = false } = {}) {
+    const root = $('#activityCorrectionTargetFilters');
+    if (!root || !window.TradePulseFilterComponent) return;
+    if (state.activityCorrection.targetMount && !force) return;
+    state.activityCorrection.targetMount?.destroy();
+    state.activityCorrection.targetMount = null;
+    state.activityCorrection.targetController = null;
+    root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+    const result = await loadActivityCorrectionTargets({ reset: true });
+    if (!result?.schema || !root.isConnected) return;
+    const controller = window.TradePulseFilterComponent.createFilterController({
+      pageKey: 'activity_correction_targets', schema: result.schema,
+      onApply: () => void loadActivityCorrectionTargets({ reset: true }),
+    });
+    state.activityCorrection.targetController = controller;
+    state.activityCorrection.targetMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
+      controller, resultMeta: { total: result.total, shown: state.activityCorrection.targets.length },
+    });
+    controller.updateSchema(result.schema);
+    await loadActivityCorrectionTargets({ reset: true });
+    root.querySelector('input,button')?.focus();
+  }
+
+  async function submitActivityCorrection() {
+    const correction = state.activityCorrection;
+    if (correction.draft?.submitting) return;
+    const button = $('#activityCorrectionSubmit');
+    const status = $('#activityCorrectionStatus');
+    correction.draft.submitting = true;
+    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = '正在更正…'; }
+    if (status) status.textContent = '正在提交并重算来源与目标客户…';
+    try {
+      const requestPayload = {
+        originalActivityId: correction.originalActivityId,
+        targetCustomerId: correction.targetCustomerId,
+        reason: correction.reason,
+      };
+      const idempotencyKey = activityCorrectionIdempotencyKey(requestPayload);
+      const result = await api('/activity-corrections', {
+        method: 'POST', preserveOnForbidden: true,
+        body: JSON.stringify({
+          ...requestPayload,
+          idempotencyKey,
+        }),
+      });
+      if (result.correction) {
+        await refreshAfterActivityCorrection(result.correction, '跟进归属已更正');
+      } else if (result.proposal) {
+        await refreshAfterActivityCorrection({
+          ...result.proposal,
+          sourceCustomerId: correction.sourceCustomerId,
+          targetCustomerId: correction.targetCustomerId,
+        }, '已提交主管或管理员审批');
+      }
+    } catch (error) {
+      let message = `${error.message}；当前输入已保留。`;
+      if (error.code === 'ACTIVITY_CORRECTIONS_DISABLED' || error.status === 503) {
+        correction.writeEnabled = false;
+        message = '更正功能尚未启用或暂不可用，当前输入已保留。';
+      } else if (error.code === 'ACTIVITY_CORRECTION_FORBIDDEN' || error.status === 403) {
+        message = '当前账号无权更正这条记录，草稿已保留。';
+      } else if (error.code === 'ACTIVITY_CORRECTION_MAPPING_CHANGED') {
+        message = '业务关联已变化，请刷新真实状态后重新确认；草稿已保留。';
+      } else if (error.code === 'FILTER_VERSION_CONFLICT' || error.status === 409) {
+        message = '记录或筛选权限已变化，请刷新后重新确认；草稿已保留。';
+      }
+      if (status) status.textContent = message;
+      toast(message);
+    } finally {
+      if (correction.draft) correction.draft.submitting = false;
+      if (button?.isConnected) {
+        button.disabled = correction.writeEnabled === false;
+        button.removeAttribute('aria-busy');
+        button.textContent = '确认更正';
+      }
+    }
+  }
+
+  function canReviewActivityCorrections() {
+    return ['admin', 'manager'].includes(String(state.data?.user?.role || ''))
+      && can('manage_activity_corrections') && !state.data?.impersonation;
+  }
+
+  function correctionProposalCustomer(row, side) {
+    return row[`${side}Nickname`] || row[`${side}CompanyName`]
+      || row[`${side}ExternalCustomerId`] || row[`${side}CustomerId`] || '受保护客户';
+  }
+
+  function renderActivityCorrectionProposal(proposal) {
+    const mappingResolution = proposal.mappingResolution || null;
+    const candidates = mappingResolution?.candidates || [];
+    const reviewDraft = state.activityCorrection.reviewDrafts.get(proposal.proposalId) || {};
+    const resolutionOptions = candidates.map(candidate => {
+      const value = candidate.mode === 'activity_only'
+        ? 'activity_only||'
+        : `commerce_entity|${candidate.entityType}|${candidate.entityId}`;
+      const label = candidate.mode === 'activity_only'
+        ? '仅迁移活动，不迁移关联业务记录'
+        : `同时迁移 ${candidate.entityType} · ${candidate.entityId}`;
+      return `<option value="${esc(value)}" ${reviewDraft.resolutionValue === value ? 'selected' : ''}>${esc(label)}</option>`;
+    }).join('');
+    const unavailable = mappingResolution?.required && (!mappingResolution.available || !candidates.length);
+    const writesDisabled = state.activityCorrection.writeEnabled !== true;
+    const writeWarning = state.activityCorrection.writeEnabled === false
+      ? '更正写入尚未启用，审批操作暂不可用。'
+      : '正在检查更正功能状态，审批操作暂不可用。';
+    return `<article class="activity-correction-proposal" data-correction-proposal="${esc(proposal.proposalId)}">
+      <header><div><strong>${esc(correctionProposalCustomer(proposal, 'source'))} → ${esc(correctionProposalCustomer(proposal, 'target'))}</strong><small>${shortDate(proposal.createdAt, true)}</small></div><span class="pill ${proposal.status === 'pending' ? 'amber' : proposal.status === 'approved' ? '' : 'gray'}">${esc(({ pending: '待审批', approved: '已批准', rejected: '已拒绝' })[proposal.status] || proposal.status)}</span></header>
+      <p>${esc(proposal.reason || '未填写更正原因')}</p>
+      ${proposal.status === 'pending' ? `<div class="activity-correction-review-fields">
+        ${mappingResolution?.required ? `<label>业务记录处理<select data-correction-resolution ${unavailable ? 'disabled' : ''}><option value="">请选择处理方式</option>${resolutionOptions}</select></label>` : ''}
+        ${unavailable ? '<div class="activity-correction-review-warning">当前映射无法安全确认，只能拒绝或刷新后再审。</div>' : ''}
+        ${writesDisabled ? `<div class="activity-correction-review-warning">${writeWarning}</div>` : ''}
+        <label>审批意见<textarea data-correction-review-reason maxlength="2000" placeholder="拒绝时必须填写原因">${esc(reviewDraft.reason || '')}</textarea></label>
+        <p class="activity-correction-review-status" data-correction-review-status role="alert" aria-live="polite"></p>
+        <div class="activity-correction-review-actions"><button class="button secondary" type="button" data-review-correction="rejected" ${writesDisabled ? 'disabled' : ''}>拒绝</button><button class="button primary" type="button" data-review-correction="approved" ${unavailable || writesDisabled ? 'disabled' : ''}>批准</button></div>
+      </div>` : `<small>${esc(proposal.reviewReason || '审批已完成')}</small>`}
+    </article>`;
+  }
+
+  function renderActivityCorrectionProposalRows() {
+    const correction = state.activityCorrection;
+    const list = $('#activityCorrectionProposalList');
+    if (list) list.innerHTML = correction.proposalLoading && !correction.proposalRows.length
+      ? '<div class="empty">正在读取审批队列…</div>'
+      : correction.proposalRows.map(renderActivityCorrectionProposal).join('') || '<div class="empty">当前筛选下没有更正申请</div>';
+    const count = $('#activityCorrectionProposalCount');
+    if (count) count.textContent = `已显示 ${correction.proposalRows.length} / ${correction.proposalTotal} 条（授权范围 ${correction.proposalAuthorizedTotal} 条）`;
+    const more = $('#activityCorrectionProposalMore');
+    if (more) {
+      more.classList.toggle('hidden', !correction.proposalHasMore);
+      more.disabled = correction.proposalLoading;
+    }
+  }
+
+  async function loadActivityCorrectionProposals({ reset = false } = {}) {
+    const correction = state.activityCorrection;
+    if (!can('manage_activity_corrections') || state.data?.impersonation) {
+      clearActivityCorrectionProposalResults();
+      return null;
+    }
+    const requestEpoch = ++correction.proposalRequestEpoch;
+    correction.proposalLoading = true;
+    if (reset) { correction.proposalRows = []; correction.proposalPage = 1; }
+    renderActivityCorrectionProposalRows();
+    try {
+      const page = reset ? 1 : correction.proposalPage + 1;
+      const payload = correction.proposalController?.serialize('applied') || { permissionVersion: '', filters: [] };
+      const params = new URLSearchParams({
+        page: String(page), pageSize: String(correction.proposalPageSize),
+        ...(correction.proposalController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
+        filters: JSON.stringify(componentPayloadToRaw(payload)),
+      });
+      const result = await api(`/activity-correction-proposals?${params}`, { preserveOnForbidden: true });
+      if (requestEpoch !== correction.proposalRequestEpoch) return null;
+      applyActivityCorrectionReadEnvelope(result);
+      const rows = result.rows || result.proposals || [];
+      correction.proposalRows = reset ? rows : [...correction.proposalRows, ...rows];
+      correction.proposalPage = Number(result.page || page);
+      correction.proposalTotal = Number(result.total || 0);
+      correction.proposalAuthorizedTotal = Number(result.authorizedTotal || 0);
+      correction.proposalHasMore = Boolean(result.hasMore);
+      if (result.schema && correction.proposalController) correction.proposalController.updateSchema(result.schema);
+      correction.proposalMount?.setResultMeta({ total: result.total, shown: correction.proposalRows.length });
+      renderActivityCorrectionProposalRows();
+      return result;
+    } catch (error) {
+      if (requestEpoch !== correction.proposalRequestEpoch) return null;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        await initializeActivityCorrectionProposalFilters({ force: true });
+        return null;
+      }
+      if (error.status === 403) {
+        clearActivityCorrectionProposalResults();
+        const filters = $('#activityCorrectionProposalFilters');
+        if (filters && window.TradePulseFilterComponent) {
+          filters.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({
+            status: 'error', error: '当前账号无权读取更正审批',
+          });
+        }
+      }
+      const status = $('#activityCorrectionProposalStatus');
+      if (status) status.textContent = error.message;
+      return null;
+    } finally {
+      if (requestEpoch === correction.proposalRequestEpoch) correction.proposalLoading = false;
+      renderActivityCorrectionProposalRows();
+    }
+  }
+
+  async function initializeActivityCorrectionProposalFilters({ force = false } = {}) {
+    const root = $('#activityCorrectionProposalFilters');
+    if (!root || !window.TradePulseFilterComponent || !canReviewActivityCorrections()) return;
+    if (state.activityCorrection.proposalMount && !force) return;
+    state.activityCorrection.proposalMount?.destroy();
+    state.activityCorrection.proposalMount = null;
+    state.activityCorrection.proposalController = null;
+    root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+    const result = await loadActivityCorrectionProposals({ reset: true });
+    if (!result?.schema || !root.isConnected) return;
+    const controller = window.TradePulseFilterComponent.createFilterController({
+      pageKey: 'activity_correction_proposals', schema: result.schema,
+      onApply: () => void loadActivityCorrectionProposals({ reset: true }),
+    });
+    state.activityCorrection.proposalController = controller;
+    state.activityCorrection.proposalMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
+      controller, resultMeta: { total: result.total, shown: state.activityCorrection.proposalRows.length },
+    });
+    controller.updateSchema(result.schema);
+    await loadActivityCorrectionProposals({ reset: true });
+  }
+
+  function proposalResolutionFromControl(root) {
+    const value = String(root?.querySelector('[data-correction-resolution]')?.value || '');
+    if (!value) return null;
+    const [mode, entityType, entityId] = value.split('|');
+    return mode === 'activity_only' ? { mode } : { mode: 'commerce_entity', entityType, entityId };
+  }
+
+  async function reviewActivityCorrectionProposal(proposalId, decision, button) {
+    const proposal = state.activityCorrection.proposalRows.find(row => row.proposalId === proposalId);
+    if (state.activityCorrection.writeEnabled !== true) {
+      return toast(state.activityCorrection.writeEnabled === false
+        ? '更正写入尚未启用，审批暂不可用'
+        : '正在检查更正功能状态，请稍后重试');
+    }
+    const root = button?.closest('[data-correction-proposal]');
+    const reason = String(root?.querySelector('[data-correction-review-reason]')?.value || '').trim();
+    if (decision === 'rejected' && !reason) return toast('拒绝申请时必须填写审批原因');
+    const resolution = proposalResolutionFromControl(root);
+    if (decision === 'approved' && proposal?.mappingResolution?.required
+        && proposal.mappingResolution.available === false) {
+      return toast('当前业务映射不可批准，请刷新或重新加载后处理');
+    }
+    if (decision === 'approved' && proposal?.mappingResolution?.required && !resolution) {
+      return toast('请选择业务记录处理方式；无法确认时请拒绝或刷新');
+    }
+    if (!proposal || state.activityCorrection.reviewSubmitting) return;
+    const key = JSON.stringify({
+      proposalId,
+      expectedVersion: proposal.version,
+      decision,
+      reason,
+      resolution: resolution || null,
+    });
+    if (!state.activityCorrection.reviewKeys.has(key)) {
+      state.activityCorrection.reviewKeys.set(key, `activity-correction-review-ui:${crypto.randomUUID()}`);
+    }
+    const idempotencyKey = state.activityCorrection.reviewKeys.get(key);
+    state.activityCorrection.reviewDrafts.set(proposalId, {
+      reason,
+      resolutionValue: String(root?.querySelector('[data-correction-resolution]')?.value || ''),
+    });
+    const status = root?.querySelector('[data-correction-review-status]');
+    state.activityCorrection.reviewSubmitting = proposalId;
+    root?.setAttribute('aria-busy', 'true');
+    root?.querySelectorAll('button,select,textarea').forEach(control => { control.disabled = true; });
+    if (status) status.textContent = '正在提交审批…';
+    try {
+      const response = await api(`/activity-correction-proposals/${encodeURIComponent(proposalId)}/review`, {
+        method: 'POST', preserveOnForbidden: true,
+        body: JSON.stringify({ decision, expectedVersion: proposal.version, reason, idempotencyKey, ...(resolution ? { resolution } : {}) }),
+      });
+      state.activityCorrection.reviewDrafts.delete(proposalId);
+      await refreshAfterActivityCorrection({
+        ...(response.result || {}), sourceCustomerId: proposal.sourceCustomerId,
+        targetCustomerId: proposal.targetCustomerId,
+      }, decision === 'approved' ? '更正申请已批准' : '更正申请已拒绝');
+    } catch (error) {
+      if (error.code === 'ACTIVITY_CORRECTIONS_DISABLED' || error.status === 503) {
+        state.activityCorrection.writeEnabled = false;
+        if (status) status.textContent = '更正写入已关闭，审批意见已保留。';
+        applyActivityCorrectionReadEnvelope({ writeEnabled: false });
+      } else if (error.code === 'ACTIVITY_CORRECTION_MAPPING_CHANGED'
+          || error.code === 'ACTIVITY_CORRECTION_VERSION_CONFLICT') {
+        if (status) status.textContent = '业务映射或申请版本已变化，正在刷新真实状态…';
+        await loadActivityCorrectionProposals({ reset: true });
+      } else if (status) {
+        status.textContent = `${error.message}；审批意见已保留。`;
+      }
+      toast(error.message);
+    } finally {
+      state.activityCorrection.reviewSubmitting = '';
+      if (root?.isConnected) {
+        root.removeAttribute('aria-busy');
+        const mappingResolution = proposal?.mappingResolution || null;
+        const unavailable = mappingResolution?.required
+          && (!mappingResolution.available || !(mappingResolution.candidates || []).length);
+        const writesDisabled = state.activityCorrection.writeEnabled !== true;
+        const textarea = root.querySelector('[data-correction-review-reason]');
+        const select = root.querySelector('[data-correction-resolution]');
+        const reject = root.querySelector('[data-review-correction="rejected"]');
+        const approve = root.querySelector('[data-review-correction="approved"]');
+        if (textarea) textarea.disabled = false;
+        if (select) select.disabled = Boolean(unavailable);
+        if (reject) reject.disabled = writesDisabled;
+        if (approve) approve.disabled = writesDisabled || Boolean(unavailable);
+      }
+    }
+  }
+
+  function renderActivityCorrectionHistoryRows() {
+    const correction = state.activityCorrection;
+    const list = $('#activityCorrectionHistoryList');
+    if (list) list.innerHTML = correction.historyLoading && !correction.historyRows.length
+      ? '<div class="empty">正在读取更正历史…</div>'
+      : correction.historyRows.map(row => `<article class="activity-correction-history-item"><strong>${esc(correctionProposalCustomer(row, 'source'))} → ${esc(correctionProposalCustomer(row, 'target'))}</strong><p>${esc(row.reason || '未填写原因')}</p><small>${shortDate(row.createdAt, true)} · 已完成</small></article>`).join('') || '<div class="empty">当前筛选下没有更正历史</div>';
+    const count = $('#activityCorrectionHistoryCount');
+    if (count) count.textContent = `已显示 ${correction.historyRows.length} / ${correction.historyTotal} 条（授权范围 ${correction.historyAuthorizedTotal} 条）`;
+    const more = $('#activityCorrectionHistoryMore');
+    if (more) more.classList.toggle('hidden', !correction.historyHasMore);
+  }
+
+  async function loadActivityCorrections({ reset = false } = {}) {
+    const correction = state.activityCorrection;
+    if (state.data?.impersonation
+        || (!can('correct_own_activity') && !can('manage_activity_corrections'))) {
+      clearActivityCorrectionHistoryResults();
+      return null;
+    }
+    const requestEpoch = ++correction.historyRequestEpoch;
+    correction.historyLoading = true;
+    if (reset) { correction.historyRows = []; correction.historyPage = 1; }
+    renderActivityCorrectionHistoryRows();
+    try {
+      const page = reset ? 1 : correction.historyPage + 1;
+      const payload = correction.historyController?.serialize('applied') || { permissionVersion: '', filters: [] };
+      const params = new URLSearchParams({
+        page: String(page), pageSize: String(correction.historyPageSize),
+        ...(correction.historyController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
+        filters: JSON.stringify(componentPayloadToRaw(payload)),
+      });
+      const result = await api(`/activity-corrections?${params}`, { preserveOnForbidden: true });
+      if (requestEpoch !== correction.historyRequestEpoch) return null;
+      applyActivityCorrectionReadEnvelope(result);
+      const rows = result.rows || result.corrections || [];
+      correction.historyRows = reset ? rows : [...correction.historyRows, ...rows];
+      correction.historyPage = Number(result.page || page);
+      correction.historyTotal = Number(result.total || 0);
+      correction.historyAuthorizedTotal = Number(result.authorizedTotal || 0);
+      correction.historyHasMore = Boolean(result.hasMore);
+      if (result.schema && correction.historyController) correction.historyController.updateSchema(result.schema);
+      correction.historyMount?.setResultMeta({ total: result.total, shown: correction.historyRows.length });
+      renderActivityCorrectionHistoryRows();
+      return result;
+    } catch (error) {
+      if (requestEpoch !== correction.historyRequestEpoch) return null;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        await initializeActivityCorrectionHistoryFilters({ force: true });
+        return null;
+      }
+      if (error.status === 403) {
+        clearActivityCorrectionHistoryResults();
+        const filters = $('#activityCorrectionHistoryFilters');
+        if (filters && window.TradePulseFilterComponent) {
+          filters.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({
+            status: 'error', error: '当前账号无权读取更正历史',
+          });
+        }
+      }
+      const status = $('#activityCorrectionHistoryStatus');
+      if (status) status.textContent = error.message;
+      return null;
+    } finally {
+      if (requestEpoch === correction.historyRequestEpoch) correction.historyLoading = false;
+      renderActivityCorrectionHistoryRows();
+    }
+  }
+
+  async function initializeActivityCorrectionHistoryFilters({ force = false } = {}) {
+    const root = $('#activityCorrectionHistoryFilters');
+    if (!root || !window.TradePulseFilterComponent || state.data?.impersonation
+        || (!can('correct_own_activity') && !can('manage_activity_corrections'))) return;
+    if (state.activityCorrection.historyMount && !force) return;
+    state.activityCorrection.historyMount?.destroy();
+    state.activityCorrection.historyMount = null;
+    state.activityCorrection.historyController = null;
+    root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+    const result = await loadActivityCorrections({ reset: true });
+    if (!result?.schema || !root.isConnected) return;
+    const controller = window.TradePulseFilterComponent.createFilterController({
+      pageKey: 'activity_corrections', schema: result.schema,
+      onApply: () => void loadActivityCorrections({ reset: true }),
+    });
+    state.activityCorrection.historyController = controller;
+    state.activityCorrection.historyMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
+      controller, resultMeta: { total: result.total, shown: state.activityCorrection.historyRows.length },
+    });
+    controller.updateSchema(result.schema);
+    await loadActivityCorrections({ reset: true });
+  }
+
+  async function refreshAfterActivityCorrection(change = {}, message = '') {
+    const sourceCustomerId = String(change.sourceCustomerId || '');
+    const targetCustomerId = String(change.targetCustomerId || '');
+    const affectedCustomerIds = new Set([sourceCustomerId, targetCustomerId].filter(Boolean));
+    await refresh();
+    if (state.customerFilterController) await loadCustomerPage({ reset: true });
+    const reloads = [];
+    if (state.authorizedBusinessLists.notifications.filterController) reloads.push(loadAuthorizedBusinessPage('notifications', { reset: true }));
+    if (state.authorizedBusinessLists.alerts.filterController) reloads.push(loadAuthorizedBusinessPage('alerts', { reset: true }));
+    if (state.authorizedBusinessLists.manager_tasks.filterController) reloads.push(loadAuthorizedBusinessPage('manager_tasks', { reset: true }));
+    if (state.authorizedBusinessLists.manager_risks.filterController) reloads.push(loadAuthorizedBusinessPage('manager_risks', { reset: true }));
+    if (state.authorizedBusinessLists.manager_metrics.filterController) reloads.push(loadAuthorizedBusinessPage('manager_metrics', { reset: true }));
+    if (state.activityCorrection.historyController) reloads.push(loadActivityCorrections({ reset: true }));
+    if (state.activityCorrection.proposalController) reloads.push(loadActivityCorrectionProposals({ reset: true }));
+    await Promise.all(reloads);
+    if (affectedCustomerIds.has(String(state.selectedCustomerId || ''))) {
+      renderDrawer();
+      if (state.view === 'customerProfile') reloadCustomerProfileFrame();
+    }
+    if (message) toast(message);
+  }
+
   function renderDrawer() {
     if (state.recycleCustomerDetail
       && (state.recycleCustomerDetail.account?.id || state.selectedCustomerId) === state.selectedCustomerId) {
@@ -5982,13 +6802,11 @@
         }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
       </section>
       <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span></div>
-      <div class="timeline">${timeline.map(event => {
-        const meta = activityMeta[event.event_type] || [event.title || event.kind || '客户事件', '记'];
-        return `<div class="timeline-item" data-timeline-kind="${esc(event.kind || 'activity')}"><h4>${esc(event.title || meta[0])}</h4><p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p><time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
-      }).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
+      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
   }
 
   function openModal(title, eyebrow, html, modalClass = '') {
+    if (!$('#modal').classList.contains('open')) state.modalReturnFocus = document.activeElement;
     $('#modalTitle').textContent = title;
     $('#modalEyebrow').textContent = eyebrow;
     $('#modalBody').innerHTML = `<div class="modal-body">${html}</div>`;
@@ -5997,6 +6815,10 @@
     if (dialog) dialog.className = `modal${modalClass ? ` ${modalClass}` : ''}`;
     $('#modal').classList.add('open');
     $('#modal').setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+      const focusTarget = $('#modal [autofocus], #modal input:not([type="hidden"]), #modal textarea, #modal select, #modal button');
+      focusTarget?.focus?.();
+    });
   }
   function closeModal() {
     clearTimeout(state.activityCustomerSearchTimer);
@@ -6004,8 +6826,19 @@
     $('#modal').classList.remove('open');
     $('#modal').setAttribute('aria-hidden', 'true');
     state.activityDraftBeforeReactionAdmin = null;
+    state.activityCorrection.targetRequestEpoch += 1;
+    state.activityCorrection.targetMount?.destroy();
+    state.activityCorrection.targetMount = null;
+    state.activityCorrection.targetController = null;
+    state.activityCorrection.draft = null;
     const dialog = $('#modal .modal');
-    if (dialog) dialog.className = 'modal';
+    if (dialog) {
+      dialog.className = 'modal';
+      dialog.removeAttribute('id');
+    }
+    const returnFocus = state.modalReturnFocus;
+    state.modalReturnFocus = null;
+    if (returnFocus?.isConnected) requestAnimationFrame(() => returnFocus.focus?.());
   }
 
   function todayTaskById(taskId) {
@@ -7184,12 +8017,24 @@
     for (const config of Object.values(researchConfig)) {
       if (previous?.[config.dataKey]?.length) next[config.dataKey] = previous[config.dataKey];
     }
+    resetActivityCorrectionState();
     state.data = next;
     const aiGateChanged = previousAIEnabled !== customerAIEnabled()
       || previousSalesPackEnabled !== salesPackEnabled();
     stripDisabledAINotificationState();
     populateFilters();
     renderAll();
+    if (!state.data.impersonation
+        && (can('correct_own_activity') || can('manage_activity_corrections'))) {
+      if (state.view === 'activityCorrections') {
+        await Promise.all([
+          initializeActivityCorrectionHistoryFilters(),
+          initializeActivityCorrectionProposalFilters(),
+        ]);
+      } else {
+        await loadActivityCorrectionWriteStatus();
+      }
+    }
     if (aiGateChanged && state.authorizedBusinessLists.notifications.filterMount) {
       await initializeAuthorizedBusinessFilters('notifications', { force: true });
     }
@@ -7274,7 +8119,20 @@
         .filter(input => !input.disabled && !input.closest('.hidden'))
         .find(input => !validateFutureDateTime(input));
       if (invalidFuture) throw new Error('下一步时间必须晚于当前时间');
-      if (form.id === 'loginForm') {
+      if (form.id === 'activityCorrectionTargetForm') {
+        if (!state.activityCorrection.targetCustomerId) throw new Error('请选择正确客户');
+        state.activityCorrection.step = 2;
+        renderActivityCorrectionModal();
+      } else if (form.id === 'activityCorrectionReasonForm') {
+        const reason = String(new FormData(form).get('reason') || '').trim();
+        if (!reason) throw new Error('请填写更正原因');
+        if (reason !== state.activityCorrection.reason) rotateActivityCorrectionIdempotencyKey();
+        state.activityCorrection.reason = reason;
+        state.activityCorrection.step = 3;
+        renderActivityCorrectionModal();
+      } else if (form.id === 'activityCorrectionConfirmForm') {
+        await submitActivityCorrection();
+      } else if (form.id === 'loginForm') {
         if (state.loginPending) return;
         state.loginPending = true;
         $('#loginError').textContent = '';
@@ -8028,9 +8886,51 @@
       syncCustomerFilterControls();
       renderCustomers();
     }
+    const correctActivity = event.target.closest('[data-correct-activity]');
+    if (correctActivity && !correctActivity.disabled) {
+      openActivityCorrectionModal(correctActivity.dataset.correctActivity, correctActivity);
+    }
+    const correctionTarget = event.target.closest('[data-correction-target]');
+    if (correctionTarget) {
+      const nextTargetId = String(correctionTarget.dataset.correctionTarget || '');
+      if (nextTargetId !== state.activityCorrection.targetCustomerId) rotateActivityCorrectionIdempotencyKey();
+      state.activityCorrection.targetCustomerId = nextTargetId;
+      renderActivityCorrectionTargetRows();
+    }
+    if (event.target.closest('#activityCorrectionTargetMore') && state.activityCorrection.targetHasMore) {
+      await loadActivityCorrectionTargets();
+    }
+    const correctionBack = event.target.closest('[data-correction-back]');
+    if (correctionBack) {
+      state.activityCorrection.step = Number(correctionBack.dataset.correctionBack) || 1;
+      renderActivityCorrectionModal();
+    }
+    if (event.target.closest('[data-close-activity-correction]')) closeActivityCorrectionModal();
+    if (event.target.closest('#activityCorrectionProposalMore') && state.activityCorrection.proposalHasMore) {
+      await loadActivityCorrectionProposals();
+    }
+    if (event.target.closest('#activityCorrectionHistoryMore') && state.activityCorrection.historyHasMore) {
+      await loadActivityCorrections();
+    }
+    const correctionReview = event.target.closest('[data-review-correction]');
+    if (correctionReview) {
+      const proposalRoot = correctionReview.closest('[data-correction-proposal]');
+      await reviewActivityCorrectionProposal(
+        proposalRoot?.dataset.correctionProposal || '',
+        correctionReview.dataset.reviewCorrection,
+        correctionReview,
+      );
+    }
+    if (event.target.closest('#activityCorrectionWorkspaceRefresh')) {
+      await Promise.all([
+        loadActivityCorrections({ reset: true }),
+        loadActivityCorrectionProposals({ reset: true }),
+      ]);
+    }
     if (event.target.closest('[data-close-drawer]')) closeDrawer();
     if (event.target.closest('[data-close-modal]')) {
       if (state.activityDraftBeforeReactionAdmin && $('.activity-reaction-admin')) void restoreActivityDraft();
+      else if ($('#modal .modal')?.classList.contains('activity-correction-modal')) closeActivityCorrectionModal();
       else closeModal();
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
@@ -8557,6 +9457,11 @@
       clearTimeout(loadRecycleBin.timer);
       loadRecycleBin.timer = setTimeout(() => void loadRecycleBin(), 250);
     }
+    if (event.target.matches('#activityCorrectionReasonForm textarea[name="reason"]')) {
+      const nextReason = event.target.value;
+      if (nextReason !== state.activityCorrection.reason) rotateActivityCorrectionIdempotencyKey();
+      state.activityCorrection.reason = nextReason;
+    }
   });
 
   document.addEventListener('click', event => {
@@ -8585,6 +9490,9 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
+    if (view === 'activityCorrections' && state.data?.impersonation) {
+      return toast('身份检查期间不能进入跟进更正管理');
+    }
     if (view === 'aiTasks' && !customerAIEnabled()) {
       view = firstAllowedBusinessView();
       toast('AI 功能已关闭，已返回业务首页');
@@ -8643,6 +9551,10 @@
     if (canonicalView === 'managerMetrics') {
       void initializeAuthorizedBusinessFilters('manager_metrics');
       void initializeAuthorizedBusinessFilters('manager_risks');
+    }
+    if (canonicalView === 'activityCorrections') {
+      void initializeActivityCorrectionHistoryFilters();
+      void initializeActivityCorrectionProposalFilters();
     }
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
     if (canonicalView === 'protectedCustomers' && !state.protectedCustomers.loaded) {
@@ -8773,6 +9685,17 @@
     location.reload();
   });
   document.addEventListener('keydown', event => {
+    if (event.key === 'Tab' && $('#modal').classList.contains('open')) {
+      const focusable = Array.from($('#modal .modal')?.querySelectorAll(
+        'button:not([disabled]),input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])',
+      ) || []).filter(element => !element.closest('.hidden'));
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
     if (event.target.id === 'activityCustomerSearch') {
       const rows = state.activityCustomerResults;
       if (['ArrowDown', 'ArrowUp'].includes(event.key) && rows.length) {
@@ -8818,6 +9741,8 @@
       if (state.activityDraftBeforeReactionAdmin && $('.activity-reaction-admin')) {
         event.preventDefault();
         void restoreActivityDraft();
+      } else if ($('#modal .modal')?.classList.contains('activity-correction-modal')) {
+        closeActivityCorrectionModal();
       } else {
         closeModal();
       }

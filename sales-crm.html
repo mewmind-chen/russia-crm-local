@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260801-issue196">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260802-issue171c">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -61,6 +61,7 @@
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
           <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管介入任务</span></button>
+          <button data-view="activityCorrections" data-permission="manage_activity_corrections"><i data-tp-icon="note" aria-hidden="true"></i><span>跟进更正</span></button>
           <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>延期与介入统计</span></button>
           <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>销售能力</span></button>
           <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
@@ -375,6 +376,28 @@
           </div>
           <div id="notificationList" class="notification-list" aria-live="polite"></div>
           <div class="load-more-row"><button id="notificationsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="notifications">继续加载</button></div>
+        </article>
+      </section>
+
+      <section id="activityCorrectionsView" class="view" data-view-panel="activityCorrections">
+        <div class="section-intro">
+          <div><p class="eyebrow">ACTIVITY CORRECTIONS</p><h2>跟进归属更正</h2><p>查看更正审计历史，并处理授权范围内的待审批申请。</p></div>
+          <button id="activityCorrectionWorkspaceRefresh" class="button secondary" type="button">刷新</button>
+        </div>
+        <div id="activityCorrectionWriteStatus" class="activity-correction-write-status" role="status" aria-live="polite">正在读取更正功能状态…</div>
+        <article class="panel activity-correction-workspace">
+          <div class="panel-head"><div><p class="eyebrow">CORRECTION HISTORY</p><h2>更正历史</h2></div><span id="activityCorrectionHistoryCount" class="panel-note"></span></div>
+          <div id="activityCorrectionHistoryFilters" class="authorized-filter-host" aria-live="polite"></div>
+          <p id="activityCorrectionHistoryStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
+          <div id="activityCorrectionHistoryList" class="activity-correction-history-list"><div class="empty">进入页面后读取更正历史</div></div>
+          <div class="load-more-row"><button id="activityCorrectionHistoryMore" class="button secondary hidden" type="button">继续加载</button></div>
+        </article>
+        <article class="panel activity-correction-workspace">
+          <div class="panel-head"><div><p class="eyebrow">CORRECTION REVIEW</p><h2>待审批申请</h2></div><span id="activityCorrectionProposalCount" class="panel-note"></span></div>
+          <div id="activityCorrectionProposalFilters" class="authorized-filter-host" aria-live="polite"></div>
+          <p id="activityCorrectionProposalStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
+          <div id="activityCorrectionProposalList" class="activity-correction-proposal-list"><div class="empty">进入页面后读取审批队列</div></div>
+          <div class="load-more-row"><button id="activityCorrectionProposalMore" class="button secondary hidden" type="button">继续加载</button></div>
         </article>
       </section>
 
@@ -702,6 +725,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260801-issue196"></script>
+  <script src="/sales-assets/app.js?v=20260802-issue171c"></script>
 </body>
 </html>
