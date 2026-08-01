@@ -226,6 +226,22 @@ curl -fsS http://127.0.0.1:3000/healthz
 
 Also confirm the public `/healthz` endpoint after a deployment. Notifications: none in the first version.
 
+Run the release gate with an explicit endpoint, full expected commit SHA, and
+absolute SQLite path. The gate does not derive a database from the repository,
+`DEPLOY_ROOT`, or `CRM_DB_PATH`; it opens only the supplied file in read-only mode:
+
+```bash
+bash scripts/verify-release-gate.sh \
+  --health-url http://127.0.0.1:3000/healthz \
+  --expected-sha 0123456789abcdef0123456789abcdef01234567 \
+  --database /absolute/path/to/tradepulse-production/shared/data/crm.db
+```
+
+The command requires healthy JSON with the exact release SHA, then requires
+`PRAGMA integrity_check` to return `ok` and `PRAGMA foreign_key_check` to return
+no rows. Use the SHA selected by the release process rather than an abbreviated
+commit ID.
+
 Rollback boundary: code symlink is automatic; SQLite restore is manual and requires
 stopped services. Automatic database restore is forbidden.
 
