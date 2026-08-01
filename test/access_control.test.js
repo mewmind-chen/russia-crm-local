@@ -105,11 +105,17 @@ test('unknown browser route and action are denied by default', () => {
     SALES_ROUTE_POLICIES['POST /ai/jobs/:jobId/feedback'],
   );
   for (const [path, key] of [
+    ['/protected-customers/template', 'GET /protected-customers/template'],
+    ['/protected-customers/export', 'GET /protected-customers/export'],
+    ['/protected-customers/RU-1001', 'GET /protected-customers/:externalCustomerId'],
+    ['/protected-customers/RU-1001', 'PATCH /protected-customers/:externalCustomerId'],
+    ['/protected-customer-conflicts/rescan', 'POST /protected-customer-conflicts/rescan'],
     ['/protected-customers/batches/BATCH-1/commit', 'POST /protected-customers/batches/:batchId/commit'],
     ['/protected-customers/batches/BATCH-1/rollback', 'POST /protected-customers/batches/:batchId/rollback'],
     ['/protected-customers/RU-1001/activate', 'POST /protected-customers/:externalCustomerId/activate'],
   ]) {
-    assert.deepEqual(policyForSalesRequest('POST', path), SALES_ROUTE_POLICIES[key], key);
+    const method = key.split(' ')[0];
+    assert.deepEqual(policyForSalesRequest(method, path), SALES_ROUTE_POLICIES[key], key);
   }
 });
 
@@ -197,11 +203,15 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'GET /data-maintenance/runs',
     'GET /protected-customer-conflicts',
     'GET /protected-customers',
+    'GET /protected-customers/:externalCustomerId',
+    'GET /protected-customers/export',
+    'GET /protected-customers/template',
     'PATCH /activity-reactions/:reactionId',
     'PATCH /ai/features/:featureKey',
     'PATCH /filter-permissions/definitions/:filterKey',
     'PATCH /master/:customerId',
     'PATCH /permission-groups/:groupId',
+    'PATCH /protected-customers/:externalCustomerId',
     'PATCH /users/:userId',
     'POST /accounts/:customerId/reassign',
     'POST /accounts/:customerId/restore',
@@ -236,6 +246,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /password',
     'POST /permission-groups',
     'POST /protected-customer-conflicts/:conflictId/resolve',
+    'POST /protected-customer-conflicts/rescan',
     'POST /protected-customers/:externalCustomerId/activate',
     'POST /protected-customers/batches/:batchId/commit',
     'POST /protected-customers/batches/:batchId/rollback',

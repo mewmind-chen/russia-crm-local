@@ -142,6 +142,80 @@ test('activation preserves the external customer id, creates one account, and bl
   assert.equal((await rollback.json()).code, 'PROTECTED_CUSTOMER_BATCH_NOT_ROLLBACKABLE');
 });
 
+test('activation accepts only an active non-archived sales owner and invalid owners write nothing', async t => {
+  const fx = await protectedFixture(t);
+  const preview = await fx.requestJson('/api/sales-crm/protected-customers/batches/preview', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      idempotencyKey: 'preview-owner-eligibility',
+      rows: [{ alphaNickname: 'Alpha Owner Eligibility', country: 'Russia' }],
+    },
+  });
+  const committed = await fx.requestJson(
+    `/api/sales-crm/protected-customers/batches/${preview.batchId}/commit`,
+    {
+      cookie: fx.adminCookie,
+      method: 'POST',
+      body: { idempotencyKey: 'commit-owner-eligibility' },
+    },
+  );
+  const externalCustomerId = committed.rows[0].externalCustomerId;
+  const route = `/api/sales-crm/protected-customers/${externalCustomerId}/activate`;
+
+  async function assertOwnerRejected(ownerId, idempotencyKey) {
+    const response = await fx.request(route, {
+      cookie: fx.adminCookie,
+      method: 'POST',
+      body: {
+        idempotencyKey,
+        ownerId,
+        companyName: 'Owner Eligibility Official LLC',
+      },
+    });
+    assert.equal(response.status, 400, ownerId);
+    assert.equal((await response.json()).code, 'PROTECTED_CUSTOMER_OWNER_REQUIRED', ownerId);
+    assert.deepEqual(
+      fx.db.prepare(`SELECT status,activated_account_id accountId
+        FROM crm_protected_customers WHERE external_customer_id=?`).get(externalCustomerId),
+      { status: 'protected', accountId: '' },
+      ownerId,
+    );
+    assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_accounts
+      WHERE external_customer_id=?`).get(externalCustomerId).count, 0, ownerId);
+    assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_protected_customer_audit
+      WHERE external_customer_id=? AND action='protected_customer_activated'`)
+      .get(externalCustomerId).count, 0, ownerId);
+    assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_protected_customer_action_requests
+      WHERE action='activate'`).get().count, 0, ownerId);
+  }
+
+  await assertOwnerRejected('USR-ADMIN', 'activate-owner-admin');
+  await assertOwnerRejected('U-WU', 'activate-owner-manager');
+
+  fx.db.prepare("UPDATE sales_users SET active=0 WHERE id='U-OTHER'").run();
+  await assertOwnerRejected('U-OTHER', 'activate-owner-inactive-sales');
+  fx.db.prepare("UPDATE sales_users SET active=1,archived_at='2026-08-01 00:00:00' WHERE id='U-OTHER'").run();
+  await assertOwnerRejected('U-OTHER', 'activate-owner-archived-sales');
+
+  fx.db.prepare("UPDATE sales_users SET archived_at='' WHERE id='U-OTHER'").run();
+  const activatedResponse = await fx.request(route, {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      idempotencyKey: 'activate-owner-valid-sales',
+      ownerId: 'U-OTHER',
+      companyName: 'Owner Eligibility Official LLC',
+    },
+  });
+  assert.equal(activatedResponse.status, 200);
+  assert.equal(
+    fx.db.prepare('SELECT owner_id FROM crm_accounts WHERE external_customer_id=?')
+      .get(externalCustomerId).owner_id,
+    'U-OTHER',
+  );
+});
+
 test('an unactivated batch can be rolled back without reusing its stable customer id', async t => {
   const fx = await protectedFixture(t);
   const preview = await fx.requestJson('/api/sales-crm/protected-customers/batches/preview', {
@@ -252,4 +326,149 @@ test('disabled write gate blocks lifecycle writes without creating a batch', asy
   assert.equal(response.status, 409);
   assert.equal((await response.json()).code, 'PROTECTED_CUSTOMER_WRITES_DISABLED');
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_protected_customer_batches').get().count, 0);
+});
+
+test('admin workspace exposes complete protected profiles, template, detail, update, and mapping export', async t => {
+  const fx = await protectedFixture(t);
+  const preview = await fx.requestJson('/api/sales-crm/protected-customers/batches/preview', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      idempotencyKey: 'preview-admin-workspace',
+      rows: [{
+        alphaNickname: 'Alpha Workspace',
+        companyName: 'Workspace Draft LLC',
+        country: 'Russia',
+        city: 'Moscow',
+        website: 'https://draft.example',
+        industry: 'Electronics',
+        customerType: 'OEM',
+        productFocus: 'MCU',
+      }],
+    },
+  });
+  const committed = await fx.requestJson(
+    `/api/sales-crm/protected-customers/batches/${preview.batchId}/commit`,
+    {
+      cookie: fx.adminCookie,
+      method: 'POST',
+      body: { idempotencyKey: 'commit-admin-workspace' },
+    },
+  );
+  const externalCustomerId = committed.rows[0].externalCustomerId;
+
+  const listResponse = await fx.request(
+    '/api/sales-crm/protected-customers?query=Workspace&status=protected',
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(listResponse.status, 200);
+  const listed = await listResponse.json();
+  assert.equal(listed.writeEnabled, true);
+  assert.equal(listed.total, 1);
+  assert.deepEqual(
+    Object.fromEntries([
+      'externalCustomerId', 'alphaNickname', 'crmNickname', 'companyName', 'country', 'city',
+      'website', 'industry', 'customerType', 'productFocus', 'batchId', 'status', 'createdAt',
+    ].map(key => [key, listed.items[0][key]])),
+    {
+      externalCustomerId,
+      alphaNickname: 'Alpha Workspace',
+      crmNickname: '',
+      companyName: 'Workspace Draft LLC',
+      country: 'Russia',
+      city: 'Moscow',
+      website: 'https://draft.example',
+      industry: 'Electronics',
+      customerType: 'OEM',
+      productFocus: 'MCU',
+      batchId: preview.batchId,
+      status: 'protected',
+      createdAt: listed.items[0].createdAt,
+    },
+  );
+
+  const templateResponse = await fx.request('/api/sales-crm/protected-customers/template', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(templateResponse.status, 200);
+  assert.match(templateResponse.headers.get('content-type'), /^text\/csv/);
+  assert.match(templateResponse.headers.get('content-disposition'), /protected-customer-template\.csv/);
+  assert.match(await templateResponse.text(), /^alphaNickname,companyName,country,city,website,industry,customerType,productFocus/);
+
+  const detailResponse = await fx.request(
+    `/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(detailResponse.status, 200);
+  assert.equal((await detailResponse.json()).customer.alphaNickname, 'Alpha Workspace');
+
+  const updateResponse = await fx.request(
+    `/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}`,
+    {
+      cookie: fx.adminCookie,
+      method: 'PATCH',
+      body: {
+        companyName: 'Workspace Official LLC',
+        city: 'Saint Petersburg',
+        website: 'https://workspace.example',
+        productFocus: 'Sensors',
+      },
+    },
+  );
+  assert.equal(updateResponse.status, 200);
+  const updated = (await updateResponse.json()).customer;
+  assert.equal(updated.companyName, 'Workspace Official LLC');
+  assert.equal(updated.city, 'Saint Petersburg');
+  assert.equal(updated.productFocus, 'Sensors');
+
+  const exportResponse = await fx.request('/api/sales-crm/protected-customers/export', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(exportResponse.status, 200);
+  assert.match(exportResponse.headers.get('content-type'), /^text\/csv/);
+  assert.match(exportResponse.headers.get('content-disposition'), /protected-customer-mapping\.csv/);
+  const exported = await exportResponse.text();
+  assert.match(exported, /Alpha Workspace/);
+  assert.match(exported, /Workspace Official LLC/);
+  assert.match(exported, new RegExp(externalCustomerId));
+
+  const ordinaryExport = await fx.request('/api/sales-crm/export?format=csv', {
+    cookie: fx.adminCookie,
+  });
+  const ordinaryText = await ordinaryExport.text();
+  assert.equal(ordinaryText.includes('Alpha Workspace'), false);
+  assert.equal(ordinaryText.includes('Workspace Official LLC'), false);
+});
+
+test('new protected workspace routes stay admin-only and write endpoints fail closed', async t => {
+  const fx = await protectedFixture(t);
+  const readRoutes = [
+    '/api/sales-crm/protected-customers/template',
+    '/api/sales-crm/protected-customers/export',
+    '/api/sales-crm/protected-customers/RU-UNKNOWN',
+  ];
+  for (const route of readRoutes) {
+    assert.equal((await fx.request(route, { cookie: fx.cookie })).status, 403, route);
+    assert.equal((await fx.request(route, { cookie: fx.otherCookie })).status, 403, route);
+  }
+
+  process.env.CRM_PROTECTED_CUSTOMERS_WRITES_ENABLED = 'false';
+  const readOnlyList = await fx.request('/api/sales-crm/protected-customers', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(readOnlyList.status, 200);
+  assert.equal((await readOnlyList.json()).writeEnabled, false);
+  assert.equal((await fx.request('/api/sales-crm/protected-customers/template', {
+    cookie: fx.adminCookie,
+  })).status, 200);
+  assert.equal((await fx.request('/api/sales-crm/protected-customers/export', {
+    cookie: fx.adminCookie,
+  })).status, 200);
+  const update = await fx.request('/api/sales-crm/protected-customers/RU-UNKNOWN', {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: { companyName: 'Must Not Persist' },
+  });
+  assert.equal(update.status, 409);
+  assert.equal((await update.json()).code, 'PROTECTED_CUSTOMER_WRITES_DISABLED');
 });
