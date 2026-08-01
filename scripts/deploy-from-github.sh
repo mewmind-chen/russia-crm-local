@@ -31,6 +31,8 @@ target_sha=""
 switched=0
 previous_link_changed=0
 previous_link_backup=""
+# zsh runs TRAPEXIT in command substitutions; deployment cleanup belongs to this shell only.
+deployment_shell_level=$ZSH_SUBSHELL
 
 force=0
 if (( $# == 1 )) && [[ "$1" == --force ]]; then
@@ -110,6 +112,9 @@ run_rollback_healthcheck() {
 
 TRAPEXIT() {
   local exit_code=$?
+  if (( ZSH_SUBSHELL != deployment_shell_level )); then
+    return $exit_code
+  fi
   local failed_stage="$stage"
   local rollback_sha=""
   set +e

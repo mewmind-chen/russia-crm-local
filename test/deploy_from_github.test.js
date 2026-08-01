@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const deployScript = path.join(__dirname, '..', 'scripts', 'deploy-from-github.sh');
 
@@ -33,6 +33,7 @@ function createFixture() {
   const validationLog = path.join(root, 'validation.log');
   const validationFailFile = path.join(root, 'validation.fail');
   const backupLog = path.join(root, 'backup.log');
+  const backupBlockFile = path.join(root, 'backup.block');
   const restartLog = path.join(root, 'restart.log');
   const healthLog = path.join(root, 'health.log');
   const healthFailShaFile = path.join(root, 'health-fail-sha');
@@ -60,6 +61,7 @@ function createFixture() {
   fs.writeFileSync(path.join(source, 'package.json'), '{"name":"deploy-fixture","version":"1.0.0"}\n');
   fs.writeFileSync(path.join(source, 'server.js'), 'console.log("fixture");\n');
   fs.mkdirSync(path.join(source, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(source, 'scripts', 'deploy-from-github.sh'), '#!/bin/zsh\nexit 0\n');
   fs.writeFileSync(path.join(source, 'scripts', 'recon_agent_worker.py'), 'print("fixture")\n');
   fs.writeFileSync(path.join(source, 'scripts', 'contact_recon_worker.py'), 'print("fixture")\n');
 
@@ -77,6 +79,18 @@ function createFixture() {
   const backupBin = path.join(helpersDir, 'backup.sh');
   const restartBin = path.join(helpersDir, 'restart.sh');
   const healthcheckBin = path.join(helpersDir, 'healthcheck.sh');
+  const npmBin = path.join(helpersDir, 'npm');
+  const pythonBin = path.join(helpersDir, 'python3');
+  writeExecutable(npmBin, `#!/bin/sh
+set -eu
+if test "${'$'}{1:-}" = ci; then
+  pwd >> "$DEPLOY_TEST_VALIDATION_LOG"
+fi
+`);
+  writeExecutable(pythonBin, `#!/bin/sh
+set -eu
+exit 0
+`);
   writeExecutable(validationBin, `#!/bin/sh
 set -eu
 candidate="$1"
@@ -97,6 +111,11 @@ set -eu
 printf '%s\\n' "$1" >> "$DEPLOY_TEST_BACKUP_LOG"
 mkdir -p "$(dirname "$1")"
 : > "$1"
+if test -n "${'$'}{DEPLOY_TEST_BACKUP_BLOCK_FILE:-}"; then
+  while test -e "$DEPLOY_TEST_BACKUP_BLOCK_FILE"; do
+    sleep 0.02
+  done
+fi
 `);
   writeExecutable(restartBin, `#!/bin/sh
 set -eu
@@ -125,11 +144,14 @@ fi
     validationLog,
     validationFailFile,
     backupLog,
+    backupBlockFile,
+    lockDir: path.join(stateDir, 'deploy.lock'),
     restartLog,
     healthLog,
     healthFailShaFile,
     env: {
       ...process.env,
+      PATH: `${helpersDir}:${process.env.PATH}`,
       HOME: homeDir,
       DEPLOY_REMOTE_URL: remote,
       DEPLOY_BRANCH: 'main',
@@ -147,6 +169,7 @@ fi
       DEPLOY_TEST_VALIDATION_LOG: validationLog,
       DEPLOY_TEST_VALIDATION_FAIL_FILE: validationFailFile,
       DEPLOY_TEST_BACKUP_LOG: backupLog,
+      DEPLOY_TEST_BACKUP_BLOCK_FILE: backupBlockFile,
       DEPLOY_TEST_RESTART_LOG: restartLog,
       DEPLOY_TEST_HEALTH_LOG: healthLog,
       DEPLOY_TEST_HEALTH_FAIL_SHA_FILE: healthFailShaFile,
@@ -196,6 +219,129 @@ function installOldRelease(fixture) {
 function deploy(fixture, args = []) {
   return spawnSync('zsh', [deployScript, ...args], { encoding: 'utf8', env: fixture.env });
 }
+
+function startDeploy(fixture, args = [], envOverrides = {}) {
+  const child = spawn('zsh', [deployScript, ...args], {
+    env: { ...fixture.env, ...envOverrides },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const execution = {
+    child,
+    stdout: '',
+    stderr: '',
+    done: false,
+    result: null,
+    completion: null,
+  };
+  child.stdout.on('data', chunk => {
+    execution.stdout += chunk;
+  });
+  child.stderr.on('data', chunk => {
+    execution.stderr += chunk;
+  });
+  execution.completion = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (status, signal) => {
+      execution.done = true;
+      execution.result = { status, signal, stdout: execution.stdout, stderr: execution.stderr };
+      resolve(execution.result);
+    });
+  });
+  return execution;
+}
+
+function lineCount(file) {
+  if (!fs.existsSync(file)) return 0;
+  const contents = fs.readFileSync(file, 'utf8').trim();
+  return contents ? contents.split('\n').length : 0;
+}
+
+async function waitFor(condition, description, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error(`timed out waiting for ${description}`);
+}
+
+test('keeps the deployment lock through validation and rejects a concurrent deploy', { timeout: 15000 }, async () => {
+  const fixture = createFixture();
+  const oldRelease = installOldRelease(fixture);
+  let firstDeploy;
+  let secondDeploy;
+  fs.writeFileSync(fixture.backupBlockFile, 'block\n');
+
+  try {
+    firstDeploy = startDeploy(fixture, [], { DEPLOY_VALIDATION_BIN: '' });
+    await waitFor(() => lineCount(fixture.backupLog) === 1, 'the first deploy to reach backup');
+
+    const lockHeldAfterValidation = fs.existsSync(fixture.lockDir);
+    secondDeploy = startDeploy(fixture, [], { DEPLOY_VALIDATION_BIN: '' });
+    await waitFor(
+      () => secondDeploy.done || lineCount(fixture.backupLog) > 1,
+      'the concurrent deploy to exit or enter backup',
+    );
+
+    const secondExitedWhileFirstBlocked = secondDeploy.done;
+    const backupCountWhileBlocked = lineCount(fixture.backupLog);
+    const currentWhileBlocked = fs.realpathSync(fixture.currentLink);
+    const previousExistsWhileBlocked = fs.existsSync(fixture.previousLink);
+    const stateExistsWhileBlocked = fs.existsSync(fixture.stateFile);
+    const restartCountWhileBlocked = lineCount(fixture.restartLog);
+
+    fs.rmSync(fixture.backupBlockFile);
+    const [firstResult, secondResult] = await Promise.all([
+      firstDeploy.completion,
+      secondDeploy.completion,
+    ]);
+
+    assert.equal(lockHeldAfterValidation, true, 'a deployment child shell released the deployment lock');
+    assert.equal(secondExitedWhileFirstBlocked, true, 'concurrent deploy entered a protected stage');
+    assert.notEqual(secondResult.status, 0);
+    assert.match(secondResult.stderr, /another deployment is running/);
+    assert.equal(backupCountWhileBlocked, 1);
+    assert.equal(currentWhileBlocked, fs.realpathSync(oldRelease));
+    assert.equal(previousExistsWhileBlocked, false);
+    assert.equal(stateExistsWhileBlocked, false);
+    assert.equal(restartCountWhileBlocked, 0);
+
+    assert.equal(firstResult.status, 0, firstResult.stderr);
+    assert.equal(lineCount(fixture.validationLog), 1);
+    assert.equal(lineCount(fixture.backupLog), 1);
+    assert.equal(lineCount(fixture.restartLog), 5);
+    assert.equal(fs.existsSync(fixture.lockDir), false);
+
+    const release = path.join(fixture.releasesDir, fixture.sha.slice(0, 12));
+    assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(release));
+    assert.equal(fs.realpathSync(fixture.previousLink), fs.realpathSync(oldRelease));
+    assert.notEqual(fs.realpathSync(fixture.currentLink), fs.realpathSync(fixture.previousLink));
+
+    const logCounts = {
+      validation: lineCount(fixture.validationLog),
+      backup: lineCount(fixture.backupLog),
+      restart: lineCount(fixture.restartLog),
+    };
+    const followUp = deploy(fixture);
+    assert.equal(followUp.status, 0, followUp.stderr);
+    assert.match(followUp.stdout, /already deployed/);
+    assert.deepEqual(
+      {
+        validation: lineCount(fixture.validationLog),
+        backup: lineCount(fixture.backupLog),
+        restart: lineCount(fixture.restartLog),
+      },
+      logCounts,
+    );
+  } finally {
+    fs.rmSync(fixture.backupBlockFile, { force: true });
+    await Promise.allSettled([
+      firstDeploy?.completion,
+      secondDeploy?.completion,
+    ].filter(Boolean));
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
 
 test('deploys newest remote main as an immutable release', () => {
   const fixture = createFixture();
