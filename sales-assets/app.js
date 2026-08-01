@@ -290,23 +290,74 @@
   function money(value, currency = 'USD') {
     return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
   }
-  function shortDate(value, withTime = false) {
+  function businessTimezone() {
+    const configured = String(state.data?.businessTimezone || 'Asia/Shanghai').trim();
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: configured }).format(0);
+      return configured;
+    } catch (_error) {
+      return 'Asia/Shanghai';
+    }
+  }
+  function instantDate(value) {
+    const text = String(value || '').trim().replace(' ', 'T');
+    if (!text) return new Date(NaN);
+    const explicitOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    return new Date(explicitOffset ? text : `${text}Z`);
+  }
+  function shortDate(value, withTime = false, timezone = businessTimezone()) {
     if (!value) return '—';
-    const date = new Date(String(value).replace(' ', 'T') + (String(value).includes('Z') ? '' : 'Z'));
+    const date = instantDate(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('zh-CN', withTime ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false } : { month: 'numeric', day: 'numeric' }).format(date);
+    return new Intl.DateTimeFormat('zh-CN', withTime
+      ? { timeZone: timezone, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
+      : { timeZone: timezone, month: 'numeric', day: 'numeric' }).format(date);
   }
   function relative(value) {
     if (!value) return '暂无记录';
-    const time = new Date(String(value).replace(' ', 'T') + (String(value).includes('Z') ? '' : 'Z')).getTime();
+    const time = instantDate(value).getTime();
     const hours = Math.max(0, Math.round((Date.now() - time) / 3600000));
     if (hours < 1) return '刚刚';
     if (hours < 24) return `${hours}小时前`;
     return `${Math.floor(hours / 24)}天前`;
   }
   function dateInput(days = 1) {
-    const d = new Date(Date.now() + days * 86400000);
-    return d.toISOString().slice(0, 16);
+    return businessDateInput(new Date(Date.now() + days * 86400000));
+  }
+  function businessDateInput(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const values = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: businessTimezone(),
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(date).filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  }
+  function storedPlanDateInput(value) {
+    return storedPlanDateInputWithBasis(value, 'utc');
+  }
+  function storedPlanDateInputWithBasis(value, basis) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    if (basis !== 'utc') return text.replace(' ', 'T').slice(0, 16);
+    return businessDateInput(instantDate(text));
+  }
+  function suggestedPlanDateInput(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) return businessDateInput(instantDate(text));
+    const local = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?$/);
+    return local ? `${local[1]}T${local[2]}` : '';
+  }
+  function storedPlanDateLabel(value, basis) {
+    return basis === 'utc'
+      ? shortDate(value, true)
+      : shortDate(value, true, 'UTC');
+  }
+  function legacyPlanTimeNote(basis) {
+    return basis === 'utc' ? '' : '<small class="subtle">历史时间待确认</small>';
   }
   function apiTime(value) {
     return value ? String(value).replace('T', ' ') + (String(value).length === 16 ? ':00' : '') : '';
@@ -2345,7 +2396,7 @@
       <p>${esc(value.reason || '')}</p>
       <div class="next-action-suggestion-fields">
         <label>下一步动作<input id="nextActionSuggestion" value="${esc(value.nextAction || '')}" ${editable ? '' : 'readonly'}></label>
-        <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" value="${esc(String(value.nextActionAt || '').replace(' ', 'T').slice(0, 16))}" ${editable ? '' : 'readonly'}></label>
+        <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" value="${esc(suggestedPlanDateInput(value.nextActionAt))}" ${editable ? '' : 'readonly'}></label>
         <label class="check"><input id="nextActionSuggestionManager" type="checkbox" ${value.managerRequired ? 'checked' : ''} ${editable ? '' : 'disabled'}> 需要经理介入</label>
       </div>
       ${editable ? `<div class="next-action-suggestion-actions"><button class="button primary tiny" type="button" data-adopt-next-action="${esc(job.id)}">采纳下一步建议</button><span>采纳前可编辑；不会自动修改客户。</span></div>` : ''}
@@ -3048,7 +3099,7 @@
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           esc(account.owner_name || '未分配'),
           `<span>${relative(account.last_activity_at)}</span>`,
-          `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${shortDate(account.next_action_at, true)}</span></div>`,
+          `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</span>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div>`,
           `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span> · ${money(account.potential_value)}`,
           `${alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>'}${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
         ];
@@ -5383,7 +5434,7 @@
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${alert ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
-      <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div><time>${shortDate(account.next_action_at, true)}</time></div>
+      <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
         ${accountFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
@@ -5821,7 +5872,7 @@
     }
     setActivityField(form, 'summary', value.summary);
     setActivityField(form, 'nextAction', value.nextAction);
-    setActivityField(form, 'nextActionAt', String(value.nextActionAt || '').replace(' ', 'T').slice(0, 16));
+    setActivityField(form, 'nextActionAt', suggestedPlanDateInput(value.nextActionAt));
     setActivityField(form, 'proposalJobId', task.taskId);
     const missingLabels = {
       activityType: '本次进展', channel: '本次进展', outcome: '客户反应',
@@ -6270,7 +6321,7 @@
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
-      <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" value="${esc(String(account.next_action_at || '').replace(' ', 'T').slice(0, 16))}"></label>
+      <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存调整</button></div>
     </form>`);
   }

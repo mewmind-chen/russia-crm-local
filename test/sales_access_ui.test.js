@@ -110,7 +110,7 @@ test('override editor styles exist and asset versions are refreshed', () => {
   assert.match(css, /permission-override-row/);
   assert.match(css, /binary-permission-control/);
   assert.match(html, /app\.css\?v=20260801-issue190/);
-  assert.match(html, /app\.js\?v=20260801-issue190/);
+  assert.match(html, /app\.js\?v=20260801-issue192/);
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });

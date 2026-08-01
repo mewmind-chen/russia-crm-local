@@ -66,7 +66,7 @@ test('quote and order writes are human-authorized and idempotent', async t => {
     amount: 12500,
     currency: 'USD',
     grossMargin: 8,
-    nextFollowAt: '2026-07-30 09:00:00',
+    nextFollowAt: '2099-07-30 09:00:00',
     idempotencyKey: 'a3-05-quote-1',
   };
   const firstQuoteResponse = await fx.request('/api/sales-crm/quotes', {
@@ -89,7 +89,7 @@ test('quote and order writes are human-authorized and idempotent', async t => {
     amount: 12500,
     currency: 'USD',
     grossMargin: 6,
-    nextActionAt: '2026-08-08 09:00:00',
+    nextActionAt: '2099-08-08 09:00:00',
     idempotencyKey: 'a3-05-order-1',
   };
   const firstOrderResponse = await fx.request('/api/sales-crm/orders', {

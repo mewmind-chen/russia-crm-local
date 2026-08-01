@@ -217,7 +217,7 @@ test('activity stores a stable reaction id and immutable text snapshot across re
   assert.equal(exportedActivity.reactionSnapshot, '首次选择文字');
   assert.equal(exportedActivity.summary, '客户已有明确反应');
   assert.equal(exportedActivity.nextAction, '继续确认');
-  assert.equal(exportedActivity.nextActionAt, '2099-08-01 09:00:00');
+  assert.equal(exportedActivity.nextActionAt, '2099-08-01 01:00:00');
   assert.equal(exportedActivity.managerRequired, false);
 
   fx.db.prepare('UPDATE crm_activities SET summary=? WHERE id=?')

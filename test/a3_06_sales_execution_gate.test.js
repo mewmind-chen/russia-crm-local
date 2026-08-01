@@ -34,7 +34,7 @@ function stationOutput(station, evidenceIds = []) {
   return {
     version: 'v1',
     nextAction: '确认 BOM 明细并安排技术评审',
-    nextActionAt: '2026-07-29 09:00:00',
+    nextActionAt: '2099-07-29 09:00:00',
     managerRequired: false,
     reason: '客户已由销售人工触达，应在承诺窗口内确认需求。',
     missingFields: [],
@@ -150,7 +150,7 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
       reactionOptionId: 'REACTION-COMPLETED',
       summary: '销售复核资料包后人工发送首次触达邮件。',
       nextAction: '等待客户回复',
-      nextActionAt: '2026-07-28 09:00:00',
+      nextActionAt: '2099-07-28 09:00:00',
       occurredAt: '2026-07-25 10:00:00',
     },
   });
@@ -169,7 +169,7 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
 
   const adoptionPayload = {
     nextAction: '确认 BOM 明细并安排技术评审',
-    nextActionAt: '2026-07-29 09:00:00',
+    nextActionAt: '2099-07-29 09:00:00',
     managerRequired: false,
   };
   const adopted = await fx.request(`/api/sales-crm/ai/jobs/${activity.nextActionJobId}/next-action/adopt`, {
@@ -196,7 +196,7 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
       reactionOptionId: 'REACTION-FOLLOW-UP',
       summary: '客户人工确认进入询价阶段。',
       nextAction: '准备报价',
-      nextActionAt: '2026-07-30 09:00:00',
+      nextActionAt: '2099-07-30 09:00:00',
       reference: 'RFQ-A3-06',
       bomLines: 18,
       expectedValue: 15000,
@@ -215,7 +215,7 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
     amount: 12800,
     currency: 'USD',
     grossMargin: 9,
-    nextFollowAt: '2026-07-31 09:00:00',
+    nextFollowAt: '2099-07-31 09:00:00',
     sentAt: '2026-07-25 12:00:00',
     idempotencyKey: 'a3-06-quote',
   };
@@ -241,7 +241,7 @@ test('A3-06 sales execution gate keeps one human-confirmed timeline through work
     currency: 'USD',
     grossMargin: 7,
     orderedAt: '2026-07-25 13:00:00',
-    nextActionAt: '2026-08-08 09:00:00',
+    nextActionAt: '2099-08-08 09:00:00',
     idempotencyKey: 'a3-06-order',
   };
   const orderResponse = await fx.request('/api/sales-crm/orders', {
