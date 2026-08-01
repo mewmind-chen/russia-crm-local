@@ -139,7 +139,7 @@
     recycleBin: ['CUSTOMER RECYCLE BIN', '客户回收站'],
     customerProfile: ['CUSTOMER PROFILE', '客户资料'],
     pool: ['LEAD POOL', '线索池'],
-    contacts: ['CONTACT EVIDENCE', '负责人线索'],
+    contacts: ['CONTACT EVIDENCE', '客户联系人线索'],
     recon: ['RECON INTELLIGENCE', 'Recon 情报'],
     pipeline: ['PIPELINE CONTROL', '推进管道'],
     alerts: ['TODAY TASKS', '今日待办'],
