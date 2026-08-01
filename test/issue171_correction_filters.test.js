@@ -37,8 +37,8 @@ function ast(page, filters = []) {
   return { page, filters };
 }
 
-function memoryDb() {
-  const db = new Database(':memory:');
+function memoryDb(options = {}) {
+  const db = new Database(':memory:', options);
   db.exec(`
     CREATE TABLE crm_accounts (
       id TEXT PRIMARY KEY, external_customer_id TEXT NOT NULL,
@@ -51,6 +51,18 @@ function memoryDb() {
     CREATE TABLE customer_pool (
       customer_id TEXT PRIMARY KEY, company_name TEXT NOT NULL DEFAULT '',
       nickname TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE crm_activities (
+      id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, activity_type TEXT NOT NULL
+    );
+    CREATE TABLE crm_rfqs (
+      id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, activity_id TEXT NOT NULL
+    );
+    CREATE TABLE crm_quotes (
+      id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, activity_id TEXT NOT NULL
+    );
+    CREATE TABLE crm_orders (
+      id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, activity_id TEXT NOT NULL
     );
     CREATE TABLE crm_activity_corrections (
       id TEXT PRIMARY KEY, original_activity_id TEXT NOT NULL,
@@ -224,6 +236,259 @@ test('proposal list filters status without leaking outside either customer scope
       ['approved', 1],
       ['pending', 1],
     ]);
+  } finally {
+    db.close();
+  }
+});
+
+test('manager proposal rows expose only revalidated in-scope mapping resolution candidates', () => {
+  const db = memoryDb();
+  try {
+    db.prepare(`INSERT INTO crm_activities(id,customer_id,activity_type)
+      VALUES ('ACT-MAPPING','A-1','quote')`).run();
+    db.prepare(`INSERT INTO crm_activity_correction_proposals
+      (id,original_activity_id,source_customer_id,target_customer_id,
+       source_external_customer_id,target_external_customer_id,requester_id,
+       original_creator_id,reason,reason_code,status,created_at,mapping_evidence_json)
+      VALUES ('PROP-MAPPING','ACT-MAPPING','A-1','A-2','EXT-A1','EXT-A2','SALES',
+       'SALES','Ambiguous quote mapping','MAPPING_UNCERTAIN','pending','2026-08-04 09:00:00',?)`)
+      .run(JSON.stringify({
+        linkedCount: 99,
+        rankedCandidates: 'AI_FILTER_SENTINEL',
+        ownerId: 'OTHER',
+        assignmentReason: 'ASSIGNMENT_FILTER_SENTINEL',
+      }));
+    db.prepare(`INSERT INTO crm_quotes(id,customer_id,activity_id) VALUES
+      ('QUOTE-A1-1','A-1','ACT-MAPPING'),
+      ('QUOTE-A1-2','A-1','ACT-MAPPING'),
+      ('QUOTE-OUTSIDE','B-1','ACT-MAPPING')`).run();
+    db.prepare(`INSERT INTO crm_rfqs(id,customer_id,activity_id)
+      VALUES ('RFQ-WRONG-TYPE','A-1','ACT-MAPPING')`).run();
+
+    const result = queryActivityCorrectionProposals(
+      db,
+      manager(),
+      ast(FILTER_PAGES.proposals, [{
+        key: 'search', operator: 'contains', value: 'PROP-MAPPING',
+      }]),
+    );
+    assert.equal(result.rows.length, 1);
+    assert.deepEqual(result.rows[0].mappingResolution, {
+      required: true,
+      available: true,
+      evidence: { linkedCount: 3 },
+      candidates: [
+        { mode: 'activity_only' },
+        { mode: 'commerce_entity', entityType: 'quote', entityId: 'QUOTE-A1-1' },
+        { mode: 'commerce_entity', entityType: 'quote', entityId: 'QUOTE-A1-2' },
+      ],
+    });
+    assert.doesNotMatch(JSON.stringify(result),
+      /QUOTE-OUTSIDE|AI_FILTER_SENTINEL|ASSIGNMENT_FILTER_SENTINEL|ownerId|assignmentReason/);
+    assert.deepEqual(
+      Object.keys(result.rows[0].mappingResolution.candidates[1]).sort(),
+      ['entityId', 'entityType', 'mode'],
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('commerce rows without IDs remain uncertain but never become submit candidates', () => {
+  const db = memoryDb();
+  try {
+    db.exec(`
+      DROP TABLE crm_quotes;
+      CREATE TABLE crm_quotes (
+        customer_id TEXT NOT NULL, activity_id TEXT NOT NULL
+      );
+      INSERT INTO crm_activities(id,customer_id,activity_type)
+        VALUES ('ACT-NO-COMMERCE-ID','A-1','quote');
+      INSERT INTO crm_quotes(customer_id,activity_id)
+        VALUES ('A-1','ACT-NO-COMMERCE-ID');
+      INSERT INTO crm_activity_correction_proposals
+        (id,original_activity_id,source_customer_id,target_customer_id,
+         source_external_customer_id,target_external_customer_id,requester_id,
+         original_creator_id,reason,reason_code,status,created_at)
+      VALUES ('PROP-NO-COMMERCE-ID','ACT-NO-COMMERCE-ID','A-1','A-2','EXT-A1','EXT-A2',
+        'SALES','SALES','legacy commerce row has no id','MAPPING_UNCERTAIN','pending',
+        '2026-08-05 08:30:00');
+    `);
+
+    const result = queryActivityCorrectionProposals(
+      db, manager(), ast(FILTER_PAGES.proposals), { pageSize: 20 },
+    );
+    const proposal = result.rows.find(row => row.proposalId === 'PROP-NO-COMMERCE-ID');
+    assert.deepEqual(proposal.mappingResolution, {
+      required: true,
+      available: true,
+      evidence: { linkedCount: 1 },
+      candidates: [{ mode: 'activity_only' }],
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('proposal mapping requirement follows the current links instead of the stored reason code', () => {
+  const db = memoryDb();
+  try {
+    db.exec(`
+      INSERT INTO crm_activities(id,customer_id,activity_type)
+        VALUES ('ACT-NOW-STABLE','A-1','quote'),('ACT-NOW-UNCERTAIN','A-1','quote');
+      INSERT INTO crm_quotes(id,customer_id,activity_id) VALUES
+        ('QUOTE-STABLE','A-1','ACT-NOW-STABLE'),
+        ('QUOTE-UNCERTAIN-1','A-1','ACT-NOW-UNCERTAIN'),
+        ('QUOTE-UNCERTAIN-2','A-1','ACT-NOW-UNCERTAIN');
+      INSERT INTO crm_activity_correction_proposals
+        (id,original_activity_id,source_customer_id,target_customer_id,
+         source_external_customer_id,target_external_customer_id,requester_id,
+         original_creator_id,reason,reason_code,status,created_at)
+      VALUES
+        ('PROP-NOW-STABLE','ACT-NOW-STABLE','A-1','A-2','EXT-A1','EXT-A2',
+         'SALES','SALES','mapping converged','MAPPING_UNCERTAIN','pending','2026-08-05 09:00:00'),
+        ('PROP-NOW-UNCERTAIN','ACT-NOW-UNCERTAIN','A-1','A-2','EXT-A1','EXT-A2',
+         'MANAGER','SALES','creator override plus mapping conflict','OTHER_CREATOR','pending',
+         '2026-08-05 09:01:00');
+    `);
+    const result = queryActivityCorrectionProposals(
+      db, manager(), ast(FILTER_PAGES.proposals), { pageSize: 20 },
+    );
+    const stable = result.rows.find(row => row.proposalId === 'PROP-NOW-STABLE');
+    const uncertain = result.rows.find(row => row.proposalId === 'PROP-NOW-UNCERTAIN');
+    assert.equal(stable.mappingResolution, undefined,
+      'a currently stable link must not offer an unnecessary activity-only override');
+    assert.deepEqual(uncertain.mappingResolution, {
+      required: true,
+      available: true,
+      evidence: { linkedCount: 2 },
+      candidates: [
+        { mode: 'activity_only' },
+        { mode: 'commerce_entity', entityType: 'quote', entityId: 'QUOTE-UNCERTAIN-1' },
+        { mode: 'commerce_entity', entityType: 'quote', entityId: 'QUOTE-UNCERTAIN-2' },
+      ],
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('pending mapping context tolerates missing schema and deleted activities without invalid candidates', () => {
+  const db = memoryDb();
+  try {
+    db.exec(`
+      DROP TABLE crm_rfqs;
+      CREATE TABLE crm_rfqs (id TEXT PRIMARY KEY, activity_id TEXT NOT NULL);
+      DROP TABLE crm_quotes;
+      CREATE TABLE crm_quotes (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL);
+      DROP TABLE crm_orders;
+      INSERT INTO crm_activities(id,customer_id,activity_type)
+        VALUES ('ACT-MISSING-COMMERCE','A-1','quote'),('ACT-LEGACY-LINK','A-1','note');
+      INSERT INTO crm_rfqs(id,activity_id) VALUES ('RFQ-LEGACY-LINK','ACT-LEGACY-LINK');
+      INSERT INTO crm_activity_correction_proposals
+        (id,original_activity_id,source_customer_id,target_customer_id,
+         source_external_customer_id,target_external_customer_id,requester_id,
+         original_creator_id,reason,reason_code,status,created_at)
+      VALUES
+        ('PROP-MISSING-COMMERCE','ACT-MISSING-COMMERCE','A-1','A-2','EXT-A1','EXT-A2',
+         'SALES','SALES','missing old commerce schema','MAPPING_UNCERTAIN','pending',
+         '2026-08-05 10:00:00'),
+        ('PROP-DELETED-ACTIVITY','ACT-DELETED','A-1','A-2','EXT-A1','EXT-A2',
+         'SALES','SALES','deleted legacy activity','MAPPING_UNCERTAIN','pending',
+         '2026-08-05 10:01:00'),
+        ('PROP-LEGACY-LINK','ACT-LEGACY-LINK','A-1','A-2','EXT-A1','EXT-A2',
+         'SALES','SALES','legacy link missing customer column','OTHER_CREATOR','pending',
+         '2026-08-05 10:01:30'),
+        ('PROP-ALREADY-DONE','ACT-DELETED','A-1','A-2','EXT-A1','EXT-A2',
+         'SALES','SALES','processed history','MAPPING_UNCERTAIN','approved',
+         '2026-08-05 10:02:00');
+    `);
+    const result = queryActivityCorrectionProposals(
+      db, manager(), ast(FILTER_PAGES.proposals), { pageSize: 20 },
+    );
+    assert.deepEqual(result.rows.find(row => row.proposalId === 'PROP-MISSING-COMMERCE')
+      .mappingResolution, {
+      required: true,
+      available: true,
+      evidence: { linkedCount: 0 },
+      candidates: [{ mode: 'activity_only' }],
+    });
+    assert.deepEqual(result.rows.find(row => row.proposalId === 'PROP-DELETED-ACTIVITY')
+      .mappingResolution, {
+      required: true,
+      available: false,
+      evidence: { linkedCount: 0 },
+      candidates: [],
+    });
+    assert.deepEqual(result.rows.find(row => row.proposalId === 'PROP-LEGACY-LINK')
+      .mappingResolution, {
+      required: true,
+      available: true,
+      evidence: { linkedCount: 0 },
+      candidates: [{ mode: 'activity_only' }],
+    });
+    assert.equal(result.rows.find(row => row.proposalId === 'PROP-ALREADY-DONE')
+      .mappingResolution, undefined);
+  } finally {
+    db.close();
+  }
+});
+
+test('a full pending proposal page batch-loads mapping context with constant query counts', () => {
+  const statements = [];
+  const db = memoryDb({ verbose: sql => statements.push(sql) });
+  try {
+    const insertActivity = db.prepare(
+      'INSERT INTO crm_activities(id,customer_id,activity_type) VALUES (?,\'A-1\',\'quote\')',
+    );
+    const insertQuote = db.prepare(
+      'INSERT INTO crm_quotes(id,customer_id,activity_id) VALUES (?,\'A-1\',?)',
+    );
+    const insertProposal = db.prepare(`INSERT INTO crm_activity_correction_proposals
+      (id,original_activity_id,source_customer_id,target_customer_id,
+       source_external_customer_id,target_external_customer_id,requester_id,
+       original_creator_id,reason,reason_code,status,created_at)
+      VALUES (?,?,'A-1','A-2','EXT-A1','EXT-A2','SALES','SALES',
+       'full page mapping','MAPPING_UNCERTAIN','pending','2026-08-05 11:00:00')`);
+    for (let index = 0; index < 100; index += 1) {
+      const activityId = `ACT-FULL-${index}`;
+      insertActivity.run(activityId);
+      insertQuote.run(`QUOTE-FULL-${index}-A`, activityId);
+      insertQuote.run(`QUOTE-FULL-${index}-B`, activityId);
+      insertProposal.run(`PROP-FULL-${index}`, activityId);
+    }
+    statements.length = 0;
+    const result = queryActivityCorrectionProposals(
+      db, manager(), ast(FILTER_PAGES.proposals), { page: 1, pageSize: 100 },
+    );
+    assert.equal(result.rows.length, 100);
+    assert.ok(result.rows.every(row => row.mappingResolution?.required));
+    const schemaQueries = statements.filter(sql => /^PRAGMA table_info/i.test(sql.trim()));
+    const activityQueries = statements.filter(sql => /FROM crm_activities/i.test(sql));
+    const commerceQueries = statements.filter(sql => /FROM crm_(?:rfqs|quotes|orders)/i.test(sql));
+    assert.ok(schemaQueries.length <= 4, `schema queries: ${schemaQueries.length}`);
+    assert.equal(activityQueries.length, 1);
+    assert.ok(commerceQueries.length <= 3, `commerce queries: ${commerceQueries.length}`);
+    assert.ok(statements.length <= 12, `total queries: ${statements.length}`);
+  } finally {
+    db.close();
+  }
+});
+
+test('sales role cannot read manager correction proposals even if the permission is misgranted', () => {
+  const db = memoryDb();
+  try {
+    assert.throws(
+      () => queryActivityCorrectionProposals(
+        db,
+        {
+          id: 'SALES', role: 'sales',
+          permissions: { view_customers: true, manage_activity_corrections: true },
+        },
+        ast(FILTER_PAGES.proposals),
+      ),
+      error => error.code === 'FILTER_NOT_AUTHORIZED' && error.statusCode === 403,
+    );
   } finally {
     db.close();
   }

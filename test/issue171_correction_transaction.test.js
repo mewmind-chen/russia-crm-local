@@ -504,6 +504,101 @@ test('explicit manager resolution closes a genuinely ambiguous milestone proposa
   } finally { db.close(); }
 });
 
+test('activity-only approval succeeds for one expected commerce link without an ID', () => {
+  const db = memoryDb();
+  try {
+    db.exec(`
+      DROP TABLE crm_quotes;
+      CREATE TABLE crm_quotes (
+        customer_id TEXT NOT NULL, activity_id TEXT NOT NULL
+      );
+      UPDATE crm_activities SET activity_type='quote',progress_key='quote'
+        WHERE id='ACT-ORIGINAL';
+      INSERT INTO crm_quotes(customer_id,activity_id)
+        VALUES ('CRM-SOURCE','ACT-ORIGINAL');
+    `);
+    const proposal = proposeActivityCorrection(
+      db, actor(), request({ idempotencyKey: 'proposal-commerce-without-id' }), options(),
+    );
+    assert.equal(proposal.reasonCode, 'MAPPING_UNCERTAIN');
+    const manager = actor('MANAGER-1', {
+      role: 'manager',
+      permissions: permissions({
+        view_all_customers: true,
+        manage_intake: true,
+        manage_activity_corrections: true,
+      }),
+    });
+
+    const result = reviewActivityCorrection(db, manager, {
+      proposalId: proposal.proposalId,
+      decision: 'approved',
+      expectedVersion: proposal.version,
+      idempotencyKey: 'review-commerce-without-id',
+      resolution: { mode: 'activity_only' },
+    }, options());
+    assert.equal(result.status, 'approved');
+    assert.ok(result.correctionId);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM crm_quotes').get().count, 1);
+    const evidence = JSON.parse(db.prepare(`SELECT mapping_evidence_json
+      FROM crm_activity_corrections WHERE id=?`).get(result.correctionId).mapping_evidence_json);
+    assert.deepEqual(evidence.resolution, { mode: 'activity_only' });
+  } finally { db.close(); }
+});
+
+test('approval conflicts and rolls back when an ambiguous mapping becomes certain', () => {
+  const db = memoryDb();
+  try {
+    db.prepare("UPDATE crm_activities SET activity_type='quote',progress_key='quote' WHERE id='ACT-ORIGINAL'").run();
+    db.prepare(`INSERT INTO crm_quotes
+      (id,rfq_id,customer_id,user_id,activity_id,amount,currency,gross_margin,loss_leader,
+       status,sent_at,next_follow_at,created_at)
+      VALUES
+      ('Q-MAPPING-1','','CRM-SOURCE','SALES-1','ACT-ORIGINAL',100,'USD',10,0,
+       'sent','2026-08-01 09:00:00','','2026-08-01 09:01:00'),
+      ('Q-MAPPING-2','','CRM-SOURCE','SALES-1','ACT-ORIGINAL',200,'USD',10,0,
+       'sent','2026-08-01 09:00:00','','2026-08-01 09:01:00')`).run();
+    const proposal = proposeActivityCorrection(
+      db, actor(), request({ idempotencyKey: 'proposal-mapping-changed' }), options(),
+    );
+    const manager = actor('MANAGER-1', {
+      role: 'manager',
+      permissions: permissions({
+        view_all_customers: true,
+        manage_intake: true,
+        manage_activity_corrections: true,
+      }),
+    });
+
+    db.prepare("DELETE FROM crm_quotes WHERE id='Q-MAPPING-2'").run();
+    const snapshot = () => ({
+      business: businessSnapshot(db),
+      quotes: db.prepare('SELECT * FROM crm_quotes ORDER BY id').all(),
+      proposal: db.prepare(`SELECT status,version,reviewer_id,review_reason,correction_id,
+        reviewed_at,updated_at FROM crm_activity_correction_proposals WHERE id=?`)
+        .get(proposal.proposalId),
+      decisions: db.prepare('SELECT * FROM crm_activity_correction_decisions ORDER BY id').all(),
+    });
+    const before = snapshot();
+
+    assert.throws(
+      () => reviewActivityCorrection(db, manager, {
+        proposalId: proposal.proposalId,
+        decision: 'approved',
+        expectedVersion: 1,
+        idempotencyKey: 'review-mapping-changed',
+        resolution: {
+          mode: 'commerce_entity', entityType: 'quote', entityId: 'Q-MAPPING-1',
+        },
+      }, options()),
+      error => error.statusCode === 409
+        && error.code === 'ACTIVITY_CORRECTION_MAPPING_CHANGED',
+    );
+    assert.deepEqual(snapshot(), before);
+    assert.equal(before.proposal.status, 'pending');
+  } finally { db.close(); }
+});
+
 test('proposal approval can override creator ownership and remains idempotent', () => {
   const db = memoryDb();
   try {

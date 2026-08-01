@@ -271,3 +271,157 @@ test('Issue 171 list APIs enforce authorized filter versions and pagination', as
   assert.equal(forged.status, 403);
   assert.equal((await forged.json()).code, 'FILTER_NOT_AUTHORIZED');
 });
+
+test('Issue 171 manager proposal API exposes only safe revalidated mapping candidates', async t => {
+  const fx = await adminFixture({
+    appOptions: { salesCrm: { activityCorrectionsEnabled: true } },
+  });
+  t.after(() => fx.close());
+  seedActivity(fx.db, {
+    id: 'ACT-171-API-MAPPING', customerId: 'CRM-OWN', userId: 'U-WU',
+  });
+  fx.db.prepare("UPDATE crm_activities SET activity_type='repeat_order' WHERE id='ACT-171-API-MAPPING'")
+    .run();
+  fx.db.prepare(`INSERT INTO crm_orders
+    (id,customer_id,user_id,activity_id,is_repeat,ordered_at,created_at) VALUES
+    ('ORDER-171-API-1','CRM-OWN','U-WU','ACT-171-API-MAPPING',1,
+      '2026-08-01 08:00:00','2026-08-01 08:00:00'),
+    ('ORDER-171-API-2','CRM-OWN','U-WU','ACT-171-API-MAPPING',1,
+      '2026-08-01 08:00:00','2026-08-01 08:00:00'),
+    ('ORDER-171-API-OUTSIDE','CRM-OTHER','U-OTHER','ACT-171-API-MAPPING',1,
+      '2026-08-01 08:00:00','2026-08-01 08:00:00')`).run();
+  fx.db.prepare(`INSERT INTO crm_activity_correction_proposals
+    (id,idempotency_key,request_hash,original_activity_id,source_customer_id,
+     target_customer_id,source_external_customer_id,target_external_customer_id,
+     requester_id,original_creator_id,reason,reason_code,mapping_evidence_json,
+     status,version,created_at,updated_at)
+    VALUES ('CORP-171-API-MAPPING','issue171-api-mapping','hash-171-api-mapping',
+      'ACT-171-API-MAPPING','CRM-OWN','CRM-WU','EXT-OWN','EXT-WU','U-WU','U-WU',
+      'API ambiguous mapping','MAPPING_UNCERTAIN',?,'pending',1,
+      '2026-08-04 09:00:00','2026-08-04 09:00:00')`)
+    .run(JSON.stringify({
+      linkedCount: 999,
+      rankedCandidates: 'AI_API_SENTINEL',
+      ownerId: 'U-OTHER',
+      assignmentReason: 'ASSIGNMENT_API_SENTINEL',
+    }));
+
+  const managerCookie = await fx.login('manager@example.com', 'Password123!');
+  const response = await fx.request('/api/sales-crm/activity-correction-proposals', {
+    cookie: managerCookie,
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  const proposal = body.proposals.find(row => row.proposalId === 'CORP-171-API-MAPPING');
+  assert.deepEqual(proposal.mappingResolution, {
+    required: true,
+    available: true,
+    evidence: { linkedCount: 2 },
+    candidates: [
+      { mode: 'activity_only' },
+      { mode: 'commerce_entity', entityType: 'order', entityId: 'ORDER-171-API-1' },
+      { mode: 'commerce_entity', entityType: 'order', entityId: 'ORDER-171-API-2' },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(proposal),
+    /ORDER-171-API-OUTSIDE|AI_API_SENTINEL|ASSIGNMENT_API_SENTINEL|ownerId|assignmentReason/);
+
+  const approvedResponse = await fx.request(
+    `/api/sales-crm/activity-correction-proposals/${proposal.proposalId}/review`,
+    {
+      cookie: managerCookie,
+      method: 'POST',
+      body: {
+        decision: 'approved',
+        expectedVersion: proposal.version,
+        idempotencyKey: 'issue171-api-mapping-review',
+        resolution: proposal.mappingResolution.candidates[1],
+      },
+    },
+  );
+  const approved = await approvedResponse.json();
+  assert.equal(approvedResponse.status, 200, approved.error);
+  assert.equal(approved.result.status, 'approved');
+  assert.ok(approved.result.correctionId);
+
+  fx.setUserPermissions('U-OTHER', { manage_activity_corrections: true });
+  const salesCookie = await fx.login('other@example.com', 'Password123!');
+  const denied = await fx.request('/api/sales-crm/activity-correction-proposals', {
+    cookie: salesCookie,
+  });
+  assert.equal(denied.status, 403);
+  assert.equal((await denied.json()).code, 'FILTER_NOT_AUTHORIZED');
+});
+
+test('Issue 171 review API returns a rollback-safe conflict when mapping converges after GET', async t => {
+  const fx = await adminFixture({
+    appOptions: { salesCrm: { activityCorrectionsEnabled: true } },
+  });
+  t.after(() => fx.close());
+  seedActivity(fx.db, {
+    id: 'ACT-171-API-MAPPING-CHANGED', customerId: 'CRM-OWN', userId: 'U-WU',
+  });
+  fx.db.prepare(`UPDATE crm_activities SET activity_type='order'
+    WHERE id='ACT-171-API-MAPPING-CHANGED'`).run();
+  fx.db.prepare(`INSERT INTO crm_orders
+    (id,customer_id,user_id,activity_id,is_repeat,ordered_at,created_at) VALUES
+    ('ORDER-171-CHANGED-1','CRM-OWN','U-WU','ACT-171-API-MAPPING-CHANGED',0,
+      '2026-08-01 08:00:00','2026-08-01 08:00:00'),
+    ('ORDER-171-CHANGED-2','CRM-OWN','U-WU','ACT-171-API-MAPPING-CHANGED',0,
+      '2026-08-01 08:00:00','2026-08-01 08:00:00')`).run();
+  fx.db.prepare(`INSERT INTO crm_activity_correction_proposals
+    (id,idempotency_key,request_hash,original_activity_id,source_customer_id,
+     target_customer_id,source_external_customer_id,target_external_customer_id,
+     requester_id,original_creator_id,reason,reason_code,mapping_evidence_json,
+     status,version,created_at,updated_at)
+    VALUES ('CORP-171-API-MAPPING-CHANGED','issue171-api-mapping-changed',
+      'hash-171-api-mapping-changed','ACT-171-API-MAPPING-CHANGED','CRM-OWN','CRM-WU',
+      'EXT-OWN','EXT-WU','U-WU','U-WU','mapping changes after GET','MAPPING_UNCERTAIN',
+      '{}','pending',1,'2026-08-04 10:00:00','2026-08-04 10:00:00')`).run();
+
+  const managerCookie = await fx.login('manager@example.com', 'Password123!');
+  const listResponse = await fx.request('/api/sales-crm/activity-correction-proposals', {
+    cookie: managerCookie,
+  });
+  const listBody = await listResponse.json();
+  assert.equal(listResponse.status, 200, listBody.error);
+  const proposal = listBody.proposals.find(
+    row => row.proposalId === 'CORP-171-API-MAPPING-CHANGED',
+  );
+  assert.equal(proposal.mappingResolution.candidates.length, 3);
+  const submittedResolution = proposal.mappingResolution.candidates[1];
+
+  fx.db.prepare("DELETE FROM crm_orders WHERE id='ORDER-171-CHANGED-2'").run();
+  const snapshot = () => ({
+    counts: correctionWriteCounts(fx.db),
+    activity: fx.db.prepare("SELECT * FROM crm_activities WHERE id='ACT-171-API-MAPPING-CHANGED'")
+      .get(),
+    orders: fx.db.prepare(`SELECT * FROM crm_orders
+      WHERE activity_id='ACT-171-API-MAPPING-CHANGED' ORDER BY id`).all(),
+    accounts: fx.db.prepare(`SELECT id,stage,last_activity_at,next_action,next_action_at,
+      manager_required,manager_status,updated_at FROM crm_accounts
+      WHERE id IN ('CRM-OWN','CRM-WU') ORDER BY id`).all(),
+    proposal: fx.db.prepare(`SELECT status,version,reviewer_id,review_reason,correction_id,
+      reviewed_at,updated_at FROM crm_activity_correction_proposals
+      WHERE id='CORP-171-API-MAPPING-CHANGED'`).get(),
+  });
+  const before = snapshot();
+  const reviewResponse = await fx.request(
+    `/api/sales-crm/activity-correction-proposals/${proposal.proposalId}/review`,
+    {
+      cookie: managerCookie,
+      method: 'POST',
+      body: {
+        decision: 'approved',
+        expectedVersion: proposal.version,
+        idempotencyKey: 'issue171-api-mapping-changed-review',
+        resolution: submittedResolution,
+      },
+    },
+  );
+  const reviewBody = await reviewResponse.json();
+  assert.equal(reviewResponse.status, 409);
+  assert.equal(reviewBody.code, 'ACTIVITY_CORRECTION_MAPPING_CHANGED');
+  assert.deepEqual(snapshot(), before);
+  assert.equal(before.proposal.status, 'pending');
+});
