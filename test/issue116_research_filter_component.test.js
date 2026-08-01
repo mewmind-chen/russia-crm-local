@@ -74,8 +74,8 @@ test('research pages expose retry, empty, and 390px-safe host layout states', ()
   assert.match(css, /\.authorized-filter-host\s*\{/);
   assert.match(css, /@media\(max-width:600px\)/);
   assert.match(css, /\.authorized-filter-host\{margin-right:-12px;margin-left:-12px\}/);
-  assert.match(html, /app\.js\?v=20260801-issue196/);
-  assert.match(html, /app\.css\?v=20260801-issue196/);
+  assert.match(html, /app\.js\?v=20260802-issue171c/);
+  assert.match(html, /app\.css\?v=20260802-issue171c/);
 });
 
 test('research navigation uses canonical page keys and exposes only permission-scoped entries', () => {
