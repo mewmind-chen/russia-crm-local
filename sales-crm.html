@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260802-issue171c">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260802-issue174-ui">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -63,7 +63,7 @@
           <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管介入任务</span></button>
           <button data-view="activityCorrections" data-permission="manage_activity_corrections"><i data-tp-icon="note" aria-hidden="true"></i><span>跟进更正</span></button>
           <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>延期与介入统计</span></button>
-          <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>销售能力</span></button>
+          <button data-view="team" data-permission="view_customers"><i data-tp-icon="chart" aria-hidden="true"></i><span>团队状态</span></button>
           <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
           <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
@@ -476,14 +476,62 @@
         </article>
       </section>
 
-      <section id="teamView" class="view">
-        <div class="section-intro">
-          <div><p class="eyebrow">CAPABILITY REVIEW</p><h2>销售能力差异检视</h2><p>按同类客户漏斗拆解优势与短板，作为客户分配、培训和介入依据。</p></div>
-          <div class="method-note"><strong>公平口径</strong><span>样本不足时只提示趋势；不以邮件量代替有效推进。</span></div>
+      <section id="teamView" class="view team-status-workspace">
+        <div class="section-intro team-status-intro">
+          <div><p class="eyebrow">TEAM STATUS</p><h2>团队状态</h2><p>以真实推进和协作事实了解团队，不按登录、点击或记录数量评价人员。</p></div>
+          <div class="team-status-actions">
+            <select id="teamRange" aria-label="团队状态时间范围">
+              <option value="7d">最近 7 天</option>
+              <option value="30d" selected>最近 30 天</option>
+              <option value="since-last-view">自上次查看以来</option>
+            </select>
+            <select id="teamExportFormat" aria-label="团队状态导出格式">
+              <option value="csv" selected>CSV</option>
+              <option value="json">JSON</option>
+            </select>
+            <button id="teamRefresh" class="button secondary" type="button">刷新</button>
+            <button id="teamExport" data-permission="export_data" class="button secondary" type="button">导出当前栏目</button>
+          </div>
         </div>
-        <div id="teamCoachingStatus" class="team-coaching-status hidden" data-ai-business role="status" aria-live="polite">进入页面后读取授权团队的 AI 辅导状态。</div>
-        <div id="teamCards" class="team-grid"></div>
-        <article id="teamDetail" class="panel team-detail hidden"></article>
+        <div id="teamStatusState" class="team-status-state" role="status" aria-live="polite">进入页面后读取授权范围内的团队状态。</div>
+        <div class="segmented team-section-tabs" role="tablist" aria-label="团队状态栏目">
+          <button class="active" type="button" role="tab" aria-selected="true" data-team-section="progress">业务推进</button>
+          <button type="button" role="tab" aria-selected="false" data-team-section="capability">销售能力</button>
+          <button type="button" role="tab" aria-selected="false" data-team-section="collaboration">协作支持</button>
+        </div>
+
+        <section id="teamProgressPanel" class="team-status-panel" data-team-panel="progress">
+          <div id="teamProgressFilters" class="authorized-filter-host" aria-live="polite"></div>
+          <div id="teamProgressSummary" class="team-progress-summary"></div>
+          <article class="panel team-status-list-panel">
+            <div class="panel-head"><div><h2>按销售查看推进事实</h2><p>同时显示数量、比例和样本范围。</p></div></div>
+            <div id="teamProgressSales" class="team-progress-sales"></div>
+          </article>
+          <article id="teamProgressDrilldown" class="panel team-progress-drilldown">
+            <div class="panel-head"><div><h2>推进事实明细</h2><p>明细与当前时间范围和授权筛选保持一致。</p></div></div>
+            <div class="segmented team-drilldown-tabs" role="tablist" aria-label="推进事实明细">
+              <button class="active" type="button" data-team-progress-drilldown="customer">客户</button>
+              <button type="button" data-team-progress-drilldown="task">待办</button>
+              <button type="button" data-team-progress-drilldown="timeline">事实时间线</button>
+            </div>
+            <div id="teamProgressDrilldownList" class="team-progress-drilldown-list"></div>
+          </article>
+        </section>
+
+        <section id="teamCapabilityPanel" class="team-status-panel hidden" data-team-panel="capability">
+          <div id="teamCoachingStatus" class="team-coaching-status hidden" data-ai-business role="status" aria-live="polite">进入页面后读取授权团队的 AI 辅导状态。</div>
+          <div id="teamCards" class="team-grid"></div>
+          <article id="teamDetail" class="panel team-detail hidden"></article>
+        </section>
+
+        <section id="teamCollaborationPanel" class="team-status-panel hidden" data-team-panel="collaboration">
+          <div class="team-collaboration-head">
+            <div id="teamCollaborationFilters" class="authorized-filter-host" aria-live="polite"></div>
+            <button id="teamCollaborationAdd" data-permission="record_collaboration_support" class="button primary" type="button">补记协作</button>
+          </div>
+          <div id="teamCollaborationList" class="team-collaboration-list"></div>
+          <button id="teamCollaborationMore" class="button secondary hidden" type="button">继续加载</button>
+        </section>
       </section>
 
       <section id="marketsView" class="view">
@@ -725,6 +773,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260802-issue171c"></script>
+  <script src="/sales-assets/app.js?v=20260802-issue174-ui"></script>
 </body>
 </html>

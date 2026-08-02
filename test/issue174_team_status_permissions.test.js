@@ -405,11 +405,25 @@ test('authorized exports reuse scoped rows and always redact AI and assignment d
       suggestion: ' +CMD',
       outcome: '-1+1',
       nextStep: '@SUM(1,1)',
+      nulPrefixed: '\u0000=1+1',
+      verticalTabPrefixed: '\u000b@SUM(1,1)',
+      unitSeparatorPrefixed: '\u001f-CMD',
+      deletePrefixed: '\u007f+CMD',
+      noBreakSpacePrefixed: '\u00a0=1+1',
+      zeroWidthPrefixed: '\u200b@SUM(1,1)',
+      bomPrefixed: '\ufeff-CMD',
     }], { format: 'csv' });
     assert.match(formulaSafe.content, /'=/);
     assert.match(formulaSafe.content, /' \+CMD/);
     assert.match(formulaSafe.content, /'-1\+1/);
     assert.match(formulaSafe.content, /'@SUM/);
+    assert.match(formulaSafe.content, /'\u0000=1\+1/);
+    assert.match(formulaSafe.content, /'\u000b@SUM/);
+    assert.match(formulaSafe.content, /'\u001f-CMD/);
+    assert.match(formulaSafe.content, /'\u007f\+CMD/);
+    assert.match(formulaSafe.content, /'\u00a0=1\+1/);
+    assert.match(formulaSafe.content, /'\u200b@SUM/);
+    assert.match(formulaSafe.content, /'\ufeff-CMD/);
   } finally {
     db.close();
   }
