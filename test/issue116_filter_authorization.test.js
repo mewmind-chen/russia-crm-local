@@ -143,6 +143,8 @@ test('install creates an idempotent versioned catalog with supported pages and s
     activity_correction_targets: ['view_customers'],
     activity_corrections: ['view_customers'],
     activity_correction_proposals: ['manage_activity_corrections'],
+    team_status_progress: ['view_team'],
+    team_status_collaboration: ['view_customers'],
   });
   assert.ok(FILTER_SOURCE_CATALOG.some(item => item.key === 'city'));
   const definitions = listFilterDefinitions(db);
