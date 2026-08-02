@@ -139,6 +139,26 @@ test('team and collaboration exports set exact JSON and CSV download headers', a
   );
 });
 
+test('sales with export permission uses collaboration export without gaining team export', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { export_data: true });
+  const salesCookie = await fx.login('other@example.com', 'Password123!');
+
+  const collaboration = await fx.request(`${COLLABORATION_ROUTE}/export?format=json`, {
+    cookie: salesCookie,
+  });
+  assert.equal(collaboration.status, 200, await collaboration.clone().text());
+  const rows = await collaboration.json();
+  assert.ok(rows.every(row => row.salesUserId === 'U-OTHER'));
+  assert.equal(JSON.stringify(rows).includes('RU-9002'), false);
+
+  const team = await fx.request(`${TEAM_ROUTE}/export?section=collaboration&format=json`, {
+    cookie: salesCookie,
+  });
+  assert.equal(team.status, 403);
+});
+
 test('since-last-view advances one server-owned cursor row without accepting client timestamps', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
