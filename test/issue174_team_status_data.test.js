@@ -18,7 +18,9 @@ const {
 const {
   buildTeamStatus,
   correctCollaborationEvent,
+  exportTeamStatus,
   installTeamStatusSchema,
+  listCollaborationSupport,
   readTeamStatusSinceLastView,
   recordExternalAssistance,
   revokeCollaborationEvent,
@@ -361,6 +363,55 @@ test('authorized owner filters narrow capability with the same account scope as 
   }
 });
 
+test('capability response and export apply the same authorized progress filter AST', () => {
+  const db = seededDb();
+  try {
+    const input = {
+      range: '30d',
+      filters: {
+        page: FILTER_PAGES.progress,
+        filters: [{ key: 'owner', operator: 'in', values: ['SALES-A'] }],
+      },
+    };
+    const result = buildTeamStatus(db, admin(), input, { now: NOW });
+    assert.deepEqual(result.progress.sales.map(row => row.salesUserId), ['SALES-A']);
+    assert.deepEqual(result.capability.map(row => row.user.id), ['SALES-A']);
+
+    const exported = exportTeamStatus(db, admin(), {
+      ...input,
+      section: 'capability',
+      format: 'json',
+    }, { now: NOW });
+    assert.deepEqual(exported.rows.map(row => row.user.id), ['SALES-A']);
+    assert.equal(exported.content.includes('SALES-B'), false);
+  } finally {
+    db.close();
+  }
+});
+
+test('progress drill-down reuses the authorized accounts, tasks and effective timeline', () => {
+  const db = seededDb();
+  try {
+    const result = buildTeamStatus(db, admin(), {
+      range: '30d',
+      filters: {
+        page: FILTER_PAGES.progress,
+        filters: [{ key: 'owner', operator: 'in', values: ['SALES-A'] }],
+      },
+    }, { now: NOW });
+    assert.deepEqual(result.progress.drilldown.customers.map(row => row.customerId), ['EXT-A']);
+    assert.deepEqual(result.progress.drilldown.tasks.map(row => row.taskId), ['TASK-1']);
+    assert.deepEqual(
+      [...new Set(result.progress.drilldown.timeline.map(row => row.kind))].sort(),
+      ['activity', 'deferred_plan', 'manager_task', 'next_plan'],
+    );
+    assert.equal(JSON.stringify(result.progress.drilldown).includes('EXT-B'), false);
+    assert.equal(JSON.stringify(result.progress.drilldown).includes('ACT-SUPERSEDED'), false);
+  } finally {
+    db.close();
+  }
+});
+
 test('since-last-view uses a server cursor and rolls aggregation and cursor back together', () => {
   const db = seededDb();
   try {
@@ -529,6 +580,53 @@ test('manual assistance correction, supplement, and revocation are append-only a
     assert.equal(eventId(revoked) !== eventId(corrected), true);
     assert.equal(db.prepare(`SELECT COUNT(*) count FROM crm_audit_log
       WHERE entity_type='collaboration_event'`).get().count, 4);
+  } finally {
+    db.close();
+  }
+});
+
+test('legacy cross-target revisions do not expose another target through before or after snapshots', () => {
+  const db = seededDb();
+  try {
+    const original = recordExternalAssistance(
+      db, manager(), writePayload({ problem: '销售甲的私密协作内容' }), {
+        env: ENABLED_ENV, now: '2026-08-02 12:01:00', audit: auditToDb,
+      },
+    );
+    const crossTargetAfter = {
+      salesUserId: 'SALES-B', customerId: 'EXT-B', problem: '销售乙的协作内容',
+      suggestion: '', outcome: '', nextStep: '', status: 'unresolved',
+    };
+    const originalRow = db.prepare(
+      'SELECT after_json FROM crm_collaboration_events WHERE id=?',
+    ).get(eventId(original));
+    db.prepare(`INSERT INTO crm_collaboration_events
+      (id,root_event_id,supersedes_event_id,relation_type,idempotency_key,request_hash,
+       sales_user_id,customer_id,problem,suggestion,outcome,next_step,status,actor_id,
+       reason,source,before_json,after_json,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'manual',?,?,?)`).run(
+      'COLL-LEGACY-CROSS', eventId(original), eventId(original), 'correction',
+      'LEGACY-CROSS-TARGET', 'legacy-request-hash', 'SALES-B', 'EXT-B',
+      crossTargetAfter.problem, '', '', '', 'unresolved', 'MANAGER', '历史异常归属更正',
+      originalRow.after_json, JSON.stringify(crossTargetAfter), '2026-08-02 12:02:00',
+    );
+
+    const listed = listCollaborationSupport(
+      db, salesA(), {
+        filters: { page: FILTER_PAGES.collaboration, filters: [] },
+      }, { now: NOW },
+    );
+    assert.equal(JSON.stringify(listed).includes('销售乙的协作内容'), false);
+
+    const salesB = actor('SALES-B', 'sales', { view_team: true });
+    const visibleToB = listCollaborationSupport(
+      db, salesB, {
+        filters: { page: FILTER_PAGES.collaboration, filters: [] },
+      }, { now: NOW },
+    );
+    assert.equal(visibleToB.rows.length, 1);
+    assert.deepEqual(visibleToB.rows[0].before, {});
+    assert.equal(JSON.stringify(visibleToB).includes('销售甲的私密协作内容'), false);
   } finally {
     db.close();
   }

@@ -53,6 +53,15 @@
     },
     stageReached: '',
     teamUserId: '',
+    teamStatus: {
+      section: 'progress', range: '30d', data: null,
+      loading: false, loaded: false, error: '', requestEpoch: 0,
+      progressController: null, progressMount: null,
+      collaborationController: null, collaborationMount: null,
+      collaborationRows: [], collaborationPage: 1, collaborationTotal: 0,
+      collaborationHasMore: false, writeEnabled: false, submitting: false,
+      drilldown: 'customer',
+    },
     activityType: 'email',
     activityProgressType: 'email',
     activitySelectedCustomer: null,
@@ -180,7 +189,7 @@
     activityCorrections: ['ACTIVITY CORRECTIONS', '跟进归属更正'],
     aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
     insights: ['MANAGER INTELLIGENCE', '经理评价'],
-    team: ['CAPABILITY REVIEW', '销售能力'],
+    team: ['TEAM STATUS', '团队状态'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
     protectedCustomers: ['PROTECTED CUSTOMERS', '合作客户保护'],
@@ -192,6 +201,7 @@
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_customers',
     activityCorrections: 'manage_activity_corrections',
+    team: 'view_customers',
     aiTasks: 'view_customers', protectedCustomers: 'manage_protected_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -4058,6 +4068,362 @@
     return state.salesCoaching.items.find(item => item.salesUserId === userId) || null;
   }
 
+  const teamProgressLabels = {
+    progressedCustomers: '真实推进', silentCustomers: '持续沉默',
+    repeatedDeferredCustomers: '反复延期', plansFormedCustomers: '形成计划',
+    actionsAfterPlanCustomers: '计划后行动', overdueManagerTasks: '主管逾期',
+    escalatedManagerTasks: '已升级',
+  };
+  const teamRatioLabels = {
+    progressRate: '推进率', silenceRate: '沉默率', deferredRate: '延期率',
+    planFormationRate: '计划形成率', actionAfterPlanRate: '计划后行动率',
+  };
+  const collaborationStatusLabels = {
+    unresolved: '未解决', resolved: '已解决', escalated: '已升级', revoked: '已撤销',
+  };
+  const collaborationRelationLabels = {
+    original: '原始记录', supplement: '补充记录', correction: '更正记录',
+    revocation: '撤销记录', system: '系统事实',
+  };
+
+  function teamFilterPayload(kind = 'progress') {
+    const controller = kind === 'collaboration'
+      ? state.teamStatus.collaborationController
+      : state.teamStatus.progressController;
+    return controller?.serialize('applied') || { permissionVersion: '', filters: [] };
+  }
+
+  function teamStatusQuery(kind = 'progress', extra = {}) {
+    const payload = teamFilterPayload(kind);
+    return new URLSearchParams({
+      ...extra,
+      permissionVersion: String(payload.permissionVersion || ''),
+      filters: JSON.stringify(componentPayloadToRaw(payload)),
+    });
+  }
+
+  function renderTeamStatusState() {
+    const status = $('#teamStatusState');
+    if (!status) return;
+    status.classList.toggle('error', Boolean(state.teamStatus.error));
+    status.textContent = state.teamStatus.loading
+      ? '正在读取授权团队状态…'
+      : state.teamStatus.error
+        ? `团队状态暂不可用：${state.teamStatus.error}`
+        : state.teamStatus.loaded
+          ? `${$('#teamRange')?.selectedOptions?.[0]?.textContent || '当前范围'} · 数据截至 ${shortDate(state.teamStatus.data?.sample?.toInclusive, true)}`
+          : '进入页面后读取授权范围内的团队状态。';
+  }
+
+  function renderTeamProgress() {
+    const data = state.teamStatus.data?.progress;
+    if (!data) {
+      $('#teamProgressSummary').innerHTML = state.teamStatus.loading ? '<div class="empty">正在加载业务推进…</div>' : '<div class="empty">暂无业务推进数据</div>';
+      $('#teamProgressSales').innerHTML = '';
+      $('#teamProgressDrilldownList').innerHTML = '';
+      return;
+    }
+    const sample = data.sample || {};
+    $('#teamProgressSummary').innerHTML = `<div class="team-progress-metrics">
+      ${Object.entries(teamProgressLabels).map(([key, label]) => `<article class="team-progress-metric"><span>${label}</span><strong>${Number(data.counts?.[key] || 0)}</strong><small>样本 ${Number(sample.size || 0)}${sample.unavailable ? ' · 样本不足' : ''}</small></article>`).join('')}
+    </div><div class="team-ratio-strip">${Object.entries(teamRatioLabels).map(([key, label]) => `<span><b>${label}</b><strong>${Number(data.ratios?.[key] || 0).toFixed(1)}%</strong></span>`).join('')}</div>`;
+    $('#teamProgressSales').innerHTML = data.sales?.length ? data.sales.map(row => {
+      const user = userById(row.salesUserId);
+      return `<article class="team-progress-person">
+        <header><div class="person"><span class="avatar">${esc((user?.name || '销').slice(0, 1))}</span><div><strong>${esc(user?.name || row.salesUserId)}</strong><small>样本 ${Number(row.sample?.size || 0)}${row.sample?.unavailable ? ' · 样本不足' : ''}</small></div></div><span class="pill">推进率 ${Number(row.ratios?.progressRate || 0).toFixed(1)}%</span></header>
+        <dl><div><dt>真实推进</dt><dd>${Number(row.counts?.progressedCustomers || 0)}</dd></div><div><dt>持续沉默</dt><dd>${Number(row.counts?.silentCustomers || 0)}</dd></div><div><dt>反复延期</dt><dd>${Number(row.counts?.repeatedDeferredCustomers || 0)}</dd></div><div><dt>计划后行动</dt><dd>${Number(row.counts?.actionsAfterPlanCustomers || 0)}</dd></div></dl>
+      </article>`;
+    }).join('') : '<div class="empty">当前筛选下没有销售推进数据</div>';
+    const drilldown = data.drilldown || { customers: [], tasks: [], timeline: [] };
+    $$('[data-team-progress-drilldown]').forEach(button => button.classList.toggle(
+      'active', button.dataset.teamProgressDrilldown === state.teamStatus.drilldown,
+    ));
+    const rows = state.teamStatus.drilldown === 'task' ? drilldown.tasks
+      : state.teamStatus.drilldown === 'timeline' ? drilldown.timeline : drilldown.customers;
+    $('#teamProgressDrilldownList').innerHTML = rows?.length ? rows.map(row => {
+      if (state.teamStatus.drilldown === 'customer') {
+        const facts = [row.progressed && '有推进', row.deferred && '有延期',
+          row.planned && '已形成计划', row.actedAfterPlan && '计划后已行动'].filter(Boolean);
+        return `<button class="team-drilldown-row" type="button" data-open-customer="${esc(row.accountId)}"><span><strong>${esc(row.companyName || row.customerId)}</strong><small>${esc(row.customerId)} · ${esc(userById(row.ownerId)?.name || row.ownerId || '未分配')}</small></span><span>${facts.map(label => `<i class="pill gray">${label}</i>`).join('') || '<i class="pill gray">持续沉默</i>'}</span></button>`;
+      }
+      if (state.teamStatus.drilldown === 'task') {
+        return `<button class="team-drilldown-row" type="button" data-manager-task-id="${esc(row.taskId)}"><span><strong>${esc(managerTaskReasonLabels[row.reason] || row.reason || '主管待办')}</strong><small>${esc(row.customerId)} · ${esc(userById(row.salesUserId)?.name || row.salesUserId)}</small></span><span class="pill ${row.status === 'overdue' || row.status === 'escalated' ? 'red' : 'gray'}">${esc(managerTaskStatusLabels[row.status] || row.status)}</span></button>`;
+      }
+      const kindLabels = { activity: '真实动作', deferred_plan: '暂未确定', next_plan: '形成计划', manager_task: '主管待办' };
+      return `<div class="team-drilldown-row"><span><strong>${esc(kindLabels[row.kind] || row.kind)}</strong><small>${esc(row.customerId)} · ${esc(row.detail || '')}</small></span><time>${esc(shortDate(row.occurredAt, true))}</time></div>`;
+    }).join('') : '<div class="empty">当前范围没有对应明细</div>';
+  }
+
+  function renderTeamCapability() {
+    if (!can('view_team')) return;
+    const rows = Array.isArray(state.teamStatus.data?.capability)
+      ? state.teamStatus.data.capability
+      : state.data.teamReport;
+    const coachingStatus = $('#teamCoachingStatus');
+    if (coachingStatus) {
+      coachingStatus.classList.toggle('hidden', !canViewSalesCoaching());
+      const ready = state.salesCoaching.items.filter(item => item.ai?.result && !item.ai.stale).length;
+      coachingStatus.textContent = state.salesCoaching.loading && !state.salesCoaching.loaded
+        ? '正在读取团队辅导状态…'
+        : state.salesCoaching.error
+          ? `团队辅导暂不可用：${state.salesCoaching.error}`
+          : `${rows.length} 位销售 · ${ready} 份 AI 辅导建议 · 样本不足时不调用模型`;
+    }
+    $('#teamCards').innerHTML = rows.length ? rows.map(item => {
+      const topScores = Object.entries(item.scores).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const coaching = customerAIEnabled() ? coachingFor(item.user.id) : null;
+      const coachingLabel = coaching?.ai?.result && !coaching.ai.stale
+        ? 'AI辅导已生成'
+        : ['queued', 'running', 'retry_wait'].includes(coaching?.ai?.job?.state)
+          ? 'AI辅导处理中'
+          : item.sampleSize < 10 ? '样本不足' : '待生成AI辅导';
+      return `<article class="team-card ${state.teamUserId === item.user.id ? 'selected' : ''}" data-team-user="${item.user.id}">
+        <div class="team-card-top"><div class="person"><span class="avatar">${esc(item.user.name.slice(0, 1))}</span><div><strong>${esc(item.user.name)}</strong><small>${esc(item.bestCountries.join(' / ') || '待积累数据')}</small></div></div><div class="score-ring" style="--score:${item.overall}%"><strong>${item.overall}</strong></div></div>
+        <div class="capability-bars">${topScores.map(([key, value]) => `<div class="cap-row"><span>${capabilityLabels[key]}</span><div class="cap-track"><i style="width:${value}%"></i></div><b>${value}</b></div>`).join('')}</div>
+        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span>${customerAIEnabled() ? `<span class="pill">${coachingLabel}</span>` : ''}</div>
+      </article>`;
+    }).join('') : '<div class="empty">当前筛选下暂无销售能力样本</div>';
+    if (state.teamUserId) renderTeamDetail(state.teamUserId);
+  }
+
+  function renderTeamCollaboration() {
+    const rows = state.teamStatus.collaborationRows;
+    const writeEnabled = state.teamStatus.writeEnabled && can('record_collaboration_support')
+      && !state.data?.impersonation;
+    $('#teamCollaborationAdd')?.classList.toggle('hidden', !writeEnabled);
+    $('#teamCollaborationList').innerHTML = rows.length ? rows.map(item => {
+      const sourceLabel = item.source === 'system' ? '系统事实' : '手工补记';
+      const sourceClass = item.source === 'system' ? 'system' : 'manual';
+      const actionable = writeEnabled && item.source === 'manual' && item.effective && !item.revoked;
+      return `<article class="team-collaboration-item ${item.effective === false ? 'superseded' : ''}">
+        <header><div><span class="team-source ${sourceClass}">${sourceLabel}</span><span class="pill ${item.status === 'escalated' ? 'red' : item.status === 'resolved' ? '' : 'gray'}">${esc(collaborationStatusLabels[item.status] || item.status)}</span></div><time>${esc(shortDate(item.createdAt, true))}</time></header>
+        <div class="team-collaboration-title"><strong>${esc(userById(item.salesUserId)?.name || item.salesUserId || '未指定销售')}</strong><span>${esc(item.customerId || '未关联客户')}</span></div>
+        <dl><div><dt>问题</dt><dd>${esc(item.problem || '—')}</dd></div><div><dt>建议</dt><dd>${esc(item.suggestion || '—')}</dd></div><div><dt>结果 / 下一步</dt><dd>${esc(item.outcome || item.nextStep || '待处理')}</dd></div></dl>
+        <footer><span>${esc(collaborationRelationLabels[item.relationType] || item.relationType)} · 操作人 ${esc(userById(item.actorId)?.name || item.actorId || '系统')}${item.supersedesEventId ? ` · 接续 ${esc(item.supersedesEventId)}` : ''}</span>${actionable ? `<div><button class="text-button" type="button" data-collaboration-supplement="${esc(item.eventId)}">补充</button><button class="text-button" type="button" data-collaboration-correct="${esc(item.eventId)}">更正</button><button class="text-button danger" type="button" data-collaboration-revoke="${esc(item.eventId)}">撤销</button></div>` : ''}</footer>
+      </article>`;
+    }).join('') : `<div class="empty">${state.teamStatus.loaded ? '当前筛选下没有协作事实' : '进入栏目后加载协作事实'}</div>`;
+    $('#teamCollaborationMore')?.classList.toggle('hidden', !state.teamStatus.collaborationHasMore);
+  }
+
+  function renderTeamSection() {
+    const collaborationOnly = !can('view_team');
+    if (collaborationOnly) state.teamStatus.section = 'collaboration';
+    $('#teamRange')?.classList.toggle('hidden', collaborationOnly);
+    $$('[data-team-section]').forEach(button => {
+      const active = button.dataset.teamSection === state.teamStatus.section;
+      button.classList.toggle('hidden', collaborationOnly && button.dataset.teamSection !== 'collaboration');
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    $$('[data-team-panel]').forEach(panel => panel.classList.toggle(
+      'hidden', panel.dataset.teamPanel !== state.teamStatus.section,
+    ));
+    renderTeamStatusState();
+    renderTeamProgress();
+    renderTeamCapability();
+    renderTeamCollaboration();
+    uiFormat?.mountIcons?.($('#teamView'));
+  }
+
+  async function loadTeamStatus({ reset = true } = {}) {
+    if (!can('view_team')) return;
+    if (state.teamStatus.loading && !reset) return;
+    const requestEpoch = ++state.teamStatus.requestEpoch;
+    state.teamStatus.loading = true;
+    state.teamStatus.error = '';
+    renderTeamSection();
+    try {
+      const range = $('#teamRange')?.value || state.teamStatus.range || '30d';
+      state.teamStatus.range = range;
+      const params = teamStatusQuery('progress', range === 'since-last-view' ? {} : { range });
+      const result = range === 'since-last-view'
+        ? await api('/team-status/since-last-view', {
+          method: 'POST', preserveOnForbidden: true,
+          body: JSON.stringify({
+            permissionVersion: params.get('permissionVersion'),
+            filters: JSON.parse(params.get('filters') || '{}'),
+          }),
+        })
+        : await api(`/team-status?${params}`, { preserveOnForbidden: true, timeoutMs: 12000 });
+      if (requestEpoch !== state.teamStatus.requestEpoch) return;
+      const data = result.data || result;
+      state.teamStatus.data = data;
+      state.teamStatus.writeEnabled = Boolean(data.writeEnabled);
+      state.teamStatus.loaded = true;
+      state.teamStatus.error = '';
+      if (data.schemas?.progress) state.teamStatus.progressController?.updateSchema(data.schemas.progress);
+      if (data.schemas?.collaboration) state.teamStatus.collaborationController?.updateSchema(data.schemas.collaboration);
+      state.teamStatus.collaborationRows = data.collaboration?.rows || [];
+      state.teamStatus.collaborationPage = Number(data.collaboration?.page || 1);
+      state.teamStatus.collaborationTotal = Number(data.collaboration?.total || 0);
+      state.teamStatus.collaborationHasMore = Boolean(data.collaboration?.hasMore);
+      state.teamStatus.progressMount?.setResultMeta({
+        total: Number(data.progress?.sample?.size || 0), shown: Number(data.progress?.sample?.size || 0),
+      });
+      state.teamStatus.collaborationMount?.setResultMeta({
+        total: state.teamStatus.collaborationTotal,
+        shown: state.teamStatus.collaborationRows.length,
+      });
+    } catch (error) {
+      if (requestEpoch !== state.teamStatus.requestEpoch) return;
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        state.teamStatus.loading = false;
+        await initializeTeamStatusFilters({ force: true });
+        return;
+      }
+      state.teamStatus.error = error.message || '数据读取失败';
+    } finally {
+      if (requestEpoch === state.teamStatus.requestEpoch) {
+        state.teamStatus.loading = false;
+        renderTeamSection();
+      }
+    }
+  }
+
+  async function loadTeamCollaboration({ reset = false } = {}) {
+    const page = reset ? 1 : state.teamStatus.collaborationPage + 1;
+    const params = teamStatusQuery('collaboration', { page: String(page), pageSize: '50' });
+    try {
+      const result = await api(`/collaboration-support?${params}`, { preserveOnForbidden: true });
+      state.teamStatus.collaborationRows = reset
+        ? result.rows || []
+        : [...state.teamStatus.collaborationRows, ...(result.rows || [])];
+      state.teamStatus.collaborationPage = Number(result.page || page);
+      state.teamStatus.collaborationTotal = Number(result.total || 0);
+      state.teamStatus.collaborationHasMore = Boolean(result.hasMore);
+      state.teamStatus.writeEnabled = Boolean(result.writeEnabled);
+      if (result.schema) state.teamStatus.collaborationController?.updateSchema(result.schema);
+      renderTeamCollaboration();
+    } catch (error) {
+      if (error.code === 'FILTER_VERSION_CONFLICT') {
+        await initializeTeamStatusFilters({ force: true });
+        return;
+      }
+      state.teamStatus.error = error.message;
+      renderTeamStatusState();
+    }
+  }
+
+  async function initializeTeamStatusFilters({ force = false } = {}) {
+    if (!can('view_customers') || !window.TradePulseFilterComponent) return;
+    const mounts = [
+      ['progress', 'team_status_progress', '#teamProgressFilters'],
+      ['collaboration', 'team_status_collaboration', '#teamCollaborationFilters'],
+    ].filter(([kind]) => kind === 'collaboration' || can('view_team'));
+    try {
+      for (const [kind, pageKey, selector] of mounts) {
+        const root = $(selector);
+        const mountKey = `${kind}Mount`;
+        const controllerKey = `${kind}Controller`;
+        if (!root || (state.teamStatus[mountKey] && !force)) continue;
+        state.teamStatus[mountKey]?.destroy();
+        root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
+        const result = await api(`/filter-schema/${pageKey}`, { preserveOnForbidden: true });
+        invalidateStaleResearchFilterState(pageKey, result.schema);
+        const controller = window.TradePulseFilterComponent.createFilterController({
+          pageKey, schema: result.schema,
+          onApply: () => kind === 'progress'
+            ? void loadTeamStatus({ reset: true })
+            : void loadTeamCollaboration({ reset: true }),
+        });
+        state.teamStatus[controllerKey] = controller;
+        state.teamStatus[mountKey] = window.TradePulseFilterComponent.mountFilterComponent(root, {
+          controller, resultMeta: { total: 0, shown: 0 },
+        });
+      }
+      if (can('view_team')) await loadTeamStatus({ reset: true });
+      else {
+        state.teamStatus.section = 'collaboration';
+        state.teamStatus.loaded = true;
+        await loadTeamCollaboration({ reset: true });
+        renderTeamSection();
+      }
+    } catch (error) {
+      state.teamStatus.error = error.message;
+      renderTeamSection();
+    }
+  }
+
+  function collaborationFormMarkup(item = null, action = 'record') {
+    const users = (state.data?.users || []).filter(user => user.role === 'sales' && user.active !== false);
+    const accounts = scopedAccounts();
+    const append = action !== 'record';
+    return `<form id="collaborationSupportForm" data-action="${esc(action)}" data-event-id="${esc(item?.eventId || '')}" data-idempotency-key="${esc(crypto.randomUUID())}" class="collaboration-support-form">
+      ${append ? `<div class="collaboration-reference"><strong>${esc(item?.problem || '协作记录')}</strong><span>${esc(item?.customerId || '未关联客户')} · ${esc(collaborationStatusLabels[item?.status] || item?.status || '')}</span></div>` : ''}
+      <div class="form-grid two">
+        <label>销售<select name="salesUserId" ${append ? 'disabled' : ''} required>${users.map(user => `<option value="${esc(user.id)}" ${user.id === item?.salesUserId ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
+        <label>关联客户（可选）<select name="customerId" ${append ? 'disabled' : ''}><option value="">不关联客户</option>${accounts.map(account => `<option value="${esc(account.external_customer_id || account.id)}" ${(account.external_customer_id || account.id) === item?.customerId ? 'selected' : ''}>${esc(accountDisplayName(account))}</option>`).join('')}</select></label>
+        <label class="span-2">问题<textarea name="problem" rows="3" ${action === 'record' ? 'required' : ''}>${esc(item?.problem || '')}</textarea></label>
+        <label class="span-2">建议<textarea name="suggestion" rows="3">${esc(item?.suggestion || '')}</textarea></label>
+        <label>结果<textarea name="outcome" rows="2">${esc(item?.outcome || '')}</textarea></label>
+        <label>下一步<textarea name="nextStep" rows="2">${esc(item?.nextStep || '')}</textarea></label>
+        <label>状态<select name="status"><option value="unresolved" ${item?.status === 'unresolved' ? 'selected' : ''}>未解决</option><option value="resolved" ${item?.status === 'resolved' ? 'selected' : ''}>已解决</option><option value="escalated" ${item?.status === 'escalated' ? 'selected' : ''}>已升级</option></select></label>
+        ${append ? '<label>操作原因<input name="reason" required placeholder="说明为何补充、更正或撤销"></label>' : ''}
+      </div>
+      <p id="collaborationSupportStatus" class="form-status" role="status" aria-live="polite"></p>
+      <div class="form-actions"><button class="button secondary" type="button" data-close-modal>取消</button><button class="button primary" type="submit">${action === 'record' ? '保存补记' : action === 'supplement' ? '追加补充' : action === 'correction' ? '提交更正' : '确认撤销'}</button></div>
+    </form>`;
+  }
+
+  function openCollaborationSupport(item = null, action = 'record') {
+    const titles = { record: '补记协作支持', supplement: '补充协作记录', correction: '更正协作记录', revocation: '撤销协作记录' };
+    openModal(titles[action], 'COLLABORATION SUPPORT', collaborationFormMarkup(item, action), 'collaboration-support-modal');
+  }
+
+  async function submitCollaborationSupport(form) {
+    if (state.teamStatus.submitting) return;
+    const payload = formPayload(form);
+    const action = form.dataset.action || 'record';
+    const eventId = form.dataset.eventId || '';
+    const status = $('#collaborationSupportStatus');
+    const idempotencyKey = form.dataset.idempotencyKey;
+    state.teamStatus.submitting = true;
+    if (status) status.textContent = '正在保存…';
+    const body = {
+      problem: String(payload.problem || ''), suggestion: String(payload.suggestion || ''),
+      outcome: String(payload.outcome || ''), nextStep: String(payload.nextStep || ''),
+      status: String(payload.status || 'unresolved'), reason: String(payload.reason || ''),
+      idempotencyKey,
+    };
+    if (action === 'record') {
+      body.salesUserId = String(payload.salesUserId || '');
+      body.customerId = String(payload.customerId || '');
+    }
+    try {
+      const suffix = { supplement: 'supplements', correction: 'corrections', revocation: 'revocations' }[action];
+      await api(suffix ? `/collaboration-support/${encodeURIComponent(eventId)}/${suffix}` : '/collaboration-support', {
+        method: 'POST', preserveOnForbidden: true, body: JSON.stringify(body),
+      });
+      closeModal();
+      toast('协作记录已按追加事件保存');
+      if (can('view_team')) await loadTeamStatus({ reset: true });
+      else await loadTeamCollaboration({ reset: true });
+    } catch (error) {
+      if (status) status.textContent = `${error.message}；输入已保留，请修正后重试。`;
+    } finally {
+      state.teamStatus.submitting = false;
+    }
+  }
+
+  function downloadTeamStatus() {
+    if (!can('export_data')) return toast('当前账号没有导出权限');
+    const section = state.teamStatus.section;
+    const filterKind = section === 'collaboration' ? 'collaboration' : 'progress';
+    const format = $('#teamExportFormat')?.value || 'csv';
+    const params = teamStatusQuery(filterKind, {
+      section, format,
+      ...(state.teamStatus.range === 'since-last-view' ? {} : { range: state.teamStatus.range }),
+    });
+    const link = document.createElement('a');
+    link.href = section === 'collaboration' && !can('view_team')
+      ? `/api/sales-crm/collaboration-support/export?${params}`
+      : `/api/sales-crm/team-status/export?${params}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   async function loadSalesCoaching({ quiet = false } = {}) {
     if (!canViewSalesCoaching() || state.salesCoaching.loading) return;
     state.salesCoaching.loading = true;
@@ -4146,35 +4512,13 @@
 
   function renderTeam() {
     if (!can('view_team')) return;
-    const rows = state.data.teamReport;
-    const coachingStatus = $('#teamCoachingStatus');
-    if (coachingStatus) {
-      coachingStatus.classList.toggle('hidden', !canViewSalesCoaching());
-      const ready = state.salesCoaching.items.filter(item => item.ai?.result && !item.ai.stale).length;
-      coachingStatus.textContent = state.salesCoaching.loading && !state.salesCoaching.loaded
-          ? '正在读取团队辅导状态…'
-          : state.salesCoaching.error
-            ? `团队辅导暂不可用：${state.salesCoaching.error}`
-            : `${rows.length} 位销售 · ${ready} 份 AI 辅导建议 · 样本不足时不调用模型`;
-    }
-    $('#teamCards').innerHTML = rows.map(item => {
-      const topScores = Object.entries(item.scores).sort((a, b) => b[1] - a[1]).slice(0, 4);
-      const coaching = customerAIEnabled() ? coachingFor(item.user.id) : null;
-      const coachingLabel = coaching?.ai?.result && !coaching.ai.stale
-        ? 'AI辅导已生成'
-        : ['queued', 'running', 'retry_wait'].includes(coaching?.ai?.job?.state)
-          ? 'AI辅导处理中'
-          : item.sampleSize < 10 ? '样本不足' : '待生成AI辅导';
-      return `<article class="team-card ${state.teamUserId === item.user.id ? 'selected' : ''}" data-team-user="${item.user.id}">
-        <div class="team-card-top"><div class="person"><span class="avatar">${esc(item.user.name.slice(0, 1))}</span><div><strong>${esc(item.user.name)}</strong><small>${esc(item.bestCountries.join(' / ') || '待积累数据')}</small></div></div><div class="score-ring" style="--score:${item.overall}%"><strong>${item.overall}</strong></div></div>
-        <div class="capability-bars">${topScores.map(([key, value]) => `<div class="cap-row"><span>${capabilityLabels[key]}</span><div class="cap-track"><i style="width:${value}%"></i></div><b>${value}</b></div>`).join('')}</div>
-        <div class="team-tags">${item.bestChannels.map(channel => `<span class="pill">${esc(channel)}</span>`).join('')}<span class="pill gray">${item.sampleStatus}</span>${customerAIEnabled() ? `<span class="pill">${coachingLabel}</span>` : ''}</div>
-      </article>`;
-    }).join('');
-    if (state.teamUserId) renderTeamDetail(state.teamUserId);
+    renderTeamSection();
   }
   function renderTeamDetail(userId) {
-    const item = state.data.teamReport.find(row => row.user.id === userId);
+    const rows = Array.isArray(state.teamStatus.data?.capability)
+      ? state.teamStatus.data.capability
+      : state.data.teamReport;
+    const item = rows.find(row => row.user.id === userId);
     if (!item) return;
     const strongest = item.strongest.map(key => capabilityLabels[key]).join('、');
     const weakest = item.weakest.map(key => capabilityLabels[key]).join('、');
@@ -8119,7 +8463,9 @@
         .filter(input => !input.disabled && !input.closest('.hidden'))
         .find(input => !validateFutureDateTime(input));
       if (invalidFuture) throw new Error('下一步时间必须晚于当前时间');
-      if (form.id === 'activityCorrectionTargetForm') {
+      if (form.id === 'collaborationSupportForm') {
+        await submitCollaborationSupport(form);
+      } else if (form.id === 'activityCorrectionTargetForm') {
         if (!state.activityCorrection.targetCustomerId) throw new Error('请选择正确客户');
         state.activityCorrection.step = 2;
         renderActivityCorrectionModal();
@@ -8740,6 +9086,31 @@
     if (nav) switchView(nav.dataset.view);
     const go = event.target.closest('[data-go]');
     if (go) switchView(go.dataset.go);
+    const teamSection = event.target.closest('[data-team-section]');
+    if (teamSection) {
+      state.teamStatus.section = teamSection.dataset.teamSection;
+      renderTeamSection();
+    }
+    const progressDrilldown = event.target.closest('[data-team-progress-drilldown]');
+    if (progressDrilldown) {
+      state.teamStatus.drilldown = progressDrilldown.dataset.teamProgressDrilldown;
+      renderTeamProgress();
+    }
+    if (event.target.closest('#teamRefresh')) await loadTeamStatus({ reset: true });
+    if (event.target.closest('#teamExport')) downloadTeamStatus();
+    if (event.target.closest('#teamCollaborationMore')) await loadTeamCollaboration({ reset: false });
+    if (event.target.closest('#teamCollaborationAdd')) openCollaborationSupport();
+    for (const [attribute, action] of [
+      ['data-collaboration-supplement', 'supplement'],
+      ['data-collaboration-correct', 'correction'],
+      ['data-collaboration-revoke', 'revocation'],
+    ]) {
+      const button = event.target.closest(`[${attribute}]`);
+      if (!button) continue;
+      const item = state.teamStatus.collaborationRows.find(row =>
+        row.eventId === button.getAttribute(attribute));
+      if (item) openCollaborationSupport(item, action);
+    }
     const accessSection = event.target.closest('[data-access-section]');
     if (accessSection) switchAccessSection(accessSection.dataset.accessSection);
     const planMode = event.target.closest('#planModeTabs [data-plan-mode]');
@@ -9537,6 +9908,9 @@
     if (canonicalView === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
       void loadSalesCoaching();
     }
+    if (canonicalView === 'team' && !state.teamStatus.loaded) {
+      void initializeTeamStatusFilters();
+    }
     const businessPageKey = {
       pipeline: 'pipeline',
       alerts: 'alerts',
@@ -9595,6 +9969,7 @@
     if (event.target.id === 'activitySummary') resizeActivitySummary(event.target);
   });
   document.addEventListener('change', event => {
+    if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
     if (event.target.id === 'protectedCsvInput') void loadProtectedCustomerCsv(event.target.files?.[0]);
     if (event.target.id === 'protectedStatus') {
       state.protectedCustomers.status = event.target.value;
