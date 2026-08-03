@@ -73,6 +73,8 @@ test('Issue 207 redirects security administration views and gates their row acti
   const firstAllowed = between('function firstAllowedBusinessView', 'async function load');
   const load = between('async function load', 'function applyUser');
   const users = between('function renderUsers', 'function renderManagerTaskSettings');
+  const duplicateGate = between('function canReviewDuplicateCustomers', 'function canAccessProtectionAndDedupe');
+  const duplicateReviews = between('function renderDuplicateReviews', 'async function loadDuplicateReviews');
   const switcher = between('function switchView', "window.addEventListener('hashchange'");
 
   assert.match(viewGate, /\['activityCorrections', 'users', 'maintenance', 'protectedCustomers'\]\.includes\(view\)/);
@@ -80,11 +82,10 @@ test('Issue 207 redirects security administration views and gates their row acti
   assert.match(load, /requestedAllowed[\s\S]{0,180}identityInspectionAllowsView\(requestedView\)/);
   assert.match(switcher, /if \(!identityInspectionAllowsView\(canonicalView\)\)[\s\S]{0,180}firstAllowedBusinessView\(\)/);
   assert.match(users, /const canMutate = can\('manage_users'\) && !state\.data\.impersonation/);
-  for (const marker of ['data-duplicate-review=', 'data-resolve-review=']) {
-    const markerAt = users.indexOf(marker);
-    assert.ok(markerAt >= 0, `missing ${marker}`);
-    assert.match(users.slice(Math.max(0, markerAt - 180), markerAt), /canMutate/);
-  }
+  assert.match(duplicateGate, /!state\.data\?\.impersonation/);
+  assert.match(duplicateReviews, /const allowed = canReviewDuplicateCustomers\(\)/);
+  assert.match(duplicateReviews, /panel\.classList\.toggle\('hidden', !allowed\)/);
+  assert.match(duplicateReviews, /if \(!allowed\) return/);
 });
 
 test('Issue 207 restores password controls and disables cursor-advancing team ranges', () => {

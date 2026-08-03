@@ -165,6 +165,6 @@ test('manager checkbox, textarea and modal scrolling have dedicated responsive c
 });
 
 test('Issue 149 assets are cache-busted together', () => {
-  assert.match(html, /sales-assets\/app\.css\?v=20260803-issue207-impersonation-actions/);
-  assert.match(html, /sales-assets\/app\.js\?v=20260803-issue207-impersonation-actions/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260804-issue208-duplicate-review/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260804-issue208-duplicate-review/);
 });
