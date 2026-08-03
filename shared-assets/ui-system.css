@@ -236,6 +236,10 @@ body[data-app="sales"] .search-box {
   display: none;
 }
 
+body[data-app="sales"] .menu-button {
+  display: none;
+}
+
 body[data-app="intelligence"] .sidebar-foot {
   margin-top: 14px;
 }
