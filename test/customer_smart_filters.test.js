@@ -45,7 +45,7 @@ test('customer export applies multi-keyword, multi-select, quick-view and sortin
     '/api/sales-crm/export?search=wu%20俄罗斯&countries=俄罗斯,德国&owners=U-WU,U-MGR'
       + '&stages=qualified&priorities=A,B&customerTypes=原厂,终端制造商'
       + '&industries=工业控制,汽车电子&sources=展会,官网&creators=USR-ADMIN,U-WU'
-      + '&sort=potential_desc',
+      + '&sort=recent_progress',
     { cookie: fx.adminCookie },
   );
   assert.deepEqual(ids(combined), ['CRM-WU']);

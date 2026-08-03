@@ -18,7 +18,6 @@ test('established year is stored independently and unassigned creation stays in 
       country: '巴西',
       establishedYear: '2008',
       ownerId: '__unassigned__',
-      potentialValue: 7123,
     },
   });
   const account = fx.db.prepare(`SELECT owner_id,assignment_status,established_year,potential_value,lifecycle_status
@@ -29,7 +28,7 @@ test('established year is stored independently and unassigned creation stays in 
     owner_id: null,
     assignment_status: 'unassigned',
     established_year: 2008,
-    potential_value: 7123,
+    potential_value: 0,
     lifecycle_status: 'active',
   });
   assert.equal(master.established_year, 2008);
@@ -118,13 +117,14 @@ test('established year is available in authorized filtering, JSON/CSV export and
   const exported = await fx.requestJson(`/api/sales-crm/export?filters=${filters}`, { cookie: fx.adminCookie });
   assert.deepEqual(exported.customers.map(item => item.id), ['CRM-OWN']);
   assert.equal(exported.customers[0].established_year, 2003);
-  assert.equal(exported.customers[0].potential_value, 4567);
+  assert.equal(Object.hasOwn(exported.customers[0], 'potential_value'), false);
 
   const csv = await (await fx.request(`/api/sales-crm/export?format=csv&filters=${filters}`, {
     cookie: fx.adminCookie,
   })).text();
   assert.match(csv, /成立年份/);
   assert.match(csv, /2003/);
+  assert.doesNotMatch(csv, /潜在金额/);
 
   const profile = await fx.requestJson('/api/sales-crm/profile/RU-9002', { cookie: fx.adminCookie });
   assert.equal(profile.customerPool[0].establishedYear, 2003);

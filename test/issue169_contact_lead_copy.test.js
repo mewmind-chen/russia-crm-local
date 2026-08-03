@@ -78,7 +78,7 @@ test('documentation uses customer contact terminology while sales ownership copy
   assert.match(readme, /未找到有效客户联系人线索/);
   assert.doesNotMatch(readme, /负责人线索/);
 
-  assert.match(salesHtml, /批量设置负责人/);
+  assert.match(salesHtml, /批量分配/);
   assert.match(workbenchHtml, /活跃客户无负责人/);
   assert.match(workbenchHtml, /for="ownerFilter">负责人<\/label>/);
   assert.match(readme, /不会代替业务人员填写负责人、下一步动作或跟进日期/);
