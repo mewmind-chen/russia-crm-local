@@ -105,6 +105,7 @@ test('nickname search preserves row scope and JSON/CSV exports separate official
 test('nickname survives return, reassignment, trash and restore workflows', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { manage_customer_recycle: true });
   fx.db.prepare("UPDATE crm_accounts SET nickname='长期合作方' WHERE id='CRM-OTHER'").run();
 
   assert.equal((await fx.request('/api/sales-crm/accounts/CRM-OTHER/return', {

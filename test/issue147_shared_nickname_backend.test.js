@@ -256,6 +256,7 @@ test('legacy account nicknames migrate deterministically with conflict audit and
 test('canonical nickname is searchable in CRM and recycle and exported in separate columns', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { manage_customer_recycle: true });
   fx.db.prepare(`UPDATE customer_pool SET company_name='生命周期正式名称'
     WHERE customer_id='RU-9003'`).run();
   const saved = await fx.request('/api/sales-crm/customers/RU-9003/nickname', {

@@ -5,6 +5,7 @@ const { adminFixture } = require('./helpers/permission_fixture');
 test('sales can return an owned CRM customer and manager can reassign the same account', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { manage_customer_recycle: true });
 
   const returned = await fx.request('/api/sales-crm/accounts/CRM-OTHER/return', {
     cookie: fx.otherCookie, method: 'POST', body: { reason: '当前区域暂不匹配，需要重新评估' },
