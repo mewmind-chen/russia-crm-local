@@ -170,6 +170,7 @@ test('manual assignment uses the authorized filter scope instead of selecting fr
       ownerId: 'U-OTHER',
       amount: 2,
       idempotencyKey: 'issue-141-filter-once',
+      previewToken: body.previewToken,
     },
   });
   body = await response.json();

@@ -78,6 +78,6 @@ test('plan UI uses basis-aware conversion, AI normalization, and the current JS 
   assert.match(source, /storedPlanDateInputWithBasis\(account\.next_action_at, account\.next_action_time_basis\)/);
   assert.match(source, /suggestedPlanDateInput\(value\.nextActionAt\)/);
   assert.match(source, /历史时间待确认/);
-  assert.match(html, /sales-assets\/app\.js\?v=20260803-issue210-customer-controls/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260803-issue210-customer-controls/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260803-issue212-lead-pool/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260803-issue212-lead-pool/);
 });

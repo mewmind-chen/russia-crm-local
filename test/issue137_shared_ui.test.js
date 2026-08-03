@@ -157,7 +157,7 @@ test('all nine authorized business pages continue to use the shared filter compo
   ['contacts', 'recon'].forEach(pageKey => {
     assert.match(appSource, new RegExp(`pageKey:\\s*['"]${pageKey}['"]`));
   });
-  ['intake', 'lead_flow', 'recycle_bin', 'pipeline', 'alerts', 'insights'].forEach(pageKey => {
+  ['intake', 'recycle_bin', 'pipeline', 'alerts', 'insights'].forEach(pageKey => {
     assert.match(appSource, new RegExp(`\\n\\s*${pageKey}:\\s*\\{\\n\\s*root:`));
   });
   assert.match(appSource, /TradePulseFilterComponent\.mountFilterComponent/g);

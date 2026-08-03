@@ -146,10 +146,12 @@ test('zero and single-page results expose counts without fake navigation buttons
   }
 });
 
-test('current-page bulk assignment never falls back to a full filter scope', () => {
+test('current-page assignment stays explicit while all-filtered selection is separately confirmed', () => {
   const assignmentScope = functionBlock(app, 'currentIntakeAssignmentScope');
   assert.match(assignmentScope, /const itemIds = visibleOrder/);
-  assert.doesNotMatch(assignmentScope, /scopeType:\s*'filter'|filterScope/);
+  assert.match(assignmentScope, /scopeType:\s*'selection', itemIds/);
+  assert.match(assignmentScope, /state\.intakeSelectAllScope[\s\S]*scopeType:\s*'all_filtered'/);
+  assert.match(app, /window\.confirm\(`将选择全部筛选结果/);
   assert.match(assignmentScope, /return null/);
 });
 

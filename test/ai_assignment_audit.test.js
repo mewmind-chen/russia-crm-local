@@ -41,16 +41,23 @@ test('intake bootstrap exposes arbitration layers and keeps manual assignment hi
   assert.equal(item.arbitration.ruleDecision.reasonCode, 'high_value_review');
   assert.equal(item.assignmentAudit.length, 1);
 
+  fx.db.prepare(`INSERT INTO sales_users
+    (id,email,name,role,password_hash,password_salt,active,must_change_password,
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at)
+    SELECT 'U-AUDIT-SALES','audit-sales@example.com','Audit Sales','sales',password_hash,password_salt,1,0,
+     languages_json,countries_json,channels_json,permission_group_id,created_at,updated_at
+    FROM sales_users WHERE id='U-OTHER'`).run();
+
   const action = await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.cookie,
     method: 'POST',
-    body: { action: 'reassign', itemId: 'INTAKE-OTHER', ownerId: 'U-OTHER', reason: '经理确认分配' },
+    body: { action: 'reassign', itemId: 'INTAKE-OTHER', ownerId: 'U-AUDIT-SALES' },
   });
   assert.equal(action.status, 200);
   const manual = fx.db.prepare(`SELECT * FROM crm_intake_decisions
     WHERE intake_item_id=? AND decision_type='manual' ORDER BY created_at DESC,id DESC LIMIT 1`).get('INTAKE-OTHER');
   assert.ok(manual);
   assert.equal(manual.actor_id, 'U-WU');
-  assert.equal(JSON.parse(manual.manual_decision_json).ownerId, 'U-OTHER');
+  assert.equal(JSON.parse(manual.manual_decision_json).ownerId, 'U-AUDIT-SALES');
   assert.equal(manual.candidate_snapshot_id, 'SNAPSHOT-1');
 });
