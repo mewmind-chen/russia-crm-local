@@ -45,8 +45,8 @@ test('Issue #62 profile keeps one AI entry and a direct follow-up action', () =>
 });
 
 test('Issue #62 navigation restores browser history and mobile affordances', () => {
-  assert.match(js, /history\.pushState\(null, '', `#\$\{canonicalView\}`\)/);
-  assert.match(js, /history\.replaceState\(null, '', `#\$\{canonicalView\}`\)/);
+  assert.match(js, /history\.pushState\(null, '', navigationUrl\)/);
+  assert.match(js, /history\.replaceState\(null, '', navigationUrl\)/);
   assert.match(js, /window\.scrollTo\?\.\(0, 0\)/);
   assert.match(html, /href="#dashboard"/);
   assert.match(css, /左右滑动查看更多/);

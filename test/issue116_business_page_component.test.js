@@ -19,9 +19,9 @@ test('six remaining business lists mount the shared authorized filter component'
   ]) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
-  assert.match(html, /data-authorized-intake-page="lead_flow"/);
+  assert.doesNotMatch(html, /data-authorized-intake-page|intakeAuthorizedPageTabs/);
   for (const pageKey of [
-    'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
+    'intake', 'pipeline', 'alerts', 'insights', 'recycle_bin',
   ]) {
     assert.match(app, new RegExp(`${pageKey}: \\{`), pageKey);
   }

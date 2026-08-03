@@ -75,8 +75,11 @@
     intakeTotalPages: 0,
     intakeHasMore: false,
     intakeLoading: false,
-    intakeAuthorizedPage: 'intake',
     selectedIntakeIds: new Set(),
+    intakeSelectAllScope: null,
+    pendingIntakeStat: '',
+    pendingCustomerIntakeFlow: '',
+    leadWorkflowApplying: false,
     intakeAssignmentPreview: null,
     intakeAssignmentSubmitting: false,
     intakeSearchTimer: null,
@@ -167,7 +170,7 @@
     recycleBin: { rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, hasMore: false, loading: false },
     recycleCustomerDetail: null,
     authorizedBusinessLists: Object.fromEntries([
-      'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
+      'intake', 'pipeline', 'alerts', 'insights', 'recycle_bin',
       'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications',
     ].map(pageKey => [pageKey, emptyAuthorizedListState(50)])),
     managerTaskPage: 1,
@@ -934,6 +937,7 @@
         pageKey,
         schema: customerFilterSchema(result.schema),
         onApply: () => {
+          if (!state.leadWorkflowApplying) updateLeadWorkflowUrl('');
           resetCustomerSelection();
           void loadCustomerPage({ reset: true });
         },
@@ -942,6 +946,15 @@
         },
       });
       state.customerFilterController = controller;
+      if (state.pendingCustomerIntakeFlow) {
+        const flow = state.pendingCustomerIntakeFlow;
+        state.pendingCustomerIntakeFlow = '';
+        state.leadWorkflowApplying = true;
+        controller.clearAll({ apply: false });
+        controller.setDraft('intake_flow', [flow]);
+        controller.apply();
+        state.leadWorkflowApplying = false;
+      }
       state.customerFilterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
         controller,
         resultMeta: {
@@ -998,10 +1011,6 @@
       root: '#intakeAuthorizedFilters', pagination: '#intakePagination',
       count: '#intakeAuthorizedResultCount', render: renderIntake,
     },
-    lead_flow: {
-      root: '#intakeAuthorizedFilters', pagination: '#intakePagination',
-      count: '#intakeAuthorizedResultCount', render: renderIntake,
-    },
     pipeline: {
       root: '#pipelineAuthorizedFilters', pagination: '#pipelineAuthorizedPagination',
       count: '#pipelineAuthorizedResultCount', render: renderPipeline,
@@ -1048,7 +1057,7 @@
   }
 
   function applyAuthorizedBusinessRows(pageKey, meta) {
-    if (['intake', 'lead_flow'].includes(pageKey)) {
+    if (pageKey === 'intake') {
       state.data.intake = {
         ...(state.data.intake || {}),
         items: meta.rows,
@@ -1083,7 +1092,10 @@
     const meta = state.authorizedBusinessLists[pageKey];
     const count = config ? $(config.count) : null;
     renderPagination(config?.pagination, pageKey, meta, change => {
-      if (['intake', 'lead_flow'].includes(pageKey)) state.selectedIntakeIds.clear();
+      if (pageKey === 'intake') {
+        state.selectedIntakeIds.clear();
+        state.intakeSelectAllScope = null;
+      }
       if (change.pageSize) meta.pageSize = change.pageSize;
       void loadAuthorizedBusinessPage(pageKey, { page: change.page || 1 });
     });
@@ -1180,14 +1192,6 @@
     if (!config || !meta || !root || !window.TradePulseFilterComponent) return;
     if (meta.filterMount && !force) return;
     const initializeEpoch = ++meta.initializeEpoch;
-    if (['intake', 'lead_flow'].includes(pageKey)) {
-      const otherKey = pageKey === 'intake' ? 'lead_flow' : 'intake';
-      const other = state.authorizedBusinessLists[otherKey];
-      other.requestEpoch += 1;
-      other.filterMount?.destroy();
-      other.filterMount = null;
-      other.filterController = null;
-    }
     meta.requestEpoch += 1;
     meta.filterMount?.destroy();
     meta.filterMount = null;
@@ -1202,7 +1206,11 @@
         pageKey,
         schema: result.schema,
         onApply: payload => {
-          if (['intake', 'lead_flow'].includes(pageKey)) state.selectedIntakeIds.clear();
+          if (pageKey === 'intake') {
+            if (!state.leadWorkflowApplying) updateLeadWorkflowUrl('');
+            state.selectedIntakeIds.clear();
+            state.intakeSelectAllScope = null;
+          }
           if (pageKey === 'notifications') {
             state.notificationStatus = notificationStatusFromApplied(payload);
           }
@@ -1210,6 +1218,18 @@
         },
       });
       meta.filterController = controller;
+      if (pageKey === 'intake' && state.pendingIntakeStat) {
+        const statKey = state.pendingIntakeStat;
+        state.pendingIntakeStat = '';
+        state.leadWorkflowApplying = true;
+        controller.clearAll({ apply: false });
+        for (const [field, value] of Object.entries(intakeStatDraft(statKey))) {
+          controller.setDraft(field, value);
+        }
+        state.intakeStatus = intakeStatusFromStat(statKey);
+        controller.apply();
+        state.leadWorkflowApplying = false;
+      }
       if (pageKey === 'notifications') {
         syncNotificationStatusFromController(controller);
       }
@@ -1289,16 +1309,20 @@
           && (can('correct_own_activity') || can('manage_activity_corrections'))) {
         void loadActivityCorrectionWriteStatus();
       }
+      const requestedView = location.hash.replace(/^#/, '');
+      const requestedParams = new URLSearchParams(location.search);
+      const requestedCustomerId = requestedParams.get('customer') || '';
+      const requestedIntakeItemId = requestedParams.get('intake') || '';
+      const requestedLeadView = String(requestedParams.get('leadView') || '');
+      if (!restoreLeadWorkflowFromLocation(requestedView) && requestedLeadView) {
+        updateLeadWorkflowUrl('');
+      }
       if (can('view_customers')) void initializeCustomerFilters();
       renderImpersonationBanner();
       if (can('manage_users') && !state.data.impersonation) {
         void loadAssistantRuntime();
         void loadAIFeatures();
       }
-      const requestedView = location.hash.replace(/^#/, '');
-      const requestedParams = new URLSearchParams(location.search);
-      const requestedCustomerId = requestedParams.get('customer') || '';
-      const requestedIntakeItemId = requestedParams.get('intake') || '';
       const requestedPermission = requestedView === 'customerProfile' && requestedIntakeItemId
         ? 'view_intake'
         : viewPermissions[requestedView] || `view_${requestedView}`;
@@ -1844,7 +1868,7 @@
     if (status === 'returned') return { label: '已退回线索池', className: 'red' };
     if (status === 'rejected') return { label: '不对口', className: 'red' };
     if (status === 'approved') return { label: '待分配', className: 'gray' };
-    if (status === 'pending') return { label: '待审核', className: 'gray' };
+    if (status === 'pending') return { label: '待分配', className: 'gray' };
     return { label: intakeStatusLabel(status) || '状态未知', className: 'gray' };
   }
 
@@ -1981,7 +2005,7 @@
   }
 
   async function loadIntakePage({ reset = true, page = 1 } = {}) {
-    const pageKey = state.intakeAuthorizedPage || 'intake';
+    const pageKey = 'intake';
     const meta = state.authorizedBusinessLists[pageKey];
     if (!meta?.filterController) {
       await initializeAuthorizedBusinessFilters(pageKey, { force: true });
@@ -1992,7 +2016,7 @@
     controller.clearAll({ apply: false });
     const values = {
       search: ($('#intakeSearch')?.value || '').trim(),
-      status: state.intakeStatus,
+      status: state.intakeStatus === 'unassigned' ? ['pending', 'approved'] : state.intakeStatus,
       country: state.intakeFilters.country,
       industry: state.intakeFilters.industry,
       customer_type: state.intakeFilters.customerType,
@@ -2018,8 +2042,15 @@
   }
 
   function currentIntakeAssignmentScope() {
-    if (state.intakeAuthorizedPage !== 'intake' || !can('manage_intake') || state.data?.impersonation) {
+    if (!can('manage_intake') || state.data?.impersonation) {
       return null;
+    }
+    if (state.intakeSelectAllScope) {
+      return {
+        scopeType: 'all_filtered',
+        filterScope: state.intakeSelectAllScope.filterScope,
+        count: Number(state.intakeSelectAllScope.total || 0),
+      };
     }
     const visibleItems = state.data?.intake?.items || [];
     const visibleOrder = visibleItems.map(item => item.id)
@@ -2031,20 +2062,44 @@
     return null;
   }
 
+  function switchIntakeSelectionToCurrentPage() {
+    if (!state.intakeSelectAllScope) return;
+    state.intakeSelectAllScope = null;
+    state.selectedIntakeIds = new Set(
+      (state.data?.intake?.items || []).filter(intakeItemAssignable).map(item => item.id),
+    );
+  }
+
   function renderIntakeAssignmentBar() {
     const bar = $('#intakeBulkBar');
     const label = $('#intakeSelectionCount');
     const button = $('#manualAssignIntakeBtn');
     const clear = $('#clearIntakeSelection');
-    if (!bar || !label || !button || !clear) return;
-    const visible = state.intakeAuthorizedPage === 'intake'
-      && can('manage_intake')
-      && !state.data?.impersonation;
+    const selectAll = $('#intakeSelectAllResults');
+    if (!bar || !label || !button || !clear || !selectAll) return;
+    const visible = can('manage_intake') && !state.data?.impersonation;
     bar.classList.toggle('hidden', !visible);
     if (!visible) return;
     const scope = currentIntakeAssignmentScope();
-    clear.classList.toggle('hidden', !state.selectedIntakeIds.size);
-    if (state.selectedIntakeIds.size) {
+    const assignableVisible = (state.data?.intake?.items || []).filter(intakeItemAssignable);
+    const selectedVisible = state.intakeSelectAllScope
+      ? assignableVisible.length
+      : assignableVisible.filter(item => state.selectedIntakeIds.has(item.id)).length;
+    const canOfferAll = !state.intakeSelectAllScope
+      && state.selectedIntakeIds.size > 0
+      && selectedVisible === assignableVisible.length
+      && assignableVisible.length > 0
+      && Number(state.data?.intake?.total || 0) > assignableVisible.length;
+    selectAll.classList.toggle('hidden', !canOfferAll);
+    selectAll.disabled = !canOfferAll;
+    selectAll.title = canOfferAll
+      ? `选择全部筛选结果 ${state.data?.intake?.total || 0} 条`
+      : '仅当前页存在可分配线索时可用';
+    clear.classList.toggle('hidden', !state.selectedIntakeIds.size && !state.intakeSelectAllScope);
+    if (state.intakeSelectAllScope) {
+      label.textContent = `已选择全部筛选结果 ${scope.count} 条`;
+      button.textContent = `分配筛选结果 ${scope.count} 条`;
+    } else if (state.selectedIntakeIds.size) {
       label.textContent = `已勾选 ${state.selectedIntakeIds.size} 条线索`;
       button.textContent = `分配已选 ${state.selectedIntakeIds.size} 条`;
     } else if (scope?.scopeType === 'filter') {
@@ -2055,6 +2110,17 @@
       button.textContent = '分配';
     }
     button.disabled = !scope || scope.count < 1 || state.intakeAssignmentSubmitting;
+    const headerCheckbox = $('#selectVisibleIntake');
+    if (headerCheckbox) {
+      headerCheckbox.title = assignableVisible.length
+        ? '选择当前页可分配线索'
+        : '当前页没有可分配线索';
+    }
+  }
+
+  function intakeAssignmentCandidates() {
+    return (state.data?.todayTaskAssignmentCandidates || [])
+      .filter(user => user?.id && user?.name);
   }
 
   function syncManualAssignmentAmount() {
@@ -2089,12 +2155,16 @@
           action: 'manual_assign_preview',
           itemIds: scope.itemIds,
           filterScope: scope.filterScope,
+          allFiltered: scope.scopeType === 'all_filtered',
         }),
       });
       const defaultOwner = preview.sales?.[0];
       const defaultAmount = defaultOwner ? Number(preview.eligibleCount || 0) : 0;
       const blocked = Object.entries(preview.blockedReasons || {})
         .map(([reason, count]) => `${esc(reason)} ${esc(count)} 条`).join('；');
+      const scopeLabel = scope.scopeType === 'selection'
+        ? '已勾选'
+        : scope.scopeType === 'all_filtered' ? '全部筛选结果' : '当前筛选';
       state.intakeAssignmentPreview = {
         scope,
         preview,
@@ -2102,7 +2172,7 @@
       };
       openModal('分配线索', 'MANUAL ASSIGNMENT', `<form id="intakeManualAssignForm" class="form-grid">
         <div class="manual-assignment-summary">
-          <div><span>分配范围</span><strong>${preview.scopeType === 'selection' ? '已勾选' : '当前筛选'}</strong></div>
+          <div><span>分配范围</span><strong>${scopeLabel}</strong></div>
           <div><span>范围内线索</span><strong>${esc(preview.scopeTotal)}</strong></div>
           <div><span>当前可分配</span><strong>${esc(preview.eligibleCount)}</strong></div>
         </div>
@@ -2112,6 +2182,9 @@
         </select></label>
         <label>分多少条<input name="amount" type="number" min="1" max="${esc(defaultAmount)}" value="${defaultAmount || ''}" required></label>
         <div id="manualAssignmentCapacity" class="recommendation"></div>
+        ${scope.scopeType === 'all_filtered'
+          ? `<label class="intake-all-confirm"><input type="checkbox" name="confirmAll" required> 我确认向所选销售分配全部筛选结果中的可分配线索（共 ${esc(preview.eligibleCount)} 条）</label>`
+          : ''}
         <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit" ${defaultAmount ? '' : 'disabled'}>确认分配</button></div>
       </form>`);
       syncManualAssignmentAmount();
@@ -2122,12 +2195,141 @@
     }
   }
 
+  function intakeStatCards(salesView, stats, settings) {
+    return salesView ? [
+      ['today', '今日收到线索', stats.todayImported, '领取前保留在线索池'],
+      ['assigned', '待领取', stats.assigned, `领取时限 ${settings.claimSlaHours} 小时`],
+      ['claimed', '已领取', stats.claimed, '已转入个人CRM'],
+      ['contacted', '已完成触达', stats.contacted, '邮件、电话或社媒'],
+      ['returned', '已退回', stats.returned, '必须说明原因'],
+      ['overdue', '领取超期', stats.overdueClaim, '管理者将收到预警'],
+    ] : [
+      ['today', '今日同步线索', stats.todayImported, '仍属于线索池'],
+      ['unassigned', '待分配', stats.pending + stats.approved, '勾选或筛选后手动指定销售'],
+      ['assigned', '待销售领取', stats.assigned, `时限 ${settings.claimSlaHours} 小时`],
+      ['claimed', '销售已领取 / CRM', stats.claimed, `领取后进入CRM，首次触达 ${settings.contactSlaHours} 小时`],
+      ['contacted', '已完成触达', stats.contacted, '已进入开发漏斗'],
+      ['idle', '闲置资源', stats.idle, '待分配或退回'],
+      ['returned', '退回待处理', stats.returned, '需要重新分配'],
+      ['rejected', '不对口', stats.rejected, '保留判断依据'],
+      ['overdue', '领取超期', stats.overdueClaim, '系统异常预警'],
+    ];
+  }
+
+  function intakeAppliedFilters() {
+    const controller = state.authorizedBusinessLists?.intake?.filterController;
+    const payload = controller?.serialize('applied') || { filters: [] };
+    const applied = {};
+    (payload.filters || []).forEach(filter => { applied[filter.field] = filter.value; });
+    return applied;
+  }
+
+  function intakeActiveStatCard() {
+    const requestedLeadView = String(new URLSearchParams(location.search).get('leadView') || '');
+    const poolLeadViews = ['today', 'unassigned', 'assigned', 'idle', 'returned', 'rejected', 'overdue'];
+    if (state.view === 'pool' && poolLeadViews.includes(requestedLeadView)) return requestedLeadView;
+    const applied = intakeAppliedFilters();
+    const normalize = value => (Array.isArray(value) ? value : [value])
+      .map(item => String(item)).sort();
+    const appliedKeys = Object.keys(applied).sort();
+    for (const key of poolLeadViews) {
+      const draft = intakeStatDraft(key);
+      const draftKeys = Object.keys(draft).sort();
+      if (appliedKeys.length !== draftKeys.length
+          || appliedKeys.some((field, index) => field !== draftKeys[index])) continue;
+      const matches = draftKeys.every(field => {
+        const actual = normalize(applied[field]);
+        const expected = normalize(draft[field]);
+        return actual.length === expected.length
+          && actual.every((value, index) => value === expected[index]);
+      });
+      if (matches) return key;
+    }
+    return '';
+  }
+
+  function intakeStatDraft(key) {
+    return {
+      today: { created_today: true },
+      unassigned: { status: ['pending', 'approved'] },
+      assigned: { status: ['assigned'] },
+      idle: { status: ['pending', 'approved', 'returned'] },
+      returned: { status: ['returned'] },
+      rejected: { status: ['rejected'] },
+      overdue: { status: ['assigned'], claim_overdue: true },
+    }[key] || {};
+  }
+
+  function intakeStatusFromStat(key) {
+    return ({
+      unassigned: 'unassigned',
+      assigned: 'assigned',
+      overdue: 'assigned',
+      returned: 'returned',
+      rejected: 'rejected',
+    })[key] || '';
+  }
+
+  function updateLeadWorkflowUrl(key, view = '') {
+    const url = new URL(location.href);
+    if (key) url.searchParams.set('leadView', key);
+    else url.searchParams.delete('leadView');
+    if (view) url.hash = view;
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function leadWorkflowMatchesView(view, key) {
+    if (!key) return true;
+    if (['pool', 'intake', 'pending'].includes(view)) {
+      return ['today', 'unassigned', 'assigned', 'idle', 'returned', 'rejected', 'overdue'].includes(key);
+    }
+    return view === 'customers' && ['claimed', 'contacted'].includes(key);
+  }
+
+  function restoreLeadWorkflowFromLocation(view) {
+    const key = String(new URLSearchParams(location.search).get('leadView') || '');
+    state.pendingIntakeStat = '';
+    state.pendingCustomerIntakeFlow = '';
+    if (!leadWorkflowMatchesView(view, key)) return false;
+    if (['pool', 'intake', 'pending'].includes(view) && key) state.pendingIntakeStat = key;
+    if (view === 'customers' && key) state.pendingCustomerIntakeFlow = key;
+    return true;
+  }
+
+  function leadWorkflowNavigationUrl(view) {
+    const url = new URL(location.href);
+    const key = String(url.searchParams.get('leadView') || '');
+    if (!leadWorkflowMatchesView(view, key)) url.searchParams.delete('leadView');
+    url.hash = view;
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function applyIntakeStatCard(key) {
+    const controller = state.authorizedBusinessLists?.intake?.filterController;
+    if (!controller) return;
+    state.leadWorkflowApplying = true;
+    controller.clearAll({ apply: false });
+    const draft = intakeStatDraft(key);
+    for (const [field, value] of Object.entries(draft)) {
+      controller.setDraft(field, value);
+    }
+    state.intakeStatus = intakeStatusFromStat(key);
+    controller.apply();
+    state.leadWorkflowApplying = false;
+    updateLeadWorkflowUrl(key, 'pool');
+    $('#intakeTable')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function jumpIntakeStatToCrm(key) {
+    const flow = key === 'claimed' ? 'claimed' : 'contacted';
+    state.pendingCustomerIntakeFlow = flow;
+    updateLeadWorkflowUrl(flow, 'customers');
+    switchView('customers');
+  }
+
   function renderIntake() {
     const intake = state.data.intake;
     if (!intake) return;
-    $$('[data-authorized-intake-page]').forEach(button => {
-      button.classList.toggle('active', button.dataset.authorizedIntakePage === state.intakeAuthorizedPage);
-    });
     const salesView = !canViewAssignmentDecisions();
     const stats = intake.stats;
     const tabCounts = {
@@ -2158,31 +2360,15 @@
       ? ''
       : `<span class="intake-mode">${intake.settings.enabled ? '自动同步已启用' : '自动同步已停用'} · 手动分配不限条数</span>`;
     renderIntakeActiveFilters();
-    const summary = salesView ? [
-      ['今日收到线索', stats.todayImported, '领取前保留在线索池'],
-      ['待领取', stats.assigned, `领取时限 ${intake.settings.claimSlaHours} 小时`],
-      ['已领取', stats.claimed, '已转入个人CRM'],
-      ['已完成触达', stats.contacted, '邮件、电话或社媒'],
-      ['已退回', stats.returned, '必须说明原因'],
-      ['领取超期', stats.overdueClaim, '管理者将收到预警'],
-    ] : [
-      ['今日同步线索', stats.todayImported, '仍属于线索池'],
-      ['待分配', stats.pending + stats.approved, '勾选或筛选后手动指定销售'],
-      ['待销售领取', stats.assigned, `时限 ${intake.settings.claimSlaHours} 小时`],
-      ['销售已领取 / CRM', stats.claimed, `领取后进入CRM，首次触达 ${intake.settings.contactSlaHours} 小时`],
-      ['已完成触达', stats.contacted, '已进入开发漏斗'],
-      ['闲置资源', stats.idle, '待分配或退回'],
-      ['退回待处理', stats.returned, '需要重新分配'],
-      ['不对口', stats.rejected, '保留判断依据'],
-      ['领取超期', stats.overdueClaim, '系统异常预警'],
-    ];
-    $('#intakeSummary').innerHTML = summary.map(([label, value, note]) => `<article class="metric ${label.includes('超期') && value ? 'alert' : ''}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    const summary = intakeStatCards(salesView, stats, intake.settings);
+    const activeStat = intakeActiveStatCard();
+    $('#intakeSummary').innerHTML = summary.map(([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
     const items = intake.items || [];
-    const canManualAssign = !salesView
-      && state.intakeAuthorizedPage === 'intake'
-      && !state.data.impersonation;
+    const canManualAssign = !salesView && !state.data.impersonation;
     const assignableItems = items.filter(intakeItemAssignable);
-    const selectedVisibleCount = assignableItems.filter(item => state.selectedIntakeIds.has(item.id)).length;
+    const selectedVisibleCount = state.intakeSelectAllScope
+      ? assignableItems.length
+      : assignableItems.filter(item => state.selectedIntakeIds.has(item.id)).length;
     renderIntakeAssignmentBar();
     const showAI = customerAIEnabled();
     const showAssignmentAI = showAI && !salesView;
@@ -2205,7 +2391,10 @@
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
-        else if (!salesView && ['assigned', 'claimed'].includes(item.status)) actions = `<button class="text-button" data-intake-assign="${item.id}">重新分配</button>`;
+        else if (!salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
+        else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
+          ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看 CRM 客户</button>`
+          : '—';
         else actions = '—';
         const signals = intakeSignals(item);
         const layers = showAssignmentAI ? intakeDecisionLayers(item) : null;
@@ -2239,20 +2428,24 @@
           : businessColumns;
         if (canManualAssign) {
           row.unshift(intakeItemAssignable(item)
-            ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
+            ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.intakeSelectAllScope || state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
             : '');
         }
         row._attrs = `data-intake-profile="${esc(item.id)}"`;
         return row;
       }),
     );
+    if (!items.length) $('#intakeTable').innerHTML = '<div class="empty">暂无符合条件的线索</div>';
     const selectVisible = $('#selectVisibleIntake');
     if (selectVisible) {
       selectVisible.checked = Boolean(assignableItems.length)
         && selectedVisibleCount === assignableItems.length;
-      selectVisible.indeterminate = selectedVisibleCount > 0
+      selectVisible.indeterminate = !state.intakeSelectAllScope && selectedVisibleCount > 0
         && selectedVisibleCount < assignableItems.length;
       selectVisible.disabled = !assignableItems.length;
+      selectVisible.title = assignableItems.length
+        ? '选择当前页可分配线索'
+        : '当前页没有可分配线索';
     }
     $('#intakeBatchTable').innerHTML = table(
       ['日期', '来源', '候选', '入库', '已分配', '跳过', '状态'],
@@ -8452,19 +8645,17 @@
 
   function openIntakeAssignModal(itemId) {
     const item = state.data.intake.items.find(row => row.id === itemId);
-    const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
+    if (!item) return toast('线索已更新，请刷新后重试');
+    const sales = intakeAssignmentCandidates()
+      .filter(user => String(user.id) !== String(item.assigned_owner_id || ''));
+    if (!sales.length) return toast(item.assigned_owner_id ? '暂无其他可接收线索的在职销售' : '暂无可接收线索的在职销售');
     const suggestedOwnerId = customerAIEnabled() ? item.suggested_owner_id : '';
-    const selectedOwnerId = item.assigned_owner_id || suggestedOwnerId;
-    const assignmentContext = customerAIEnabled()
-      ? `建议：${item.suggested_owner_name || '暂无'}`
-      : item.assigned_owner_name
-        ? `当前负责人：${item.assigned_owner_name}`
-        : '请人工选择负责人';
+    const selectedOwnerId = sales.some(user => user.id === suggestedOwnerId) ? suggestedOwnerId : sales[0].id;
     openModal(item.crm_customer_id ? '重新分配客户' : '指定销售负责人', 'CUSTOMER ASSIGNMENT', `<form id="intakeAssignForm" class="form-grid">
       <input type="hidden" name="itemId" value="${esc(itemId)}">
-      <div class="recommendation"><strong>${esc(item.company_name)}</strong><br>${esc(item.country)} · ${esc(item.contact_level)} · ${esc(assignmentContext)}</div>
-      <label>销售负责人<select name="ownerId">${sales.map(user => `<option value="${user.id}" ${user.id === selectedOwnerId ? 'selected' : ''}>${esc(user.name)} · ${esc(user.countries.join('/'))}</option>`).join('')}</select></label>
-      <label>分配说明<input name="reason" value="${esc(customerAIEnabled() ? item.decision_reason || '管理者指定分配' : '管理者指定分配')}"></label>
+      <div class="recommendation"><strong>${esc(item.company_name)}</strong><br>${esc(item.country)} · ${esc(item.contact_level)}</div>
+      <label>当前负责人<span class="intake-current-owner">${esc(item.assigned_owner_name || '未分配')}</span></label>
+      <label>销售负责人<select name="ownerId" required>${sales.map(user => `<option value="${esc(user.id)}" ${user.id === selectedOwnerId ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</select></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">确认分配</button></div>
     </form>`);
   }
@@ -8572,6 +8763,14 @@
     }
     renderImpersonationBanner();
     closeModal();
+    if (message) toast(message);
+  }
+
+  async function refreshIntakeWorkflow(message = '') {
+    await refresh();
+    if (state.authorizedBusinessLists.intake?.filterController) {
+      await loadAuthorizedBusinessPage('intake', { reset: true });
+    }
     if (message) toast(message);
   }
 
@@ -9168,12 +9367,15 @@
               action: 'manual_assign',
               itemIds: assignment.scope.itemIds,
               filterScope: assignment.scope.filterScope,
+              allFiltered: assignment.scope.scopeType === 'all_filtered',
               ownerId: payload.ownerId,
               amount: Number(payload.amount),
               idempotencyKey: assignment.idempotencyKey,
+              previewToken: assignment.preview.previewToken || '',
             }),
           });
           state.selectedIntakeIds.clear();
+          state.intakeSelectAllScope = null;
           state.intakeAssignmentPreview = null;
           closeModal();
           const overview = await api('/api/sales-crm/intake?page=1&pageSize=20');
@@ -9184,20 +9386,30 @@
             batches: overview.batches,
           };
           await loadAuthorizedBusinessPage('intake', { reset: true });
-          toast(`已分配 ${result.assigned} 条${result.blocked ? `，阻断 ${result.blocked} 条` : ''}`);
+          const blockedReasons = Object.entries(result.blockedReasons || {})
+            .map(([reason, count]) => `${reason} ${count} 条`).join('；');
+          toast(`已分配 ${result.assigned} 条${result.blocked ? `，阻断 ${result.blocked} 条${blockedReasons ? `（${blockedReasons}）` : ''}` : ''}`);
+        } catch (error) {
+          if (['ASSIGNMENT_PREVIEW_EXPIRED', 'ASSIGNMENT_PREVIEW_REQUIRED'].includes(error.code)) {
+            state.intakeAssignmentPreview = null;
+            closeModal();
+          }
+          throw error;
         } finally {
           state.intakeAssignmentSubmitting = false;
+          if (button) button.textContent = '确认分配';
           renderIntakeAssignmentBar();
+          syncManualAssignmentAmount();
         }
       } else if (form.id === 'intakeAssignForm') {
         const payload = formPayload(form);
         payload.action = 'assign';
         await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh('客户已分配并生成领取任务');
+        await refreshIntakeWorkflow('客户已分配并生成领取任务');
       } else if (form.id === 'intakeReasonForm') {
         const payload = formPayload(form);
         await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
-        await refresh(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
+        await refreshIntakeWorkflow(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
       } else if (form.id === 'bulkCustomerAssignForm') {
         const payload = formPayload(form);
         if (!payload.ownerId) throw new Error('请选择有效的销售负责人');
@@ -9716,14 +9928,42 @@
       link.click();
       link.remove();
     }
-    const intakePageTab = event.target.closest('[data-authorized-intake-page]');
-    if (intakePageTab) {
-      state.selectedIntakeIds.clear();
-      state.intakeAuthorizedPage = intakePageTab.dataset.authorizedIntakePage;
-      $$('[data-authorized-intake-page]').forEach(button => {
-        button.classList.toggle('active', button.dataset.authorizedIntakePage === state.intakeAuthorizedPage);
-      });
-      await initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage, { force: true });
+    const intakeStat = event.target.closest('[data-intake-stat]');
+    if (intakeStat) {
+      const statKey = intakeStat.dataset.intakeStat;
+      if (intakeStat.hasAttribute('data-intake-stat-crm')) {
+        await jumpIntakeStatToCrm(statKey);
+      } else {
+        applyIntakeStatCard(statKey);
+      }
+      return;
+    }
+    if (event.target.closest('#intakeSelectAllResults')) {
+      const total = Number(state.data?.intake?.total || 0);
+      if (!total) return toast('当前筛选结果为空');
+      if (!window.confirm(`将选择全部筛选结果 ${total} 条，而不只是当前页。确认继续？`)) return;
+      const payload = state.authorizedBusinessLists.intake?.filterController?.serialize('applied') || { filters: [] };
+      const filterScope = {
+        permissionVersion: String(payload.permissionVersion || ''),
+        filters: componentPayloadToRaw(payload),
+      };
+      try {
+        const preview = await api('/api/sales-crm/intake/action', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'manual_assign_preview', filterScope, allFiltered: true }),
+        });
+        if (!preview.eligibleCount) return toast('全部筛选结果中没有可分配线索');
+        state.intakeSelectAllScope = {
+          total: Number(preview.eligibleCount || 0),
+          matchedTotal: total,
+          filterScope,
+        };
+        state.selectedIntakeIds.clear();
+        renderIntake();
+      } catch (error) {
+        toast(error.message);
+      }
+      return;
     }
     if (event.target.closest('[data-select-all-filtered-customers]')) {
       const total = Number(state.customerList.total || 0);
@@ -9801,6 +10041,7 @@
     }
     if (event.target.closest('#clearIntakeSelection')) {
       state.selectedIntakeIds.clear();
+      state.intakeSelectAllScope = null;
       renderIntake();
     }
     if (event.target.closest('#scanIntakeBtn')) {
@@ -9842,6 +10083,20 @@
     }
     const assignIntake = event.target.closest('[data-intake-assign]');
     if (assignIntake) openIntakeAssignModal(assignIntake.dataset.intakeAssign);
+    const unassignIntake = event.target.closest('[data-intake-unassign]');
+    if (unassignIntake) {
+      const item = (state.data?.intake?.items || []).find(row => row.id === unassignIntake.dataset.intakeUnassign);
+      if (!item) return;
+      if (!window.confirm(`确认取消分配「${item.company_name || item.id}」？将清空负责人和领取期限并恢复为待分配。`)) return;
+      try {
+        await api('/api/sales-crm/intake/action', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'unassign', itemId: item.id, idempotencyKey: proposalRequestId() }),
+        });
+        await refreshIntakeWorkflow('已取消分配，线索恢复为待分配');
+      } catch (error) { toast(error.message); }
+      return;
+    }
     const intakeAction = event.target.closest('[data-intake-action]');
     if (intakeAction) {
       const action = intakeAction.dataset.intakeAction;
@@ -9850,7 +10105,11 @@
       else {
         try {
           await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action, itemId, ownerId: intakeAction.dataset.ownerId || '', idempotencyKey: intakeAction.dataset.idempotencyKey || proposalRequestId() }) });
-          await refresh(action === 'claim' ? '客户已领取，请在规定时间内完成首次触达' : '客户已分配');
+          if (action === 'claim') {
+            await refreshIntakeWorkflow('客户已领取，请在规定时间内完成首次触达');
+          } else {
+            await refresh('客户已分配');
+          }
         } catch (error) { toast(error.message); }
       }
     }
@@ -10006,12 +10265,14 @@
       renderCustomers();
     }
     if (event.target.matches('[data-select-intake]')) {
+      switchIntakeSelectionToCurrentPage();
       const itemId = event.target.dataset.selectIntake;
       if (event.target.checked) state.selectedIntakeIds.add(itemId);
       else state.selectedIntakeIds.delete(itemId);
       renderIntake();
     }
     if (event.target.id === 'selectVisibleIntake') {
+      switchIntakeSelectionToCurrentPage();
       const assignable = (state.data.intake?.items || [])
         .filter(intakeItemAssignable);
       assignable.forEach(item => {
@@ -10089,7 +10350,6 @@
       }
       const viewChanged = state.view !== canonicalView;
       state.view = canonicalView;
-      if (viewChanged && canonicalView === 'pool') state.intakeAuthorizedPage = 'intake';
       if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();
       if (viewChanged && canonicalView === 'recycleBin') state.recycleKind = 'sales_return';
       if (viewChanged && canonicalView === 'managerMetrics') state.managerMetricRange = 30;
@@ -10102,7 +10362,7 @@
     document.body.classList.toggle('access-admin-active', canonicalView === 'users');
     if (canonicalView === 'pool') renderIntake();
       if (canonicalView === 'pool') {
-        void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage, { force: viewChanged });
+        void initializeAuthorizedBusinessFilters('intake', { force: viewChanged });
       }
       if (canonicalView === 'customers') void initializeCustomerFilters({ force: viewChanged });
     if (canonicalView === 'users' && can('manage_users') && !state.data.impersonation) {
@@ -10171,8 +10431,9 @@
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
     if (location.hash !== `#${canonicalView}`) {
-      if (pushHistory && !intakeAlias) history.pushState(null, '', `#${canonicalView}`);
-      else history.replaceState(null, '', `#${canonicalView}`);
+      const navigationUrl = leadWorkflowNavigationUrl(canonicalView);
+      if (pushHistory && !intakeAlias) history.pushState(null, '', navigationUrl);
+      else history.replaceState(null, '', navigationUrl);
     }
   }
 
@@ -10379,11 +10640,17 @@
   });
   window.addEventListener('hashchange', () => {
     const view = location.hash.replace(/^#/, '');
-    if (viewMeta[view] && state.data) switchView(view, false);
+    if (viewMeta[view] && state.data) {
+      restoreLeadWorkflowFromLocation(view);
+      switchView(view, false);
+    }
   });
   window.addEventListener('popstate', () => {
     const view = location.hash.replace(/^#/, '');
-    if (viewMeta[view] && state.data) switchView(view, false);
+    if (viewMeta[view] && state.data) {
+      restoreLeadWorkflowFromLocation(view);
+      switchView(view, false);
+    }
   });
 
   initializeDataTableOverflowHints();

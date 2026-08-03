@@ -29,7 +29,8 @@ test('disabled intake rendering removes AI headers, cells and the third decision
   assert.match(app, /<div class="decision-review-grid \$\{showAI \? '' : 'without-ai'\}">/);
   assert.match(css, /\.decision-review-grid\.without-ai\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/);
   assert.match(app, /const suggestedOwnerId = customerAIEnabled\(\) \? item\.suggested_owner_id : ''/);
-  assert.match(app, /customerAIEnabled\(\) \? item\.decision_reason \|\| '管理者指定分配' : '管理者指定分配'/);
+  assert.doesNotMatch(app, /name="reason" value="\$\{esc\(customerAIEnabled\(\)/);
+  assert.doesNotMatch(app, /分配说明/);
 });
 
 test('disabled customer, evaluation and notification views omit historical AI presentation', () => {

@@ -34,7 +34,7 @@ test('intake, pending and claimed routes select the canonical pool view', () => 
   assert.match(appJs, /intakeAlias = \['intake', 'pending', 'claimed'\]\.includes\(view\)/);
   assert.match(appJs, /canonicalView = intakeAlias \? 'pool' : view/);
   assert.match(appJs, /state\.intakeStatus = legacyIntakeStatus \|\| \(canonicalView === 'pool' \? '' : state\.intakeStatus\)/);
-  assert.match(appJs, /history\.replaceState\(null, '', `#\$\{canonicalView\}`\)/);
+  assert.match(appJs, /history\.replaceState\(null, '', navigationUrl\)/);
   assert.match(appJs, /status === state\.intakeStatus/);
 });
 
