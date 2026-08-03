@@ -84,7 +84,7 @@ test('manager task permissions have explicit least-privilege role defaults', () 
   assert.equal(ROLE_PERMISSIONS.sales.resolve_manager_tasks, false);
 });
 
-test('manager routes normalize to explicit policies and block impersonated writes', () => {
+test('manager routes normalize to explicit policies and separate business from safety writes', () => {
   const expected = new Map([
     ['POST /accounts/CRM-1/deferred-plan', 'POST /accounts/:customerId/deferred-plan'],
     ['GET /manager-task-settings', 'GET /manager-task-settings'],
@@ -105,7 +105,7 @@ test('manager routes normalize to explicit policies and block impersonated write
   }
 
   assert.deepEqual(SALES_ROUTE_POLICIES['POST /accounts/:customerId/deferred-plan'], {
-    permissions: ['record_activity'], blockedWhileImpersonating: true,
+    permissions: ['record_activity'],
   });
   assert.deepEqual(SALES_ROUTE_POLICIES['GET /manager-task-settings'], {
     permissions: ['manage_manager_task_settings'],
@@ -115,10 +115,8 @@ test('manager routes normalize to explicit policies and block impersonated write
   });
 
   for (const key of [
-    'POST /accounts/:customerId/deferred-plan',
     'PATCH /manager-task-settings',
     'POST /manager-tasks',
-    'POST /manager-tasks/:taskId/resolve',
   ]) {
     assert.throws(
       () => assertPolicyAllowed(SALES_ROUTE_POLICIES[key], { isImpersonating: true }),
@@ -127,6 +125,8 @@ test('manager routes normalize to explicit policies and block impersonated write
     );
   }
   for (const key of [
+    'POST /accounts/:customerId/deferred-plan',
+    'POST /manager-tasks/:taskId/resolve',
     'GET /manager-task-settings', 'GET /manager-tasks', 'GET /manager-tasks/:taskId',
     'GET /manager-metrics', 'GET /manager-risks', 'GET /manager-tasks/export',
   ]) {

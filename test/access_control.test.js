@@ -170,7 +170,21 @@ test('every browser API has an explicit permission policy or separate token boun
 });
 
 test('identity inspection blocks exactly the Recon and account-security policies', () => {
-  const { LEGACY_ACTION_POLICIES, SALES_ROUTE_POLICIES, policyForLegacyRequest, assertPolicyAllowed } = accessControl();
+  const {
+    LEGACY_ROUTE_POLICIES,
+    LEGACY_ACTION_POLICIES,
+    SALES_ROUTE_POLICIES,
+    policyForLegacyRequest,
+    assertPolicyAllowed,
+  } = accessControl();
+  const blockedLegacy = Object.entries(LEGACY_ROUTE_POLICIES)
+    .filter(([, policy]) => policy.blockedWhileImpersonating).map(([route]) => route).sort();
+  assert.deepEqual(blockedLegacy, [
+    'PATCH /assistant/conversations/:conversationId',
+    'PATCH /assistant/runtime',
+    'POST /assistant/conversations',
+    'POST /assistant/runtime/recheck',
+  ]);
   const blockedApp = Object.entries(LEGACY_ACTION_POLICIES.app)
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action).sort();
   assert.deepEqual(blockedApp, [
@@ -209,13 +223,12 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'PATCH /activity-reactions/:reactionId',
     'PATCH /ai/features/:featureKey',
     'PATCH /filter-permissions/definitions/:filterKey',
+    'PATCH /intake/settings',
     'PATCH /manager-task-settings',
     'PATCH /master/:customerId',
     'PATCH /permission-groups/:groupId',
     'PATCH /protected-customers/:externalCustomerId',
     'PATCH /users/:userId',
-    'POST /accounts/:customerId/deferred-plan',
-    'POST /accounts/:customerId/reassign',
     'POST /accounts/:customerId/restore',
     'POST /accounts/:customerId/trash',
     'POST /activity-correction-proposals',
@@ -251,8 +264,8 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /duplicate-reviews/:reviewId/resolve',
     'POST /filter-permissions',
     'POST /impersonation/start',
+    'POST /intake/scan',
     'POST /manager-tasks',
-    'POST /manager-tasks/:taskId/resolve',
     'POST /migration-review/:reviewId',
     'POST /password',
     'POST /permission-groups',
@@ -263,7 +276,6 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /protected-customers/batches/:batchId/rollback',
     'POST /protected-customers/batches/preview',
     'POST /team-status/since-last-view',
-    'POST /today-tasks/actions',
     'POST /users',
     'POST /users/:userId/archive',
     'POST /users/:userId/password-reset',
@@ -280,5 +292,26 @@ test('identity inspection blocks exactly the Recon and account-security policies
     () => assertPolicyAllowed(SALES_ROUTE_POLICIES['POST /users'], { isImpersonating: true }),
     error => error.statusCode === 403 && error.code === 'IMPERSONATION_ACTION_BLOCKED',
   );
-  assert.doesNotThrow(() => assertPolicyAllowed(SALES_ROUTE_POLICIES['POST /activities'], { isImpersonating: true }));
+  for (const route of [
+    'POST /activities',
+    'POST /accounts/:customerId/deferred-plan',
+    'POST /accounts/:customerId/return',
+    'POST /accounts/:customerId/reassign',
+    'POST /intake/action',
+    'POST /manager-tasks/:taskId/resolve',
+    'POST /today-tasks/actions',
+  ]) {
+    assert.doesNotThrow(
+      () => assertPolicyAllowed(SALES_ROUTE_POLICIES[route], { isImpersonating: true }),
+      route,
+    );
+  }
+  assert.throws(
+    () => assertPolicyAllowed(SALES_ROUTE_POLICIES['PATCH /intake/settings'], {
+      isImpersonating: true,
+    }),
+    error => error.statusCode === 403
+      && error.code === 'IMPERSONATION_ACTION_BLOCKED'
+      && error.message === '身份检查期间禁止此安全操作',
+  );
 });

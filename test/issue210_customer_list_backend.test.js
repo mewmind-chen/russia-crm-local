@@ -190,7 +190,7 @@ test('Issue 210 bulk return accepts authorized filter scope and rolls back an ou
     method: 'POST',
     body: { customerIds: ['CRM-OTHER', 'CRM-WU'], reason: '测试越权原子回滚' },
   });
-  assert.equal(mixed.status, 404);
+  assert.equal(mixed.status, 403);
   assert.deepEqual(
     fx.db.prepare("SELECT id,lifecycle_status FROM crm_accounts WHERE id IN ('CRM-OTHER','CRM-WU') ORDER BY id").all(),
     before,

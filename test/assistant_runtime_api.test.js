@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createAssistantRuntimeHandlers, serializeAssistantEngineError } = require('../lib/assistant_runtime_api');
-const { policyForLegacyRequest } = require('../lib/access_control');
+const { assertPolicyAllowed, policyForLegacyRequest } = require('../lib/access_control');
 
 function response() {
   return {
@@ -124,8 +124,23 @@ test('administrator can persist auto mode and force recheck', async () => {
 
 test('runtime routes have explicit legacy permission policies', () => {
   assert.deepEqual(policyForLegacyRequest('GET', '/assistant/runtime'), { permissions: ['use_ai_assistant'] });
-  assert.deepEqual(policyForLegacyRequest('PATCH', '/assistant/runtime'), { permissions: ['manage_users'] });
-  assert.deepEqual(policyForLegacyRequest('POST', '/assistant/runtime/recheck'), { permissions: ['manage_users'] });
+  for (const [method, route] of [
+    ['PATCH', '/assistant/runtime'],
+    ['POST', '/assistant/runtime/recheck'],
+  ]) {
+    const policy = policyForLegacyRequest(method, route);
+    assert.deepEqual(policy, {
+      permissions: ['manage_users'],
+      blockedWhileImpersonating: true,
+    });
+    assert.throws(
+      () => assertPolicyAllowed(policy, { isImpersonating: true }),
+      error => error.statusCode === 403
+        && error.code === 'IMPERSONATION_ACTION_BLOCKED'
+        && error.message === '身份检查期间禁止此安全操作',
+      `${method} ${route}`,
+    );
+  }
 });
 
 test('ordinary chat users receive a generic message for direct provider failures', () => {
