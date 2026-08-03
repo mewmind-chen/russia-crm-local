@@ -97,7 +97,7 @@ test('admin can list and resolve conflicts without leaking details into generic 
   assert.equal(listedResponse.headers.get('cache-control'), 'private, no-store');
   const listed = await listedResponse.json();
   assert.equal(listed.page, 1);
-  assert.equal(listed.pageSize, 20);
+  assert.equal(listed.pageSize, 50);
   assert.equal(listed.total, 1);
   assert.equal(listed.unresolved, 1);
   assert.equal(listed.hasMore, false);
@@ -224,7 +224,7 @@ test('admin conflict list paginates beyond twenty blocking conflicts', async t =
     insert.run(`RU-${9200 + index * 2}`, `Paged Company ${suffix} A`, nickname);
     insert.run(`RU-${9201 + index * 2}`, `Paged Company ${suffix} B`, nickname);
   }
-  const route = '/api/sales-crm/protected-customer-conflicts?status=unresolved';
+  const route = '/api/sales-crm/protected-customer-conflicts?status=unresolved&pageSize=20';
   const first = await fx.requestJson(`${route}&page=1`, { cookie: fx.adminCookie });
   const second = await fx.requestJson(`${route}&page=2`, { cookie: fx.adminCookie });
   assert.equal(first.total, 21);

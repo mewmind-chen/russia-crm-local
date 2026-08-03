@@ -87,8 +87,10 @@ test('AI task center has permission-scoped filters, pagination, details and oper
   assert.match(html, /id="aiTasksView"/);
   for (const id of [
     'aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',
-    'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter', 'aiTaskPrev', 'aiTaskNext',
+    'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter', 'aiTaskPagination',
   ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /data-pagination="ai_tasks"/);
+  assert.match(app, /renderPagination\('#aiTaskPagination', 'ai_tasks'/);
   assert.match(app, /\/api\/sales-crm\/ai\/tasks\?\$\{params\}/);
   assert.match(app, /\/api\/sales-crm\/ai\/tasks\/\$\{encodeURIComponent\(taskId\)\}/);
   assert.match(app, /data-ai-task-action="retry"/);

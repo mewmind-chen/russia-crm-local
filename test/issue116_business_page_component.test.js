@@ -39,5 +39,6 @@ test('authorized business lists have independent pagination, version conflict, a
   assert.match(app, /requestEpoch !== meta\.requestEpoch/);
   assert.match(app, /error\.code === 'FILTER_VERSION_CONFLICT'/);
   assert.match(app, /loadAuthorizedBusinessPage\(pageKey, \{ reset: true \}\)/);
-  assert.match(app, /data-load-business-page/);
+  assert.match(app, /renderPagination\(config\?\.pagination/);
+  assert.doesNotMatch(app, /data-load-business-page/);
 });

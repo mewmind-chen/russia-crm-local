@@ -98,7 +98,8 @@ test('target picker consumes the #116 schema and the complete paginated response
   assert.match(loadTargets, /result\.total/);
   assert.match(loadTargets, /result\.authorizedTotal/);
   assert.match(loadTargets, /result\.hasMore/);
-  assert.match(loadTargets, /\.\.\.state\.activityCorrection\.targets|concat\(/);
+  assert.match(loadTargets, /correction\.targets\s*=\s*rows/);
+  assert.doesNotMatch(loadTargets, /\.\.\.state\.activityCorrection\.targets|concat\(/);
   assert.match(loadTargets, /FILTER_VERSION_CONFLICT/);
 
   const initialize = functionBlock(app, 'initializeActivityCorrectionTargetFilters');
@@ -332,14 +333,14 @@ test('identity and permission boundaries clear correction state and invalidate s
   }
 });
 
-test('correction pagination advances only inside a successful loader request', () => {
+test('correction pagination requests explicit target pages without implicit increments', () => {
   const targets = functionBlock(app, 'loadActivityCorrectionTargets');
   const proposals = functionBlock(app, 'loadActivityCorrectionProposals');
   const history = functionBlock(app, 'loadActivityCorrections');
-  assert.match(targets, /targetPage\s*\+\s*1/);
-  assert.match(proposals, /proposalPage\s*\+\s*1/);
-  assert.match(history, /historyPage\s*\+\s*1/);
-  assert.doesNotMatch(app, /activityCorrection\.(?:target|proposal|history)Page\s*\+=\s*1/);
+  for (const source of [targets, proposals, history]) {
+    assert.match(source, /reset = false, page/);
+    assert.doesNotMatch(source, /(?:target|proposal|history)Page\s*\+\s*1/);
+  }
 });
 
 test('review transitions to read-only when the write gate closes and restores controls by policy', () => {

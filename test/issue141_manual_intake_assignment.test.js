@@ -34,7 +34,7 @@ function insertIntake(db, {
   );
 }
 
-test('lead pool exposes selection or filter based manual assignment and removes issue 138 rules UI', () => {
+test('lead pool exposes current-page selection assignment and removes issue 138 rules UI', () => {
   const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
   const js = fs.readFileSync(path.join(root, 'sales-assets/app.js'), 'utf8');
 
@@ -43,7 +43,7 @@ test('lead pool exposes selection or filter based manual assignment and removes 
   assert.doesNotMatch(html, /bulkAssignIntakeBtn|assignmentRulesView|data-assignment-rules-nav/);
   assert.match(js, /data-select-intake/);
   assert.match(js, /scopeType:\s*'selection'/);
-  assert.match(js, /scopeType:\s*'filter'/);
+  assert.doesNotMatch(js, /scopeType:\s*'filter'/);
   assert.match(js, /action:\s*'manual_assign_preview'/);
   assert.match(js, /action:\s*'manual_assign'/);
   assert.doesNotMatch(js, /action:\s*'bulk_assign'/);

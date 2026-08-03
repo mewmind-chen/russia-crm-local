@@ -8,8 +8,58 @@
   const dataTablesNeedingHintReset = new Set();
   let dataTableOverflowFrame = 0;
   let dataTableResizeObserver = null;
+  const PAGE_SIZE_OPTIONS = Object.freeze([50, 100]);
+  const paginationRegistry = new Map();
+  const paginationFilterStorage = Object.freeze({
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  });
+  function paginationTokens(page, totalPages) {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+    const pages = new Set([1, totalPages, page - 1, page, page + 1]);
+    const selected = [...pages].filter(value => value >= 1 && value <= totalPages).sort((a, b) => a - b);
+    const tokens = [];
+    selected.forEach(value => {
+      if (tokens.length && value - tokens[tokens.length - 1] > 1) tokens.push('ellipsis');
+      tokens.push(value);
+    });
+    return tokens;
+  }
+  function renderPagination(selector, key, input = {}, onChange) {
+    const root = typeof selector === 'string' ? $(selector) : selector;
+    if (!root) return;
+    const total = Math.max(0, Number(input.total || 0));
+    const pageSize = PAGE_SIZE_OPTIONS.includes(Number(input.pageSize)) ? Number(input.pageSize) : 50;
+    const totalPages = Math.ceil(total / pageSize);
+    const navigationPages = Math.max(1, totalPages);
+    const page = Math.max(1, Math.min(Number(input.page || 1), navigationPages));
+    input.totalPages = totalPages;
+    paginationRegistry.set(key, onChange);
+    root.className = `shared-pagination${input.loading ? ' is-loading' : ''}`;
+    root.dataset.pagination = key;
+    root.dataset.page = String(page);
+    root.dataset.totalPages = String(totalPages);
+    const count = `<span class="shared-pagination-info">共 ${total} 条 · 第 ${total ? page : 0} / ${totalPages} 页</span>`;
+    if (totalPages <= 1) {
+      root.innerHTML = count;
+      return;
+    }
+    const info = `<span class="shared-pagination-info">共 ${total} 条 · 第 ${page} / ${totalPages} 页</span>`;
+    const pages = paginationTokens(page, totalPages).map(token => token === 'ellipsis'
+      ? '<span class="shared-pagination-ellipsis" aria-hidden="true">…</span>'
+      : `<button class="button secondary tiny${token === page ? ' active' : ''}" type="button" data-pagination-action="page" data-page="${token}" ${token === page || input.loading ? 'disabled' : ''} aria-label="第 ${token} 页" aria-current="${token === page ? 'page' : 'false'}">${token}</button>`).join('');
+    root.innerHTML = `${info}<div class="shared-pagination-controls">
+      <button class="button secondary tiny" type="button" data-pagination-action="first" ${page <= 1 || input.loading ? 'disabled' : ''}>首页</button>
+      <button class="button secondary tiny" type="button" data-pagination-action="prev" ${page <= 1 || input.loading ? 'disabled' : ''}>上一页</button>
+      <span class="shared-pagination-pages">${pages}</span>
+      <button class="button secondary tiny" type="button" data-pagination-action="next" ${page >= totalPages || input.loading ? 'disabled' : ''}>下一页</button>
+      <button class="button secondary tiny" type="button" data-pagination-action="last" ${page >= totalPages || input.loading ? 'disabled' : ''}>末页</button>
+      <label class="shared-pagination-size">每页<select data-pagination-size ${input.loading ? 'disabled' : ''}>${PAGE_SIZE_OPTIONS.map(size => `<option value="${size}" ${size === pageSize ? 'selected' : ''}>${size} 条</option>`).join('')}</select></label>
+    </div>`;
+  }
   const emptyAuthorizedListState = (pageSize = 50) => ({
-    rows: [], page: 0, pageSize, total: 0, authorizedTotal: 0,
+    rows: [], page: 0, pageSize, total: 0, totalPages: 0, authorizedTotal: 0,
     hasMore: false, loading: false, loaded: false, error: '', summary: null,
     requestEpoch: 0, initializeEpoch: 0, filterMount: null, filterController: null,
   });
@@ -20,8 +70,9 @@
     alertSeverity: '',
     intakeStatus: '',
     intakePage: 1,
-    intakePageSize: 100,
+    intakePageSize: 50,
     intakeTotal: 0,
+    intakeTotalPages: 0,
     intakeHasMore: false,
     intakeLoading: false,
     intakeAuthorizedPage: 'intake',
@@ -38,7 +89,7 @@
     customerRequestEpoch: 0,
     customerInitializeEpoch: 0,
     customerList: {
-      rows: [], page: 1, pageSize: 50, total: 0, authorizedTotal: 0,
+      rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, authorizedTotal: 0,
       hasMore: false, loading: false, loaded: false,
     },
     customerFilterMount: null,
@@ -58,9 +109,10 @@
       loading: false, loaded: false, error: '', requestEpoch: 0,
       progressController: null, progressMount: null,
       collaborationController: null, collaborationMount: null,
-      collaborationRows: [], collaborationPage: 1, collaborationTotal: 0,
+      collaborationRows: [], collaborationPage: 1, collaborationPageSize: 50, collaborationTotal: 0,
+      collaborationTotalPages: 0,
       collaborationHasMore: false, writeEnabled: false, submitting: false,
-      drilldown: 'customer',
+      drilldown: 'customer', progressPage: 1, progressPageSize: 50, progressTotalPages: 0,
     },
     activityType: 'email',
     activityProgressType: 'email',
@@ -78,15 +130,15 @@
       draft: null, step: 1, originalActivityId: '', sourceCustomerId: '',
       targetCustomerId: '', reason: '', idempotencyKey: '', returnFocus: null,
       requestFingerprint: '',
-      targets: [], targetRows: [], targetPage: 1, targetPageSize: 10, targetTotal: 0,
+      targets: [], targetRows: [], targetPage: 1, targetPageSize: 50, targetTotal: 0, targetTotalPages: 0,
       targetAuthorizedTotal: 0,
       targetHasMore: false, targetLoading: false, targetRequestEpoch: 0,
       targetController: null, targetMount: null,
-      proposalRows: [], proposalPage: 1, proposalPageSize: 10, proposalTotal: 0,
+      proposalRows: [], proposalPage: 1, proposalPageSize: 50, proposalTotal: 0, proposalTotalPages: 0,
       proposalAuthorizedTotal: 0,
       proposalHasMore: false, proposalLoading: false, proposalRequestEpoch: 0,
       proposalController: null, proposalMount: null, proposalCustomerId: '',
-      historyRows: [], historyPage: 1, historyPageSize: 10, historyTotal: 0,
+      historyRows: [], historyPage: 1, historyPageSize: 50, historyTotal: 0, historyTotalPages: 0,
       historyAuthorizedTotal: 0, historyHasMore: false, historyLoading: false,
       historyRequestEpoch: 0, historyController: null, historyMount: null,
       writeEnabled: null, statusRequestEpoch: 0,
@@ -110,21 +162,21 @@
     selectedCustomerIds: new Set(),
     notificationStatus: '',
     recycleKind: 'sales_return',
-    recycleBin: { rows: [], page: 1, pageSize: 100, total: 0, hasMore: false, loading: false },
+    recycleBin: { rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, hasMore: false, loading: false },
     recycleCustomerDetail: null,
     authorizedBusinessLists: Object.fromEntries([
       'intake', 'lead_flow', 'pipeline', 'alerts', 'insights', 'recycle_bin',
       'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications',
-    ].map(pageKey => [pageKey, emptyAuthorizedListState(pageKey === 'manager_tasks' ? 20 : 50)])),
+    ].map(pageKey => [pageKey, emptyAuthorizedListState(50)])),
     managerTaskPage: 1,
-    managerTaskPageSize: 20,
+    managerTaskPageSize: 50,
     managerMetricRange: 30,
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
     customerEnrichmentPending: false,
     aiTasks: {
-      items: [], page: 1, pageSize: 20, total: 0, overview: null,
+      items: [], page: 1, pageSize: 50, total: 0, totalPages: 0, overview: null,
       loaded: false, loading: false, error: '',
     },
     aiGovernance: {
@@ -144,10 +196,11 @@
     maintenanceRuns: [],
     protectedCustomers: {
       items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
+      page: 1, pageSize: 50, totalPages: 0, hasMore: false,
       error: '', writeEnabled: null, batch: null, pendingAction: '', searchTimer: null,
       conflicts: [], conflictStatus: 'unresolved', conflictTotal: 0, unresolved: 0,
       leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
-      conflictPage: 1, conflictPageSize: 20, conflictTotalPages: 0, conflictHasMore: false,
+      conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
       conflictsLoading: false, conflictsError: '', conflictPendingId: '',
     },
     assistantRuntime: null,
@@ -158,12 +211,12 @@
     aiFeaturePending: '',
     research: {
       contacts: {
-        page: 0, total: 0, hasMore: false, loading: false, loaded: false,
+        page: 1, pageSize: 50, total: 0, hasMore: false, loading: false, loaded: false,
         error: '', initializing: false, requestEpoch: 0, initializeEpoch: 0,
         filterMount: null, filterController: null,
       },
       recon: {
-        page: 0, total: 0, hasMore: false, loading: false, loaded: false,
+        page: 1, pageSize: 50, total: 0, hasMore: false, loading: false, loaded: false,
         error: '', initializing: false, requestEpoch: 0, initializeEpoch: 0,
         filterMount: null, filterController: null,
       },
@@ -450,19 +503,9 @@
     return `tradepulse.customerFilters.${state.data?.user?.id || 'anonymous'}`;
   }
   function restoreCustomerFilters() {
-    const defaults = defaultCustomerFilters();
-    try {
-      const saved = JSON.parse(localStorage.getItem(customerFilterStorageKey()) || '{}');
-      for (const key of Object.keys(defaults)) {
-        if (Array.isArray(defaults[key])) defaults[key] = Array.isArray(saved[key]) ? saved[key].map(String) : [];
-        else if (saved[key] !== undefined) defaults[key] = String(saved[key] || '');
-      }
-    } catch (_error) {}
-    state.customerFilters = defaults;
+    state.customerFilters = defaultCustomerFilters();
   }
-  function saveCustomerFilters() {
-    try { localStorage.setItem(customerFilterStorageKey(), JSON.stringify(state.customerFilters)); } catch (_error) {}
-  }
+  function saveCustomerFilters() {}
   function selectedValues(select) {
     return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
   }
@@ -784,7 +827,7 @@
     return raw;
   }
 
-  async function loadCustomerPage({ reset = true } = {}) {
+  async function loadCustomerPage({ reset = true, page } = {}) {
     if (!state.customerFilterController) return;
     if (state.customerList.loading && !reset) return;
     const requestEpoch = ++state.customerRequestEpoch;
@@ -798,7 +841,7 @@
     try {
       const payload = state.customerFilterController.serialize('applied');
       const params = new URLSearchParams({
-        page: String(reset ? 1 : state.customerList.page + 1),
+        page: String(reset ? 1 : Math.max(1, Number(page || state.customerList.page || 1))),
         pageSize: String(state.customerList.pageSize),
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
@@ -806,7 +849,7 @@
       });
       const result = await api(`/accounts?${params}`);
       if (requestEpoch !== state.customerRequestEpoch) return;
-      const rows = reset ? result.rows : [...state.customerList.rows, ...result.rows];
+      const rows = result.rows;
       state.customerList = {
         rows,
         page: result.page,
@@ -857,6 +900,7 @@
       const result = await api(`/filter-schema/${pageKey}`);
       if (initializeEpoch !== state.customerInitializeEpoch) return;
       const controller = window.TradePulseFilterComponent.createFilterController({
+        storage: paginationFilterStorage,
         pageKey,
         schema: result.schema,
         onApply: () => void loadCustomerPage({ reset: true }),
@@ -900,7 +944,8 @@
       const config = researchConfig[kind];
       meta.filterMount?.destroy();
       Object.assign(meta, {
-        page: 0,
+        page: 1,
+        pageSize: PAGE_SIZE_OPTIONS.includes(Number(meta.pageSize)) ? Number(meta.pageSize) : 50,
         total: Number(state.data?.researchTotals?.[config?.totalsKey || kind] || 0),
         hasMore: false,
         loading: false,
@@ -917,43 +962,43 @@
 
   const authorizedBusinessConfig = {
     intake: {
-      root: '#intakeAuthorizedFilters', button: '#intakeAuthorizedLoadMore',
+      root: '#intakeAuthorizedFilters', pagination: '#intakePagination',
       count: '#intakeAuthorizedResultCount', render: renderIntake,
     },
     lead_flow: {
-      root: '#intakeAuthorizedFilters', button: '#intakeAuthorizedLoadMore',
+      root: '#intakeAuthorizedFilters', pagination: '#intakePagination',
       count: '#intakeAuthorizedResultCount', render: renderIntake,
     },
     pipeline: {
-      root: '#pipelineAuthorizedFilters', button: '#pipelineAuthorizedLoadMore',
+      root: '#pipelineAuthorizedFilters', pagination: '#pipelineAuthorizedPagination',
       count: '#pipelineAuthorizedResultCount', render: renderPipeline,
     },
     alerts: {
-      root: '#alertsAuthorizedFilters', button: '#alertsAuthorizedLoadMore',
+      root: '#alertsAuthorizedFilters', pagination: '#alertsAuthorizedPagination',
       count: '#alertsAuthorizedResultCount', render: renderAlerts,
     },
     insights: {
-      root: '#insightsAuthorizedFilters', button: '#insightsAuthorizedLoadMore',
+      root: '#insightsAuthorizedFilters', pagination: '#insightsAuthorizedPagination',
       count: '#insightsAuthorizedResultCount', render: renderInsightsHub,
     },
     recycle_bin: {
-      root: '#recycleAuthorizedFilters', button: '#recycleAuthorizedLoadMore',
+      root: '#recycleAuthorizedFilters', pagination: '#recycleAuthorizedPagination',
       count: '#recycleAuthorizedResultCount', render: renderRecycleBin,
     },
     manager_tasks: {
       root: '#managerTaskFilters', count: '#managerTaskResultCount',
-      endpoint: '/manager-tasks', pageSize: 20, render: renderManagerTasks,
+      pagination: '#managerTaskPagination', endpoint: '/manager-tasks', pageSize: 50, render: renderManagerTasks,
     },
     manager_risks: {
-      root: '#managerRiskFilters', button: '#managerRiskLoadMore', count: '#managerRiskResultCount',
+      root: '#managerRiskFilters', pagination: '#managerRiskPagination', count: '#managerRiskResultCount',
       endpoint: '/manager-risks', render: renderManagerRisks,
     },
     manager_metrics: {
-      root: '#managerMetricFilters', button: '#managerMetricLoadMore', count: '#managerMetricResultCount',
+      root: '#managerMetricFilters', pagination: '#managerMetricPagination', count: '#managerMetricResultCount',
       endpoint: '/manager-metrics', render: renderManagerMetrics,
     },
     notifications: {
-      root: '#notificationsAuthorizedFilters', button: '#notificationsAuthorizedLoadMore',
+      root: '#notificationsAuthorizedFilters', pagination: '#notificationsAuthorizedPagination',
       count: '#notificationResultCount', render: renderNotifications,
     },
   };
@@ -977,10 +1022,12 @@
         page: meta.page,
         pageSize: meta.pageSize,
         total: meta.total,
+        totalPages: meta.totalPages,
         hasMore: meta.hasMore,
       };
       state.intakePage = meta.page;
       state.intakeTotal = meta.total;
+      state.intakeTotalPages = meta.totalPages;
       state.intakeHasMore = meta.hasMore;
     } else if (pageKey === 'recycle_bin') {
       state.recycleBin = {
@@ -989,6 +1036,7 @@
         page: meta.page,
         pageSize: meta.pageSize,
         total: meta.total,
+        totalPages: meta.totalPages,
         hasMore: meta.hasMore,
         loading: meta.loading,
       };
@@ -1000,31 +1048,26 @@
   function updateAuthorizedBusinessMeta(pageKey) {
     const config = authorizedBusinessConfig[pageKey];
     const meta = state.authorizedBusinessLists[pageKey];
-    const button = config ? $(config.button) : null;
     const count = config ? $(config.count) : null;
-    if (button) {
-      button.dataset.loadBusinessPage = pageKey;
-      button.classList.toggle('hidden', !meta.loaded || !meta.hasMore);
-      button.disabled = meta.loading;
-      button.textContent = meta.loading
-        ? '正在加载…'
-        : `继续加载（已显示 ${meta.rows.length} / ${meta.total}）`;
-    }
+    renderPagination(config?.pagination, pageKey, meta, change => {
+      if (['intake', 'lead_flow'].includes(pageKey)) state.selectedIntakeIds.clear();
+      if (change.pageSize) meta.pageSize = change.pageSize;
+      void loadAuthorizedBusinessPage(pageKey, { page: change.page || 1 });
+    });
     if (count) {
       count.textContent = meta.loading && !meta.loaded
         ? '正在读取授权结果…'
-        : `已显示 ${meta.rows.length} / ${meta.total} 条`;
+        : `共 ${meta.total} 条 · 第 ${meta.total ? meta.page : 0} / ${meta.total ? Math.max(1, Math.ceil(meta.total / meta.pageSize)) : 0} 页`;
     }
   }
 
-  async function loadAuthorizedBusinessPage(pageKey, { reset = false } = {}) {
+  async function loadAuthorizedBusinessPage(pageKey, { reset = false, page } = {}) {
     const config = authorizedBusinessConfig[pageKey];
     const meta = state.authorizedBusinessLists[pageKey];
     if (!config || !meta?.filterController || (meta.loading && !reset)) return;
     if (reset) {
-      meta.rows = [];
       Object.assign(meta, {
-        page: 0,
+        page: 1,
         pageSize: config.pageSize || meta.pageSize,
         total: 0,
         authorizedTotal: 0,
@@ -1043,7 +1086,7 @@
     try {
       const payload = meta.filterController.serialize('applied');
       const params = new URLSearchParams({
-        page: String(meta.page + 1),
+        page: String(reset ? 1 : Math.max(1, Number(page || meta.page || 1))),
         pageSize: String(meta.pageSize),
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
@@ -1051,11 +1094,12 @@
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
-      meta.rows = reset ? result.rows : [...meta.rows, ...result.rows];
+      meta.rows = result.rows;
       Object.assign(meta, {
         page: result.page,
         pageSize: result.pageSize,
         total: result.total,
+        totalPages: Number(result.totalPages ?? Math.ceil(Number(result.total || 0) / Number(result.pageSize || meta.pageSize || 50))),
         authorizedTotal: Number(result.authorizedTotal ?? result.total),
         hasMore: result.hasMore,
         loaded: true,
@@ -1121,6 +1165,7 @@
       if (initializeEpoch !== meta.initializeEpoch) return;
       invalidateStaleResearchFilterState(pageKey, result.schema);
       const controller = window.TradePulseFilterComponent.createFilterController({
+        storage: paginationFilterStorage,
         pageKey,
         schema: result.schema,
         onApply: payload => {
@@ -1190,7 +1235,7 @@
         items: [], total: 0, loaded: false, loading: false, error: '', writeEnabled: null,
         batch: null, pendingAction: '', conflicts: [], conflictTotal: 0, unresolved: 0,
         leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
-        conflictPage: 1, conflictPageSize: 20, conflictTotalPages: 0, conflictHasMore: false,
+          conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
         conflictsLoading: false, conflictsError: '', conflictPendingId: '',
       });
       clearTimeout(state.managerAnomalies.timer);
@@ -1553,7 +1598,7 @@
       dataKey: 'people',
       root: '#peopleAuthorizedFilters',
       render: renderUnifiedPeople,
-      button: '#peopleLoadMore',
+      pagination: '#peoplePagination',
     },
     recon: {
       pageKey: 'recon',
@@ -1562,29 +1607,26 @@
       dataKey: 'reconResults',
       root: '#reconAuthorizedFilters',
       render: renderUnifiedRecon,
-      button: '#reconLoadMore',
+      pagination: '#reconPagination',
     },
   };
 
-  function updateResearchButton(kind) {
+  function updateResearchPagination(kind) {
     const meta = state.research[kind];
-    const button = $(researchConfig[kind].button);
-    if (!button) return;
-    button.classList.toggle('hidden', !meta.loaded || !meta.hasMore);
-    button.disabled = meta.loading;
-    button.textContent = meta.loading
-      ? '正在加载…'
-      : `${meta.error ? '重试' : '继续加载'}（已显示 ${state.data[researchConfig[kind].dataKey].length} / ${meta.total}）`;
+    renderPagination(researchConfig[kind].pagination, kind, meta, change => {
+      if (change.pageSize) meta.pageSize = change.pageSize;
+      void loadResearch(kind, { page: change.page || 1 });
+    });
   }
 
-  async function loadResearch(kind, { reset = false } = {}) {
+  async function loadResearch(kind, { reset = false, page } = {}) {
     const config = researchConfig[kind];
     const meta = state.research[kind];
     if (!config || !meta?.filterController) return;
     if (meta.loading && !reset) return;
     if (reset) {
       state.data[config.dataKey] = [];
-      Object.assign(meta, { page: 0, total: 0, hasMore: false, loaded: false });
+      Object.assign(meta, { page: 1, total: 0, hasMore: false, loaded: false });
     }
     const requestEpoch = ++meta.requestEpoch;
     meta.loading = true;
@@ -1595,12 +1637,12 @@
       shown: state.data[config.dataKey].length,
     });
     config.render();
-    updateResearchButton(kind);
+    updateResearchPagination(kind);
     try {
       const payload = meta.filterController.serialize('applied');
       const params = new URLSearchParams({
-        page: String(meta.page + 1),
-        pageSize: '100',
+        page: String(reset ? 1 : Math.max(1, Number(page || meta.page || 1))),
+        pageSize: String(meta.pageSize),
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
@@ -1609,10 +1651,12 @@
         { timeoutMs: 12000 },
       );
       if (requestEpoch !== meta.requestEpoch) return;
-      state.data[config.dataKey] = reset ? result.rows : [...state.data[config.dataKey], ...result.rows];
+      state.data[config.dataKey] = result.rows;
       Object.assign(meta, {
         page: result.page,
+        pageSize: result.pageSize || meta.pageSize,
         total: result.total,
+        totalPages: Number(result.totalPages ?? Math.ceil(Number(result.total || 0) / Number(result.pageSize || meta.pageSize || 50))),
         hasMore: result.hasMore,
         loaded: true,
         error: '',
@@ -1642,7 +1686,7 @@
           shown: state.data[config.dataKey].length,
         });
         config.render();
-        updateResearchButton(kind);
+        updateResearchPagination(kind);
       }
     }
   }
@@ -1682,7 +1726,7 @@
     state.data[config.dataKey] = [];
     Object.assign(meta, { page: 0, total: 0, hasMore: false, loaded: false });
     config.render();
-    updateResearchButton(kind);
+    updateResearchPagination(kind);
     root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
     try {
       const result = await api(`/filter-schema/${config.pageKey}`);
@@ -1690,6 +1734,7 @@
       invalidateStaleResearchFilterState(config.pageKey, result.schema);
       const controller = window.TradePulseFilterComponent.createFilterController({
         pageKey: config.pageKey,
+        storage: paginationFilterStorage,
         schema: result.schema,
         onApply: () => void loadResearch(kind, { reset: true }),
       });
@@ -1907,40 +1952,41 @@
     }).join('');
   }
 
-  async function loadIntakePage({ reset = false } = {}) {
-    if (state.intakeLoading) return;
-    if (reset) {
-      state.intakePage = 1;
-      state.intakeTotal = 0;
-      state.intakeHasMore = false;
+  async function loadIntakePage({ reset = true, page = 1 } = {}) {
+    const pageKey = state.intakeAuthorizedPage || 'intake';
+    const meta = state.authorizedBusinessLists[pageKey];
+    if (!meta?.filterController) {
+      await initializeAuthorizedBusinessFilters(pageKey, { force: true });
+      return;
     }
-    state.intakeLoading = true;
-    renderIntake();
-    try {
-      const nextPage = reset ? 1 : state.intakePage + 1;
-      const params = new URLSearchParams({
-        page: String(nextPage),
-        pageSize: String(state.intakePageSize),
-      });
-      const search = ($('#intakeSearch')?.value || '').trim();
-      if (search) params.set('search', search);
-      if (state.intakeStatus) params.set('status', state.intakeStatus);
-      Object.entries(state.intakeFilters).forEach(([key, value]) => {
-        if (value !== '' && value !== false) params.set(key, value === true ? '1' : String(value));
-      });
-      const result = await api(`/api/sales-crm/intake?${params}`, { timeoutMs: 12000 });
-      const previousItems = reset ? [] : (state.data.intake?.items || []);
-      state.data.intake = { ...result, items: [...previousItems, ...(result.items || [])] };
-      populateIntakeFilterOptions(result.filterOptions);
-      state.intakePage = result.page;
-      state.intakeTotal = result.total;
-      state.intakeHasMore = result.hasMore;
-    } catch (error) {
-      toast(error.message);
-    } finally {
-      state.intakeLoading = false;
-      renderIntake();
+    const controller = meta.filterController;
+    const fields = new Map(controller.getSchema().fields.map(field => [field.key, field]));
+    controller.clearAll({ apply: false });
+    const values = {
+      search: ($('#intakeSearch')?.value || '').trim(),
+      status: state.intakeStatus,
+      country: state.intakeFilters.country,
+      industry: state.intakeFilters.industry,
+      customer_type: state.intakeFilters.customerType,
+      contact_level: state.intakeFilters.contactLevel,
+      owner: state.intakeFilters.owner,
+      source_batch: state.intakeFilters.sourceBatch,
+      has_website: state.intakeFilters.hasWebsite,
+      has_named_contact: state.intakeFilters.hasNamedContact,
+      unassigned_only: state.intakeFilters.unassignedOnly ? '1' : '',
+    };
+    for (const [key, value] of Object.entries(values)) {
+      const field = fields.get(key);
+      if (!field || value === '' || value === false) continue;
+      controller.setDraft(key, field.type === 'text' ? String(value) : [String(value)]);
     }
+    if (fields.has('updated_at') && (state.intakeFilters.updatedFrom || state.intakeFilters.updatedTo)) {
+      controller.setDraft('updated_at', {
+        from: state.intakeFilters.updatedFrom || '', to: state.intakeFilters.updatedTo || '',
+      });
+    }
+    controller.apply();
+    if (!reset && Number(page) > 1) void loadAuthorizedBusinessPage(pageKey, { page });
   }
 
   function currentIntakeAssignmentScope() {
@@ -1950,26 +1996,11 @@
     const visibleItems = state.data?.intake?.items || [];
     const visibleOrder = visibleItems.map(item => item.id)
       .filter(itemId => state.selectedIntakeIds.has(itemId));
-    const visibleSet = new Set(visibleOrder);
-    const itemIds = [
-      ...visibleOrder,
-      ...[...state.selectedIntakeIds].filter(itemId => !visibleSet.has(itemId)),
-    ];
+    const itemIds = visibleOrder;
     if (itemIds.length) {
       return { scopeType: 'selection', itemIds, count: itemIds.length };
     }
-    const meta = state.authorizedBusinessLists.intake;
-    const payload = meta?.filterController?.serialize('applied');
-    const filters = componentPayloadToRaw(payload || {});
-    if (!Object.keys(filters).length) return null;
-    return {
-      scopeType: 'filter',
-      filterScope: {
-        permissionVersion: String(payload?.permissionVersion || ''),
-        filters,
-      },
-      count: Number(meta?.total || 0),
-    };
+    return null;
   }
 
   function renderIntakeAssignmentBar() {
@@ -2202,12 +2233,6 @@
         `<span class="pill ${batch.status === 'done' ? '' : 'amber'}">${batch.status === 'done' ? '完成' : batch.status}</span>`,
       ]),
     );
-    const pager = $('#intakePagination');
-    if (pager) {
-      const meta = state.authorizedBusinessLists[state.intakeAuthorizedPage];
-      pager.classList.remove('hidden');
-      pager.innerHTML = `<button id="intakeAuthorizedLoadMore" class="button secondary ${meta?.hasMore ? '' : 'hidden'}" type="button" data-load-business-page="${esc(state.intakeAuthorizedPage)}" ${meta?.loading ? 'disabled' : ''}>${meta?.loading ? '正在加载…' : `继续加载（已显示 ${items.length} / ${meta?.total ?? items.length}）`}</button>`;
-    }
   }
 
   function customerProfileFrameUrl(externalCustomerId, intakeItemId = '') {
@@ -2900,25 +2925,25 @@
       return row;
     });
     $('#aiTaskTable').innerHTML = table(['任务', '类型', '客户', '发起人', '状态', '模型 / 成本', '创建 / 耗时', ''], rows);
-    const pages = Math.max(1, Math.ceil(tasks.total / tasks.pageSize));
-    $('#aiTaskPageInfo').textContent = `第 ${tasks.page} / ${pages} 页 · 共 ${tasks.total} 项`;
-    $('#aiTaskPrev').disabled = tasks.page <= 1;
-    $('#aiTaskNext').disabled = tasks.page >= pages;
+    renderPagination('#aiTaskPagination', 'ai_tasks', tasks, ({ page, pageSize }) => {
+      state.aiTasks.pageSize = pageSize || state.aiTasks.pageSize;
+      void loadAiTasks({ page: page || 1 });
+    });
   }
 
-  async function loadAiTasks({ reset = false } = {}) {
+  async function loadAiTasks({ reset = false, page } = {}) {
     if (!customerAIEnabled() || state.aiTasks.loading) return;
-    if (reset) state.aiTasks.page = 1;
+    const targetPage = reset ? 1 : Math.max(1, Number(page || state.aiTasks.page || 1));
     state.aiTasks.loading = true;
     renderAiTasks();
     try {
       const params = new URLSearchParams({
-        page: state.aiTasks.page,
+        page: targetPage,
         pageSize: state.aiTasks.pageSize,
         ...aiTaskFilters(),
       });
       const payload = await api(`/api/sales-crm/ai/tasks?${params}`);
-      Object.assign(state.aiTasks, payload, { loaded: true, error: '' });
+      Object.assign(state.aiTasks, payload, { page: Number(payload.page || targetPage), loaded: true, error: '' });
     } catch (error) {
       state.aiTasks.error = error.message;
       toast(error.message);
@@ -3261,14 +3286,10 @@
 
   function renderCustomers() {
     const accounts = state.customerList.loaded ? state.customerList.rows : [];
-    const loadMore = $('#customerLoadMore');
-    if (loadMore) {
-      loadMore.classList.toggle('hidden', !state.customerList.loaded || !state.customerList.hasMore);
-      loadMore.disabled = state.customerList.loading;
-      loadMore.textContent = state.customerList.loading
-        ? '正在加载…'
-        : `继续加载（已显示 ${accounts.length} / ${state.customerList.total}）`;
-    }
+    renderPagination('#customerPagination', 'customers', state.customerList, change => {
+      if (change.pageSize) state.customerList.pageSize = change.pageSize;
+      void loadCustomerPage({ reset: false, page: change.page || 1 });
+    });
     const visibleIds = new Set(accounts.map(account => account.id));
     state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(customerId => visibleIds.has(customerId)));
     const canBulkAssign = can('view_all_customers') && can('manage_intake') && can('edit_customer') && !state.data.impersonation;
@@ -3321,19 +3342,23 @@
     );
   }
 
-  async function loadRecycleBin() {
-    if (!can('manage_customer_recycle') || state.recycleBin.loading) return;
-    state.recycleBin.loading = true;
-    try {
-      const search = ($('#recycleSearch')?.value || '').trim();
-      const payload = await api(`/api/sales-crm/accounts/recycle-bin?kind=${encodeURIComponent(state.recycleKind)}&page=1&pageSize=100&search=${encodeURIComponent(search)}`);
-      state.recycleBin = { ...state.recycleBin, ...payload, loading: false };
-      if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
-      renderRecycleBin();
-    } catch (error) {
-      state.recycleBin.loading = false;
-      toast(error.message);
+  async function loadRecycleBin({ reset = true, page = 1 } = {}) {
+    if (!can('manage_customer_recycle')) return;
+    const meta = state.authorizedBusinessLists.recycle_bin;
+    if (!meta?.filterController) {
+      await initializeAuthorizedBusinessFilters('recycle_bin', { force: true });
+      return;
     }
+    const controller = meta.filterController;
+    controller.clearAll({ apply: false });
+    const fields = new Set(controller.getSchema().fields.map(field => field.key));
+    const search = ($('#recycleSearch')?.value || '').trim();
+    if (search && fields.has('search')) controller.setDraft('search', search);
+    if (state.recycleKind && fields.has('recycle_kind')) {
+      controller.setDraft('recycle_kind', [state.recycleKind]);
+    }
+    controller.apply();
+    if (!reset && Number(page) > 1) void loadAuthorizedBusinessPage('recycle_bin', { page });
   }
 
   function renderRecycleBin() {
@@ -3667,10 +3692,7 @@
       summary.innerHTML = values.map(([label, value]) =>
         `<article><span>${esc(label)}</span><strong>${Number(value)}</strong></article>`).join('');
     }
-    const maxPage = Math.max(1, Math.ceil(rows.length / state.managerTaskPageSize));
-    state.managerTaskPage = Math.min(state.managerTaskPage, maxPage);
-    const start = (state.managerTaskPage - 1) * state.managerTaskPageSize;
-    const visible = rows.slice(start, start + state.managerTaskPageSize);
+    const visible = rows;
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取主管任务…</div>'
       : visible.length
@@ -3682,12 +3704,6 @@
           <footer class="manager-task-actions">${managerTaskButton(task)}</footer>
         </article>`).join('')
         : `<div class="empty">${esc(meta.error || '当前授权范围内没有主管任务')}</div>`;
-    const page = $('#managerTaskPage');
-    if (page) page.textContent = `第 ${state.managerTaskPage} 页 · 已加载 ${rows.length} / ${Number(meta.total || rows.length)}`;
-    if ($('#managerTaskPrev')) $('#managerTaskPrev').disabled = state.managerTaskPage <= 1;
-    if ($('#managerTaskNext')) {
-      $('#managerTaskNext').disabled = state.managerTaskPage >= maxPage && !meta.hasMore;
-    }
   }
 
   function renderManagerRisks() {
@@ -4121,6 +4137,9 @@
       $('#teamProgressSummary').innerHTML = state.teamStatus.loading ? '<div class="empty">正在加载业务推进…</div>' : '<div class="empty">暂无业务推进数据</div>';
       $('#teamProgressSales').innerHTML = '';
       $('#teamProgressDrilldownList').innerHTML = '';
+      renderPagination('#teamProgressPagination', 'team_progress', {
+        page: 1, pageSize: state.teamStatus.progressPageSize, total: 0,
+      }, () => {});
       return;
     }
     const sample = data.sample || {};
@@ -4140,7 +4159,9 @@
     ));
     const rows = state.teamStatus.drilldown === 'task' ? drilldown.tasks
       : state.teamStatus.drilldown === 'timeline' ? drilldown.timeline : drilldown.customers;
-    $('#teamProgressDrilldownList').innerHTML = rows?.length ? rows.map(row => {
+    const progressTotal = Number(data.pagination?.total ?? rows?.length ?? 0);
+    const visibleRows = rows || [];
+    $('#teamProgressDrilldownList').innerHTML = visibleRows.length ? visibleRows.map(row => {
       if (state.teamStatus.drilldown === 'customer') {
         const facts = [row.progressed && '有推进', row.deferred && '有延期',
           row.planned && '已形成计划', row.actedAfterPlan && '计划后已行动'].filter(Boolean);
@@ -4152,6 +4173,14 @@
       const kindLabels = { activity: '真实动作', deferred_plan: '暂未确定', next_plan: '形成计划', manager_task: '主管待办' };
       return `<div class="team-drilldown-row"><span><strong>${esc(kindLabels[row.kind] || row.kind)}</strong><small>${esc(row.customerId)} · ${esc(row.detail || '')}</small></span><time>${esc(shortDate(row.occurredAt, true))}</time></div>`;
     }).join('') : '<div class="empty">当前范围没有对应明细</div>';
+    renderPagination('#teamProgressPagination', 'team_progress', {
+      page: state.teamStatus.progressPage, pageSize: state.teamStatus.progressPageSize,
+      total: progressTotal, loading: state.teamStatus.loading,
+    }, ({ page, pageSize }) => {
+      state.teamStatus.progressPageSize = pageSize || state.teamStatus.progressPageSize;
+      state.teamStatus.progressPage = page || 1;
+      void loadTeamStatus({ reset: false, page: state.teamStatus.progressPage });
+    });
   }
 
   function renderTeamCapability() {
@@ -4202,7 +4231,15 @@
         <footer><span>${esc(collaborationRelationLabels[item.relationType] || item.relationType)} · 操作人 ${esc(userById(item.actorId)?.name || item.actorId || '系统')}${item.supersedesEventId ? ` · 接续 ${esc(item.supersedesEventId)}` : ''}</span>${actionable ? `<div><button class="text-button" type="button" data-collaboration-supplement="${esc(item.eventId)}">补充</button><button class="text-button" type="button" data-collaboration-correct="${esc(item.eventId)}">更正</button><button class="text-button danger" type="button" data-collaboration-revoke="${esc(item.eventId)}">撤销</button></div>` : ''}</footer>
       </article>`;
     }).join('') : `<div class="empty">${state.teamStatus.loaded ? '当前筛选下没有协作事实' : '进入栏目后加载协作事实'}</div>`;
-    $('#teamCollaborationMore')?.classList.toggle('hidden', !state.teamStatus.collaborationHasMore);
+    renderPagination('#teamCollaborationPagination', 'team_collaboration', {
+      page: state.teamStatus.collaborationPage,
+      pageSize: state.teamStatus.collaborationPageSize,
+      total: state.teamStatus.collaborationTotal,
+      loading: state.teamStatus.loading,
+    }, ({ page, pageSize }) => {
+      state.teamStatus.collaborationPageSize = pageSize || state.teamStatus.collaborationPageSize;
+      void loadTeamCollaboration({ page: page || 1 });
+    });
   }
 
   function renderTeamSection() {
@@ -4225,9 +4262,13 @@
     uiFormat?.mountIcons?.($('#teamView'));
   }
 
-  async function loadTeamStatus({ reset = true } = {}) {
+  async function loadTeamStatus({ reset = true, page } = {}) {
     if (!can('view_team')) return;
     if (state.teamStatus.loading && !reset) return;
+    if (reset) {
+      state.teamStatus.progressPage = 1;
+      state.teamStatus.collaborationPage = 1;
+    }
     const requestEpoch = ++state.teamStatus.requestEpoch;
     state.teamStatus.loading = true;
     state.teamStatus.error = '';
@@ -4235,28 +4276,37 @@
     try {
       const range = $('#teamRange')?.value || state.teamStatus.range || '30d';
       state.teamStatus.range = range;
-      const params = teamStatusQuery('progress', range === 'since-last-view' ? {} : { range });
+      const targetPage = reset ? 1 : Math.max(1, Number(page || state.teamStatus.progressPage || 1));
+      const pagination = {
+        drilldown: state.teamStatus.drilldown,
+        page: String(targetPage),
+        pageSize: String(state.teamStatus.progressPageSize),
+      };
+      const params = teamStatusQuery('progress', range === 'since-last-view'
+        ? pagination : { range, ...pagination });
       const result = range === 'since-last-view'
         ? await api('/team-status/since-last-view', {
           method: 'POST', preserveOnForbidden: true,
           body: JSON.stringify({
             permissionVersion: params.get('permissionVersion'),
             filters: JSON.parse(params.get('filters') || '{}'),
+            ...pagination,
           }),
         })
         : await api(`/team-status?${params}`, { preserveOnForbidden: true, timeoutMs: 12000 });
       if (requestEpoch !== state.teamStatus.requestEpoch) return;
       const data = result.data || result;
       state.teamStatus.data = data;
+      state.teamStatus.progressPage = Number(data.progress?.pagination?.page || targetPage);
+      state.teamStatus.progressPageSize = Number(data.progress?.pagination?.pageSize
+        || state.teamStatus.progressPageSize);
+      state.teamStatus.progressTotalPages = Number(data.progress?.pagination?.totalPages
+        ?? Math.ceil(Number(data.progress?.pagination?.total || 0) / state.teamStatus.progressPageSize));
       state.teamStatus.writeEnabled = Boolean(data.writeEnabled);
       state.teamStatus.loaded = true;
       state.teamStatus.error = '';
       if (data.schemas?.progress) state.teamStatus.progressController?.updateSchema(data.schemas.progress);
       if (data.schemas?.collaboration) state.teamStatus.collaborationController?.updateSchema(data.schemas.collaboration);
-      state.teamStatus.collaborationRows = data.collaboration?.rows || [];
-      state.teamStatus.collaborationPage = Number(data.collaboration?.page || 1);
-      state.teamStatus.collaborationTotal = Number(data.collaboration?.total || 0);
-      state.teamStatus.collaborationHasMore = Boolean(data.collaboration?.hasMore);
       state.teamStatus.progressMount?.setResultMeta({
         total: Number(data.progress?.sample?.size || 0), shown: Number(data.progress?.sample?.size || 0),
       });
@@ -4264,6 +4314,9 @@
         total: state.teamStatus.collaborationTotal,
         shown: state.teamStatus.collaborationRows.length,
       });
+      if (state.teamStatus.section === 'collaboration') {
+        void loadTeamCollaboration({ reset: true, page: 1 });
+      }
     } catch (error) {
       if (requestEpoch !== state.teamStatus.requestEpoch) return;
       if (error.code === 'FILTER_VERSION_CONFLICT') {
@@ -4280,16 +4333,18 @@
     }
   }
 
-  async function loadTeamCollaboration({ reset = false } = {}) {
-    const page = reset ? 1 : state.teamStatus.collaborationPage + 1;
-    const params = teamStatusQuery('collaboration', { page: String(page), pageSize: '50' });
+  async function loadTeamCollaboration({ reset = false, page } = {}) {
+    const targetPage = reset ? 1 : Math.max(1, Number(page || state.teamStatus.collaborationPage || 1));
+    const params = teamStatusQuery('collaboration', {
+      page: String(targetPage), pageSize: String(state.teamStatus.collaborationPageSize),
+    });
     try {
       const result = await api(`/collaboration-support?${params}`, { preserveOnForbidden: true });
-      state.teamStatus.collaborationRows = reset
-        ? result.rows || []
-        : [...state.teamStatus.collaborationRows, ...(result.rows || [])];
-      state.teamStatus.collaborationPage = Number(result.page || page);
+      state.teamStatus.collaborationRows = result.rows || [];
+      state.teamStatus.collaborationPage = Number(result.page || targetPage);
       state.teamStatus.collaborationTotal = Number(result.total || 0);
+      state.teamStatus.collaborationTotalPages = Number(result.totalPages
+        ?? Math.ceil(state.teamStatus.collaborationTotal / state.teamStatus.collaborationPageSize));
       state.teamStatus.collaborationHasMore = Boolean(result.hasMore);
       state.teamStatus.writeEnabled = Boolean(result.writeEnabled);
       if (result.schema) state.teamStatus.collaborationController?.updateSchema(result.schema);
@@ -4321,6 +4376,7 @@
         const result = await api(`/filter-schema/${pageKey}`, { preserveOnForbidden: true });
         invalidateStaleResearchFilterState(pageKey, result.schema);
         const controller = window.TradePulseFilterComponent.createFilterController({
+          storage: paginationFilterStorage,
           pageKey, schema: result.schema,
           onApply: () => kind === 'progress'
             ? void loadTeamStatus({ reset: true })
@@ -5182,6 +5238,12 @@
     if (!root) return;
     const model = state.protectedCustomers;
     $('#protectedListCount').textContent = `${model.total || 0} 个客户`;
+    renderPagination('#protectedCustomerPagination', 'protected_customers', {
+      page: model.page, pageSize: model.pageSize, total: model.total, loading: model.loading,
+    }, ({ page, pageSize }) => {
+      model.pageSize = pageSize || model.pageSize;
+      void loadProtectedCustomers({ page: page || 1 });
+    });
     if (model.loading) {
       root.innerHTML = '<div class="empty">正在加载保护名单…</div>';
       setProtectedInlineStatus('#protectedListStatus', 'pending', '正在读取受保护数据…');
@@ -5252,13 +5314,13 @@
 
   function renderProtectedConflictPagination() {
     const model = state.protectedCustomers;
-    const root = $('#protectedConflictPagination');
-    if (!root) return;
-    const totalPages = Math.max(1, Number(model.conflictTotalPages || 0));
-    root.classList.toggle('hidden', totalPages <= 1);
-    $('#protectedConflictPageText').textContent = `第 ${model.conflictPage} / ${totalPages} 页`;
-    $('#protectedConflictPrev').disabled = model.conflictsLoading || model.conflictPage <= 1;
-    $('#protectedConflictNext').disabled = model.conflictsLoading || !model.conflictHasMore;
+    renderPagination('#protectedConflictPagination', 'protected_conflicts', {
+      page: model.conflictPage, pageSize: model.conflictPageSize,
+      total: model.conflictTotal, loading: model.conflictsLoading,
+    }, ({ page, pageSize }) => {
+      model.conflictPageSize = pageSize || model.conflictPageSize;
+      void loadProtectedConflicts({ page: page || 1 });
+    });
   }
 
   function renderProtectedConflicts() {
@@ -5319,17 +5381,25 @@
     }
   }
 
-  async function loadProtectedCustomers() {
+  async function loadProtectedCustomers({ reset = false, page } = {}) {
     if (!canManageProtectedCustomers()) return;
     const model = state.protectedCustomers;
     model.loading = true;
     model.error = '';
     renderProtectedCustomers();
     try {
-      const params = new URLSearchParams({ status: model.status, query: model.query });
+      const targetPage = reset ? 1 : Math.max(1, Number(page || model.page || 1));
+      const params = new URLSearchParams({
+        status: model.status, query: model.query,
+        page: String(targetPage), pageSize: String(model.pageSize),
+      });
       const result = await api(`/api/sales-crm/protected-customers?${params}`);
       model.items = result.items || [];
       model.total = Number(result.total || 0);
+      model.page = Number(result.page || targetPage);
+      model.pageSize = Number(result.pageSize || model.pageSize || 50);
+      model.totalPages = Number(result.totalPages ?? Math.ceil(model.total / model.pageSize));
+      model.hasMore = Boolean(result.hasMore);
       model.writeEnabled = result.writeEnabled === true;
       model.loaded = true;
     } catch (error) {
@@ -5345,7 +5415,7 @@
     model.conflicts = result.items || [];
     model.conflictTotal = Number(result.total || 0);
     model.conflictPage = Number(result.page || 1);
-    model.conflictPageSize = Number(result.pageSize || 20);
+    model.conflictPageSize = Number(result.pageSize || 50);
     model.conflictTotalPages = Number(result.totalPages || 0);
     model.conflictHasMore = result.hasMore === true;
     model.unresolved = Number(result.unresolved || 0);
@@ -5354,7 +5424,7 @@
     model.canEnter172B = result.canEnter172B === true;
   }
 
-  async function loadProtectedConflicts({ rescan = false } = {}) {
+  async function loadProtectedConflicts({ rescan = false, page } = {}) {
     if (!canManageProtectedCustomers()) return;
     const model = state.protectedCustomers;
     const retainDraft = model.conflicts.length > 0;
@@ -5366,14 +5436,16 @@
     let completed = false;
     try {
       const status = model.conflictStatus;
-      const page = model.conflictPage;
+      const targetPage = Math.max(1, Number(page || model.conflictPage || 1));
+      model.conflictPage = targetPage;
+      const query = { status, page: String(targetPage), pageSize: String(model.conflictPageSize) };
       let result = rescan
-        ? await api('/api/sales-crm/protected-customer-conflicts/rescan', { method: 'POST', body: JSON.stringify({ status, page }) })
-        : await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams({ status, page: String(page) })}`);
+        ? await api('/api/sales-crm/protected-customer-conflicts/rescan', { method: 'POST', body: JSON.stringify(query) })
+        : await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams(query)}`);
       const lastPage = Math.max(1, Number(result.totalPages || 0));
-      if (page > lastPage) {
+      if (targetPage > lastPage) {
         model.conflictPage = lastPage;
-        result = await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams({ status, page: String(lastPage) })}`);
+        result = await api(`/api/sales-crm/protected-customer-conflicts?${new URLSearchParams({ status, page: String(lastPage), pageSize: String(model.conflictPageSize) })}`);
       }
       applyProtectedConflictResult(result);
       completed = true;
@@ -6395,12 +6467,13 @@
         : '<div class="empty">当前筛选下没有可选客户</div>';
     const count = $('#activityCorrectionTargetCount');
     if (count) count.textContent = `已显示 ${correction.targets.length} / ${correction.targetTotal} 条（授权范围 ${correction.targetAuthorizedTotal} 条）`;
-    const more = $('#activityCorrectionTargetMore');
-    if (more) {
-      more.classList.toggle('hidden', !correction.targetHasMore);
-      more.disabled = correction.targetLoading;
-      more.textContent = correction.targetLoading ? '正在加载…' : '继续加载';
-    }
+    renderPagination('#activityCorrectionTargetPagination', 'correction_targets', {
+      page: correction.targetPage, pageSize: correction.targetPageSize,
+      total: correction.targetTotal, loading: correction.targetLoading,
+    }, ({ page, pageSize }) => {
+      correction.targetPageSize = pageSize || correction.targetPageSize;
+      void loadActivityCorrectionTargets({ page: page || 1 });
+    });
     const next = $('#activityCorrectionNext');
     if (next) next.disabled = !correction.targetCustomerId;
   }
@@ -6428,7 +6501,7 @@
         <div id="activityCorrectionTargetFilters" class="authorized-filter-host" aria-live="polite"></div>
         <div class="activity-correction-result-meta"><strong>选择正确客户</strong><span id="activityCorrectionTargetCount"></span></div>
         <div id="activityCorrectionTargets" class="activity-correction-targets"></div>
-        <button id="activityCorrectionTargetMore" class="button secondary hidden" type="button">继续加载</button>
+        <div id="activityCorrectionTargetPagination" class="shared-pagination" data-pagination="correction_targets"></div>
         ${status}<div class="form-actions"><button class="button secondary" type="button" data-close-activity-correction>取消</button><button id="activityCorrectionNext" class="button primary" type="submit" disabled>下一步</button></div>
       </form>`;
     } else if (step === 2) {
@@ -6584,17 +6657,17 @@
     }
   }
 
-  async function loadActivityCorrectionTargets({ reset = false } = {}) {
+  async function loadActivityCorrectionTargets({ reset = false, page } = {}) {
     const correction = state.activityCorrection;
     const requestEpoch = ++correction.targetRequestEpoch;
     correction.targetLoading = true;
     if (reset) { correction.targets = []; correction.targetRows = []; correction.targetPage = 1; }
     renderActivityCorrectionTargetRows();
     try {
-      const page = reset ? 1 : correction.targetPage + 1;
+      const targetPage = reset ? 1 : Math.max(1, Number(page || correction.targetPage || 1));
       const payload = correction.targetController?.serialize('applied') || { permissionVersion: '', filters: [] };
       const params = new URLSearchParams({
-        page: String(page), pageSize: String(correction.targetPageSize),
+        page: String(targetPage), pageSize: String(correction.targetPageSize),
         ...(correction.targetController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
         excludeCustomerId: correction.sourceCustomerId,
@@ -6603,10 +6676,12 @@
       if (requestEpoch !== correction.targetRequestEpoch) return null;
       applyActivityCorrectionReadEnvelope(result);
       const rows = result.rows || result.customers || [];
-      correction.targets = reset ? rows : [...state.activityCorrection.targets, ...rows];
+      correction.targets = rows;
       correction.targetRows = correction.targets;
-      correction.targetPage = Number(result.page || page);
+      correction.targetPage = Number(result.page || targetPage);
       correction.targetTotal = Number(result.total || 0);
+      correction.targetTotalPages = Number(result.totalPages
+        ?? Math.ceil(correction.targetTotal / correction.targetPageSize));
       correction.targetAuthorizedTotal = Number(result.authorizedTotal || 0);
       correction.targetHasMore = Boolean(result.hasMore);
       if (result.schema && correction.targetController) correction.targetController.updateSchema(result.schema);
@@ -6657,6 +6732,7 @@
     const result = await loadActivityCorrectionTargets({ reset: true });
     if (!result?.schema || !root.isConnected) return;
     const controller = window.TradePulseFilterComponent.createFilterController({
+      storage: paginationFilterStorage,
       pageKey: 'activity_correction_targets', schema: result.schema,
       onApply: () => void loadActivityCorrectionTargets({ reset: true }),
     });
@@ -6774,14 +6850,16 @@
       : correction.proposalRows.map(renderActivityCorrectionProposal).join('') || '<div class="empty">当前筛选下没有更正申请</div>';
     const count = $('#activityCorrectionProposalCount');
     if (count) count.textContent = `已显示 ${correction.proposalRows.length} / ${correction.proposalTotal} 条（授权范围 ${correction.proposalAuthorizedTotal} 条）`;
-    const more = $('#activityCorrectionProposalMore');
-    if (more) {
-      more.classList.toggle('hidden', !correction.proposalHasMore);
-      more.disabled = correction.proposalLoading;
-    }
+    renderPagination('#activityCorrectionProposalPagination', 'correction_proposals', {
+      page: correction.proposalPage, pageSize: correction.proposalPageSize,
+      total: correction.proposalTotal, loading: correction.proposalLoading,
+    }, ({ page, pageSize }) => {
+      correction.proposalPageSize = pageSize || correction.proposalPageSize;
+      void loadActivityCorrectionProposals({ page: page || 1 });
+    });
   }
 
-  async function loadActivityCorrectionProposals({ reset = false } = {}) {
+  async function loadActivityCorrectionProposals({ reset = false, page } = {}) {
     const correction = state.activityCorrection;
     if (!can('manage_activity_corrections') || state.data?.impersonation) {
       clearActivityCorrectionProposalResults();
@@ -6792,10 +6870,10 @@
     if (reset) { correction.proposalRows = []; correction.proposalPage = 1; }
     renderActivityCorrectionProposalRows();
     try {
-      const page = reset ? 1 : correction.proposalPage + 1;
+      const targetPage = reset ? 1 : Math.max(1, Number(page || correction.proposalPage || 1));
       const payload = correction.proposalController?.serialize('applied') || { permissionVersion: '', filters: [] };
       const params = new URLSearchParams({
-        page: String(page), pageSize: String(correction.proposalPageSize),
+        page: String(targetPage), pageSize: String(correction.proposalPageSize),
         ...(correction.proposalController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
@@ -6803,9 +6881,11 @@
       if (requestEpoch !== correction.proposalRequestEpoch) return null;
       applyActivityCorrectionReadEnvelope(result);
       const rows = result.rows || result.proposals || [];
-      correction.proposalRows = reset ? rows : [...correction.proposalRows, ...rows];
-      correction.proposalPage = Number(result.page || page);
+      correction.proposalRows = rows;
+      correction.proposalPage = Number(result.page || targetPage);
       correction.proposalTotal = Number(result.total || 0);
+      correction.proposalTotalPages = Number(result.totalPages
+        ?? Math.ceil(correction.proposalTotal / correction.proposalPageSize));
       correction.proposalAuthorizedTotal = Number(result.authorizedTotal || 0);
       correction.proposalHasMore = Boolean(result.hasMore);
       if (result.schema && correction.proposalController) correction.proposalController.updateSchema(result.schema);
@@ -6847,6 +6927,7 @@
     const result = await loadActivityCorrectionProposals({ reset: true });
     if (!result?.schema || !root.isConnected) return;
     const controller = window.TradePulseFilterComponent.createFilterController({
+      storage: paginationFilterStorage,
       pageKey: 'activity_correction_proposals', schema: result.schema,
       onApply: () => void loadActivityCorrectionProposals({ reset: true }),
     });
@@ -6955,11 +7036,16 @@
       : correction.historyRows.map(row => `<article class="activity-correction-history-item"><strong>${esc(correctionProposalCustomer(row, 'source'))} → ${esc(correctionProposalCustomer(row, 'target'))}</strong><p>${esc(row.reason || '未填写原因')}</p><small>${shortDate(row.createdAt, true)} · 已完成</small></article>`).join('') || '<div class="empty">当前筛选下没有更正历史</div>';
     const count = $('#activityCorrectionHistoryCount');
     if (count) count.textContent = `已显示 ${correction.historyRows.length} / ${correction.historyTotal} 条（授权范围 ${correction.historyAuthorizedTotal} 条）`;
-    const more = $('#activityCorrectionHistoryMore');
-    if (more) more.classList.toggle('hidden', !correction.historyHasMore);
+    renderPagination('#activityCorrectionHistoryPagination', 'correction_history', {
+      page: correction.historyPage, pageSize: correction.historyPageSize,
+      total: correction.historyTotal, loading: correction.historyLoading,
+    }, ({ page, pageSize }) => {
+      correction.historyPageSize = pageSize || correction.historyPageSize;
+      void loadActivityCorrections({ page: page || 1 });
+    });
   }
 
-  async function loadActivityCorrections({ reset = false } = {}) {
+  async function loadActivityCorrections({ reset = false, page } = {}) {
     const correction = state.activityCorrection;
     if (state.data?.impersonation
         || (!can('correct_own_activity') && !can('manage_activity_corrections'))) {
@@ -6971,10 +7057,10 @@
     if (reset) { correction.historyRows = []; correction.historyPage = 1; }
     renderActivityCorrectionHistoryRows();
     try {
-      const page = reset ? 1 : correction.historyPage + 1;
+      const targetPage = reset ? 1 : Math.max(1, Number(page || correction.historyPage || 1));
       const payload = correction.historyController?.serialize('applied') || { permissionVersion: '', filters: [] };
       const params = new URLSearchParams({
-        page: String(page), pageSize: String(correction.historyPageSize),
+        page: String(targetPage), pageSize: String(correction.historyPageSize),
         ...(correction.historyController ? { permissionVersion: String(payload.permissionVersion || '') } : {}),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
@@ -6982,9 +7068,11 @@
       if (requestEpoch !== correction.historyRequestEpoch) return null;
       applyActivityCorrectionReadEnvelope(result);
       const rows = result.rows || result.corrections || [];
-      correction.historyRows = reset ? rows : [...correction.historyRows, ...rows];
-      correction.historyPage = Number(result.page || page);
+      correction.historyRows = rows;
+      correction.historyPage = Number(result.page || targetPage);
       correction.historyTotal = Number(result.total || 0);
+      correction.historyTotalPages = Number(result.totalPages
+        ?? Math.ceil(correction.historyTotal / correction.historyPageSize));
       correction.historyAuthorizedTotal = Number(result.authorizedTotal || 0);
       correction.historyHasMore = Boolean(result.hasMore);
       if (result.schema && correction.historyController) correction.historyController.updateSchema(result.schema);
@@ -7027,6 +7115,7 @@
     const result = await loadActivityCorrections({ reset: true });
     if (!result?.schema || !root.isConnected) return;
     const controller = window.TradePulseFilterComponent.createFilterController({
+      storage: paginationFilterStorage,
       pageKey: 'activity_corrections', schema: result.schema,
       onApply: () => void loadActivityCorrections({ reset: true }),
     });
@@ -9082,6 +9171,21 @@
   });
 
   document.addEventListener('click', async event => {
+    const paginationButton = event.target.closest('[data-pagination-action]');
+    if (paginationButton && !paginationButton.disabled) {
+      const root = paginationButton.closest('[data-pagination]');
+      const handler = paginationRegistry.get(root?.dataset.pagination || '');
+      const current = Number(root?.dataset.page || 1);
+      const totalPages = Number(root?.dataset.totalPages || 1);
+      const action = paginationButton.dataset.paginationAction;
+      const page = action === 'first' ? 1
+        : action === 'prev' ? Math.max(1, current - 1)
+          : action === 'next' ? Math.min(totalPages, current + 1)
+            : action === 'last' ? totalPages
+              : Math.max(1, Math.min(totalPages, Number(paginationButton.dataset.page || current)));
+      if (handler && page !== current) handler({ page });
+      return;
+    }
     const nav = event.target.closest('[data-view]');
     if (nav) switchView(nav.dataset.view);
     const go = event.target.closest('[data-go]');
@@ -9089,16 +9193,20 @@
     const teamSection = event.target.closest('[data-team-section]');
     if (teamSection) {
       state.teamStatus.section = teamSection.dataset.teamSection;
+      if (state.teamStatus.section === 'collaboration') {
+        state.teamStatus.collaborationPage = 1;
+        void loadTeamCollaboration({ reset: true, page: 1 });
+      }
       renderTeamSection();
     }
     const progressDrilldown = event.target.closest('[data-team-progress-drilldown]');
     if (progressDrilldown) {
       state.teamStatus.drilldown = progressDrilldown.dataset.teamProgressDrilldown;
-      renderTeamProgress();
+      state.teamStatus.progressPage = 1;
+      void loadTeamStatus({ reset: false, page: 1 });
     }
     if (event.target.closest('#teamRefresh')) await loadTeamStatus({ reset: true });
     if (event.target.closest('#teamExport')) downloadTeamStatus();
-    if (event.target.closest('#teamCollaborationMore')) await loadTeamCollaboration({ reset: false });
     if (event.target.closest('#teamCollaborationAdd')) openCollaborationSupport();
     for (const [attribute, action] of [
       ['data-collaboration-supplement', 'supplement'],
@@ -9119,20 +9227,6 @@
     if (managerMetric) await drillDownManagerMetric(managerMetric.dataset.managerMetricOwner);
     const managerTask = event.target.closest('[data-manager-task-id]');
     if (managerTask) await openManagerTaskDetail(managerTask.dataset.managerTaskId);
-    if (event.target.closest('#managerTaskPrev') && state.managerTaskPage > 1) {
-      state.managerTaskPage -= 1;
-      renderManagerTasks();
-    }
-    if (event.target.closest('#managerTaskNext')) {
-      const meta = state.authorizedBusinessLists.manager_tasks;
-      let maxPage = Math.max(1, Math.ceil(managerTaskRows('manager_tasks').length / state.managerTaskPageSize));
-      if (state.managerTaskPage >= maxPage && meta.hasMore) {
-        await loadAuthorizedBusinessPage('manager_tasks', { reset: false });
-        maxPage = Math.max(1, Math.ceil(managerTaskRows('manager_tasks').length / state.managerTaskPageSize));
-      }
-      if (state.managerTaskPage < maxPage) state.managerTaskPage += 1;
-      renderManagerTasks();
-    }
     if (event.target.closest('#managerTaskRefresh')) {
       state.managerTaskPage = 1;
       await loadAuthorizedBusinessPage('manager_tasks', { reset: true });
@@ -9146,12 +9240,17 @@
     const managerRange = event.target.closest('[data-manager-range]');
     if (managerRange) {
       state.managerMetricRange = Number(managerRange.dataset.managerRange) === 90 ? 90 : 30;
+      state.authorizedBusinessLists.manager_metrics.page = 1;
+      state.authorizedBusinessLists.manager_risks.page = 1;
       const metricController = state.authorizedBusinessLists.manager_metrics.filterController;
       if (metricController) {
         metricController.setDraft('metric_window', [String(state.managerMetricRange)]);
         metricController.apply();
       }
-      renderManagerMetrics();
+      void Promise.all([
+        loadAuthorizedBusinessPage('manager_metrics', { reset: true }),
+        loadAuthorizedBusinessPage('manager_risks', { reset: true }),
+      ]);
     }
     if (event.target.closest('#managerTaskExport')) {
       if (!can('export_data')) toast('当前账号没有导出权限');
@@ -9267,9 +9366,6 @@
       if (nextTargetId !== state.activityCorrection.targetCustomerId) rotateActivityCorrectionIdempotencyKey();
       state.activityCorrection.targetCustomerId = nextTargetId;
       renderActivityCorrectionTargetRows();
-    }
-    if (event.target.closest('#activityCorrectionTargetMore') && state.activityCorrection.targetHasMore) {
-      await loadActivityCorrectionTargets();
     }
     const correctionBack = event.target.closest('[data-correction-back]');
     if (correctionBack) {
@@ -9494,14 +9590,6 @@
     if (protectedActivate) openProtectedActivationModal(protectedActivate.dataset.protectedActivate);
     if (event.target.closest('#protectedRefreshBtn')) await loadProtectedCustomers();
     if (event.target.closest('#protectedRescanBtn')) await loadProtectedConflicts({ rescan: true });
-    if (event.target.closest('#protectedConflictPrev') && state.protectedCustomers.conflictPage > 1) {
-      state.protectedCustomers.conflictPage -= 1;
-      await loadProtectedConflicts();
-    }
-    if (event.target.closest('#protectedConflictNext') && state.protectedCustomers.conflictHasMore) {
-      state.protectedCustomers.conflictPage += 1;
-      await loadProtectedConflicts();
-    }
     const resolveProtected = event.target.closest('[data-resolve-protected-conflict]');
     if (resolveProtected) await resolveProtectedConflict(resolveProtected);
     if (event.target.closest('#customerExportBtn')) {
@@ -9518,13 +9606,6 @@
       document.body.appendChild(link);
       link.click();
       link.remove();
-    }
-    if (event.target.closest('#customerLoadMore')) {
-      await loadCustomerPage({ reset: false });
-    }
-    const businessLoadMore = event.target.closest('[data-load-business-page]');
-    if (businessLoadMore) {
-      await loadAuthorizedBusinessPage(businessLoadMore.dataset.loadBusinessPage, { reset: false });
     }
     const intakePageTab = event.target.closest('[data-authorized-intake-page]');
     if (intakePageTab) {
@@ -9605,15 +9686,12 @@
         await loadRecycleBin();
       } catch (error) { toast(error.message); }
     }
-    const loadMore = event.target.closest('[data-load-research]');
-    if (loadMore) await loadResearch(loadMore.dataset.loadResearch);
     const retryResearch = event.target.closest('[data-retry-research]');
     if (retryResearch) await loadResearch(retryResearch.dataset.retryResearch, { reset: true });
     const retryResearchSchema = event.target.closest('[data-retry-research-schema]');
     if (retryResearchSchema) {
       await initializeResearchFilters(retryResearchSchema.dataset.retryResearchSchema, { force: true });
     }
-    if (event.target.closest('#intakeLoadMore')) await loadIntakePage();
     if (event.target.closest('#changePasswordBtn')) openPasswordModal();
     if (event.target.closest('#intakeSettingsBtn')) openIntakeSettingsModal();
     if (event.target.closest('#manualAssignIntakeBtn')) {
@@ -9686,8 +9764,14 @@
     const alertTab = event.target.closest('[data-severity]');
     if (alertTab) {
       state.alertSeverity = alertTab.dataset.severity;
+      state.authorizedBusinessLists.alerts.page = 1;
       $$('#alertTabs button').forEach(item => item.classList.toggle('active', item === alertTab));
-      renderAlerts();
+      const controller = state.authorizedBusinessLists.alerts.filterController;
+      if (controller) {
+        if (state.alertSeverity) controller.setDraft('urgency', [state.alertSeverity]);
+        else controller.clearField('urgency', { draftOnly: true });
+        controller.apply();
+      } else void loadAuthorizedBusinessPage('alerts', { reset: true });
     }
     const toggleUser = event.target.closest('[data-toggle-user]');
     if (toggleUser) {
@@ -9784,6 +9868,15 @@
   });
 
   document.addEventListener('change', event => {
+    const pageSize = event.target.closest('[data-pagination-size]');
+    if (!pageSize) return;
+    const root = pageSize.closest('[data-pagination]');
+    const handler = paginationRegistry.get(root?.dataset.pagination || '');
+    const value = Number(pageSize.value);
+    if (handler && PAGE_SIZE_OPTIONS.includes(value)) handler({ page: 1, pageSize: value });
+  });
+
+  document.addEventListener('change', event => {
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
     if (event.target.closest('#managerTaskSettingsForm')) {
       event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
@@ -9839,6 +9932,7 @@
     const tab = event.target.closest('[data-notification-status]');
     if (tab) {
       const controller = state.authorizedBusinessLists.notifications.filterController;
+      state.authorizedBusinessLists.notifications.page = 1;
       const statusAuthorized = Boolean(controller?.getSchema().fields
         .some(field => field.key === 'notification_status'));
       if (!controller || !statusAuthorized) {
@@ -9871,14 +9965,19 @@
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
     const intakeAlias = ['intake', 'pending', 'claimed'].includes(view);
     const canonicalView = intakeAlias ? 'pool' : view;
-    const permission = canonicalView === 'customerProfile' && state.customerProfileReadOnly
+      const permission = canonicalView === 'customerProfile' && state.customerProfileReadOnly
       ? 'view_intake'
       : viewPermissions[view] || `view_${canonicalView}`;
     if (!can(permission)) return toast('当前账号没有该模块权限');
-    if (canonicalView === 'protectedCustomers' && !canManageProtectedCustomers()) {
-      return toast('只有真实管理员可以管理合作客户保护');
-    }
-    state.view = canonicalView;
+      if (canonicalView === 'protectedCustomers' && !canManageProtectedCustomers()) {
+        return toast('只有真实管理员可以管理合作客户保护');
+      }
+      const viewChanged = state.view !== canonicalView;
+      state.view = canonicalView;
+      if (viewChanged && canonicalView === 'pool') state.intakeAuthorizedPage = 'intake';
+      if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();
+      if (viewChanged && canonicalView === 'recycleBin') state.recycleKind = 'sales_return';
+      if (viewChanged && canonicalView === 'managerMetrics') state.managerMetricRange = 30;
     state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
     $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
@@ -9887,20 +9986,27 @@
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
     document.body.classList.toggle('access-admin-active', canonicalView === 'users');
     if (canonicalView === 'pool') renderIntake();
-    if (canonicalView === 'pool') {
-      void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage);
-    }
-    if (canonicalView === 'customers') void initializeCustomerFilters();
+      if (canonicalView === 'pool') {
+        void initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage, { force: viewChanged });
+      }
+      if (canonicalView === 'customers') void initializeCustomerFilters({ force: viewChanged });
     if (canonicalView === 'users' && can('manage_users') && !state.data.impersonation) {
       void loadFilterPermissionAdmin().catch(error => toast(error.message));
     }
     if (canonicalView === 'users' && isRealAdmin() && can('manage_manager_task_settings')) {
       void loadManagerTaskSettings().catch(error => toast(error.message));
     }
-    if (researchConfig[canonicalView] && !state.research[canonicalView].filterMount) {
-      void initializeResearchFilters(canonicalView);
-    }
-    if (canonicalView === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks();
+      if (researchConfig[canonicalView] && (viewChanged || !state.research[canonicalView].filterMount)) {
+        void initializeResearchFilters(canonicalView, { force: viewChanged });
+      }
+      if (canonicalView === 'aiTasks' && viewChanged) {
+        ['aiTaskStateFilter', 'aiTaskTypeFilter', 'aiTaskCustomerFilter', 'aiTaskOwnerFilter',
+          'aiTaskModelFilter', 'aiTaskFromFilter', 'aiTaskToFilter'].forEach(id => {
+          const input = $(`#${id}`);
+          if (input) input.value = '';
+        });
+        void loadAiTasks({ reset: true });
+      } else if (canonicalView === 'aiTasks' && !state.aiTasks.loaded) void loadAiTasks({ reset: true });
     if (canonicalView === 'aiTasks' && !state.aiGovernance.loaded) void loadAiGovernance();
     if (canonicalView === 'alerts' && canViewManagerAnomalies() && !state.managerAnomalies.loaded) {
       void loadManagerAnomalies();
@@ -9908,31 +10014,42 @@
     if (canonicalView === 'team' && canViewSalesCoaching() && !state.salesCoaching.loaded) {
       void loadSalesCoaching();
     }
-    if (canonicalView === 'team' && !state.teamStatus.loaded) {
-      void initializeTeamStatusFilters();
+      if (canonicalView === 'team' && (viewChanged || !state.teamStatus.loaded)) {
+        state.teamStatus.section = 'progress';
+        state.teamStatus.drilldown = 'customer';
+        state.teamStatus.range = '30d';
+        if ($('#teamRange')) $('#teamRange').value = '30d';
+        void initializeTeamStatusFilters({ force: viewChanged });
     }
-    const businessPageKey = {
+      const businessPageKey = {
       pipeline: 'pipeline',
       alerts: 'alerts',
       insights: 'insights',
       recycleBin: 'recycle_bin',
       notifications: 'notifications',
-    }[canonicalView];
-    if (businessPageKey) void initializeAuthorizedBusinessFilters(businessPageKey);
-    if (canonicalView === 'managerTasks') {
-      void initializeAuthorizedBusinessFilters('manager_tasks');
-    }
-    if (canonicalView === 'managerMetrics') {
-      void initializeAuthorizedBusinessFilters('manager_metrics');
-      void initializeAuthorizedBusinessFilters('manager_risks');
-    }
-    if (canonicalView === 'activityCorrections') {
-      void initializeActivityCorrectionHistoryFilters();
-      void initializeActivityCorrectionProposalFilters();
+      }[canonicalView];
+      if (canonicalView === 'alerts' && viewChanged) state.alertSeverity = '';
+      if (businessPageKey) void initializeAuthorizedBusinessFilters(businessPageKey, { force: viewChanged });
+      if (canonicalView === 'managerTasks') {
+        void initializeAuthorizedBusinessFilters('manager_tasks', { force: viewChanged });
+      }
+      if (canonicalView === 'managerMetrics') {
+        void initializeAuthorizedBusinessFilters('manager_metrics', { force: viewChanged });
+        void initializeAuthorizedBusinessFilters('manager_risks', { force: viewChanged });
+      }
+      if (canonicalView === 'activityCorrections') {
+        void initializeActivityCorrectionHistoryFilters({ force: viewChanged });
+        void initializeActivityCorrectionProposalFilters({ force: viewChanged });
     }
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
-    if (canonicalView === 'protectedCustomers' && !state.protectedCustomers.loaded) {
-      void loadProtectedWorkspace();
+      if (canonicalView === 'protectedCustomers' && (viewChanged || !state.protectedCustomers.loaded)) {
+        if (viewChanged) Object.assign(state.protectedCustomers, {
+          query: '', status: 'all', page: 1, conflictStatus: 'unresolved', conflictPage: 1,
+        });
+        if ($('#protectedSearch')) $('#protectedSearch').value = state.protectedCustomers.query;
+        if ($('#protectedStatus')) $('#protectedStatus').value = state.protectedCustomers.status;
+        if ($('#protectedConflictStatus')) $('#protectedConflictStatus').value = state.protectedCustomers.conflictStatus;
+        void loadProtectedWorkspace();
     }
     closeDrawer();
     closeCustomerFilterPanel();
@@ -9949,8 +10066,8 @@
     if (event.target.id === 'protectedSearch') {
       clearTimeout(state.protectedCustomers.searchTimer);
       state.protectedCustomers.searchTimer = setTimeout(() => {
-        state.protectedCustomers.query = event.target.value.trim();
-        void loadProtectedCustomers();
+          state.protectedCustomers.query = event.target.value.trim();
+          void loadProtectedCustomers({ reset: true });
       }, 300);
     }
     if (event.target.id === 'customerSearch') {
@@ -9971,9 +10088,9 @@
   document.addEventListener('change', event => {
     if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
     if (event.target.id === 'protectedCsvInput') void loadProtectedCustomerCsv(event.target.files?.[0]);
-    if (event.target.id === 'protectedStatus') {
-      state.protectedCustomers.status = event.target.value;
-      void loadProtectedCustomers();
+        if (event.target.id === 'protectedStatus') {
+          state.protectedCustomers.status = event.target.value;
+          void loadProtectedCustomers({ reset: true });
     }
     if (event.target.id === 'protectedConflictStatus') {
       state.protectedCustomers.conflictStatus = event.target.value;
