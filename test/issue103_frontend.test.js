@@ -28,7 +28,8 @@ test('Issue #103 exposes the unified status model without a review tab', () => {
     assert.match(pool, new RegExp(`data-intake-status="${status}"`));
   }
   assert.doesNotMatch(pool, /待审核|data-intake-status="pending"|data-intake-status="approved"/);
-  assert.match(js, /if \(state\.intakeStatus\) params\.set\('status', state\.intakeStatus\)/);
+  assert.match(js, /status: state\.intakeStatus/);
+  assert.match(js, /controller\.setDraft\(key/);
   assert.match(js, /unassigned: Number\(stats\.pending \|\| 0\) \+ Number\(stats\.approved \|\| 0\)/);
 });
 
@@ -44,8 +45,9 @@ test('Issue #103 detailed filters use the intake API and customer-tag wording', 
   }
   assert.match(pool, /客户标签/);
   assert.doesNotMatch(pool, /业务标签/);
-  assert.match(js, /Object\.entries\(state\.intakeFilters\)[\s\S]*?params\.set\(key/);
-  assert.match(js, /\/api\/sales-crm\/intake\?\$\{params\}/);
+  assert.match(js, /const values = \{[\s\S]*?customer_type: state\.intakeFilters\.customerType/);
+  assert.match(js, /controller\.apply\(\)/);
+  assert.match(js, /loadAuthorizedBusinessPage\(pageKey/);
 });
 
 test('Issue #103 preserves the AI gate and applies one return eligibility rule everywhere', () => {

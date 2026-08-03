@@ -60,20 +60,19 @@ function insertNotification(db, row) {
 test('notification center mounts the #116 authorized filter, result count, and pagination controls', () => {
   assert.match(html, /id="notificationsAuthorizedFilters"[^>]*aria-live="polite"/);
   assert.match(html, /id="notificationResultCount"[^>]*class="toolbar-count"/);
-  assert.match(html, /id="notificationsAuthorizedLoadMore"[^>]*data-load-business-page="notifications"/);
-  assert.match(html, /id="notificationsAuthorizedLoadMore"[^>]*>继续加载<\/button>/);
+  assert.match(html, /id="notificationsAuthorizedPagination"[^>]*data-pagination="notifications"/);
 });
 
 test('notification page registers, initializes, loads, and renders one authorized list contract', () => {
   assert.match(app, /'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications'/);
   assert.match(app, /notifications:\s*\{\s*root:\s*'#notificationsAuthorizedFilters'/);
-  assert.match(app, /button:\s*'#notificationsAuthorizedLoadMore'/);
+  assert.match(app, /pagination:\s*'#notificationsAuthorizedPagination'/);
   assert.match(app, /count:\s*'#notificationResultCount'/);
   assert.match(app, /render:\s*renderNotifications/);
 
   const switchView = functionBlock(app, 'switchView');
   assert.match(switchView, /notifications:\s*'notifications'/);
-  assert.match(switchView, /initializeAuthorizedBusinessFilters\(businessPageKey\)/);
+  assert.match(switchView, /initializeAuthorizedBusinessFilters\(businessPageKey, \{ force: viewChanged \}\)/);
 
   const applyRows = functionBlock(app, 'applyAuthorizedBusinessRows');
   assert.match(applyRows, /pageKey === 'notifications'/);
@@ -240,15 +239,15 @@ test('authorized notification API removes sales-pack rows, aggregates, and facet
   assert.equal(disabledBody.features.ai_stations.effectiveEnabled, true);
 
   const response = await fx.request(
-    '/api/sales-crm/lists/notifications?page=1&pageSize=1',
+    '/api/sales-crm/lists/notifications?page=1&pageSize=50',
     { cookie: fx.cookie },
   );
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.total, 2);
   assert.equal(body.authorizedTotal, 2);
-  assert.equal(body.rows.length, 1);
-  assert.equal(body.hasMore, true);
+  assert.equal(body.rows.length, 2);
+  assert.equal(body.hasMore, false);
   assert.deepEqual(body.summary, { total: 2, unread: 1, failed: 0 });
   assert.equal(body.rows[0].id, 'NOTE-API-BUSINESS');
   assert.doesNotMatch(JSON.stringify(body), /NOTE-API-PACK|SALES_PACK_READY|SALES_PACK_FAILED/);

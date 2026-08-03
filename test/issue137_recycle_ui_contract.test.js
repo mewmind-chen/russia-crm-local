@@ -136,7 +136,7 @@ test('restore and reassign success close recycle detail then refresh bootstrap a
     'const restoreCustomer =',
     'const reassignCustomer =',
   );
-  const reassignEnd = clickHandler.indexOf('const loadMore =', clickHandler.indexOf('const reassignCustomer ='));
+  const reassignEnd = clickHandler.indexOf('const retryResearch =', clickHandler.indexOf('const reassignCustomer ='));
   assert.notEqual(reassignEnd, -1, 'missing source marker after reassign handler');
   const reassign = clickHandler.slice(
     clickHandler.indexOf('const reassignCustomer ='),

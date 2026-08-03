@@ -77,7 +77,7 @@ test('research APIs enforce authorized AST, permission version, scope, paginatio
   assert.equal(firstResponse.status, 200);
   const first = await firstResponse.json();
   assert.equal(first.page, 1);
-  assert.equal(first.pageSize, 20);
+  assert.equal(first.pageSize, 50);
   assert.equal(first.total, 13);
   assert.equal(first.rows.length, 13);
   assert.equal(first.hasMore, false);
@@ -89,14 +89,14 @@ test('research APIs enforce authorized AST, permission version, scope, paginatio
     { cookie: fx.otherCookie },
   )).json();
   assert.equal(unfiltered.total, 26);
-  assert.equal(unfiltered.rows.length, 20);
-  assert.equal(unfiltered.hasMore, true);
+  assert.equal(unfiltered.rows.length, 26);
+  assert.equal(unfiltered.hasMore, false);
   const second = await (await fx.request(
     `/api/sales-crm/research/recon?page=2&pageSize=20&permissionVersion=${schema.permissionVersion}&filters=${encodedFilters({})}`,
     { cookie: fx.otherCookie },
   )).json();
   assert.equal(second.total, 26);
-  assert.equal(second.rows.length, 6);
+  assert.equal(second.rows.length, 0);
   assert.equal(second.hasMore, false);
   const bootstrap = await (await fx.request('/api/sales-crm/bootstrap', {
     cookie: fx.otherCookie,

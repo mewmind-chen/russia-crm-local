@@ -48,7 +48,7 @@ test('manager workspaces and settings expose stable permission-governed mount po
   }
   for (const id of [
     'managerTaskSummary', 'managerTaskFilters', 'managerTaskResultCount', 'managerTaskList',
-    'managerTaskPrev', 'managerTaskPage', 'managerTaskNext', 'managerTaskRefresh',
+    'managerTaskPagination', 'managerTaskRefresh',
     'managerTaskExport', 'managerRiskFilters', 'managerRiskResultCount', 'managerRiskList',
     'managerMetricRange', 'managerMetricSummary', 'managerMetricFilters',
     'managerMetricResultCount', 'managerMetricList',

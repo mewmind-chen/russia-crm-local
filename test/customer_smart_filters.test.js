@@ -121,10 +121,11 @@ test('customer UI renders only the authorized shared filter schema and server re
   assert.match(css, /\.filter-permission-admin/);
 });
 
-test('customer UI can continue paginated results and ignores stale filter responses', () => {
-  assert.match(html, /id="customerLoadMore"/);
-  assert.match(js, /state\.customerList\.hasMore/);
-  assert.match(js, /loadCustomerPage\(\{\s*reset:\s*false\s*\}\)/);
+test('customer UI replaces target pages and ignores stale filter responses', () => {
+  assert.match(html, /id="customerPagination"[^>]*data-pagination="customers"/);
+  assert.match(js, /hasMore:\s*result\.hasMore/);
+  assert.match(js, /loadCustomerPage\(\{ reset: false, page:/);
+  assert.doesNotMatch(js, /\.\.\.state\.customerList\.rows/);
   assert.match(js, /const requestEpoch = \+\+state\.customerRequestEpoch/);
   assert.match(js, /requestEpoch !== state\.customerRequestEpoch/);
 });

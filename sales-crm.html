@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260802-issue174-ui">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260803-issue205-pagination">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -154,11 +154,7 @@
             <input id="aiTaskToFilter" type="date" aria-label="结束日期">
           </div>
           <div id="aiTaskTable" class="data-table"><div class="empty">尚未加载任务</div></div>
-          <div class="ai-task-pagination">
-            <button id="aiTaskPrev" class="button secondary tiny" type="button">上一页</button>
-            <span id="aiTaskPageInfo" class="subtle">第 1 页</span>
-            <button id="aiTaskNext" class="button secondary tiny" type="button">下一页</button>
-          </div>
+          <div id="aiTaskPagination" class="shared-pagination" data-pagination="ai_tasks"></div>
         </article>
         <article id="aiGovernancePanel" class="panel ai-governance-panel hidden">
           <div class="panel-head">
@@ -226,12 +222,12 @@
           </section>
           <div id="intakeActiveFilters" class="customer-active-filters hidden"></div>
           <div id="intakeBulkBar" class="customer-bulk-bar intake-bulk-bar hidden">
-            <span id="intakeSelectionCount">勾选线索，或先设置筛选条件</span>
+            <span id="intakeSelectionCount">勾选当前页线索后进行分配</span>
             <button id="clearIntakeSelection" class="button secondary tiny hidden" type="button">清除勾选</button>
             <button id="manualAssignIntakeBtn" class="button primary tiny" type="button" disabled>分配</button>
           </div>
           <div id="intakeTable" class="data-table"></div>
-          <div id="intakePagination" class="load-more-row"><button id="intakeAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="intake">继续加载</button></div>
+          <div id="intakePagination" class="shared-pagination" data-pagination="intake"></div>
         </article>
         <article id="intakeBatchPanel" class="panel intake-batches">
           <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div></div>
@@ -255,16 +251,14 @@
           </div>
           <div id="customerBulkBar" class="customer-bulk-bar hidden">
             <span id="customerSelectionCount">已选择 0 个客户</span>
-            <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前结果</button>
+            <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前页</button>
             <button id="clearCustomerSelection" class="button secondary tiny" type="button">清除选择</button>
             <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">请选择销售</option></select>
             <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量设置负责人</button>
             <button id="bulkReturnCustomers" class="button danger tiny" type="button">批量退回线索池</button>
           </div>
           <div id="customerTable" class="data-table"></div>
-          <div class="load-more-row">
-            <button id="customerLoadMore" class="button secondary hidden" type="button">继续加载</button>
-          </div>
+          <div id="customerPagination" class="shared-pagination" data-pagination="customers"></div>
         </article>
       </section>
 
@@ -284,7 +278,7 @@
           </div>
           <div class="toolbar"><span id="recycleAuthorizedResultCount" class="toolbar-count"></span></div>
           <div id="recycleTable" class="data-table"></div>
-          <div class="load-more-row"><button id="recycleAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="recycle_bin">继续加载</button></div>
+          <div id="recycleAuthorizedPagination" class="shared-pagination" data-pagination="recycle_bin"></div>
         </article>
       </section>
 
@@ -312,13 +306,13 @@
       <section id="contactsView" class="view">
         <div class="section-intro"><div><p class="eyebrow">CONTACT EVIDENCE</p><h2>客户联系人线索</h2><p>寻找并核实客户公司的采购、老板、工程师等潜在联系人；确认后进入正式客户联系人。</p></div></div>
         <div id="peopleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <article class="panel"><div class="toolbar"><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div class="load-more-row"><button id="peopleLoadMore" class="button secondary hidden" type="button" data-load-research="contacts">继续加载</button></div></article>
+        <article class="panel"><div class="toolbar"><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div id="peoplePagination" class="shared-pagination" data-pagination="contacts"></div></article>
       </section>
 
       <section id="reconView" class="view">
         <div class="section-intro"><div><p class="eyebrow">RECON INTELLIGENCE</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
         <div id="reconAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <article class="panel"><div class="toolbar"><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div class="load-more-row"><button id="reconLoadMore" class="button secondary hidden" type="button" data-load-research="recon">继续加载</button></div></article>
+        <article class="panel"><div class="toolbar"><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div id="reconPagination" class="shared-pagination" data-pagination="recon"></div></article>
       </section>
 
       <section id="pipelineView" class="view">
@@ -329,7 +323,7 @@
         <div id="pipelineAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <div class="toolbar"><span id="pipelineAuthorizedResultCount" class="toolbar-count"></span></div>
         <div id="pipelineBoard" class="pipeline-board"></div>
-        <div class="load-more-row"><button id="pipelineAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="pipeline">继续加载</button></div>
+        <div id="pipelineAuthorizedPagination" class="shared-pagination" data-pagination="pipeline"></div>
       </section>
 
       <section id="alertsView" class="view">
@@ -355,7 +349,7 @@
             <span id="alertsAuthorizedResultCount" class="toolbar-count"></span>
           </div>
           <div id="alertTable" class="today-task-list"></div>
-          <div class="load-more-row"><button id="alertsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="alerts">继续加载</button></div>
+          <div id="alertsAuthorizedPagination" class="shared-pagination" data-pagination="alerts"></div>
         </article>
       </section>
 
@@ -375,7 +369,7 @@
             <span id="notificationResultCount" class="toolbar-count"></span>
           </div>
           <div id="notificationList" class="notification-list" aria-live="polite"></div>
-          <div class="load-more-row"><button id="notificationsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="notifications">继续加载</button></div>
+          <div id="notificationsAuthorizedPagination" class="shared-pagination" data-pagination="notifications"></div>
         </article>
       </section>
 
@@ -390,14 +384,14 @@
           <div id="activityCorrectionHistoryFilters" class="authorized-filter-host" aria-live="polite"></div>
           <p id="activityCorrectionHistoryStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
           <div id="activityCorrectionHistoryList" class="activity-correction-history-list"><div class="empty">进入页面后读取更正历史</div></div>
-          <div class="load-more-row"><button id="activityCorrectionHistoryMore" class="button secondary hidden" type="button">继续加载</button></div>
+          <div id="activityCorrectionHistoryPagination" class="shared-pagination" data-pagination="correction_history"></div>
         </article>
         <article class="panel activity-correction-workspace">
           <div class="panel-head"><div><p class="eyebrow">CORRECTION REVIEW</p><h2>待审批申请</h2></div><span id="activityCorrectionProposalCount" class="panel-note"></span></div>
           <div id="activityCorrectionProposalFilters" class="authorized-filter-host" aria-live="polite"></div>
           <p id="activityCorrectionProposalStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
           <div id="activityCorrectionProposalList" class="activity-correction-proposal-list"><div class="empty">进入页面后读取审批队列</div></div>
-          <div class="load-more-row"><button id="activityCorrectionProposalMore" class="button secondary hidden" type="button">继续加载</button></div>
+          <div id="activityCorrectionProposalPagination" class="shared-pagination" data-pagination="correction_proposals"></div>
         </article>
       </section>
 
@@ -416,11 +410,7 @@
             <span id="managerTaskResultCount" class="toolbar-count">进入页面后加载授权任务</span>
           </div>
           <div id="managerTaskList" class="data-table manager-task-list" aria-live="polite"></div>
-          <nav class="manager-task-pagination" aria-label="主管任务分页">
-            <button id="managerTaskPrev" class="button secondary" type="button">上一页</button>
-            <span id="managerTaskPage" aria-live="polite">第 1 页</span>
-            <button id="managerTaskNext" class="button secondary" type="button">下一页</button>
-          </nav>
+          <nav id="managerTaskPagination" class="shared-pagination" data-pagination="manager_tasks" aria-label="主管任务分页"></nav>
         </article>
       </section>
 
@@ -443,7 +433,7 @@
             <span id="managerMetricResultCount" class="panel-note"></span>
           </div>
           <div id="managerMetricList" class="data-table manager-metric-list" aria-live="polite"></div>
-          <div class="load-more-row"><button id="managerMetricLoadMore" class="button secondary hidden" type="button">继续加载</button></div>
+          <div id="managerMetricPagination" class="shared-pagination" data-pagination="manager_metrics"></div>
         </article>
 
         <div id="managerRiskFilters" class="authorized-filter-host" aria-live="polite"></div>
@@ -453,7 +443,7 @@
             <span id="managerRiskResultCount" class="panel-note"></span>
           </div>
           <div id="managerRiskList" class="manager-risk-list" aria-live="polite"></div>
-          <div class="load-more-row"><button id="managerRiskLoadMore" class="button secondary hidden" type="button">继续加载</button></div>
+          <div id="managerRiskPagination" class="shared-pagination" data-pagination="manager_risks"></div>
         </article>
       </section>
 
@@ -472,7 +462,7 @@
           </div>
           <div class="toolbar"><span id="insightsAuthorizedResultCount" class="toolbar-count"></span></div>
           <div id="insightCompanyList" class="insight-hub-list"></div>
-          <div class="load-more-row"><button id="insightsAuthorizedLoadMore" class="button secondary hidden" type="button" data-load-business-page="insights">继续加载</button></div>
+          <div id="insightsAuthorizedPagination" class="shared-pagination" data-pagination="insights"></div>
         </article>
       </section>
 
@@ -515,6 +505,7 @@
               <button type="button" data-team-progress-drilldown="timeline">事实时间线</button>
             </div>
             <div id="teamProgressDrilldownList" class="team-progress-drilldown-list"></div>
+            <div id="teamProgressPagination" class="shared-pagination" data-pagination="team_progress"></div>
           </article>
         </section>
 
@@ -530,7 +521,7 @@
             <button id="teamCollaborationAdd" data-permission="record_collaboration_support" class="button primary" type="button">补记协作</button>
           </div>
           <div id="teamCollaborationList" class="team-collaboration-list"></div>
-          <button id="teamCollaborationMore" class="button secondary hidden" type="button">继续加载</button>
+          <div id="teamCollaborationPagination" class="shared-pagination" data-pagination="team_collaboration"></div>
         </section>
       </section>
 
@@ -690,6 +681,7 @@
           </div>
           <div id="protectedListStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
           <div id="protectedCustomerList" class="data-table protected-data-table"><div class="empty">进入页面后加载保护名单</div></div>
+          <div id="protectedCustomerPagination" class="shared-pagination" data-pagination="protected_customers"></div>
         </article>
 
         <article class="panel protected-import-panel">
@@ -720,11 +712,7 @@
           </div>
           <div id="protectedConflictStatusText" class="protected-inline-status" role="status" aria-live="polite"></div>
           <div id="protectedConflictList" class="protected-conflict-list"><div class="empty">进入页面后加载身份冲突</div></div>
-          <div id="protectedConflictPagination" class="protected-conflict-pagination hidden" aria-label="身份冲突分页">
-            <button id="protectedConflictPrev" class="button secondary" type="button">上一页</button>
-            <span id="protectedConflictPageText">第 1 / 1 页</span>
-            <button id="protectedConflictNext" class="button secondary" type="button">下一页</button>
-          </div>
+          <div id="protectedConflictPagination" class="shared-pagination" data-pagination="protected_conflicts" aria-label="身份冲突分页"></div>
         </article>
       </section>
 
@@ -773,6 +761,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260802-issue174-ui"></script>
+  <script src="/sales-assets/app.js?v=20260803-issue205-pagination"></script>
 </body>
 </html>

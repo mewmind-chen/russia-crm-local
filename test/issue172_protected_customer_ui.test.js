@@ -360,10 +360,10 @@ test('admin workspace exposes the complete lifecycle and hides its entry by name
   assert.match(app, /protectedConflictCandidateIds/);
   assert.match(app, /conflictPage:\s*1/);
   assert.match(app, /conflictTotalPages/);
-  assert.match(html, /id="protectedConflictPrev"/);
-  assert.match(html, /id="protectedConflictNext"/);
+  assert.match(html, /id="protectedConflictPagination"[^>]*data-pagination="protected_conflicts"/);
+  assert.match(app, /renderPagination\('#protectedConflictPagination', 'protected_conflicts'/);
   assert.match(app, /protectedConflictStatus[\s\S]{0,300}conflictPage\s*=\s*1/);
-  assert.match(app, /page\s*>\s*lastPage[\s\S]{0,180}conflictPage\s*=\s*lastPage/);
+  assert.match(app, /targetPage\s*>\s*lastPage[\s\S]{0,180}conflictPage\s*=\s*lastPage/);
 
   for (const endpoint of [
     '/protected-customers',

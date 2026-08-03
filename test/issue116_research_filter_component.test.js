@@ -36,7 +36,8 @@ test('research filtering is server-side, versioned, paginated and stale-response
   assert.match(source, /meta\.filterController\.serialize\('applied'\)/);
   assert.match(source, /permissionVersion:\s*String\(payload\.permissionVersion/);
   assert.match(source, /filters:\s*JSON\.stringify\(componentPayloadToRaw\(payload\)\)/);
-  assert.match(source, /page:\s*String\(meta\.page \+ 1\)/);
+  assert.match(source, /page:\s*String\(reset \? 1 : Math\.max\(1, Number\(page \|\| meta\.page \|\| 1\)\)\)/);
+  assert.doesNotMatch(source, /meta\.page\s*\+\s*1/);
   assert.match(source, /\/api\/sales-crm\/research\/\$\{config\.endpointKind\}/);
   assert.match(source, /const requestEpoch = \+\+meta\.requestEpoch/);
   assert.match(source, /requestEpoch !== meta\.requestEpoch/);
@@ -74,15 +75,16 @@ test('research pages expose retry, empty, and 390px-safe host layout states', ()
   assert.match(css, /\.authorized-filter-host\s*\{/);
   assert.match(css, /@media\(max-width:600px\)/);
   assert.match(css, /\.authorized-filter-host\{margin-right:-12px;margin-left:-12px\}/);
-  assert.match(html, /app\.js\?v=20260802-issue174-ui/);
-  assert.match(html, /app\.css\?v=20260802-issue174-ui/);
+  assert.match(html, /app\.js\?v=20260803-issue205-pagination/);
+  assert.match(html, /app\.css\?v=20260803-issue205-pagination/);
 });
 
 test('research navigation uses canonical page keys and exposes only permission-scoped entries', () => {
   assert.match(html, /data-view="contacts" data-permission="view_contacts"/);
   assert.match(html, /data-view="recon" data-permission="view_recon"/);
-  assert.match(html, /data-load-research="contacts"/);
-  assert.doesNotMatch(html, /data-load-research="people"/);
+  assert.match(html, /data-pagination="contacts"/);
+  assert.match(html, /data-pagination="recon"/);
+  assert.doesNotMatch(html, /data-load-research/);
   assert.match(js, /state\.research\.contacts\.total/);
   assert.doesNotMatch(js, /state\.research\.people/);
 });

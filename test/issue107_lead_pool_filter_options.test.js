@@ -39,7 +39,9 @@ test('Issue #107 uses selects for categorical lead-pool filters', () => {
     assert.match(html, new RegExp(`<select id="${id}">[\\s\\S]*?${emptyLabel}[\\s\\S]*?</select>`));
     assert.doesNotMatch(html, new RegExp(`<input id="${id}"`));
   }
-  assert.match(js, /populateIntakeFilterOptions\(result\.filterOptions\)/);
+  assert.match(js, /intake:\s*\{[\s\S]*?root:\s*'#intakeAuthorizedFilters'/);
+  assert.match(js, /controller\.getSchema\(\)\.fields/);
+  assert.match(js, /controller\.setDraft\(key/);
   assert.match(js, /customerTags: \{ id: 'intakeCustomerTagFilter'/);
   assert.match(html, /app\.js\?v=[^"]+/);
 });
