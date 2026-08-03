@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260803-issue207-impersonation-actions">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260804-issue208-duplicate-review">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -67,7 +67,7 @@
           <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
           <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
-          <button data-view="protectedCustomers" data-permission="manage_protected_customers"><i data-tp-icon="archive" aria-hidden="true"></i><span>合作客户保护</span><b id="navProtectedConflictCount" class="danger-count hidden">0</b></button>
+          <button data-view="protectedCustomers"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户保护与查重</span><b id="navProtectedConflictCount" class="danger-count hidden">0</b></button>
           <button data-view="maintenance" data-permission="manage_data_maintenance"><i data-tp-icon="settings" aria-hidden="true"></i><span>数据维护</span></button>
         </div>
       </nav>
@@ -650,7 +650,6 @@
               </div>
             </form>
           </article>
-          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">DUPLICATE REVIEW</p><h2>疑似重复客户核验</h2></div><span id="duplicateReviewCount" class="panel-note"></span></div><div id="duplicateReviewTable" class="data-table"></div></article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
         </section>
@@ -658,12 +657,32 @@
 
       <section id="protectedCustomersView" class="view protected-customers-view">
         <div class="section-intro protected-intro">
-          <div><p class="eyebrow">PROTECTED CUSTOMERS</p><h2>合作客户保护</h2><p>管理保护名单、稳定客户编号和身份冲突。Alpha 昵称只在本管理员工作区显示。</p></div>
+          <div><p class="eyebrow">CUSTOMER IDENTITY</p><h2>客户保护与查重</h2><p>在同一工作区处理客户身份保护、疑似重复核验与可审计的身份结论。</p></div>
           <div class="protected-intro-actions">
             <button id="protectedTemplateBtn" class="button secondary" type="button">下载导入模板</button>
             <button id="protectedExportBtn" class="button secondary" type="button">导出身份映射</button>
           </div>
         </div>
+
+        <article id="duplicateReviewPanel" class="panel duplicate-review-panel hidden">
+          <div class="panel-head">
+            <div><p class="eyebrow">DUPLICATE REVIEW</p><h2>疑似重复客户核验</h2><p>对照员工提交与已有客户资料；相似度只供参考，所有结论保留审计。</p></div>
+            <div class="duplicate-review-head-actions">
+              <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
+              <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
+            </div>
+          </div>
+          <div id="duplicateReviewStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
+          <div id="duplicateReviewBulkBar" class="duplicate-review-bulk-bar">
+            <label><input id="duplicateReviewSelectAll" type="checkbox"> 选择当前页全部待核验</label>
+            <span id="duplicateReviewSelectedCount">已选 0 条</span>
+            <button id="duplicateReviewBulkDistinct" class="button primary" type="button" disabled>批量确认不是同一客户</button>
+          </div>
+          <div id="duplicateReviewList" class="duplicate-review-list"><div class="empty">进入页面后加载待核验记录</div></div>
+          <div id="duplicateReviewPagination" class="shared-pagination" data-pagination="duplicate_reviews"></div>
+        </article>
+
+        <div id="protectedAdminWorkspace">
         <div id="protectedWriteGate" class="protected-gate" role="status" aria-live="polite">正在读取保护客户状态…</div>
 
         <article class="panel protected-list-panel">
@@ -711,6 +730,7 @@
           <div id="protectedConflictList" class="protected-conflict-list"><div class="empty">进入页面后加载身份冲突</div></div>
           <div id="protectedConflictPagination" class="shared-pagination" data-pagination="protected_conflicts" aria-label="身份冲突分页"></div>
         </article>
+        </div>
       </section>
 
       <section id="maintenanceView" class="view">
@@ -758,6 +778,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260803-issue210-customer-controls"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260803-issue207-impersonation-actions"></script>
+  <script src="/sales-assets/app.js?v=20260804-issue208-duplicate-review"></script>
 </body>
 </html>

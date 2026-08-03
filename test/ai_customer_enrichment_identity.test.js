@@ -104,11 +104,13 @@ function fixture() {
     );
     CREATE TABLE customer_pool (
       customer_id TEXT PRIMARY KEY, company_name TEXT NOT NULL DEFAULT '',
-      country TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT ''
+      country TEXT NOT NULL DEFAULT '', city TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '',
+      industry TEXT NOT NULL DEFAULT '', customer_type TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE crm_accounts (
       id TEXT PRIMARY KEY, external_customer_id TEXT, company_name TEXT NOT NULL DEFAULT '',
-      country TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '', city TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '',
+      industry TEXT NOT NULL DEFAULT '', customer_type TEXT NOT NULL DEFAULT '',
       owner_id TEXT, assignment_status TEXT NOT NULL DEFAULT ''
     );
   `);
@@ -176,15 +178,15 @@ test('domain and company normalization find exact URL/name duplicates', t => {
 
   assert.equal(canonicalDomain('HTTP://EXAMPLE.com:80/path?utm_source=x'), 'example.com');
   assert.equal(normalizeCompanyName('  ACME—Technology, LLC '), 'acme technology llc');
-  assert.deepEqual(findExactDuplicate(fx.db, {
+  const exact = findExactDuplicate(fx.db, {
     companyName: 'Different',
     website: 'https://example.com/contact',
-  }), {
-    customerId: 'CUST-1',
-    crmAccountId: 'ACC-1',
-    companyName: 'Acme Technology',
-    matchedBy: 'domain',
   });
+  assert.equal(exact.customerId, 'CUST-1');
+  assert.equal(exact.crmAccountId, 'ACC-1');
+  assert.equal(exact.companyName, 'Acme Technology');
+  assert.equal(exact.matchedBy, 'domain');
+  assert.equal(exact.reliableEvidence[0].kind, 'registrable_domain');
   assert.equal(findExactDuplicate(fx.db, {
     companyName: 'ACME TECHNOLOGY',
     website: '',
@@ -194,12 +196,14 @@ test('domain and company normalization find exact URL/name duplicates', t => {
 test('fuzzy duplicate candidates are deterministic and never mutate or merge records', t => {
   const fx = fixture();
   t.after(() => fx.close());
-  fx.db.prepare("UPDATE customer_pool SET website='https://acme-tech.example' WHERE customer_id='CUST-1'").run();
+  fx.db.prepare(`UPDATE customer_pool SET website='https://acme-tech.example',country='Germany',
+    city='Dresden',industry='Precision motion control' WHERE customer_id='CUST-1'`).run();
   const before = fx.db.prepare('SELECT * FROM customer_pool WHERE customer_id=?').get('CUST-1');
 
   const candidates = findFuzzyDuplicateCandidates(fx.db, {
     companyName: 'Acme Technologies',
     website: 'https://acmetech.example',
+    country: 'Germany', city: 'Dresden', industry: 'Precision motion control',
   });
 
   assert.equal(candidates[0].customerId, 'CUST-1');

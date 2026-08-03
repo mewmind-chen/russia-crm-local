@@ -342,8 +342,8 @@ test('conflict rescan returns the established blocking gate and is protected by 
   assert.equal((await blocked.json()).code, 'PROTECTED_CUSTOMER_WRITES_DISABLED');
 });
 
-test('admin workspace exposes the complete lifecycle and hides its entry by named permission', () => {
-  assert.match(html, /data-view="protectedCustomers"[^>]*data-permission="manage_protected_customers"/);
+test('combined identity workspace keeps the protected lifecycle behind its named permission', () => {
+  assert.match(html, /data-view="protectedCustomers"[^>]*>[\s\S]*?客户保护与查重/);
   assert.match(html, /id="protectedCustomersView"[^>]*class="[^"]*view/);
   assert.match(app, /protectedCustomers:\s*\{/);
   const protectedState = app.slice(
@@ -352,7 +352,8 @@ test('admin workspace exposes the complete lifecycle and hides its entry by name
   );
   assert.match(protectedState, /\berror\b/);
   assert.match(protectedState, /\bpendingAction\b/);
-  assert.match(app, /protectedCustomers:\s*['"]manage_protected_customers['"]/);
+  assert.match(app, /function canAccessProtectionAndDedupe\(/);
+  assert.match(app, /protectedAdminWorkspace[^\n]*canManageProtectedCustomers/);
   assert.match(html, /id="protectedCsvInput"[^>]*type="file"[^>]*accept="[^"]*\.csv/);
   assert.match(app, /function parseProtectedCustomerCsv\(/);
   assert.match(app, /function loadProtectedCustomerCsv\(/);
@@ -376,7 +377,7 @@ test('admin workspace exposes the complete lifecycle and hides its entry by name
     assert.ok(app.includes(endpoint), endpoint);
   }
   for (const operation of [
-    '合作客户保护', '下载导入模板', '预览', '冲突', '关联已有', '确认新建',
+    '客户保护与查重', '下载导入模板', '预览', '冲突', '关联已有', '确认新建',
     '补充资料', '重新扫描', '提交', '激活', '回滚', '导出身份映射',
   ]) {
     assert.ok(frontend.includes(operation), operation);

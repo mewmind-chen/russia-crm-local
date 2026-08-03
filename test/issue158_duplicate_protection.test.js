@@ -38,18 +38,25 @@ test('fuzzy duplicate enters management review, then a distinct decision permits
   const fx = await adminFixture();
   t.after(() => fx.close());
   fx.setUserPermissions('U-OTHER', { create_customer: true });
+  fx.db.prepare(`UPDATE customer_pool SET country='俄罗斯',city='莫斯科',industry='工业自动化'
+    WHERE customer_id='RU-9002'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET country='俄罗斯',city='莫斯科',industry='工业自动化'
+    WHERE id='CRM-OWN'`).run();
 
   const pending = await fx.request('/api/sales-crm/accounts', {
     cookie: fx.otherCookie,
     method: 'POST',
     body: {
-      companyName: 'Owned Fixturex', country: '俄罗斯', idempotencyKey: 'fuzzy-first',
+      companyName: 'Owned Fixturex', country: '俄罗斯', city: '莫斯科', industry: '工业自动化',
+      idempotencyKey: 'fuzzy-first',
     },
   });
   const pendingBody = await pending.json();
   assert.equal(pending.status, 202);
-  assert.equal(pendingBody.reviewRequired, true);
-  assert.equal(pendingBody.message, '资料已提交管理层核验。');
+  assert.equal(pendingBody.accepted, true);
+  assert.equal(pendingBody.message, '资料已提交，系统将继续处理。');
+  assert.equal('reviewRequired' in pendingBody, false);
+  assert.equal('reviewId' in pendingBody, false);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts WHERE company_name=?').get('Owned Fixturex').count, 0);
 
   const salesReviews = await fx.request('/api/sales-crm/duplicate-reviews', { cookie: fx.otherCookie });
@@ -58,7 +65,7 @@ test('fuzzy duplicate enters management review, then a distinct decision permits
   const managerReviews = await fx.request('/api/sales-crm/duplicate-reviews', { cookie: fx.adminCookie });
   const managerBody = await managerReviews.json();
   assert.equal(managerReviews.status, 200);
-  const review = managerBody.reviews.find(item => item.id === pendingBody.reviewId);
+  const review = managerBody.reviews.find(item => item.input.companyName === 'Owned Fixturex');
   assert.ok(review);
   assert.equal(review.candidates[0].customerId, 'RU-9002');
   assert.equal(review.candidates[0].ownerId, 'U-MGR');
@@ -71,11 +78,23 @@ test('fuzzy duplicate enters management review, then a distinct decision permits
   assert.equal(resolved.status, 200);
   assert.equal((await resolved.json()).review.status, 'confirmed_distinct');
 
+  const changedIdentity = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.otherCookie,
+    method: 'POST',
+    body: {
+      companyName: 'Owned Fixturex', country: '俄罗斯', city: '圣彼得堡', industry: '工业自动化',
+      idempotencyKey: 'fuzzy-changed-city',
+    },
+  });
+  assert.equal(changedIdentity.status, 202);
+  assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_duplicate_reviews
+    WHERE status='pending' AND input_json LIKE '%圣彼得堡%'`).get().count, 1);
+
   const created = await fx.request('/api/sales-crm/accounts', {
     cookie: fx.otherCookie,
     method: 'POST',
     body: {
-      companyName: 'Owned Fixturex', country: '俄罗斯', duplicateReviewId: review.id,
+      companyName: 'Owned Fixturex', country: '俄罗斯', city: '莫斯科', industry: '工业自动化',
       idempotencyKey: 'fuzzy-approved',
     },
   });
@@ -83,6 +102,11 @@ test('fuzzy duplicate enters management review, then a distinct decision permits
   assert.equal(created.status, 200, createdBody.error);
   assert.equal(createdBody.externalCustomerId.startsWith('RU-'), true);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts WHERE company_name=?').get('Owned Fixturex').count, 1);
+  assert.deepEqual(fx.db.prepare(`SELECT created_account_id,created_external_customer_id
+    FROM crm_duplicate_reviews WHERE id=?`).get(review.id), {
+    created_account_id: createdBody.customerId,
+    created_external_customer_id: createdBody.externalCustomerId,
+  });
 });
 
 test('manual create idempotency returns the same customer and intake fuzzy protection blocks assignment', async t => {

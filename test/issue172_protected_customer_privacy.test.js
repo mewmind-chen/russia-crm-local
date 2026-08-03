@@ -95,26 +95,22 @@ test('protected exact matches expose only a non-sensitive protection flag', t =>
   assert.doesNotMatch(JSON.stringify(match), /Alpha Hidden/i);
 });
 
-test('protected fuzzy matches redact the Alpha name while normal matches keep their shape', t => {
+test('unsupported protected fuzzy names do not create reviews and exact matches stay safe', t => {
   const db = fixture();
   t.after(() => db.close());
 
-  const protectedMatch = findFuzzyDuplicateCandidates(db, {
+  const protectedMatches = findFuzzyDuplicateCandidates(db, {
     companyName: 'Alpha Hiddens',
-  }, { crmOnly: true, includeProtected: true, threshold: 0.7 })
-    .find(row => row.isProtected);
-  assert.ok(protectedMatch);
-  assert.equal(protectedMatch.companyName, '');
-  assert.doesNotMatch(JSON.stringify(protectedMatch), /Alpha Hidden/i);
+  }, { crmOnly: true, includeProtected: true, threshold: 0.7 });
+  assert.deepEqual(protectedMatches, []);
 
-  assert.deepEqual(findExactDuplicate(db, {
+  const exact = findExactDuplicate(db, {
     companyName: 'Normal Alias',
-  }), {
-    customerId: 'N-1',
-    crmAccountId: 'CRM-N',
-    companyName: 'Normal Official',
-    matchedBy: 'name',
   });
+  assert.equal(exact.customerId, 'N-1');
+  assert.equal(exact.crmAccountId, 'CRM-N');
+  assert.equal(exact.companyName, 'Normal Official');
+  assert.equal(exact.matchedBy, 'name');
 });
 
 test('committed protected customers stay out of every ordinary API and return generic duplicate conflicts', async t => {

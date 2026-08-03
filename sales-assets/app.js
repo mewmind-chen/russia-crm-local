@@ -208,6 +208,13 @@
       conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
       conflictsLoading: false, conflictsError: '', conflictPendingId: '',
     },
+    duplicateReviews: {
+      items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
+      loaded: false, loading: false, error: '', pendingAction: '',
+      requestEpoch: 0,
+      selectedIds: new Set(), searchOpenId: '', searchResults: {},
+      searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
+    },
     assistantRuntime: null,
     assistantRuntimeError: '',
     assistantRuntimePending: false,
@@ -250,7 +257,7 @@
     team: ['TEAM STATUS', '团队状态'],
     markets: ['MARKET INTELLIGENCE', '市场策略'],
     users: ['ACCESS CONTROL', '用户与权限'],
-    protectedCustomers: ['PROTECTED CUSTOMERS', '合作客户保护'],
+    protectedCustomers: ['CUSTOMER IDENTITY', '客户保护与查重'],
     maintenance: ['DATA MAINTENANCE', '数据维护'],
   };
   const viewPermissions = {
@@ -260,7 +267,7 @@
     notifications: 'view_customers',
     activityCorrections: 'manage_activity_corrections',
     team: 'view_customers',
-    aiTasks: 'view_customers', protectedCustomers: 'manage_protected_customers', maintenance: 'manage_data_maintenance',
+    aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
     note: ['记录', '记'], qualification: ['资格判断', '筛'], email: ['发送邮件', '邮'], call: ['电话开发', '电'],
@@ -350,6 +357,12 @@
   }
   function canManageProtectedCustomers() {
     return isRealAdmin() && can('manage_protected_customers');
+  }
+  function canReviewDuplicateCustomers() {
+    return !state.data?.impersonation && can('view_all_customers') && can('manage_intake');
+  }
+  function canAccessProtectionAndDedupe() {
+    return canManageProtectedCustomers() || canReviewDuplicateCustomers();
   }
   function normalizeTagText(value) {
     return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
@@ -1259,8 +1272,9 @@
     return Object.keys(viewMeta).find(view =>
       !['aiTasks', 'customerProfile'].includes(view)
       && identityInspectionAllowsView(view)
-      && (view !== 'protectedCustomers' || canManageProtectedCustomers())
-      && can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
+      && (view !== 'protectedCustomers'
+        ? can(viewPermissions[view] || `view_${view}`)
+        : canAccessProtectionAndDedupe())) || 'dashboard';
   }
 
   async function load({ fromLogin = false } = {}) {
@@ -1297,6 +1311,11 @@
         leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
           conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
         conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+      });
+      Object.assign(state.duplicateReviews, {
+        items: [], total: 0, page: 1, totalPages: 0, loaded: false, loading: false,
+        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '',
+        searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
       clearTimeout(state.managerAnomalies.timer);
       Object.assign(state.managerAnomalies, {
@@ -1335,13 +1354,16 @@
         : viewPermissions[requestedView] || `view_${requestedView}`;
       state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
       const firstAllowedView = customerAIEnabled() && can('view_customers')
-        ? Object.keys(viewMeta).find(view => (view !== 'protectedCustomers' || canManageProtectedCustomers())
-          && identityInspectionAllowsView(view)
-          && can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
+        ? Object.keys(viewMeta).find(view => identityInspectionAllowsView(view)
+          && (view !== 'protectedCustomers'
+            ? can(viewPermissions[view] || `view_${view}`)
+            : canAccessProtectionAndDedupe())) || 'dashboard'
         : firstAllowedBusinessView();
-      const requestedAllowed = viewMeta[requestedView] && can(requestedPermission)
+      const requestedAllowed = viewMeta[requestedView]
         && identityInspectionAllowsView(requestedView)
-        && (requestedView !== 'protectedCustomers' || canManageProtectedCustomers());
+        && (requestedView !== 'protectedCustomers'
+          ? can(requestedPermission)
+          : canAccessProtectionAndDedupe());
       switchView(requestedAllowed ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
         if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId);
@@ -1370,7 +1392,7 @@
     $$('[data-permission]').forEach(el => el.classList.toggle('hidden', !can(el.dataset.permission)));
     $('#nav [data-view="activityCorrections"]')?.classList.toggle('hidden',
       !can('manage_activity_corrections') || Boolean(state.data.impersonation));
-    $('#nav [data-view="protectedCustomers"]')?.classList.toggle('hidden', !canManageProtectedCustomers());
+    $('#nav [data-view="protectedCustomers"]')?.classList.toggle('hidden', !canAccessProtectionAndDedupe());
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
@@ -5026,22 +5048,6 @@
         `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`,
       ]),
     );
-    const duplicateReviews = state.data.duplicateReviews || [];
-    $('#duplicateReviewCount').textContent = `${duplicateReviews.length} 条待核验`;
-    $('#duplicateReviewTable').innerHTML = table(
-      ['员工提交', '疑似已有客户', '匹配依据', '操作'],
-      duplicateReviews.map(review => {
-        const candidates = review.candidates || [];
-        return [
-          `<div class="company-cell"><strong>${esc(review.input?.companyName || '未填公司名')}</strong><span>${esc(review.input?.website || '未填官网')} · ${esc(review.input?.country || '未填国家')}</span></div>`,
-          `<select data-duplicate-review-candidate="${esc(review.id)}">${candidates.map(candidate => `<option value="${esc(candidate.customerId)}">${esc(candidate.companyName)} · ${esc(candidate.ownerName || '未分配')} · ${esc(stageLabel(candidate.customerStage))}</option>`).join('')}</select>`,
-          candidates.map(candidate => `${candidate.matchedBy === 'fuzzy_domain' ? '官网域名相似' : '公司名称相似'} ${Math.round(Number(candidate.score || 0) * 100)}%`).join('<br>'),
-          canMutate
-            ? `<div class="assignment-actions"><button class="text-button danger-text" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_same">确认同一客户</button><button class="text-button" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_distinct">确认不是同一客户</button></div>`
-            : '<span class="subtle">无变更权限</span>',
-        ];
-      }),
-    );
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
     $('#migrationReviewCount').textContent = `${state.data.migrationReview?.length || 0} 条待确认`;
     $('#migrationReviewTable').innerHTML = table(
@@ -5673,8 +5679,317 @@
     }).join('');
   }
 
+  function duplicateEvidenceMarkup(candidate) {
+    const reliable = Array.isArray(candidate?.reliableEvidence) ? candidate.reliableEvidence : [];
+    const references = Array.isArray(candidate?.referenceSignals) ? candidate.referenceSignals : [];
+    if (!reliable.length && !references.length) {
+      return '<span class="pill amber">历史规则候选，建议先重算</span>';
+    }
+    return `${reliable.length ? `<div class="duplicate-evidence-group"><span>可靠证据</span><div>${reliable.map(item => `<span class="pill green">${esc(item.label || item.kind)}${item.value ? ` · ${esc(item.value)}` : ''}</span>`).join('')}</div></div>` : ''}
+      ${references.length ? `<div class="duplicate-evidence-group"><span>仅供参考</span><div>${references.map(item => `<span class="pill gray">${esc(item.label || item.kind)}${item.value ? ` · ${esc(item.value)}` : ''}</span>`).join('')}</div></div>` : ''}`;
+  }
+
+  function duplicateFacts(items) {
+    return `<dl class="duplicate-review-facts">${items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${value || '<span class="tp-empty-value">—</span>'}</dd></div>`).join('')}</dl>`;
+  }
+
+  function renderDuplicateReviews() {
+    const panel = $('#duplicateReviewPanel');
+    const root = $('#duplicateReviewList');
+    if (!panel || !root) return;
+    const allowed = canReviewDuplicateCustomers();
+    panel.classList.toggle('hidden', !allowed);
+    if (!allowed) return;
+    const model = state.duplicateReviews;
+    const mutationPending = Boolean(model.pendingAction);
+    const interactionPending = mutationPending || model.loading;
+    const selected = model.selectedIds;
+    const visibleIds = new Set(model.items.map(item => item.id));
+    for (const reviewId of [...selected]) if (!visibleIds.has(reviewId)) selected.delete(reviewId);
+    const selectableItems = model.items.filter(item => !item.protectedExact);
+    for (const reviewId of [...selected]) {
+      if (!selectableItems.some(item => item.id === reviewId)) selected.delete(reviewId);
+    }
+    $('#duplicateReviewStatus').textContent = model.error
+      || (model.loading ? '正在读取待核验记录…' : model.loaded ? `待处理 ${model.total} 条` : '');
+    $('#duplicateReviewStatus').className = `protected-inline-status${model.error ? ' error' : model.loading ? ' pending' : model.loaded ? ' success' : ''}`;
+    $('#duplicateReviewSelectedCount').textContent = `已选 ${selected.size} 条`;
+    $('#duplicateReviewBulkDistinct').disabled = !selected.size || interactionPending;
+    $('#duplicateReviewSelectAll').checked = Boolean(selectableItems.length)
+      && selectableItems.every(item => selected.has(item.id));
+    $('#duplicateReviewSelectAll').indeterminate = selected.size > 0 && !$('#duplicateReviewSelectAll').checked;
+    $('#duplicateReviewSelectAll').disabled = interactionPending || !selectableItems.length;
+    $('#duplicateReviewRecalculate').disabled = Boolean(model.pendingAction || model.loading);
+    $('#duplicateReviewRefresh').disabled = interactionPending;
+    renderPagination('#duplicateReviewPagination', 'duplicate_reviews', {
+      page: model.page, pageSize: model.pageSize, total: model.total, loading: model.loading,
+    }, ({ page, pageSize }) => {
+      model.pageSize = pageSize || model.pageSize;
+      void loadDuplicateReviews({ page: page || 1 });
+    });
+    if (model.loading && !model.items.length) {
+      root.innerHTML = '<div class="empty">正在加载待核验记录…</div>';
+      return;
+    }
+    if (model.error && !model.items.length) {
+      root.innerHTML = '<div class="empty">核验记录加载失败，请刷新重试。</div>';
+      return;
+    }
+    if (!model.items.length) {
+      root.innerHTML = '<div class="empty">当前没有待核验客户</div>';
+      return;
+    }
+    root.innerHTML = model.items.map(review => {
+      const input = review.input || {};
+      const candidate = review.selectedCandidate || {};
+      const searchOpen = model.searchOpenId === review.id;
+      const searchResults = model.searchResults[review.id] || [];
+      const searchQuery = model.searchQueries[review.id] || '';
+      const activeSearchIndex = Number(model.searchActiveIndexes[review.id] ?? -1);
+      const searchListId = `duplicate-candidate-results-${review.id}`;
+      const protectedExact = review.protectedExact === true;
+      return `<section class="duplicate-review-item" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
+        <header class="duplicate-review-item-head">
+          <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
+          <div><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>提交人 ${esc(review.submittedByName || review.submittedBy || '—')} · ${esc(shortDate(review.createdAt, true))}</span></div>
+          <span class="pill">规则 ${esc(review.evaluatedRuleVersion || 'legacy-v1')}</span>
+        </header>
+        <div class="duplicate-review-comparison">
+          <section class="duplicate-review-side submitted">
+            <div class="duplicate-review-side-title"><span>员工新提交</span><strong>${esc(input.companyName || '未填写公司名称')}</strong></div>
+            ${duplicateFacts([
+              ['官网', websiteMarkup(input.website)],
+              ['国家 / 城市', esc([input.country, input.city].filter(Boolean).join(' · ') || '—')],
+              ['行业', esc(input.industry || '—')],
+              ['来源', esc(input.source || '—')],
+            ])}
+          </section>
+          <section class="duplicate-review-side existing">
+            <div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(protectedExact ? '保护客户精确命中（详情受限）' : candidate.nickname || candidate.companyName || '候选已失效')}</strong></div>
+            ${duplicateFacts([
+              ['正式名称', esc(candidate.companyName || '—')],
+              ['官网', websiteMarkup(candidate.website)],
+              ['客户编号', esc(candidate.customerId || '—')],
+              ['国家 / 城市', esc([candidate.country, candidate.city].filter(Boolean).join(' · ') || '—')],
+              ['负责人 / 阶段', esc(`${candidate.ownerName || '未分配'} · ${stageLabel(candidate.customerStage)}`)],
+              ['行业', esc(candidate.industry || '—')],
+            ])}
+            <button class="text-button" type="button" data-toggle-duplicate-search="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>更换疑似客户</button>
+            <div class="duplicate-candidate-search ${searchOpen ? '' : 'hidden'}">
+              <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索名称、昵称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
+              <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span><span>${esc(uiFormat.website(item.website)?.label || '暂无官网')}</span></button>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
+            </div>
+          </section>
+        </div>
+        <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
+        <footer class="duplicate-review-actions">
+          <button class="button secondary danger" type="button" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}>确认同一客户</button>
+          <button class="button primary" type="button" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>确认不是同一客户</button>
+        </footer>
+      </section>`;
+    }).join('');
+  }
+
+  async function loadDuplicateReviews({ page } = {}) {
+    if (!canReviewDuplicateCustomers()) return;
+    const model = state.duplicateReviews;
+    const epoch = model.requestEpoch + 1;
+    model.requestEpoch = epoch;
+    model.loading = true;
+    model.error = '';
+    renderDuplicateReviews();
+    try {
+      const targetPage = Math.max(1, Number(page || model.page || 1));
+      const result = await api(`/api/sales-crm/duplicate-reviews?${new URLSearchParams({
+        status: 'pending', page: String(targetPage), pageSize: String(model.pageSize),
+      })}`);
+      if (model.requestEpoch !== epoch) return;
+      model.items = result.reviews || [];
+      model.total = Number(result.total || 0);
+      model.page = Number(result.page || targetPage);
+      model.pageSize = Number(result.pageSize || model.pageSize);
+      model.totalPages = Number(result.totalPages || 0);
+      model.loaded = true;
+    } catch (error) {
+      if (model.requestEpoch === epoch) model.error = error.message || '核验记录加载失败';
+    } finally {
+      if (model.requestEpoch === epoch) {
+        model.loading = false;
+        renderDuplicateReviews();
+      }
+    }
+  }
+
+  function restoreDuplicateSearchFocus(reviewId) {
+    requestAnimationFrame(() => {
+      const input = document.querySelector(
+        `[data-duplicate-candidate-search="${CSS.escape(reviewId)}"]`,
+      );
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange?.(input.value.length, input.value.length);
+    });
+  }
+
+  function invalidateDuplicateCandidateSearch(reviewId) {
+    const model = state.duplicateReviews;
+    clearTimeout(model.searchTimers[reviewId]);
+    delete model.searchTimers[reviewId];
+    model.requestEpochs[reviewId] = Number(model.requestEpochs[reviewId] || 0) + 1;
+  }
+
+  function searchDuplicateCandidates(reviewId, query) {
+    const model = state.duplicateReviews;
+    clearTimeout(model.searchTimers[reviewId]);
+    const text = String(query || '');
+    const epoch = Number(model.requestEpochs[reviewId] || 0) + 1;
+    model.requestEpochs[reviewId] = epoch;
+    model.searchQueries[reviewId] = text;
+    model.searchActiveIndexes[reviewId] = -1;
+    if (text.trim().length < 2) {
+      model.searchResults[reviewId] = [];
+      renderDuplicateReviews();
+      restoreDuplicateSearchFocus(reviewId);
+      return;
+    }
+    model.searchTimers[reviewId] = setTimeout(async () => {
+      try {
+        const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/candidates?q=${encodeURIComponent(text.trim())}`);
+        if (model.requestEpochs[reviewId] !== epoch) return;
+        model.searchResults[reviewId] = result.candidates || [];
+        model.searchActiveIndexes[reviewId] = -1;
+        renderDuplicateReviews();
+        restoreDuplicateSearchFocus(reviewId);
+      } catch (error) {
+        if (model.requestEpochs[reviewId] === epoch) toast(error.message);
+      }
+    }, 250);
+  }
+
+  async function chooseDuplicateCandidate(reviewId, customerId) {
+    const model = state.duplicateReviews;
+    if (model.pendingAction || model.loading) return;
+    invalidateDuplicateCandidateSearch(reviewId);
+    model.pendingAction = reviewId;
+    renderDuplicateReviews();
+    try {
+      const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/candidate`, {
+        method: 'PATCH', body: JSON.stringify({ customerId }),
+      });
+      const index = model.items.findIndex(item => item.id === reviewId);
+      if (index >= 0) model.items[index] = result.review;
+      model.searchOpenId = '';
+      model.searchResults[reviewId] = [];
+      model.searchQueries[reviewId] = '';
+      model.searchActiveIndexes[reviewId] = -1;
+      toast('疑似客户已更换并记录审计');
+    } finally {
+      if (model.pendingAction === reviewId) model.pendingAction = '';
+      renderDuplicateReviews();
+    }
+  }
+
+  function focusDuplicateReview(index = 0) {
+    const model = state.duplicateReviews;
+    requestAnimationFrame(() => {
+      const rows = $$('[data-duplicate-review-item]');
+      rows[Math.min(Math.max(0, index), Math.max(0, rows.length - 1))]?.focus();
+    });
+  }
+
+  async function reloadDuplicateReviewsAfterMutation(preferredIndex = 0) {
+    const model = state.duplicateReviews;
+    await loadDuplicateReviews({ page: model.page });
+    const lastPage = Math.max(1, model.totalPages || 1);
+    if (model.page > lastPage) await loadDuplicateReviews({ page: lastPage });
+    return preferredIndex;
+  }
+
+  async function resolveDuplicateReviewAction(reviewId, resolution, candidateCustomerId = '') {
+    const model = state.duplicateReviews;
+    if (model.pendingAction || model.loading) return;
+    if (resolution === 'confirmed_same'
+        && !window.confirm('确认双方为同一客户？该结论会阻止新客户进入业务流程，但不会覆盖已有客户资料。')) return;
+    const preferredIndex = Math.max(0, model.items.findIndex(item => item.id === reviewId));
+    let shouldFocus = false;
+    model.pendingAction = reviewId;
+    renderDuplicateReviews();
+    try {
+      const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
+        method: 'POST', body: JSON.stringify({ resolution, candidateCustomerId }),
+      });
+      model.selectedIds.delete(reviewId);
+      toast(result.deduplicated
+        ? '该记录已由其他操作处理，列表已刷新'
+        : resolution === 'confirmed_same' ? '已确认同一客户' : '已确认不是同一客户并放行');
+      await reloadDuplicateReviewsAfterMutation(preferredIndex);
+      shouldFocus = true;
+    } finally {
+      if (model.pendingAction === reviewId) {
+        model.pendingAction = '';
+        renderDuplicateReviews();
+        if (shouldFocus) focusDuplicateReview(preferredIndex);
+      }
+    }
+  }
+
+  async function bulkResolveDuplicateDistinctAction() {
+    const model = state.duplicateReviews;
+    if (model.pendingAction || model.loading) return;
+    const reviewIds = [...model.selectedIds];
+    if (!reviewIds.length) return;
+    if (!window.confirm(`确认将选中的 ${reviewIds.length} 条全部判定为“不是同一客户”并放行？`)) return;
+    const preferredIndex = Math.max(0, model.items.findIndex(item => reviewIds.includes(item.id)));
+    let shouldFocus = false;
+    model.pendingAction = 'bulk-distinct';
+    renderDuplicateReviews();
+    try {
+      const result = await api('/api/sales-crm/duplicate-reviews/bulk-distinct', {
+        method: 'POST', body: JSON.stringify({ reviewIds }),
+      });
+      reviewIds.forEach(reviewId => model.selectedIds.delete(reviewId));
+      toast(`已新放行 ${result.resolvedCount} 条${result.deduplicatedCount ? `，${result.deduplicatedCount} 条此前已处理` : ''}`);
+      await reloadDuplicateReviewsAfterMutation(preferredIndex);
+      shouldFocus = true;
+    } finally {
+      if (model.pendingAction === 'bulk-distinct') {
+        model.pendingAction = '';
+        renderDuplicateReviews();
+        if (shouldFocus) focusDuplicateReview(preferredIndex);
+      }
+    }
+  }
+
+  async function recalculateDuplicateReviewAction() {
+    const model = state.duplicateReviews;
+    if (model.pendingAction || model.loading) return;
+    if (!window.confirm('按当前规则重新计算全部待核验记录？无可靠候选会自动放行，但不会合并、删除或覆盖客户主档。')) return;
+    model.pendingAction = 'recalculate';
+    let shouldFocus = false;
+    renderDuplicateReviews();
+    try {
+      const result = await api('/api/sales-crm/duplicate-reviews/recalculate', {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      toast(`重算完成：放行 ${result.releasedCount} 条，保留人工核验 ${result.retainedCount} 条`);
+      model.selectedIds.clear();
+      await loadDuplicateReviews({ page: 1 });
+      shouldFocus = true;
+    } finally {
+      if (model.pendingAction === 'recalculate') {
+        model.pendingAction = '';
+        renderDuplicateReviews();
+        if (shouldFocus) focusDuplicateReview(0);
+      }
+    }
+  }
+
   function renderProtectedWorkspace() {
-    if (!$('#protectedCustomersView') || !canManageProtectedCustomers()) return;
+    if (!$('#protectedCustomersView') || !canAccessProtectionAndDedupe()) return;
+    $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManageProtectedCustomers());
+    $$('.protected-intro-actions').forEach(root => root.classList.toggle('hidden', !canManageProtectedCustomers()));
+    renderDuplicateReviews();
+    if (!canManageProtectedCustomers()) return;
     renderProtectedWriteGate();
     renderProtectedCustomers();
     renderProtectedBatch();
@@ -5766,8 +6081,11 @@
   }
 
   async function loadProtectedWorkspace() {
-    if (!canManageProtectedCustomers()) return;
-    await Promise.all([loadProtectedCustomers(), loadProtectedConflicts()]);
+    if (!canAccessProtectionAndDedupe()) return;
+    await Promise.all([
+      ...(canReviewDuplicateCustomers() ? [loadDuplicateReviews()] : []),
+      ...(canManageProtectedCustomers() ? [loadProtectedCustomers(), loadProtectedConflicts()] : []),
+    ]);
   }
 
   async function previewProtectedBatch() {
@@ -9140,9 +9458,9 @@
         payload.nextActionAt = apiTime(payload.nextActionAt);
         try {
           const result = await api('/api/sales-crm/accounts', { method: 'POST', body: JSON.stringify(payload) });
-          if (result.reviewRequired) {
+          if (result.reviewRequired || result.accepted) {
             closeModal();
-            await refresh(result.message || '资料已提交管理层核验。');
+            await refresh(result.message || '资料已提交，系统将继续处理。');
             return;
           }
           const enrichmentState = result.enrichment?.state === 'pending_dispatch'
@@ -10227,25 +10545,47 @@
       try { await stopIdentityInspection(); }
       catch (error) { toast(error.message); }
     }
-    const duplicateReview = event.target.closest('[data-duplicate-review]');
-    if (duplicateReview) {
-      const reviewId = duplicateReview.dataset.duplicateReview;
-      const resolution = duplicateReview.dataset.resolution;
-      const candidateCustomerId = document.querySelector(
-        `[data-duplicate-review-candidate="${CSS.escape(reviewId)}"]`,
-      )?.value || '';
-      const confirmed = window.confirm(resolution === 'confirmed_same'
-        ? '确认为同一客户后，本次新增或线索分配将被终止。继续？'
-        : '确认不是同一客户后，该资料将被放行。继续？');
-      if (confirmed) {
-        try {
-          await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
-            method: 'POST',
-            body: JSON.stringify({ resolution, candidateCustomerId }),
-          });
-          await refresh(resolution === 'confirmed_same' ? '已确认为同一客户' : '已放行为新客户');
-        } catch (error) { toast(error.message); }
+    const duplicateResolution = event.target.closest('[data-duplicate-resolution]');
+    if (duplicateResolution) {
+      try {
+        await resolveDuplicateReviewAction(
+          duplicateResolution.dataset.reviewId,
+          duplicateResolution.dataset.duplicateResolution,
+          duplicateResolution.dataset.candidateId || '',
+        );
+      } catch (error) { toast(error.message); }
+    }
+    const duplicateSearchToggle = event.target.closest('[data-toggle-duplicate-search]');
+    if (duplicateSearchToggle && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
+      const reviewId = duplicateSearchToggle.dataset.toggleDuplicateSearch;
+      if (state.duplicateReviews.searchOpenId) {
+        invalidateDuplicateCandidateSearch(state.duplicateReviews.searchOpenId);
       }
+      state.duplicateReviews.searchOpenId = state.duplicateReviews.searchOpenId === reviewId ? '' : reviewId;
+      renderDuplicateReviews();
+      requestAnimationFrame(() => document.querySelector(
+        `[data-duplicate-candidate-search="${CSS.escape(reviewId)}"]`,
+      )?.focus());
+    }
+    const duplicateCandidate = event.target.closest('[data-duplicate-candidate-result]');
+    if (duplicateCandidate && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
+      try {
+        await chooseDuplicateCandidate(
+          duplicateCandidate.dataset.duplicateCandidateResult,
+          duplicateCandidate.dataset.customerId,
+        );
+      } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#duplicateReviewRefresh')) {
+      if (!state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
+        void loadDuplicateReviews({ page: state.duplicateReviews.page });
+      }
+    }
+    if (event.target.closest('#duplicateReviewBulkDistinct')) {
+      try { await bulkResolveDuplicateDistinctAction(); } catch (error) { toast(error.message); }
+    }
+    if (event.target.closest('#duplicateReviewRecalculate')) {
+      try { await recalculateDuplicateReviewAction(); } catch (error) { toast(error.message); }
     }
     const resolveReview = event.target.closest('[data-resolve-review]');
     if (resolveReview) {
@@ -10377,10 +10717,9 @@
       const permission = canonicalView === 'customerProfile' && state.customerProfileReadOnly
       ? 'view_intake'
       : viewPermissions[view] || `view_${canonicalView}`;
-    if (!can(permission)) return toast('当前账号没有该模块权限');
-      if (canonicalView === 'protectedCustomers' && !canManageProtectedCustomers()) {
-        return toast('只有真实管理员可以管理合作客户保护');
-      }
+    if (canonicalView === 'protectedCustomers') {
+      if (!canAccessProtectionAndDedupe()) return toast('当前账号没有客户保护或查重权限');
+    } else if (!can(permission)) return toast('当前账号没有该模块权限');
       const viewChanged = state.view !== canonicalView;
       state.view = canonicalView;
       if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();
@@ -10450,7 +10789,9 @@
         void initializeActivityCorrectionProposalFilters({ force: viewChanged });
     }
     if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
-      if (canonicalView === 'protectedCustomers' && (viewChanged || !state.protectedCustomers.loaded)) {
+      if (canonicalView === 'protectedCustomers' && (viewChanged
+          || (canManageProtectedCustomers() && !state.protectedCustomers.loaded)
+          || (canReviewDuplicateCustomers() && !state.duplicateReviews.loaded))) {
         if (viewChanged) Object.assign(state.protectedCustomers, {
           query: '', status: 'all', page: 1, conflictStatus: 'unresolved', conflictPage: 1,
         });
@@ -10472,6 +10813,9 @@
 
   document.addEventListener('input', event => {
     if (event.target.matches('[data-protected-field]')) saveProtectedImportDraft();
+    if (event.target.matches('[data-duplicate-candidate-search]')) {
+      searchDuplicateCandidates(event.target.dataset.duplicateCandidateSearch, event.target.value);
+    }
     if (event.target.id === 'protectedSearch') {
       clearTimeout(state.protectedCustomers.searchTimer);
       state.protectedCustomers.searchTimer = setTimeout(() => {
@@ -10496,6 +10840,22 @@
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
+    if (event.target.matches('[data-duplicate-review-select]')) {
+      if (state.duplicateReviews.pendingAction || state.duplicateReviews.loading) return;
+      const reviewId = event.target.dataset.duplicateReviewSelect;
+      if (event.target.checked) state.duplicateReviews.selectedIds.add(reviewId);
+      else state.duplicateReviews.selectedIds.delete(reviewId);
+      renderDuplicateReviews();
+    }
+    if (event.target.id === 'duplicateReviewSelectAll') {
+      if (state.duplicateReviews.pendingAction || state.duplicateReviews.loading) return;
+      state.duplicateReviews.items.forEach(item => {
+        if (item.protectedExact) return;
+        if (event.target.checked) state.duplicateReviews.selectedIds.add(item.id);
+        else state.duplicateReviews.selectedIds.delete(item.id);
+      });
+      renderDuplicateReviews();
+    }
     if (event.target.id === 'protectedCsvInput') void loadProtectedCustomerCsv(event.target.files?.[0]);
         if (event.target.id === 'protectedStatus') {
           state.protectedCustomers.status = event.target.value;
@@ -10617,6 +10977,40 @@
         state.activityCustomerActiveIndex = -1;
         renderActivityCustomerResults();
         event.target.setAttribute('aria-expanded', 'false');
+        return;
+      }
+    }
+    const duplicateSearch = event.target.closest?.('[data-duplicate-candidate-search]');
+    if (duplicateSearch) {
+      const reviewId = duplicateSearch.dataset.duplicateCandidateSearch;
+      const rows = state.duplicateReviews.searchResults[reviewId] || [];
+      if (['ArrowDown', 'ArrowUp'].includes(event.key) && rows.length) {
+        event.preventDefault();
+        const current = Number(state.duplicateReviews.searchActiveIndexes[reviewId] ?? -1);
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        state.duplicateReviews.searchActiveIndexes[reviewId] = current < 0
+          ? (event.key === 'ArrowDown' ? 0 : rows.length - 1)
+          : (current + direction + rows.length) % rows.length;
+        renderDuplicateReviews();
+        restoreDuplicateSearchFocus(reviewId);
+        return;
+      }
+      if (event.key === 'Enter') {
+        const activeIndex = Number(state.duplicateReviews.searchActiveIndexes[reviewId] ?? -1);
+        if (rows[activeIndex]) {
+          event.preventDefault();
+          void chooseDuplicateCandidate(reviewId, rows[activeIndex].customerId)
+            .catch(error => toast(error.message));
+          return;
+        }
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        invalidateDuplicateCandidateSearch(reviewId);
+        state.duplicateReviews.searchOpenId = '';
+        state.duplicateReviews.searchActiveIndexes[reviewId] = -1;
+        renderDuplicateReviews();
+        document.querySelector(`[data-duplicate-review-item="${CSS.escape(reviewId)}"]`)?.focus();
         return;
       }
     }
