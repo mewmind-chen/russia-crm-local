@@ -109,8 +109,8 @@ test('override editor styles exist and asset versions are refreshed', () => {
   assert.match(js, /permission-override-row/);
   assert.match(css, /permission-override-row/);
   assert.match(css, /binary-permission-control/);
-  assert.match(html, /app\.css\?v=20260803-issue212-lead-pool/);
-  assert.match(html, /app\.js\?v=20260803-issue212-lead-pool/);
+  assert.match(html, /app\.css\?v=20260803-issue207-impersonation-actions/);
+  assert.match(html, /app\.js\?v=20260803-issue207-impersonation-actions/);
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });
@@ -138,7 +138,7 @@ test('inspection banner lives at the top of the main column without a dismiss co
   assert.match(css, /impersonation-banner/);
 });
 
-test('inspection flow renders countdown from server expiry and suppresses forbidden UI', () => {
+test('inspection flow renders countdown and suppresses security administration UI', () => {
   const js = readAsset('sales-assets', 'app.js');
   assert.match(js, /function renderImpersonationBanner/);
   assert.match(js, /function startIdentityInspection/);
@@ -147,6 +147,7 @@ test('inspection flow renders countdown from server expiry and suppresses forbid
   assert.match(js, /身份检查已结束，正在恢复管理员账号/);
   assert.match(js, /state\.data\.impersonation/);
   assert.match(js, /data-view="users"/);
+  assert.match(js, /data-view="maintenance"/);
 });
 
 test('impersonation action blocked responses keep business state intact', () => {
@@ -155,6 +156,7 @@ test('impersonation action blocked responses keep business state intact', () => 
   const apiMatch = js.match(/async function api\(url, options = \{\}\) \{[\s\S]*?\n  \}/);
   assert.ok(apiMatch, 'api helper found');
   assert.match(apiMatch[0], /error\.code\s*=\s*result\.code/);
+  assert.match(apiMatch[0], /身份检查期间禁止此安全操作/);
 });
 
 test('data maintenance UI is permission gated and requires preview before execute', () => {

@@ -239,6 +239,7 @@ button.metric.alert{background:var(--danger-subtle)}
 .impersonation-banner>div{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
 .impersonation-banner strong{font-size:13px}
 .impersonation-banner span{color:var(--lime);font-weight:800;font-size:12px;white-space:nowrap}
+.impersonation-banner small{flex-basis:100%;min-width:0;color:#dbe8e1;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
 .impersonation-banner .button.secondary{border-color:#36584a;background:transparent;color:#fff;white-space:nowrap}
 .impersonation-banner .button.secondary:hover{background:#214238}
 @media(max-width:780px){.impersonation-banner{flex-direction:column;align-items:stretch;text-align:center}.impersonation-banner>div{justify-content:center}.impersonation-banner .button{width:100%}}

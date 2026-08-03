@@ -788,7 +788,9 @@
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.ok === false) {
-        const error = new Error(result.error || '请求失败');
+        const error = new Error(result.code === 'IMPERSONATION_ACTION_BLOCKED'
+          ? '身份检查期间禁止此安全操作'
+          : result.error || '请求失败');
         error.status = response.status;
         error.code = result.code || '';
         error.details = result;
@@ -1248,10 +1250,15 @@
     }
   }
 
+  function identityInspectionAllowsView(view) {
+    return !state.data?.impersonation
+      || !['activityCorrections', 'users', 'maintenance', 'protectedCustomers'].includes(view);
+  }
+
   function firstAllowedBusinessView() {
     return Object.keys(viewMeta).find(view =>
       !['aiTasks', 'customerProfile'].includes(view)
-      && (view !== 'activityCorrections' || !state.data?.impersonation)
+      && identityInspectionAllowsView(view)
       && (view !== 'protectedCustomers' || canManageProtectedCustomers())
       && can(viewPermissions[view] || `view_${view}`)) || 'dashboard';
   }
@@ -1329,11 +1336,11 @@
       state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
       const firstAllowedView = customerAIEnabled() && can('view_customers')
         ? Object.keys(viewMeta).find(view => (view !== 'protectedCustomers' || canManageProtectedCustomers())
-          && (view !== 'activityCorrections' || !state.data?.impersonation)
+          && identityInspectionAllowsView(view)
           && can(viewPermissions[view] || `view_${view}`)) || 'dashboard'
         : firstAllowedBusinessView();
       const requestedAllowed = viewMeta[requestedView] && can(requestedPermission)
-        && (requestedView !== 'activityCorrections' || !state.data?.impersonation)
+        && identityInspectionAllowsView(requestedView)
         && (requestedView !== 'protectedCustomers' || canManageProtectedCustomers());
       switchView(requestedAllowed ? requestedView : firstAllowedView, false);
       if (requestedView === 'customerProfile') {
@@ -1367,15 +1374,29 @@
     if ($('#navIntakeLabel')) $('#navIntakeLabel').textContent = can('manage_intake') ? '线索池' : '我的线索';
     applyBusinessAIVisibility();
     $('#runManagerAnomaly')?.classList.toggle('hidden',
-      !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team'));
+      !customerAIEnabled() || !['admin', 'manager'].includes(user.role) || !can('view_team')
+        || Boolean(state.data.impersonation));
     if (state.data.impersonation) {
-      $$('#nav [data-view="users"], #nav [data-view="protectedCustomers"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn, #changePasswordBtn').forEach(el => el.classList.add('hidden'));
+      $$('#nav [data-view="users"], #nav [data-view="protectedCustomers"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn').forEach(el => el.classList.add('hidden'));
     }
     $$('#nav .nav-group').forEach(group => {
       const buttons = $$('button[data-view]').filter(button => group.contains(button));
       group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
     });
-    $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle') || Boolean(state.data.impersonation));
+    $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle'));
+    $('#intakeSettingsBtn')?.classList.toggle('hidden',
+      !can('manage_intake') || Boolean(state.data.impersonation));
+    $('#scanIntakeBtn')?.classList.toggle('hidden',
+      !can('manage_intake') || Boolean(state.data.impersonation));
+    $('#changePasswordBtn')?.classList.toggle('hidden', Boolean(state.data.impersonation));
+    const sinceLastViewOption = $('#teamRange')?.querySelector('option[value="since-last-view"]');
+    if (sinceLastViewOption) {
+      sinceLastViewOption.hidden = Boolean(state.data.impersonation);
+      sinceLastViewOption.disabled = Boolean(state.data.impersonation);
+      if (state.data.impersonation && $('#teamRange').value === 'since-last-view') {
+        $('#teamRange').value = '30d';
+      }
+    }
     $('#filterPermissionAdmin')?.classList.toggle('hidden', !can('manage_users') || Boolean(state.data.impersonation));
   }
 
@@ -2042,7 +2063,7 @@
   }
 
   function currentIntakeAssignmentScope() {
-    if (!can('manage_intake') || state.data?.impersonation) {
+    if (!can('manage_intake')) {
       return null;
     }
     if (state.intakeSelectAllScope) {
@@ -2077,7 +2098,7 @@
     const clear = $('#clearIntakeSelection');
     const selectAll = $('#intakeSelectAllResults');
     if (!bar || !label || !button || !clear || !selectAll) return;
-    const visible = can('manage_intake') && !state.data?.impersonation;
+    const visible = can('manage_intake');
     bar.classList.toggle('hidden', !visible);
     if (!visible) return;
     const scope = currentIntakeAssignmentScope();
@@ -2351,7 +2372,7 @@
     $('#intakeSubheading').textContent = salesView
       ? `集中查看分配给你的线索；当前筛选共 ${intake.total ?? intake.items.length} 条，领取后进入 CRM 跟进。`
       : `当前筛选共 ${intake.total ?? intake.items.length} 条线索，可在同一页面查看资料并完成分配、领取、退回和重新分配。`;
-    $('#intakeManagerActions').classList.toggle('hidden', salesView || Boolean(state.data.impersonation));
+    $('#intakeManagerActions').classList.toggle('hidden', salesView || !can('manage_intake'));
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
     const filterCount = activeIntakeFilterCount();
     $('#intakeFilterToggle').textContent = filterCount ? `详细筛选 ${filterCount}` : '详细筛选';
@@ -2364,7 +2385,7 @@
     const activeStat = intakeActiveStatCard();
     $('#intakeSummary').innerHTML = summary.map(([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
     const items = intake.items || [];
-    const canManualAssign = !salesView && !state.data.impersonation;
+    const canManualAssign = !salesView && can('manage_intake');
     const assignableItems = items.filter(intakeItemAssignable);
     const selectedVisibleCount = state.intakeSelectAllScope
       ? assignableItems.length
@@ -3299,10 +3320,11 @@
   function renderAiTaskDetail(task) {
     const attempts = (task.attempts || []).map(item => `<li><strong>第 ${item.attempt || '—'} 次 · ${esc(item.engine || '—')} / ${esc(item.model || '—')}</strong><span>${esc(item.status ?? (item.ok ? 'succeeded' : 'failed'))} · ${Number(item.durationMs || 0)} ms · $${Number(item.cost || 0).toFixed(4)}</span>${item.errorSummary || item.error ? `<small>${esc(item.errorSummary || item.error)}</small>` : ''}</li>`).join('');
     const timeline = (task.timeline || []).map(item => `<li><strong>${esc(item.kind)}</strong><span>${esc(item.state || '')}</span><time>${shortDate(item.at, true)}</time></li>`).join('');
+    const canMutateAITasks = !state.data?.impersonation;
     const actions = [
-      task.canRetry && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="retry" data-job-id="${esc(task.taskId)}">重试</button>` : '',
-      task.canCancel && can('cancel_ai_tasks') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
-      task.canReview && can('review_ai_tasks') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
+      canMutateAITasks && task.canRetry && can('use_ai_assistant') ? `<button class="button secondary" data-ai-task-action="retry" data-job-id="${esc(task.taskId)}">重试</button>` : '',
+      canMutateAITasks && task.canCancel && can('cancel_ai_tasks') ? `<button class="button secondary" data-ai-task-action="cancel" data-job-id="${esc(task.taskId)}">取消</button>` : '',
+      canMutateAITasks && task.canReview && can('review_ai_tasks') ? `<textarea id="aiTaskReviewSummary" placeholder="复核说明（最多 500 字）"></textarea><button class="button primary" data-ai-task-action="approved" data-job-id="${esc(task.taskId)}">通过复核</button><button class="button danger" data-ai-task-action="rejected" data-job-id="${esc(task.taskId)}">退回</button>` : '',
     ].join('');
     const feedback = canGovernAI() && task.source === 'ai_station'
       ? `<section class="ai-feedback-form"><h3>结果标签</h3><div class="form-grid two">
@@ -3493,19 +3515,18 @@
   }
 
   function canReturnCustomer(account) {
-    if (!account || state.data.impersonation || !can('manage_customer_recycle')) return false;
+    if (!account || !can('manage_customer_recycle')) return false;
     if (String(account.lifecycle_status || 'active') !== 'active') return false;
     if (String(account.assignment_status || '') === 'returned') return false;
     return true;
   }
 
   function canBulkAssignCustomers() {
-    return can('view_all_customers') && can('manage_intake') && can('edit_customer')
-      && !state.data.impersonation;
+    return can('view_all_customers') && can('manage_intake') && can('edit_customer');
   }
 
   function canBulkReturnCustomers() {
-    return can('manage_customer_recycle') && !state.data.impersonation;
+    return can('manage_customer_recycle');
   }
 
   function canSelectCustomer(account) {
@@ -3828,17 +3849,17 @@
       'overdue-lead': todayTaskActionAllowed(
         item,
         ['resolve_overdue_lead', 'reassign', 'return_to_pool'],
-        ['admin', 'manager'].includes(role) && can('manage_intake') && !state.data?.impersonation,
+        ['admin', 'manager'].includes(role) && can('manage_intake'),
       ),
       'next-plan': todayTaskActionAllowed(
         item,
         ['add_next_plan'],
-        can('record_activity') && !state.data?.impersonation,
+        can('record_activity'),
       ),
       'manager-assistance': todayTaskActionAllowed(
         item,
         ['complete_manager_assistance'],
-        ['admin', 'manager'].includes(role) && can('view_team') && !state.data?.impersonation,
+        ['admin', 'manager'].includes(role) && can('view_team'),
       ),
       quote: todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote')),
       activity: todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity')),
@@ -4246,7 +4267,7 @@
   }
 
   async function runManagerAnomalies() {
-    if (!canViewManagerAnomalies() || state.managerAnomalies.pending) return;
+    if (state.data?.impersonation || !canViewManagerAnomalies() || state.managerAnomalies.pending) return;
     state.managerAnomalies.pending = true;
     const button = $('#runManagerAnomaly');
     if (button) {
@@ -4352,6 +4373,10 @@
     return customerAIEnabled()
       && ['admin', 'manager'].includes(state.data?.user?.role)
       && can('view_team');
+  }
+
+  function canRunSalesCoaching() {
+    return canViewSalesCoaching() && !state.data?.impersonation;
   }
 
   function coachingFor(userId) {
@@ -4548,7 +4573,9 @@
     state.teamStatus.error = '';
     renderTeamSection();
     try {
-      const range = $('#teamRange')?.value || state.teamStatus.range || '30d';
+      const selectedRange = $('#teamRange')?.value || state.teamStatus.range || '30d';
+      const range = state.data?.impersonation && selectedRange === 'since-last-view'
+        ? '30d' : selectedRange;
       state.teamStatus.range = range;
       const targetPage = reset ? 1 : Math.max(1, Number(page || state.teamStatus.progressPage || 1));
       const pagination = {
@@ -4772,7 +4799,7 @@
   }
 
   async function runSalesCoaching(userId) {
-    if (!canViewSalesCoaching() || state.salesCoaching.pendingUserId) return;
+    if (!canRunSalesCoaching() || state.salesCoaching.pendingUserId) return;
     state.salesCoaching.pendingUserId = userId;
     renderTeam();
     try {
@@ -4830,7 +4857,7 @@
           : pending
             ? '<div class="recommendation"><strong>正在生成</strong><br>Worker 正在处理聚合后的转化与 SLA 指标。</div>'
             : '<div class="recommendation"><strong>尚未生成</strong><br>当前已有可评估样本。</div>';
-    const action = canViewSalesCoaching()
+    const action = canRunSalesCoaching()
       ? `<div class="coaching-actions">
           <button class="button primary tiny" type="button" data-run-sales-coaching="${esc(item.user.id)}"
             ${pending || snapshot.sampleStatus === 'insufficient' ? 'disabled' : ''}>${value || coaching?.ai?.stale ? '重新生成' : '生成 AI 辅导'}</button>
@@ -5009,7 +5036,9 @@
           `<div class="company-cell"><strong>${esc(review.input?.companyName || '未填公司名')}</strong><span>${esc(review.input?.website || '未填官网')} · ${esc(review.input?.country || '未填国家')}</span></div>`,
           `<select data-duplicate-review-candidate="${esc(review.id)}">${candidates.map(candidate => `<option value="${esc(candidate.customerId)}">${esc(candidate.companyName)} · ${esc(candidate.ownerName || '未分配')} · ${esc(stageLabel(candidate.customerStage))}</option>`).join('')}</select>`,
           candidates.map(candidate => `${candidate.matchedBy === 'fuzzy_domain' ? '官网域名相似' : '公司名称相似'} ${Math.round(Number(candidate.score || 0) * 100)}%`).join('<br>'),
-          `<div class="assignment-actions"><button class="text-button danger-text" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_same">确认同一客户</button><button class="text-button" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_distinct">确认不是同一客户</button></div>`,
+          canMutate
+            ? `<div class="assignment-actions"><button class="text-button danger-text" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_same">确认同一客户</button><button class="text-button" data-duplicate-review="${esc(review.id)}" data-resolution="confirmed_distinct">确认不是同一客户</button></div>`
+            : '<span class="subtle">无变更权限</span>',
         ];
       }),
     );
@@ -5023,7 +5052,9 @@
           `<div class="company-cell"><strong>${esc(payload.company_name || review.source_id)}</strong><span>${esc(payload.customer_id || '')} · ${esc(review.source_id)}</span></div>`,
           esc(payload.owner || '未分配'), esc(review.reason),
           `<select data-review-owner="${esc(review.id)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select>`,
-          `<button class="text-button" data-resolve-review="${esc(review.id)}">确认迁移</button>`,
+          canMutate
+            ? `<button class="text-button" data-resolve-review="${esc(review.id)}">确认迁移</button>`
+            : '<span class="subtle">无变更权限</span>',
         ];
       }),
     );
@@ -7591,13 +7622,13 @@
       item,
       ['resolve_overdue_lead', 'reassign', 'resolve_overdue_lead_reassign'],
       ['admin', 'manager'].includes(state.data?.user?.role)
-        && can('manage_intake') && !state.data?.impersonation,
+        && can('manage_intake'),
     );
     const canReturn = todayTaskActionAllowed(
       item,
       ['resolve_overdue_lead', 'return_to_pool', 'resolve_overdue_lead_return_to_pool'],
       ['admin', 'manager'].includes(state.data?.user?.role)
-        && can('manage_intake') && !state.data?.impersonation,
+        && can('manage_intake'),
     );
     if (!canReassign && !canReturn) return toast('当前账号无权处理该超时线索');
     const overdue = Number(item.maxOverdueHours ?? item.overdueHours ?? 0);
@@ -7629,7 +7660,7 @@
     if (!todayTaskActionAllowed(
       item,
       ['add_next_plan'],
-      can('record_activity') && !state.data?.impersonation,
+      can('record_activity'),
     )) {
       return toast('当前账号无权为该客户补充计划');
     }
@@ -7802,7 +7833,7 @@
       item,
       ['complete_manager_assistance'],
       ['admin', 'manager'].includes(state.data?.user?.role)
-        && can('view_team') && !state.data?.impersonation,
+        && can('view_team'),
     )) return toast('当前账号无权完成该协助请求');
     const account = state.data.accounts.find(row => row.id === item.customerId);
     const request = item.managerRequest || {};
@@ -10331,16 +10362,18 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
-    if (view === 'activityCorrections' && state.data?.impersonation) {
-      return toast('身份检查期间不能进入跟进更正管理');
-    }
     if (view === 'aiTasks' && !customerAIEnabled()) {
       view = firstAllowedBusinessView();
       toast('AI 功能已关闭，已返回业务首页');
     }
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
     const intakeAlias = ['intake', 'pending', 'claimed'].includes(view);
-    const canonicalView = intakeAlias ? 'pool' : view;
+    let canonicalView = intakeAlias ? 'pool' : view;
+    if (!identityInspectionAllowsView(canonicalView)) {
+      canonicalView = firstAllowedBusinessView();
+      view = canonicalView;
+      toast('身份检查期间不能进入安全管理页面');
+    }
       const permission = canonicalView === 'customerProfile' && state.customerProfileReadOnly
       ? 'view_intake'
       : viewPermissions[view] || `view_${canonicalView}`;

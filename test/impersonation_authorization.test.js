@@ -89,7 +89,7 @@ test('security routes are blocked even when the target holds management permissi
   assert.equal(stop.status, 200);
 });
 
-test('ordinary customer and intake writes stay allowed during inspection', async t => {
+test('ordinary customer writes stay allowed while intake configuration stays blocked', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   await fx.startImpersonation('U-MGR');
@@ -102,7 +102,13 @@ test('ordinary customer and intake writes stay allowed during inspection', async
     cookie: fx.adminCookie, method: 'PATCH',
     body: { approvalMode: 'automatic', dailyPerSales: 6 },
   });
-  assert.equal(settings.status, 200);
+  const settingsBody = await settings.json();
+  assert.equal(settings.status, 403);
+  assert.deepEqual(settingsBody, {
+    ok: false,
+    error: '身份检查期间禁止此安全操作',
+    code: 'IMPERSONATION_ACTION_BLOCKED',
+  });
 });
 
 test('bootstrap audit rows expose names for both identities', async t => {
