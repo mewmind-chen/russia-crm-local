@@ -500,7 +500,7 @@
         ${searchFields.map(field => renderSearchField(field, state)).join('')}
         ${primaryFields.map(field => renderPrimaryField(field, state)).join('')}
         <div class="tp-filter-primary-actions">
-          <button class="tp-filter-clear" type="button" data-filter-clear>清空</button>
+          <button class="tp-filter-clear" type="button" data-filter-clear>清空筛选</button>
           <button class="tp-filter-apply" type="button" data-filter-apply>应用筛选</button>
         </div>
       </div>

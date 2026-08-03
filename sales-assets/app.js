@@ -97,7 +97,7 @@
     filterPermissionAdmin: null,
     accessSection: 'accounts',
     customerFilters: {
-      search: '', quickView: 'all', sort: 'next_urgent',
+      search: '', quickView: 'all', sort: 'pending_priority',
       countries: [], owners: [], stages: [], priorities: [], customerTypes: [],
       industries: [], sources: [], creators: [], evaluationTags: [],
       lastActionBuckets: [], nextStepBuckets: [], createdFrom: '', createdTo: '',
@@ -160,6 +160,8 @@
     customerAiTimer: null,
     customerAiPollCount: 0,
     selectedCustomerIds: new Set(),
+    customerSelectionMode: 'explicit',
+    customerSelectionFilterScope: null,
     notificationStatus: '',
     recycleKind: 'sales_return',
     recycleBin: { rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, hasMore: false, loading: false },
@@ -493,7 +495,7 @@
   }
   function defaultCustomerFilters() {
     return {
-      search: '', quickView: 'all', sort: 'next_urgent',
+      search: '', quickView: 'all', sort: 'pending_priority',
       countries: [], owners: [], stages: [], priorities: [], customerTypes: [],
       industries: [], sources: [], creators: [], evaluationTags: [],
       lastActionBuckets: [], nextStepBuckets: [], createdFrom: '', createdTo: '',
@@ -547,7 +549,7 @@
   function readCustomerFilterControls() {
     const filters = state.customerFilters;
     filters.search = ($('#customerSearch')?.value || '').trim();
-    filters.sort = $('#customerSort')?.value || 'next_urgent';
+    filters.sort = $('#customerSort')?.value || 'pending_priority';
     filters.createdFrom = $('#customerCreatedFrom')?.value || '';
     filters.createdTo = $('#customerCreatedTo')?.value || '';
     Object.assign(filters, {
@@ -827,6 +829,34 @@
     return raw;
   }
 
+  function customerFilterSchema(schema = {}) {
+    return {
+      ...schema,
+      fields: (schema.fields || []).map(field => field.key === 'owner'
+        ? { ...field, label: '负责人筛选' }
+        : field),
+    };
+  }
+
+  function resetCustomerSelection() {
+    state.selectedCustomerIds.clear();
+    state.customerSelectionMode = 'explicit';
+    state.customerSelectionFilterScope = null;
+  }
+
+  function customerSelectionPayload() {
+    if (state.customerSelectionMode === 'filtered' && state.customerSelectionFilterScope) {
+      return { filterScope: state.customerSelectionFilterScope };
+    }
+    return { customerIds: [...state.selectedCustomerIds] };
+  }
+
+  function customerSelectionCount() {
+    return state.customerSelectionMode === 'filtered'
+      ? Number(state.customerList.total || 0)
+      : state.selectedCustomerIds.size;
+  }
+
   async function loadCustomerPage({ reset = true, page } = {}) {
     if (!state.customerFilterController) return;
     if (state.customerList.loading && !reset) return;
@@ -845,7 +875,7 @@
         pageSize: String(state.customerList.pageSize),
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
-        sort: $('#customerSort')?.value || 'next_urgent',
+        sort: $('#customerSort')?.value || 'pending_priority',
       });
       const result = await api(`/accounts?${params}`);
       if (requestEpoch !== state.customerRequestEpoch) return;
@@ -862,7 +892,7 @@
       };
       if (result.schema
           && String(result.schema.permissionVersion) !== String(payload.permissionVersion)) {
-        state.customerFilterController.updateSchema(result.schema);
+        state.customerFilterController.updateSchema(customerFilterSchema(result.schema));
       }
       const accountMap = new Map((state.data.accounts || []).map(account => [account.id, account]));
       result.rows.forEach(account => accountMap.set(account.id, { ...accountMap.get(account.id), ...account }));
@@ -902,10 +932,13 @@
       const controller = window.TradePulseFilterComponent.createFilterController({
         storage: paginationFilterStorage,
         pageKey,
-        schema: result.schema,
-        onApply: () => void loadCustomerPage({ reset: true }),
+        schema: customerFilterSchema(result.schema),
+        onApply: () => {
+          resetCustomerSelection();
+          void loadCustomerPage({ reset: true });
+        },
         onPermissionChange: () => {
-          state.selectedCustomerIds.clear();
+          resetCustomerSelection();
         },
       });
       state.customerFilterController = controller;
@@ -1245,6 +1278,7 @@
       resetResearchState();
       resetAuthorizedBusinessLists();
       state.selectedIntakeIds.clear();
+      resetCustomerSelection();
       state.intakeAssignmentPreview = null;
       $('#loginScreen').classList.add('hidden');
       $('#app').classList.remove('hidden');
@@ -1324,12 +1358,6 @@
   function populateFilters() {
     const countries = [...new Set(state.data.accounts.map(item => item.country).filter(Boolean))].sort();
     const activeSales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
-    const bulkOwner = $('#bulkCustomerOwner');
-    if (bulkOwner) {
-      const selected = bulkOwner.value;
-      bulkOwner.innerHTML = '<option value="">请选择销售</option>' + activeSales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('');
-      bulkOwner.value = [...bulkOwner.options].some(option => option.value === selected) ? selected : '';
-    }
     if ($('#customerCountryFilter')) $('#customerCountryFilter').innerHTML = multiOptions(countries);
     if ($('#customerOwnerFilter')) {
       $('#customerOwnerFilter').innerHTML = '<option value="__unassigned__">未分配</option>'
@@ -3224,9 +3252,9 @@
     });
     const compareText = (left, right) => String(left || '').localeCompare(String(right || ''), 'zh-CN');
     return accounts.sort((left, right) => {
-      if (filters.sort === 'last_activity') return crmTime(right.last_activity_at) - crmTime(left.last_activity_at) || compareText(left.id, right.id);
+      if (filters.sort === 'oldest_activity') return crmTime(left.last_activity_at) - crmTime(right.last_activity_at) || compareText(left.id, right.id);
+      if (filters.sort === 'recent_progress') return crmTime(right.last_activity_at) - crmTime(left.last_activity_at) || compareText(left.id, right.id);
       if (filters.sort === 'newest') return crmTime(right.created_at) - crmTime(left.created_at) || compareText(left.id, right.id);
-      if (filters.sort === 'potential_desc') return Number(right.potential_value || 0) - Number(left.potential_value || 0) || compareText(left.id, right.id);
       if (filters.sort === 'company') return compareText(accountDisplayName(left), accountDisplayName(right)) || compareText(left.id, right.id);
       const leftNext = crmTime(left.next_action_at) || Number.MAX_SAFE_INTEGER;
       const rightNext = crmTime(right.next_action_at) || Number.MAX_SAFE_INTEGER;
@@ -3278,7 +3306,27 @@
     return true;
   }
 
+  function canBulkAssignCustomers() {
+    return can('view_all_customers') && can('manage_intake') && can('edit_customer')
+      && !state.data.impersonation;
+  }
+
+  function canBulkReturnCustomers() {
+    return can('manage_customer_recycle') && !state.data.impersonation;
+  }
+
+  function canSelectCustomer(account) {
+    return canBulkAssignCustomers() || (canBulkReturnCustomers() && canReturnCustomer(account));
+  }
+
+  function selectedVisibleCustomerIds(accounts = state.customerList.rows) {
+    return accounts.filter(canSelectCustomer).map(account => account.id);
+  }
+
   function selectedCustomersReturnEligible() {
+    if (state.customerSelectionMode === 'filtered') {
+      return customerSelectionCount() > 0 && canBulkReturnCustomers();
+    }
     if (!state.selectedCustomerIds.size) return false;
     return [...state.selectedCustomerIds].every(customerId =>
       canReturnCustomer(state.data.accounts.find(account => account.id === customerId)));
@@ -3291,34 +3339,56 @@
       void loadCustomerPage({ reset: false, page: change.page || 1 });
     });
     const visibleIds = new Set(accounts.map(account => account.id));
-    state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(customerId => visibleIds.has(customerId)));
-    const canBulkAssign = can('view_all_customers') && can('manage_intake') && can('edit_customer') && !state.data.impersonation;
-    const canBulkReturn = can('manage_customer_recycle') && !state.data.impersonation;
+    if (state.customerSelectionMode !== 'filtered') {
+      state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(customerId => visibleIds.has(customerId)));
+    }
+    const canBulkAssign = canBulkAssignCustomers();
+    const canBulkReturn = canBulkReturnCustomers();
     const canSelectCustomers = canBulkAssign || canBulkReturn;
+    const selectionCount = customerSelectionCount();
+    const selectableIds = selectedVisibleCustomerIds(accounts);
+    const selectedVisibleCount = state.customerSelectionMode === 'filtered'
+      ? selectableIds.length
+      : selectableIds.filter(customerId => state.selectedCustomerIds.has(customerId)).length;
     $('#customerBulkBar')?.classList.toggle('hidden', !canSelectCustomers);
-    $('#bulkCustomerOwner')?.classList.toggle('hidden', !canBulkAssign);
     $('#bulkAssignCustomers')?.classList.toggle('hidden', !canBulkAssign);
     $('#bulkReturnCustomers')?.classList.toggle('hidden', !canBulkReturn);
-    if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${state.selectedCustomerIds.size} 个客户`;
-    if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
+    if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${selectionCount} 个客户`;
+    const scopePrompt = $('#customerSelectionScopePrompt');
+    if (scopePrompt) {
+      const canOfferFiltered = state.customerSelectionMode === 'explicit'
+        && selectableIds.length > 0
+        && selectedVisibleCount === selectableIds.length
+        && state.customerList.total > selectableIds.length;
+      scopePrompt.classList.toggle('hidden', !canOfferFiltered && state.customerSelectionMode !== 'filtered');
+      scopePrompt.innerHTML = state.customerSelectionMode === 'filtered'
+        ? `已选择全部筛选结果 ${esc(selectionCount)} 条`
+        : canOfferFiltered
+          ? `已选择本页 ${esc(selectedVisibleCount)} 条，可选择全部筛选结果 ${esc(state.customerList.total)} 条 <button type="button" class="text-button" data-select-all-filtered-customers>选择全部</button>`
+          : '';
+    }
+    if ($('#bulkAssignCustomers')) {
+      $('#bulkAssignCustomers').disabled = !selectionCount;
+      $('#bulkAssignCustomers').title = selectionCount ? '' : '请先勾选客户';
+    }
     if ($('#bulkReturnCustomers')) {
       const returnEligible = selectedCustomersReturnEligible();
       $('#bulkReturnCustomers').disabled = !returnEligible;
-      $('#bulkReturnCustomers').title = state.selectedCustomerIds.size && !returnEligible
-        ? '仅当前仍在 CRM 且有退回权限的客户可退回' : '';
+      $('#bulkReturnCustomers').title = !selectionCount
+        ? '请先勾选客户'
+        : !returnEligible ? '仅当前仍在 CRM 且有退回权限的客户可退回' : '';
     }
     const reachedNote = state.stageReached ? ` · 漏斗累计达到“${stageLabel(state.stageReached)}”` : '';
     $('#customerResultCount').textContent = state.customerList.loading
       ? '正在读取授权结果…'
       : `当前 ${state.customerList.total} / 授权 ${state.customerList.authorizedTotal}${reachedNote}`;
     if ($('#customerExportBtn')) $('#customerExportBtn').disabled = accounts.length === 0;
-    if ($('#selectFilteredCustomers')) $('#selectFilteredCustomers').disabled = accounts.length === 0;
     if (!state.customerList.loaded && state.customerList.loading) {
       $('#customerTable').innerHTML = '<div class="empty">正在加载客户结果…</div>';
       return;
     }
     $('#customerTable').innerHTML = table(
-      [canSelectCustomers ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
+      [canSelectCustomers ? '<input id="selectCustomerPage" type="checkbox" aria-label="选择当前页客户">' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '优先级', '状态'],
       accounts.map(account => {
         const alert = alertFor(account.id);
         const canReturn = canReturnCustomer(account);
@@ -3329,14 +3399,14 @@
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
         ].filter(Boolean).join('');
         return [
-          canSelectCustomers ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
+          canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           esc(account.owner_name || '未分配'),
           `<span>${relative(account.last_activity_at)}</span>`,
           `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</span>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div>`,
-          `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span> · ${money(account.potential_value)}`,
+          `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span>`,
           `${alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>'}${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
         ];
       }).map((row, index) => {
@@ -3345,6 +3415,12 @@
         return row;
       }),
     );
+    const pageCheckbox = $('#selectCustomerPage');
+    if (pageCheckbox) {
+      pageCheckbox.checked = Boolean(selectableIds.length && selectedVisibleCount === selectableIds.length);
+      pageCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < selectableIds.length;
+      pageCheckbox.disabled = !selectableIds.length;
+    }
   }
 
   async function loadRecycleBin({ reset = true, page = 1 } = {}) {
@@ -7187,7 +7263,7 @@
     const alert = alertFor(account.id);
     const accountFacts = [
       ['负责人', account.owner_name || '未分配'], ['创建人', account.creator_name || '历史数据'],
-      ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source],
+      ['优先级', account.priority], ['客户来源', account.source],
       ['成立年份', account.established_year || '未填写'],
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
@@ -8068,7 +8144,7 @@
   }
 
   function openNewCustomerModal() {
-    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    const sales = state.data.todayTaskAssignmentCandidates || [];
     const canLeaveUnassigned = can('view_all_customers') && can('manage_intake');
     const ownerOptions = `${canLeaveUnassigned ? '<optgroup label="操作"><option value="__unassigned__">暂不分配</option></optgroup>' : ''}<optgroup label="销售人员">${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
     openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two customer-intake-form">
@@ -8238,7 +8314,6 @@
       <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
-      <label>潜力金额<input name="potentialValue" type="number" value="${Number(account.potential_value || 0)}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
       <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存调整</button></div>
@@ -8416,6 +8491,25 @@
       <div class="recommendation">${esc(note)}</div>
       <label>原因<textarea name="reason" minlength="2" maxlength="500" required placeholder="请输入2至500个字符的原因"></textarea></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button danger">确认操作</button></div>
+    </form>`);
+  }
+
+  function openBulkCustomerAssignmentModal() {
+    const count = customerSelectionCount();
+    if (!count) return toast('请先勾选客户');
+    const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
+    if (!sales.length) return toast('暂无可分配的在职销售');
+    const scopeLabel = state.customerSelectionMode === 'filtered' ? '全部筛选结果' : '当前页已勾选客户';
+    openModal('批量分配客户', 'BULK CUSTOMER ASSIGNMENT', `<form id="bulkCustomerAssignForm" class="form-grid">
+      <div class="manual-assignment-summary">
+        <div><span>分配范围</span><strong>${esc(scopeLabel)}</strong></div>
+        <div><span>客户数量</span><strong>${esc(count)}</strong></div>
+      </div>
+      <label>目标销售<select name="ownerId" required>
+        <option value="">请选择销售</option>
+        ${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}
+      </select></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认分配</button></div>
     </form>`);
   }
 
@@ -9104,6 +9198,16 @@
         const payload = formPayload(form);
         await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
         await refresh(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
+      } else if (form.id === 'bulkCustomerAssignForm') {
+        const payload = formPayload(form);
+        if (!payload.ownerId) throw new Error('请选择有效的销售负责人');
+        const result = await api('/api/sales-crm/accounts/bulk-assign', {
+          method: 'POST',
+          body: JSON.stringify({ ...customerSelectionPayload(), ownerId: payload.ownerId }),
+        });
+        resetCustomerSelection();
+        closeModal();
+        await refresh(`已批量分配 ${result.updated} 个客户`);
       } else if (form.id === 'recycleReasonForm') {
         const payload = formPayload(form);
         const action = payload.action;
@@ -9113,10 +9217,10 @@
             ? '/api/sales-crm/accounts/bulk-return'
             : `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/return`;
         const body = action === 'bulk'
-          ? { customerIds: [...state.selectedCustomerIds], reason: payload.reason }
+          ? { ...customerSelectionPayload(), reason: payload.reason }
           : { reason: payload.reason };
         await api(route, { method: 'POST', body: JSON.stringify(body) });
-        state.selectedCustomerIds.clear();
+        resetCustomerSelection();
         await refresh(action === 'trash' ? '客户已移入回收站' : '客户已退回线索池');
         if (action === 'bulk') switchView('recycleBin');
       } else if (form.id === 'contactForm') {
@@ -9602,7 +9706,7 @@
       const payload = state.customerFilterController?.serialize('applied') || { filters: [] };
       const params = new URLSearchParams({
         format: 'csv',
-        sort: $('#customerSort')?.value || 'next_urgent',
+        sort: $('#customerSort')?.value || 'pending_priority',
         permissionVersion: payload.permissionVersion || '',
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
@@ -9621,30 +9725,22 @@
       });
       await initializeAuthorizedBusinessFilters(state.intakeAuthorizedPage, { force: true });
     }
-    if (event.target.closest('#selectFilteredCustomers')) {
-      const matches = state.customerList.rows;
-      state.selectedCustomerIds = new Set(matches.slice(0, 500).map(account => account.id));
-      if (matches.length > 500) toast('一次最多选择500个客户，已选择当前排序前500个');
-      renderCustomers();
-    }
-    if (event.target.closest('#clearCustomerSelection')) {
+    if (event.target.closest('[data-select-all-filtered-customers]')) {
+      const total = Number(state.customerList.total || 0);
+      if (total > 500) return toast('全部筛选结果超过500条，请缩小筛选范围后再试');
+      if (!total) return toast('当前筛选结果为空');
+      if (!window.confirm(`将选择全部筛选结果 ${total} 条，而不只是当前页。确认继续？`)) return;
+      const payload = state.customerFilterController?.serialize('applied') || { filters: [] };
+      state.customerSelectionMode = 'filtered';
+      state.customerSelectionFilterScope = {
+        permissionVersion: String(payload.permissionVersion || ''),
+        filters: componentPayloadToRaw(payload),
+      };
       state.selectedCustomerIds.clear();
       renderCustomers();
     }
     if (event.target.closest('#bulkAssignCustomers')) {
-      try {
-        const ownerId = $('#bulkCustomerOwner')?.value || '';
-        if (!ownerId) throw new Error('请选择有效的销售负责人；退回客户请使用批量退回');
-        if (!state.selectedCustomerIds.size) throw new Error('请先选择客户');
-        const owner = userById(ownerId);
-        if (!window.confirm(`将设置 ${state.selectedCustomerIds.size} 个客户的负责人为 ${owner?.name || ownerId}。确认继续？`)) return;
-        const result = await api('/api/sales-crm/accounts/bulk-assign', {
-          method: 'POST',
-          body: JSON.stringify({ customerIds: [...state.selectedCustomerIds], ownerId }),
-        });
-        state.selectedCustomerIds.clear();
-        await refresh(`已批量分配 ${result.updated} 个客户`);
-      } catch (error) { toast(error.message); }
+      openBulkCustomerAssignmentModal();
     }
     const returnCustomer = event.target.closest('[data-return-customer]');
     if (returnCustomer) {
@@ -9655,7 +9751,7 @@
     const trashCustomer = event.target.closest('[data-trash-customer]');
     if (trashCustomer) openRecycleReasonModal(trashCustomer.dataset.trashCustomer, 'trash');
     if (event.target.closest('#bulkReturnCustomers')) {
-      if (!state.selectedCustomerIds.size) return toast('请先选择客户');
+      if (!customerSelectionCount()) return toast('请先勾选客户');
       if (!selectedCustomersReturnEligible()) return toast('所选客户中包含已退回、已离开 CRM 或无权退回的客户');
       openRecycleReasonModal('', 'bulk');
     }
@@ -9891,8 +9987,22 @@
     if (event.target.matches('#aiTaskStateFilter,#aiTaskTypeFilter,#aiTaskFromFilter,#aiTaskToFilter')) void loadAiTasks({ reset: true });
     if (event.target.matches('[data-select-customer]')) {
       const customerId = event.target.dataset.selectCustomer;
+      if (state.customerSelectionMode === 'filtered') {
+        state.customerSelectionMode = 'explicit';
+        state.customerSelectionFilterScope = null;
+        state.selectedCustomerIds = new Set(selectedVisibleCustomerIds());
+      }
       if (event.target.checked) state.selectedCustomerIds.add(customerId);
       else state.selectedCustomerIds.delete(customerId);
+      renderCustomers();
+    }
+    if (event.target.id === 'selectCustomerPage') {
+      state.customerSelectionMode = 'explicit';
+      state.customerSelectionFilterScope = null;
+      selectedVisibleCustomerIds().forEach(customerId => {
+        if (event.target.checked) state.selectedCustomerIds.add(customerId);
+        else state.selectedCustomerIds.delete(customerId);
+      });
       renderCustomers();
     }
     if (event.target.matches('[data-select-intake]')) {

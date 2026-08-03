@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260803-issue205-pagination">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260803-issue210-customer-controls">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -240,21 +240,21 @@
           <div id="customerAuthorizedFilters" aria-live="polite"></div>
           <div class="toolbar customer-list-toolbar">
             <select id="customerSort" aria-label="客户排序">
-              <option value="next_urgent">下一步最紧急</option>
-              <option value="last_activity">最近有动作</option>
-              <option value="newest">最新创建</option>
-              <option value="potential_desc">潜在金额最高</option>
+              <option value="pending_priority">待处理优先</option>
+              <option value="oldest_activity">最久未跟进</option>
+              <option value="recent_progress">最近有进展</option>
+              <option value="newest">最近创建</option>
               <option value="company">公司名称</option>
             </select>
             <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出当前结果</button>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
           <div id="customerBulkBar" class="customer-bulk-bar hidden">
-            <span id="customerSelectionCount">已选择 0 个客户</span>
-            <button id="selectFilteredCustomers" class="button secondary tiny" type="button">全选当前页</button>
-            <button id="clearCustomerSelection" class="button secondary tiny" type="button">清除选择</button>
-            <select id="bulkCustomerOwner" aria-label="批量分配目标"><option value="">请选择销售</option></select>
-            <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量设置负责人</button>
+            <div class="customer-selection-summary">
+              <span id="customerSelectionCount">已选择 0 个客户</span>
+              <span id="customerSelectionScopePrompt" class="hidden" aria-live="polite"></span>
+            </div>
+            <button id="bulkAssignCustomers" class="button primary tiny" type="button">批量分配</button>
             <button id="bulkReturnCustomers" class="button danger tiny" type="button">批量退回线索池</button>
           </div>
           <div id="customerTable" class="data-table"></div>
@@ -759,8 +759,8 @@
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-  <script src="/sales-assets/filter-component.js?v=20260729-issue137"></script>
+  <script src="/sales-assets/filter-component.js?v=20260803-issue210-customer-controls"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260803-issue205-pagination"></script>
+  <script src="/sales-assets/app.js?v=20260803-issue210-customer-controls"></script>
 </body>
 </html>

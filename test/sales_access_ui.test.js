@@ -109,8 +109,8 @@ test('override editor styles exist and asset versions are refreshed', () => {
   assert.match(js, /permission-override-row/);
   assert.match(css, /permission-override-row/);
   assert.match(css, /binary-permission-control/);
-  assert.match(html, /app\.css\?v=20260803-issue205-pagination/);
-  assert.match(html, /app\.js\?v=20260803-issue205-pagination/);
+  assert.match(html, /app\.css\?v=20260803-issue210-customer-controls/);
+  assert.match(html, /app\.js\?v=20260803-issue210-customer-controls/);
   assert.doesNotMatch(html, /app\.css\?v=20260719-4/);
   assert.doesNotMatch(html, /app\.js\?v=20260720-4/);
 });
@@ -177,7 +177,8 @@ test('access governance UI exposes archive restore safe delete export and atomic
   const js = readAsset('sales-assets', 'app.js');
   assert.match(html, /id="archivedUserTable"/);
   assert.match(html, /id="customerBulkBar"/);
-  assert.match(html, /id="bulkCustomerOwner"/);
+  assert.doesNotMatch(html, /id="bulkCustomerOwner"/);
+  assert.match(js, /id="bulkCustomerAssignForm"/);
   assert.match(html, /data-permission="export_data"/);
   assert.match(js, /data-archive-user/);
   assert.match(js, /data-restore-user/);

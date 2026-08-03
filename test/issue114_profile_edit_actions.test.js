@@ -24,9 +24,10 @@ test('customer profile and stage-rating actions have separate permission-scoped 
 test('stage and profile forms write disjoint responsibilities and refresh the embedded profile', () => {
   const stageForm = app.match(/openModal\('调整阶段和评级', 'STAGE & RATING', `([\s\S]*?)<\/form>`/)?.[1] || '';
   assert.match(stageForm, /id="stageRatingForm"/);
-  for (const name of ['stage', 'ownerId', 'priority', 'potentialValue', 'nextAction', 'nextActionAt']) {
+  for (const name of ['stage', 'ownerId', 'priority', 'nextAction', 'nextActionAt']) {
     assert.match(stageForm, new RegExp(`name="${name}"`), name);
   }
+  assert.doesNotMatch(stageForm, /name="potentialValue"/);
   for (const name of ['country', 'city', 'website', 'industry', 'customerType', 'source', 'productFocus']) {
     assert.doesNotMatch(stageForm, new RegExp(`name="${name}"`), name);
   }
