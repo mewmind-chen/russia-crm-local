@@ -85,7 +85,7 @@ test('unified lead pool merges pending and approved with filter-aligned counts',
   assert.deepEqual(tagged.items[0].customerTags.map(tag => tag.name), ['重点客户']);
 });
 
-test('single return rejects returned and unassigned customers with stable 409 codes', async t => {
+test('single return rejects returned customers and accepts active unassigned CRM customers', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
 
@@ -106,10 +106,20 @@ test('single return rejects returned and unassigned customers with stable 409 co
   const unassigned = await fx.request('/api/sales-crm/accounts/CRM-OWN/return', {
     cookie: fx.adminCookie,
     method: 'POST',
-    body: { reason: '未分配客户不可退回' },
+    body: { reason: '未分配客户正常退回线索池' },
   });
-  assert.equal(unassigned.status, 409);
-  assert.equal((await unassigned.json()).code, 'CUSTOMER_RETURN_OWNER_REQUIRED');
+  assert.equal(unassigned.status, 200);
+  assert.deepEqual(
+    fx.db.prepare(`SELECT owner_id,previous_owner_id,lifecycle_status,recycle_kind,assignment_status
+      FROM crm_accounts WHERE id='CRM-OWN'`).get(),
+    {
+      owner_id: null,
+      previous_owner_id: '',
+      lifecycle_status: 'recycled',
+      recycle_kind: 'sales_return',
+      assignment_status: 'returned',
+    },
+  );
 });
 
 test('bulk return rejects an invalid member atomically', async t => {

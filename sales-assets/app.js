@@ -3272,10 +3272,10 @@
   }
 
   function canReturnCustomer(account) {
-    if (!account || state.data.impersonation || !account.owner_id) return false;
-    if (!['assigned', 'claimed'].includes(String(account.assignment_status || ''))) return false;
-    return (state.data.user.role === 'sales' && account.owner_id === state.data.user.id)
-      || can('manage_customer_recycle');
+    if (!account || state.data.impersonation || !can('manage_customer_recycle')) return false;
+    if (String(account.lifecycle_status || 'active') !== 'active') return false;
+    if (String(account.assignment_status || '') === 'returned') return false;
+    return true;
   }
 
   function selectedCustomersReturnEligible() {
@@ -3293,14 +3293,19 @@
     const visibleIds = new Set(accounts.map(account => account.id));
     state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(customerId => visibleIds.has(customerId)));
     const canBulkAssign = can('view_all_customers') && can('manage_intake') && can('edit_customer') && !state.data.impersonation;
-    $('#customerBulkBar')?.classList.toggle('hidden', !canBulkAssign);
+    const canBulkReturn = can('manage_customer_recycle') && !state.data.impersonation;
+    const canSelectCustomers = canBulkAssign || canBulkReturn;
+    $('#customerBulkBar')?.classList.toggle('hidden', !canSelectCustomers);
+    $('#bulkCustomerOwner')?.classList.toggle('hidden', !canBulkAssign);
+    $('#bulkAssignCustomers')?.classList.toggle('hidden', !canBulkAssign);
+    $('#bulkReturnCustomers')?.classList.toggle('hidden', !canBulkReturn);
     if ($('#customerSelectionCount')) $('#customerSelectionCount').textContent = `已选择 ${state.selectedCustomerIds.size} 个客户`;
     if ($('#bulkAssignCustomers')) $('#bulkAssignCustomers').disabled = !state.selectedCustomerIds.size;
     if ($('#bulkReturnCustomers')) {
       const returnEligible = selectedCustomersReturnEligible();
       $('#bulkReturnCustomers').disabled = !returnEligible;
       $('#bulkReturnCustomers').title = state.selectedCustomerIds.size && !returnEligible
-        ? '仅负责人明确且状态为已分配或已领取的客户可退回' : '';
+        ? '仅当前仍在 CRM 且有退回权限的客户可退回' : '';
     }
     const reachedNote = state.stageReached ? ` · 漏斗累计达到“${stageLabel(state.stageReached)}”` : '';
     $('#customerResultCount').textContent = state.customerList.loading
@@ -3313,7 +3318,7 @@
       return;
     }
     $('#customerTable').innerHTML = table(
-      [canBulkAssign ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
+      [canSelectCustomers ? '<span class="sr-only">选择</span>' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '潜力', '状态'],
       accounts.map(account => {
         const alert = alertFor(account.id);
         const canReturn = canReturnCustomer(account);
@@ -3324,7 +3329,7 @@
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
         ].filter(Boolean).join('');
         return [
-          canBulkAssign ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
+          canSelectCustomers ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
@@ -7181,7 +7186,7 @@
     const canEvaluate = can('manage_evaluations');
     const alert = alertFor(account.id);
     const accountFacts = [
-      ['负责人', account.owner_name || '不分配'], ['创建人', account.creator_name || '历史数据'],
+      ['负责人', account.owner_name || '未分配'], ['创建人', account.creator_name || '历史数据'],
       ['优先级', `${account.priority} · ${money(account.potential_value)}`], ['客户来源', account.source],
       ['成立年份', account.established_year || '未填写'],
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
@@ -9644,14 +9649,14 @@
     const returnCustomer = event.target.closest('[data-return-customer]');
     if (returnCustomer) {
       const account = state.data.accounts.find(item => item.id === returnCustomer.dataset.returnCustomer);
-      if (!canReturnCustomer(account)) return toast('仅负责人明确且状态为已分配或已领取的客户可退回');
+      if (!canReturnCustomer(account)) return toast('仅当前仍在 CRM 且有退回权限的客户可退回');
       openRecycleReasonModal(returnCustomer.dataset.returnCustomer, 'return');
     }
     const trashCustomer = event.target.closest('[data-trash-customer]');
     if (trashCustomer) openRecycleReasonModal(trashCustomer.dataset.trashCustomer, 'trash');
     if (event.target.closest('#bulkReturnCustomers')) {
       if (!state.selectedCustomerIds.size) return toast('请先选择客户');
-      if (!selectedCustomersReturnEligible()) return toast('所选客户中包含未分配、已退回或状态不允许退回的客户');
+      if (!selectedCustomersReturnEligible()) return toast('所选客户中包含已退回、已离开 CRM 或无权退回的客户');
       openRecycleReasonModal('', 'bulk');
     }
     const recycleTab = event.target.closest('[data-recycle-kind]');
