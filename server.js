@@ -750,7 +750,8 @@ app.post('/api/app', (req, res) => {
       assertRequestCustomer(req, req.body.customerId);
       const identity = auditIdentity(req);
       const r = setCustomerTags(req.body.customerId, req.body.tagIds, {
-        actorId: identity.realUserId,
+        actorId: identity.effectiveUserId || identity.realUserId,
+        identity,
       });
       return res.json({ ok: true, action, ...r });
     }
@@ -758,7 +759,8 @@ app.post('/api/app', (req, res) => {
       assertRequestCustomer(req, req.body.customerId);
       const identity = auditIdentity(req);
       const r = removeCustomerTag(req.body.customerId, req.body.tagId, {
-        actorId: identity.realUserId,
+        actorId: identity.effectiveUserId || identity.realUserId,
+        identity,
       });
       return res.json({ ok: true, action, ...r });
     }

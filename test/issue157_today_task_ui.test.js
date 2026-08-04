@@ -182,8 +182,9 @@ test('capability tokens and backend action contracts govern visibility without w
   assert.match(markup, /\['admin', 'manager'\]\.includes\(role\) && can\('manage_intake'\)/);
   assert.match(markup, /can\('record_activity'\)/);
   assert.match(markup, /\['admin', 'manager'\]\.includes\(role\) && can\('view_team'\)/);
-  assert.doesNotMatch(markup, /impersonation/);
+  assert.doesNotMatch(markup, /!state\.data\.impersonation/);
   assert.match(markup, /当前账号无权处理/);
+  assert.match(markup, /身份检查期间禁止此安全操作/);
 
   assert.match(businessFilters, /actionKind:\s*'resolve_overdue_lead'/);
   assert.match(businessFilters, /allowedActions:\s*\['reassign', 'return_to_pool'\]/);
