@@ -2243,7 +2243,7 @@
       ['today', '今日收到线索', stats.todayImported, '领取前保留在线索池'],
       ['assigned', '待领取', stats.assigned, `领取时限 ${settings.claimSlaHours} 小时`],
       ['claimed', '已领取', stats.claimed, '已转入个人CRM'],
-      ['contacted', '已完成触达', stats.contacted, '邮件、电话或社媒'],
+      ['contacted', '当前触达', stats.contacted, '当前开发中已触达'],
       ['returned', '已退回', stats.returned, '必须说明原因'],
       ['overdue', '领取超期', stats.overdueClaim, '管理者将收到预警'],
     ] : [
@@ -2251,7 +2251,7 @@
       ['unassigned', '待分配', stats.pending + stats.approved, '勾选或筛选后手动指定销售'],
       ['assigned', '待销售领取', stats.assigned, `时限 ${settings.claimSlaHours} 小时`],
       ['claimed', '销售已领取 / CRM', stats.claimed, `领取后进入CRM，首次触达 ${settings.contactSlaHours} 小时`],
-      ['contacted', '已完成触达', stats.contacted, '已进入开发漏斗'],
+      ['contacted', '当前触达', stats.contacted, '当前开发漏斗中已触达'],
       ['idle', '闲置资源', stats.idle, '待分配或退回'],
       ['returned', '退回待处理', stats.returned, '需要重新分配'],
       ['rejected', '不对口', stats.rejected, '保留判断依据'],
@@ -2459,7 +2459,7 @@
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong>${salesView ? '' : `<span class="decision-block">${esc(item.decision_reason || (showAI ? signals.riskStatus : '') || '')}</span>`}</div>`,
-          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
+          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}${item.developmentHistory ? `<span class="pill amber">曾开发</span>` : ''}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
           actions,
         ];
         const aiColumns = [
@@ -6815,6 +6815,15 @@
           ...(item.status === 'returned' ? [['退回原因', item.return_reason || '未填写']] : []),
         ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
+      ${item.developmentHistory ? `<section class="development-history">
+        <div class="insight-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div><span class="pill ${item.developmentHistory.recycled ? 'amber' : ''}">${item.developmentHistory.recycled ? '曾退回线索池' : '历史已延续'}</span></div>
+        <div class="master-profile-grid">
+          <div><span>上次触达</span><p>${item.developmentHistory.lastActivityAt ? `${esc(item.developmentHistory.lastActivityType || '活动')} · ${esc(shortDate(item.developmentHistory.lastActivityAt, true))}` : '暂无活动记录'}</p></div>
+          <div><span>触达摘要</span><p>${esc(item.developmentHistory.lastActivitySummary || '—')}</p></div>
+          <div><span>开发记录</span><p>活动 ${item.developmentHistory.activityCount} · 询价 ${item.developmentHistory.rfqCount} · 报价 ${item.developmentHistory.quoteCount} · 订单 ${item.developmentHistory.orderCount}</p></div>
+          <div><span>上次阶段</span><p>${esc(item.developmentHistory.stage || '—')}</p></div>
+        </div>
+      </section>` : ''}
       ${showAssignmentDecisions ? `<section class="decision-review">
         <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>${showAI ? '分配三层裁决' : '分配裁决'}</h3></div>${showAI ? `<span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span>` : ''}</div>
         <div class="decision-review-grid ${showAI ? '' : 'without-ai'}">${showAI ? layers.ai : ''}${layers.rule}${layers.manual}</div>
