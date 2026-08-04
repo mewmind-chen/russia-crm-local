@@ -309,7 +309,7 @@ test('keeps the deployment lock through validation and rejects a concurrent depl
     assert.equal(firstResult.status, 0, firstResult.stderr);
     assert.equal(lineCount(fixture.validationLog), 1);
     assert.equal(lineCount(fixture.backupLog), 1);
-    assert.equal(lineCount(fixture.restartLog), 5);
+    assert.equal(lineCount(fixture.restartLog), 4);
     assert.equal(fs.existsSync(fixture.lockDir), false);
 
     const release = path.join(fixture.releasesDir, fixture.sha.slice(0, 12));
@@ -358,7 +358,6 @@ test('deploys newest remote main as an immutable release', () => {
       'com.russia-crm.recon-worker',
       'com.russia-crm.contact-worker-1',
       'com.russia-crm.contact-worker-2',
-      'com.russia-crm.ai-station-worker',
     ]);
     assert.equal(fs.readFileSync(fixture.validationLog, 'utf8').trim().startsWith(fixture.releasesDir), true);
     const backup = fs.readFileSync(fixture.backupLog, 'utf8').trim();
@@ -497,7 +496,7 @@ test('rolls back the current release when post-switch health fails', () => {
 
     assert.notEqual(result.status, 0);
     assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(oldRelease));
-    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 10);
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 8);
     assert.equal(JSON.parse(fs.readFileSync(fixture.stateFile, 'utf8')).lastFailedStage, 'health');
     assert.equal(fs.existsSync(path.join(fixture.releasesDir, fixture.sha.slice(0, 12))), true);
     assert.deepEqual(fs.readFileSync(fixture.healthLog, 'utf8').trim().split('\n'), [
@@ -567,7 +566,7 @@ test('force reuses a preserved release after post-switch health failure', () => 
     assert.equal(forceRetry.status, 0, forceRetry.stderr);
     assert.equal(fs.readFileSync(evidence, 'utf8'), 'preserved\n');
     assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(release));
-    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 15);
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 12);
     const backups = fs.readFileSync(fixture.backupLog, 'utf8').trim().split('\n');
     assert.equal(backups.length, 2);
     assert.equal(new Set(backups).size, 2);
@@ -613,7 +612,7 @@ test('repairs current-link drift instead of falsely treating success state as a 
 
     assert.equal(repair.status, 0, repair.stderr);
     assert.equal(fs.realpathSync(fixture.currentLink), fs.realpathSync(release));
-    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 10);
+    assert.equal(fs.readFileSync(fixture.restartLog, 'utf8').trim().split('\n').length, 8);
     assert.equal(fs.readFileSync(fixture.backupLog, 'utf8').trim().split('\n').length, 2);
     assert.equal(fs.readFileSync(fixture.healthLog, 'utf8').trim().split('\n').length, 2);
     assert.equal(fs.readFileSync(fixture.validationLog, 'utf8').trim().split('\n').length, 1);
