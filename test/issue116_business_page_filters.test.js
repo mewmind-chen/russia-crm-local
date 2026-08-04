@@ -111,17 +111,19 @@ test('today task adapter preserves existing grouped-alert semantics and scoped p
   assert.equal(complete.rows.some(row => row.customerId === 'CRM-OWN'), false);
 
   const filtered = listTodayTasks(fx.db, sales, ast('alerts', [
-    { key: 'urgency', operator: 'in', values: ['immediate'] },
     { key: 'owner', operator: 'in', values: ['U-OTHER'] },
-  ]), { pageSize: 20 }, { nowText: '2026-07-28 12:00:00' });
+  ]), { pageSize: 20 }, {
+    nowText: '2026-07-28 12:00:00',
+    urgency: 'immediate',
+  });
   assert.ok(filtered.rows.length > 0);
   assert.equal(filtered.rows.every(row => row.urgency === 'immediate' && row.ownerId === 'U-OTHER'), true);
 
-  const options = businessFilterOptions(fx.db, sales, 'alerts', ['owner', 'urgency', 'due_status'], {
+  const options = businessFilterOptions(fx.db, sales, 'alerts', ['owner', 'due_status'], {
     nowText: '2026-07-28 12:00:00',
   });
   assert.deepEqual(options.owner.map(option => option.value), ['U-OTHER']);
-  assert.equal(options.urgency.some(option => option.value === 'immediate'), true);
+  assert.equal(options.owner[0].label, 'Other');
 });
 
 test('manager evaluation adapter aggregates latest visible evaluation and enforces insight permission', async t => {
