@@ -67,7 +67,7 @@ test('issue 128 profile keeps one company heading and preserves tags', () => {
   assert.match(hero, /site=c\.website\|\|''/);
   assert.doesNotMatch(hero, /c\.website\|\|c\.domain/);
   assert.match(workbench, /id="modalTags"/);
-  assert.match(poolTags, /renderSemanticSummary\(c,\{removable:canRemoveManualTags\(\)\}\)/);
+  assert.match(poolTags, /renderTagSummary\(c\)/);
   assert.match(workbench, /\['客户类型',c\.customerType\]/);
 });
 
