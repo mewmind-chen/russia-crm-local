@@ -135,10 +135,15 @@ button.metric.alert{background:var(--danger-subtle)}
 .activity-customer-selected .text-button{flex:0 0 auto}
 .activity-summary-field textarea{min-height:58px;max-height:122px;line-height:20px;resize:none;overflow-y:hidden}
 .activity-manager-check{min-width:0;min-height:42px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fafcfb;display:flex!important;align-items:flex-start;gap:9px;cursor:pointer}
+.activity-no-plan-check{min-width:0;min-height:42px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fafcfb;display:flex!important;align-items:flex-start;gap:9px;cursor:pointer}
 .activity-progress-form .activity-manager-check input[type="checkbox"]{box-sizing:border-box;width:18px;height:18px;min-width:18px;min-height:18px;margin:2px 0 0;padding:0;border:0;flex:0 0 18px;accent-color:var(--green)}
+.activity-progress-form .activity-no-plan-check input[type="checkbox"]{box-sizing:border-box;width:18px;height:18px;min-width:18px;min-height:18px;margin:2px 0 0;padding:0;border:0;flex:0 0 18px;accent-color:var(--green)}
 .activity-manager-check span{min-width:0;display:grid;gap:1px}
+.activity-no-plan-check span{min-width:0;display:grid;gap:1px}
 .activity-manager-check strong{font-size:12px;color:var(--ink)}
+.activity-no-plan-check strong{font-size:12px;color:var(--ink)}
 .activity-manager-check small{font-size:10px;line-height:1.45;color:var(--muted);font-weight:500}
+.activity-no-plan-check small{font-size:10px;line-height:1.45;color:var(--muted);font-weight:500}
 .action-proposal-details{min-width:0;border:1px solid var(--line);border-radius:8px;background:#fbfcfc}
 .action-proposal-details>summary{padding:9px 11px;color:var(--green);font-size:11px;font-weight:700;cursor:pointer}
 .action-proposal-details .action-proposal-compose{margin:0 10px 10px}
