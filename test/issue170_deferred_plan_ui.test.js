@@ -104,7 +104,7 @@ test('all seven future-time entry points use one min and validation contract', (
     ['customerForm', 'openNewCustomerModal', 'id="customerForm"'],
     ['quoteForm', 'openQuoteModal', 'id="quoteForm"'],
     ['orderForm', 'openOrderModal', 'id="orderForm"'],
-    ['stageRatingForm', 'openStageRatingModal', 'id="stageRatingForm"'],
+    ['customerProfileEditForm', 'openCustomerProfileEditModal', 'id="customerProfileEditForm"'],
   ];
   for (const [field, functionName, marker] of expectedFields) {
     const constructor = functionBlock(app, functionName);

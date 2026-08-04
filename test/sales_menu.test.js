@@ -97,7 +97,6 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
   const masterHandler = appJs.match(/const master = event\.target\.closest\('\[data-open-master\]'\);[\s\S]*?\n    const stageJump =/)?.[0] || '';
   assert.match(html, /id="customerProfileView"/);
   assert.match(html, /id="customerProfileBack"/);
-  assert.match(html, /id="customerProfileStageEdit"/);
   assert.match(html, /id="customerProfileDataEdit"/);
   assert.match(html, /id="customerProfileFrame"/);
   assert.doesNotMatch(sidebar, /customerProfileView|客户资料/);
@@ -107,7 +106,6 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
   assert.match(appJs, /profile=1[\s\S]*?customer=\$\{encodeURIComponent\(externalCustomerId\)\}/);
   assert.match(appJs, /searchParams\.set\('customer', externalCustomerId\)/);
   assert.match(appJs, /state\.selectedCustomerId = account\.id/);
-  assert.match(appJs, /#customerProfileStageEdit/);
   assert.match(appJs, /#customerProfileDataEdit/);
   assert.match(appJs, /function returnFromCustomerProfile\(\)/);
   assert.match(appJs, /requestedView === 'customerProfile'[\s\S]*?openCustomerProfile\(requestedCustomerId\)/);

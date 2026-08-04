@@ -2709,9 +2709,7 @@
       );
     }
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
-    $('#customerProfileStageEdit').classList.toggle('hidden', readOnly || !account || !can('edit_customer'));
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerProfileNickname').classList.toggle('hidden', !customerAllowsNicknameEdit(profileCustomer));
     $('#customerAiStation')?.classList.toggle('hidden', readOnly || !account || !customerAIEnabled());
   }
 
@@ -7934,6 +7932,7 @@
       source: 'crm',
       crmCustomerId: account.id,
       allowActivity: true,
+      allowNickname: false,
     });
     $('#drawerStage').textContent = stageLabel(account.stage);
     $('#drawerCompany').textContent = accountDisplayName(account);
@@ -7980,7 +7979,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
         ${quotes.length && can('record_order') ? '<button class="button secondary" data-add-order>＋ 记录订单</button>' : ''}
-        ${can('edit_customer') ? '<button class="button secondary" data-edit-stage-rating>调整阶段和评级</button><button class="button secondary" data-edit-customer-profile>编辑客户资料</button>' : ''}
+        ${can('edit_customer') ? '<button class="button secondary" data-edit-customer-profile>编辑客户资料</button>' : ''}
         ${canReturnCustomer(account)
           ? '<button class="button danger" data-return-customer="' + esc(account.id) + '">退回线索池</button>' : ''}
         ${canRejectCustomer(account)
@@ -8999,41 +8998,38 @@
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">重置密码</button></div>
     </form>`);
   }
-  function openStageRatingModal(customerId) {
+  function openCustomerProfileEditModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
+    if (!account) return toast('当前客户不在可编辑范围内');
+    const options = state.data.customerOptions || {};
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     const currentOwner = account.owner_id && !sales.some(user => user.id === account.owner_id)
       ? state.data.users.find(user => user.id === account.owner_id)
       : null;
     const canAssign = can('edit_customer') && can('view_all_customers') && can('manage_intake');
     const ownerOptions = `<optgroup label="操作"><option value="__unassigned__" ${account.owner_id ? '' : 'selected'}>暂不分配</option></optgroup><optgroup label="销售人员">${currentOwner ? `<option value="${esc(currentOwner.id)}" selected>${esc(currentOwner.name)}（当前负责人）</option>` : ''}${sales.map(user => `<option value="${user.id}" ${user.id === account.owner_id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
-    openModal('调整阶段和评级', 'STAGE & RATING', `<form id="stageRatingForm" class="form-grid two">
+    const nicknameField = customerAllowsNicknameEdit(account)
+      ? `<label class="span-2">客户昵称<input name="nickname" value="${esc(account.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符，公司内部共用"></label>`
+      : '';
+    openModal('编辑客户资料', 'CUSTOMER PROFILE', `<form id="customerProfileEditForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
-      <label>阶段<select name="stage" ${can('edit_customer') ? '' : 'disabled'}>${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
+      <label>阶段<select name="stage">${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
+      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(account.established_year || '')}"></label>
       <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
       <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存调整</button></div>
-    </form>`);
-    constrainFutureDateTimes($('#stageRatingForm'));
-  }
-
-  function openCustomerProfileEditModal(customerId) {
-    const account = state.data.accounts.find(item => item.id === customerId);
-    const options = state.data.customerOptions || {};
-    openModal('编辑客户资料', 'CUSTOMER PROFILE', `<form id="customerProfileForm" class="form-grid two">
-      <input type="hidden" name="customerId" value="${esc(customerId)}">
+      ${nicknameField}
       <label>国家 / 地区<input name="country" value="${esc(account.country)}"></label>
       <label>城市<input name="city" value="${esc(account.city)}"></label>
       <label class="span-2">官网<input name="website" type="url" value="${esc(account.website)}" placeholder="https://example.com"></label>
       <label>行业<input name="industry" value="${esc(account.industry)}"></label>
       <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, account.customer_type, '请选择客户类型')}</select></label>
       <label>来源<select name="source">${selectedOptions(options.sources, account.source, '请选择客户来源')}</select></label>
-      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(account.established_year || '')}"></label>
       <label class="span-2">重点产品<input name="productFocus" value="${esc(account.product_focus)}"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存资料</button></div>
     </form>`);
+    constrainFutureDateTimes($('#customerProfileEditForm'));
   }
 
   function openCustomerMasterEditModal() {
@@ -9055,18 +9051,6 @@
       <label class="span-2">客户简介<textarea name="description">${esc(master.description)}</textarea></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存主档</button></div>
     </form>`);
-  }
-
-  function profileNicknameTarget() {
-    const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-    if (account) return nicknameTarget(account, {
-      source: 'crm',
-      crmCustomerId: account.id,
-    });
-    return nicknameTarget(state.customerProfileLead, {
-      source: 'intake',
-      intakeItemId: state.customerProfileIntakeItemId || state.customerProfileLead?.id,
-    });
   }
 
   function synchronizeSharedNickname(externalCustomerId, nickname) {
@@ -9802,7 +9786,7 @@
         });
         form.reset();
         await refresh('密码已重置，该账号的现有登录态已失效');
-      } else if (form.id === 'stageRatingForm') {
+      } else if (form.id === 'customerProfileEditForm') {
         const payload = formPayload(form);
         const customerId = payload.customerId;
         delete payload.customerId;
@@ -9814,14 +9798,13 @@
           payload.unassignConfirmed = true;
         }
         payload.nextActionAt = apiTime(payload.nextActionAt);
-        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        await refresh('阶段和评级已调整');
-        reloadCustomerProfileFrame();
-      } else if (form.id === 'customerProfileForm') {
-        const payload = formPayload(form);
-        const customerId = payload.customerId;
-        delete payload.customerId;
-        await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        if (payload.nickname !== undefined && account?.external_customer_id) {
+          synchronizeSharedNickname(
+            account.external_customer_id,
+            String(result?.nickname ?? (payload.nickname || '')).trim(),
+          );
+        }
         await refresh('客户资料已更新');
         reloadCustomerProfileFrame();
       } else if (form.id === 'customerMasterForm') {
@@ -10289,17 +10272,10 @@
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能记录跟进');
       else void openActivityModal(state.selectedCustomerId);
     }
-    if (event.target.closest('#customerProfileStageEdit')) {
-      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能调整阶段');
-      else openStageRatingModal(state.selectedCustomerId);
-    }
     if (event.target.closest('#customerProfileDataEdit')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑资料');
       else if (state.selectedCustomerId) openCustomerProfileEditModal(state.selectedCustomerId);
       else openCustomerMasterEditModal();
-    }
-    if (event.target.closest('#customerProfileNickname')) {
-      openNicknameModal(profileNicknameTarget());
     }
     if (event.target.closest('[data-clear-nickname]')) {
       const input = $('#nicknameForm input[name="nickname"]');
@@ -10410,7 +10386,6 @@
     if (event.target.closest('#drawerNicknameBtn')) openNicknameModal(state.drawerNicknameTarget);
     if (event.target.closest('[data-add-quote]')) openQuoteModal(state.selectedCustomerId);
     if (event.target.closest('[data-add-order]')) openOrderModal(state.selectedCustomerId);
-    if (event.target.closest('[data-edit-stage-rating]')) openStageRatingModal(state.selectedCustomerId);
     if (event.target.closest('[data-edit-customer-profile]')) openCustomerProfileEditModal(state.selectedCustomerId);
     const evaluateCompanyId = event.target.closest('[data-evaluate-company-id]');
     if (evaluateCompanyId) {
