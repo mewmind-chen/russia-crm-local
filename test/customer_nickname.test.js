@@ -120,11 +120,15 @@ test('nickname survives return, reassignment, trash and restore workflows', asyn
     '/api/sales-crm/accounts/recycle-bin?kind=sales_return&search=%E9%95%BF%E6%9C%9F%E5%90%88%E4%BD%9C%E6%96%B9',
     { cookie: fx.adminCookie },
   );
-  assert.equal(recycleBin.rows[0].nickname, '长期合作方');
+  assert.equal(recycleBin.rows.length, 0);
 
-  assert.equal((await fx.request('/api/sales-crm/accounts/CRM-OTHER/reassign', {
+  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',crm_customer_id='CRM-OTHER',
+    status='returned',assigned_owner_id='' WHERE id='INTAKE-OTHER'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET external_customer_id='RU-9003',intake_item_id='INTAKE-OTHER'
+    WHERE id='CRM-OTHER'`).run();
+  assert.equal((await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.adminCookie, method: 'POST',
-    body: { ownerId: 'U-OTHER', reason: '重新分配给区域销售' },
+    body: { action: 'assign', itemId: 'INTAKE-OTHER', ownerId: 'U-OTHER' },
   })).status, 200);
   assert.equal(
     fx.db.prepare("SELECT nickname FROM crm_accounts WHERE id='CRM-OTHER'").get().nickname,

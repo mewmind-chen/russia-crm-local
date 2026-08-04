@@ -104,7 +104,7 @@ test('recycle drawer is visibly read-only and includes recycle metadata plus ful
 test('recycle drawer exposes only the action valid for its recycle kind and current authority', () => {
   const render = topLevelFunction('renderRecycleDrawer');
 
-  assert.match(render, /detail\.recycle\.kind\s*===\s*'sales_return'/);
+  assert.match(render, /\['sales_return', 'mismatch'\]\.includes\(detail\.recycle\.kind\)/);
   assert.match(render, /detail\.actions\.includes\('reassign'\)/);
   assert.match(render, /state\.data\.assignmentCandidates \|\| \[\]/);
   assert.match(render, /data-recycle-detail-owner=/);

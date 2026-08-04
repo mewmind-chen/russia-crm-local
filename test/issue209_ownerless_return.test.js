@@ -36,8 +36,8 @@ test('Issue 209 lets an authorized admin return an active ownerless CRM customer
       created_by: 'U-WU',
       owner_id: null,
       previous_owner_id: '',
-      lifecycle_status: 'recycled',
-      recycle_kind: 'sales_return',
+      lifecycle_status: 'active',
+      recycle_kind: '',
       assignment_status: 'returned',
     },
   );
@@ -65,8 +65,8 @@ test('Issue 209 bulk return applies the same rule to owned and ownerless custome
     fx.db.prepare(`SELECT id,owner_id,previous_owner_id,lifecycle_status,assignment_status
       FROM crm_accounts WHERE id IN ('CRM-WU','CRM-OWN') ORDER BY id`).all(),
     [
-      { id: 'CRM-OWN', owner_id: null, previous_owner_id: '', lifecycle_status: 'recycled', assignment_status: 'returned' },
-      { id: 'CRM-WU', owner_id: null, previous_owner_id: 'U-WU', lifecycle_status: 'recycled', assignment_status: 'returned' },
+      { id: 'CRM-OWN', owner_id: null, previous_owner_id: '', lifecycle_status: 'active', assignment_status: 'returned' },
+      { id: 'CRM-WU', owner_id: null, previous_owner_id: 'U-WU', lifecycle_status: 'active', assignment_status: 'returned' },
     ],
   );
 });
@@ -119,8 +119,8 @@ test('Issue 209 applies the same owner-independent rule to an explicitly authori
     fx.db.prepare(`SELECT id,lifecycle_status,assignment_status FROM crm_accounts
       WHERE id IN ('CRM-WU','CRM-OWN') ORDER BY id`).all(),
     [
-      { id: 'CRM-OWN', lifecycle_status: 'recycled', assignment_status: 'returned' },
-      { id: 'CRM-WU', lifecycle_status: 'recycled', assignment_status: 'returned' },
+      { id: 'CRM-OWN', lifecycle_status: 'active', assignment_status: 'returned' },
+      { id: 'CRM-WU', lifecycle_status: 'active', assignment_status: 'returned' },
     ],
   );
 });

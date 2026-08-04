@@ -80,7 +80,7 @@ test('Issue 221 return, reassign, and claim reactivates the same account with hi
     accountId: 'CRM-OTHER',
     companyName: 'Issue 221 Lifecycle',
     stage: 'contacted',
-    recycled: true,
+    recycled: false,
     previousOwnerId: 'U-OTHER',
     activityCount: 1,
     rfqCount: 1,

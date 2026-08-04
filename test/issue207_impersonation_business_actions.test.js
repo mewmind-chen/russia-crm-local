@@ -261,26 +261,33 @@ test('Issue 207 makes direct and inspected deferred-plan writes equivalent', asy
   assert.deepEqual(await runDeferredPlanScenario(true), await runDeferredPlanScenario(false));
 });
 
+function seedRecycleAccounts(fx) {
+  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',crm_customer_id='CRM-OTHER',
+    status='claimed',assigned_owner_id='U-OTHER',duplicate_state='cleared'
+    WHERE id='INTAKE-OTHER'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET external_customer_id='RU-9003',intake_item_id='INTAKE-OTHER',
+    assignment_status='claimed' WHERE id='CRM-OTHER'`).run();
+}
+
 async function runRecycleScenario(impersonated) {
-  return runAs({ targetId: 'U-MGR', impersonated }, async context => {
+  return runAs({ targetId: 'U-MGR', impersonated, seed: seedRecycleAccounts }, async context => {
     const { fx, cookie } = context;
     const returned = await responseBody(await fx.request('/api/sales-crm/accounts/CRM-OTHER/return', {
       cookie, method: 'POST', body: { reason: '区域暂不匹配，退回重新评估' },
     }));
     assert.equal(returned.status, 200, JSON.stringify(returned.body));
-    const reassigned = await responseBody(await fx.request('/api/sales-crm/accounts/CRM-OTHER/reassign', {
-      cookie, method: 'POST', body: { ownerId: 'U-OTHER', reason: '按区域重新分配' },
+    const assigned = await responseBody(await fx.request('/api/sales-crm/intake/action', {
+      cookie, method: 'POST', body: { action: 'assign', itemId: 'INTAKE-OTHER', ownerId: 'U-OTHER' },
     }));
-    assert.equal(reassigned.status, 200, JSON.stringify(reassigned.body));
+    assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
     await flushAudit();
     assertIdentity(latestAudit(fx, 'customer_returned', 'CRM-OTHER'), context);
-    assertIdentity(latestAudit(fx, 'customer_reassigned', 'CRM-OTHER'), context);
     return fx.db.prepare(`SELECT owner_id,previous_owner_id,lifecycle_status,recycle_kind,
       assignment_status FROM crm_accounts WHERE id='CRM-OTHER'`).get();
   });
 }
 
-test('Issue 207 makes CRM return and recycle reassignment equivalent', async () => {
+test('Issue 207 makes CRM return and lead-pool reassignment equivalent', async () => {
   assert.deepEqual(await runRecycleScenario(true), await runRecycleScenario(false));
 });
 
