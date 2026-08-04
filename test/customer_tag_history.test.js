@@ -139,18 +139,24 @@ test('tag writes require edit permission and reject malformed or oversized sets'
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_tag_history').get().count, 0);
 });
 
-test('impersonated tag edits are blocked without changing bindings or history', async t => {
+test('impersonated tag edits are allowed with dual-identity audit', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   const tag = addManualTag(fx, '身份审计');
+  fx.setUserPermissions('U-WU', { edit_customer: true });
   const session = await fx.startImpersonation('U-WU');
   const response = await setTags(fx, 'RU-9001', [tag.id], session.cookie || fx.adminCookie);
-  assert.equal(response.status, 403);
-  assert.deepEqual(bindings(fx, 'RU-9001'), []);
-  assert.equal(
-    fx.db.prepare("SELECT COUNT(*) count FROM customer_tag_history WHERE customer_id='RU-9001'").get().count,
-    0,
-  );
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(bindings(fx, 'RU-9001').map(row => row.tagId), [tag.id]);
+  const history = fx.db.prepare(`SELECT actor_id FROM customer_tag_history
+    WHERE customer_id='RU-9001' ORDER BY id DESC LIMIT 1`).get();
+  assert.equal(history.actor_id, 'U-WU');
+  const audit = fx.db.prepare(`SELECT * FROM crm_audit_log
+    WHERE action='customer_tags_updated' AND entity_id='RU-9001'
+    ORDER BY rowid DESC LIMIT 1`).get();
+  assert.equal(audit.real_user_id, 'USR-ADMIN');
+  assert.equal(audit.effective_user_id, 'U-WU');
+  assert.ok(audit.impersonation_context_id);
 });
 
 test('manual tag removal uses tag ID, writes actor history, and preserves other bindings', async t => {
@@ -217,7 +223,7 @@ test('all persisted customer labels can be removed regardless of category or pre
   assert.deepEqual(bindings(fx, 'RU-9001'), []);
 });
 
-test('manual removal requires edit permission and is blocked while impersonating', async t => {
+test('manual removal requires edit permission and is allowed while impersonating', async t => {
   const fx = await fixtures.seededFixture();
   t.after(() => fx.close());
   const tag = addManualTag(fx, '权限删除');
@@ -232,12 +238,11 @@ test('manual removal requires edit permission and is blocked while impersonating
   const adminTag = addManualTag(admin, '身份检查删除');
   admin.db.prepare(`INSERT INTO customer_tags (customer_id,tag_id,created_at)
     VALUES ('RU-9001',?,'2026-07-01 08:00:00')`).run(adminTag.id);
+  admin.setUserPermissions('U-WU', { edit_customer: true });
   const session = await admin.startImpersonation('U-WU');
-  assert.equal(
-    (await removeTag(admin, 'RU-9001', adminTag.id, session.cookie || admin.adminCookie)).status,
-    403,
-  );
-  assert.deepEqual(bindings(admin, 'RU-9001').map(row => row.tagId), [adminTag.id]);
+  const removed = await removeTag(admin, 'RU-9001', adminTag.id, session.cookie || admin.adminCookie);
+  assert.equal(removed.status, 200, await removed.clone().text());
+  assert.deepEqual(bindings(admin, 'RU-9001').map(row => row.tagId), []);
 });
 
 test('customer type updates structured fields without changing independent label bindings', async t => {

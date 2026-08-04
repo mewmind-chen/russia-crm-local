@@ -3929,13 +3929,21 @@
       activity: todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity')),
     }[kind];
     if (!kind) return '<span class="subtle">暂无对应操作</span>';
-    if (!allowed) return '<span class="subtle">当前账号无权处理</span>';
+    if (!allowed) {
+      return state.data.impersonation && todayTaskSecurityBlocked(kind)
+        ? '<span class="subtle">身份检查期间禁止此安全操作</span>'
+        : '<span class="subtle">当前账号无权处理</span>';
+    }
     const labels = {
       'overdue-lead': '处理超时线索',
       'next-plan': '立即补计划',
       'manager-assistance': '处理协助请求',
     };
     return `<button class="text-button" type="button" data-today-task-action="${esc(kind)}" data-today-task-id="${esc(item.id)}">${esc(labels[kind] || item.action || '立即处理')} →</button>`;
+  }
+
+  function todayTaskSecurityBlocked(kind) {
+    return ['password', 'user-management', 'data-maintenance'].includes(kind);
   }
 
   function renderAlerts() {

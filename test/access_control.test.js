@@ -190,9 +190,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
   assert.deepEqual(blockedApp, [
     'createContactReconJob',
     'createReconJob',
-    'removeCustomerTag',
     'retryReconJob',
-    'setCustomerTags',
   ]);
   const blockedProspect = Object.entries(LEGACY_ACTION_POLICIES['prospect-agent'])
     .filter(([, policy]) => policy.blockedWhileImpersonating).map(([action]) => action);
