@@ -2380,8 +2380,10 @@
     const salesView = !canViewAssignmentDecisions();
     const stats = intake.stats;
     const tabCounts = {
-      '': Number(stats.pending || 0) + Number(stats.approved || 0) + Number(stats.assigned || 0)
-        + Number(stats.claimed || 0) + Number(stats.returned || 0) + Number(stats.rejected || 0),
+      '': salesView
+        ? Number(stats.assigned || 0)
+        : Number(stats.pending || 0) + Number(stats.approved || 0) + Number(stats.assigned || 0)
+          + Number(stats.claimed || 0) + Number(stats.returned || 0) + Number(stats.rejected || 0),
       unassigned: Number(stats.pending || 0) + Number(stats.approved || 0),
       assigned: Number(stats.assigned || 0),
       claimed: Number(stats.claimed || 0),
@@ -2393,6 +2395,7 @@
       const status = item.dataset.intakeStatus;
       item.classList.toggle('active', status === state.intakeStatus);
       item.textContent = `${tabLabels[status]} ${tabCounts[status] || 0}`;
+      item.classList.toggle('hidden', salesView && !['', 'assigned'].includes(status));
     });
     $('#intakeHeading').textContent = salesView ? '我的线索' : '线索池';
     $('#intakeSubheading').textContent = salesView
@@ -2436,7 +2439,6 @@
       items.map(item => {
         let actions = '';
         if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
-        else if (salesView && item.status === 'claimed') actions = item.crm_customer_id ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">开始跟进 →</button>` : '—';
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
         else if (!salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
         else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
@@ -10468,7 +10470,7 @@
         try {
           await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify({ action, itemId, ownerId: intakeAction.dataset.ownerId || '', idempotencyKey: intakeAction.dataset.idempotencyKey || proposalRequestId() }) });
           if (action === 'claim') {
-            await refreshIntakeWorkflow('客户已领取，请在规定时间内完成首次触达');
+            await refreshIntakeWorkflow('领取成功，客户已进入 CRM');
           } else {
             await refresh('客户已分配');
           }

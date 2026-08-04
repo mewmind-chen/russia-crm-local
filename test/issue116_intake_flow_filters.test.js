@@ -154,10 +154,10 @@ test('intake and lead-flow expose fixed server-owned filter contracts', () => {
   }
 });
 
-test('manager-wide and assigned-owner scopes preserve current intake visibility', () => {
+test('manager-wide scope keeps the full list and assigned-owner scope keeps only pending claims', () => {
   const db = createDb();
   const personal = buildIntakeFlowFilterScope(user(), 'intake', ast('intake'));
-  assert.deepEqual(ids(db, personal), ['I-ASSIGNED-ONE', 'I-CLAIMED-ONE', 'I-RETURNED-ONE']);
+  assert.deepEqual(ids(db, personal), ['I-ASSIGNED-ONE']);
 
   const manager = buildIntakeFlowFilterScope(
     user('U-MANAGER', { manage_intake: true }, 'manager'),
@@ -259,15 +259,11 @@ test('filter options expose only requested authorized fields and the same row sc
   assert.deepEqual(Object.keys(options), [
     'country', 'industry', 'contact_level', 'tag_customer_type',
   ]);
-  assert.deepEqual(options.country, [{ value: 'DE', label: 'DE', count: 3 }]);
-  assert.deepEqual(options.industry, [{ value: 'Automation', label: 'Automation', count: 3 }]);
-  assert.deepEqual(options.contact_level, [
-    { value: 'L0', label: 'L0', count: 1 },
-    { value: 'L2', label: 'L2', count: 1 },
-    { value: 'L3', label: 'L3', count: 1 },
-  ]);
+  assert.deepEqual(options.country, [{ value: 'DE', label: 'DE', count: 1 }]);
+  assert.deepEqual(options.industry, [{ value: 'Automation', label: 'Automation', count: 1 }]);
+  assert.deepEqual(options.contact_level, [{ value: 'L3', label: 'L3', count: 1 }]);
   assert.deepEqual(options.tag_customer_type, [
-    { value: 'Manufacturer', label: 'Manufacturer', count: 2 },
+    { value: 'Manufacturer', label: 'Manufacturer', count: 1 },
   ]);
   assert.doesNotMatch(JSON.stringify(options), /RU|FR|Distributor|Secret List/);
 
