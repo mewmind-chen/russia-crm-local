@@ -68,6 +68,7 @@
     view: 'dashboard',
     selectedCustomerId: '',
     drawerAccountContacts: [],
+    timelineModalEvents: [],
     alertSeverity: '',
     intakeStatus: '',
     intakePage: 1,
@@ -7049,7 +7050,7 @@
       </section>
       ${commerceGroups.map(([label, rows, describe]) => `<section class="insight-section"><div class="insight-head"><div><h3>${label}</h3></div><span class="panel-note">${rows.length} 条</span></div><div class="insight-body">${rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>'}</div></section>`).join('')}
       <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">FULL TIMELINE</p><h3>完整客户时间线</h3></div><span class="panel-note">${history.length} 条</span></div>
+        <div class="insight-head"><div><p class="eyebrow">FULL TIMELINE</p><h3>完整客户时间线</h3></div><span class="panel-note">${history.length} 条<button class="text-button" data-open-timeline-modal>展开完整时间线</button></span></div>
         <div class="timeline">${history.map(event => {
           const title = timelineEventTitle(event);
           const summary = timelineEventSummary(event);
@@ -7111,6 +7112,54 @@
       <div class="activity-correction-timeline-head"><h4>${esc(title)}</h4>${correctionEntry}</div>
       ${summary ? `<p>${esc(summary)}${event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>` : ''}
       ${provenanceMarkup}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
+  }
+
+  function timelineActivityFor(event) {
+    const rows = state.data.activities || [];
+    const activityId = event.activity_id
+      || (String(event.id || '').startsWith('activity:') ? String(event.id).slice(9) : '');
+    return rows.find(row => String(row.id) === String(activityId)) || {};
+  }
+
+  function renderTimelineEventDetail(event) {
+    const activity = timelineActivityFor(event);
+    const title = timelineEventTitle(event);
+    const summary = timelineEventSummary(event);
+    const progressLabel = activity.progressType
+      ? (progressOption(activity.progressType)?.label || activity.progressType)
+      : event.event_type || '—';
+    const rows = [
+      ['事件', title],
+      ['进展类型', progressLabel],
+      ['进展说明', activity.outcome || activity.summary || summary || '—'],
+      ['客户反应', activity.reactionSnapshot || '—'],
+      ['渠道', activity.channel || '—'],
+      ['详细说明', summary || activity.summary || '—'],
+      ['下一步', activity.nextAction || event.next_action || '—'],
+      ['计划时间', activity.nextActionAt || event.next_action_at || '—'],
+      ['阶段变化', `${activity.stage_before || '—'} → ${activity.stage_after || '—'}`],
+      ['操作人', event.actor_name || event.actorName || '—'],
+      ['发生时间', shortDate(event.occurred_at || event.occurredAt, true)],
+      ['经理介入', activity.managerRequired ? '需要介入' : '—'],
+    ];
+    return `<dl class="timeline-modal-facts">${rows.map(([label, value]) =>
+      `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>`;
+  }
+
+  function openTimelineModal(events) {
+    state.timelineModalEvents = Array.isArray(events) ? events : [];
+    const list = state.timelineModalEvents.map((event, index) => {
+      const title = timelineEventTitle(event);
+      const summary = timelineEventSummary(event);
+      return `<button type="button" class="timeline-modal-item" data-timeline-modal-index="${index}">
+        <strong>${esc(title)}</strong><span>${esc(summary || '—')}</span>
+        <time>${esc(event.actor_name || event.actorName || '')}${(event.actor_name || event.actorName) ? ' · ' : ''}${shortDate(event.occurred_at || event.occurredAt, true)}</time>
+      </button>`;
+    }).join('');
+    openModal(`完整客户时间线 · ${state.timelineModalEvents.length} 条`, 'FULL TIMELINE', `<div class="timeline-modal-layout">
+      <div class="timeline-modal-list">${list || '<div class="empty">暂无时间线记录</div>'}</div>
+      <div id="timelineModalDetail" class="timeline-modal-detail">${renderTimelineEventDetail(state.timelineModalEvents[0] || {})}</div>
+    </div>`, 'timeline-modal-wide');
   }
 
   function newActivityCorrectionIdempotencyKey() {
@@ -7954,7 +8003,7 @@
             ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
         }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
       </section>
-      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
+      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button><button class="text-button" data-open-timeline-modal>展开完整时间线（${timeline.length} 条）</button></div>
       <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div>
       <div id="customerHistoryList" class="customer-history-list hidden"></div></div>`;
   }
@@ -10384,6 +10433,39 @@
           : '<div class="empty">暂无历史记录</div>';
       } catch (error) {
         list.innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+      return;
+    }
+    if (event.target.closest('[data-open-timeline-modal]')) {
+      let events = [];
+      if (state.recycleCustomerDetail) {
+        const detail = state.recycleCustomerDetail;
+        events = detail.timeline?.length
+          ? detail.timeline
+          : (detail.activities || []).map(item => ({
+            id: item.id,
+            kind: 'activity',
+            event_type: item.activity_type,
+            title: activityMeta[item.activity_type]?.[0] || item.activity_type || '客户活动',
+            summary: item.summary || item.outcome || '',
+            next_action: item.next_action || '',
+            actor_name: item.user_name || item.userName || '',
+            occurred_at: item.occurred_at || item.occurredAt,
+          }));
+      } else {
+        const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
+        if (account) events = (state.data.timeline || []).filter(item => item.customer_id === account.id);
+      }
+      openTimelineModal(events);
+      return;
+    }
+    if (event.target.closest('[data-timeline-modal-index]')) {
+      const index = Number(event.target.closest('[data-timeline-modal-index]').dataset.timelineModalIndex);
+      const modalEvent = state.timelineModalEvents[index];
+      if (modalEvent) {
+        $$('.timeline-modal-item').forEach((item, itemIndex) => item.classList.toggle('is-active', itemIndex === index));
+        const detail = $('#timelineModalDetail');
+        if (detail) detail.innerHTML = renderTimelineEventDetail(modalEvent);
       }
       return;
     }
