@@ -141,7 +141,7 @@ test('Issue 207 keeps CRM bulk assignment and ownerless bulk return equivalent',
   assert.deepEqual(inspected, direct);
   assert.deepEqual(direct.responses, {
     assign: { ok: true, updated: 1, ownerId: 'U-OTHER' },
-    return: { ok: true, updated: 2, recycled: 2 },
+    return: { ok: true, updated: 2, returnedToPool: true },
   });
   assert.equal(
     direct.accounts.find(row => row.id === 'CRM-207-BULK-ASSIGN').owner_id,
@@ -158,12 +158,12 @@ test('Issue 207 keeps CRM bulk assignment and ownerless bulk return equivalent',
       })),
     [
       {
-        id: 'CRM-207-BULK-RETURN', ownerId: null, lifecycleStatus: 'recycled',
-        recycleKind: 'sales_return', assignmentStatus: 'returned',
+        id: 'CRM-207-BULK-RETURN', ownerId: null, lifecycleStatus: 'active',
+        recycleKind: '', assignmentStatus: 'returned',
       },
       {
-        id: 'CRM-207-OWNERLESS', ownerId: null, lifecycleStatus: 'recycled',
-        recycleKind: 'sales_return', assignmentStatus: 'returned',
+        id: 'CRM-207-OWNERLESS', ownerId: null, lifecycleStatus: 'active',
+        recycleKind: '', assignmentStatus: 'returned',
       },
     ],
   );

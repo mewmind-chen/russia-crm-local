@@ -115,8 +115,8 @@ test('single return rejects returned customers and accepts active unassigned CRM
     {
       owner_id: null,
       previous_owner_id: '',
-      lifecycle_status: 'recycled',
-      recycle_kind: 'sales_return',
+      lifecycle_status: 'active',
+      recycle_kind: '',
       assignment_status: 'returned',
     },
   );

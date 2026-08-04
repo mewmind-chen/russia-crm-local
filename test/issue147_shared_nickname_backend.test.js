@@ -307,19 +307,16 @@ test('canonical nickname is searchable in CRM and recycle and exported in separa
     '/api/sales-crm/accounts/recycle-bin?kind=sales_return&search=%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E5%85%B1%E4%BA%AB%E4%BB%A3%E5%8F%B7',
     { cookie: fx.adminCookie },
   );
-  assert.deepEqual(recycle.rows.map(item => item.customerId), ['CRM-OTHER']);
-  assert.equal(recycle.rows[0].nickname, '生命周期共享代号');
-  assert.equal(recycle.rows[0].companyName, '生命周期正式名称');
+  assert.deepEqual(recycle.rows.map(item => item.customerId), []);
+  assert.equal(
+    fx.db.prepare("SELECT nickname FROM crm_accounts WHERE id='CRM-OTHER'").get().nickname,
+    '生命周期共享代号',
+  );
   const recycleByOfficialName = await fx.requestJson(
     '/api/sales-crm/accounts/recycle-bin?kind=sales_return&search=%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E6%AD%A3%E5%BC%8F%E5%90%8D%E7%A7%B0',
     { cookie: fx.adminCookie },
   );
-  assert.deepEqual(recycleByOfficialName.rows.map(item => item.customerId), ['CRM-OTHER']);
-  const recycleProfile = await fx.requestJson(
-    '/api/sales-crm/accounts/CRM-OTHER/recycle-profile',
-    { cookie: fx.adminCookie },
-  );
-  assert.equal(recycleProfile.profileAccess.canEditNickname, true);
+  assert.deepEqual(recycleByOfficialName.rows.map(item => item.customerId), []);
 });
 
 test('nickname search never widens customer scope', async t => {

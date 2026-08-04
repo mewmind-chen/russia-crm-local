@@ -278,6 +278,7 @@
   };
   const RECYCLE_KIND_LABELS = Object.freeze({
     sales_return: '销售退回',
+    mismatch: '不对口',
     manual_delete: '手动删除',
   });
   const EVENT_LABELS = Object.freeze({
@@ -3590,6 +3591,13 @@
     return true;
   }
 
+  function canRejectCustomer(account) {
+    if (!account || !can('manage_customer_recycle')) return false;
+    if (String(account.lifecycle_status || 'active') !== 'active') return false;
+    if (String(account.assignment_status || '') === 'returned') return false;
+    return true;
+  }
+
   function canBulkAssignCustomers() {
     return can('view_all_customers') && can('manage_intake') && can('edit_customer');
   }
@@ -3675,10 +3683,12 @@
       accounts.map(account => {
         const alert = alertFor(account.id);
         const canReturn = canReturnCustomer(account);
+        const canReject = canRejectCustomer(account);
         const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
           && !account.intake_item_id && account.source_file === 'CRM手工新增';
         const lifecycleActions = [
           canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
+          canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
         ].filter(Boolean).join('');
         return [
@@ -6966,7 +6976,7 @@
       occurred_at: item.occurred_at || item.occurredAt,
       next_action: item.next_action || item.nextAction,
     }));
-    const canReassign = detail.recycle.kind === 'sales_return'
+    const canReassign = ['sales_return', 'mismatch'].includes(detail.recycle.kind)
       && detail.actions.includes('reassign');
     const canRestore = detail.recycle.kind === 'manual_delete'
       && detail.actions.includes('restore')
@@ -7919,6 +7929,8 @@
         ${can('edit_customer') ? '<button class="button secondary" data-edit-stage-rating>调整阶段和评级</button><button class="button secondary" data-edit-customer-profile>编辑客户资料</button>' : ''}
         ${canReturnCustomer(account)
           ? '<button class="button danger" data-return-customer="' + esc(account.id) + '">退回线索池</button>' : ''}
+        ${canRejectCustomer(account)
+          ? '<button class="button danger" data-reject-customer="' + esc(account.id) + '">标记不对口</button>' : ''}
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
           ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
       </div>
@@ -9107,6 +9119,7 @@
   function openRecycleReasonModal(customerId, action) {
     const labels = {
       return: ['退回客户到线索池', '说明退回原因，客户历史记录会保留。'],
+      reject: ['标记客户不对口', '说明不对口原因，客户将进入回收站“不对口”并可重新分配。'],
       trash: ['删除客户到回收站', '仅手工创建客户可执行，操作不会删除客户主档或经营历史。'],
       bulk: ['批量退回客户', '选中的客户会一次性退回，任一客户校验失败则全部不变。'],
     };
@@ -9867,6 +9880,8 @@
         const action = payload.action;
         const route = action === 'trash'
           ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/trash`
+          : action === 'reject'
+            ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/reject`
           : action === 'bulk'
             ? '/api/sales-crm/accounts/bulk-return'
             : `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/return`;
@@ -9875,8 +9890,10 @@
           : { reason: payload.reason };
         await api(route, { method: 'POST', body: JSON.stringify(body) });
         resetCustomerSelection();
-        await refresh(action === 'trash' ? '客户已移入回收站' : '客户已退回线索池');
-        if (action === 'bulk') switchView('recycleBin');
+        await refresh(action === 'trash' ? '客户已移入回收站'
+          : action === 'reject' ? '客户已标记为不对口'
+            : '客户已退回线索池');
+        if (action === 'bulk') switchView('pool');
       } else if (form.id === 'contactForm') {
         const payload = formPayload(form);
         const contactId = String(payload.contactId || '').replace(/^local:/, '');
@@ -10498,6 +10515,12 @@
       const account = state.data.accounts.find(item => item.id === returnCustomer.dataset.returnCustomer);
       if (!canReturnCustomer(account)) return toast('仅当前仍在 CRM 且有退回权限的客户可退回');
       openRecycleReasonModal(returnCustomer.dataset.returnCustomer, 'return');
+    }
+    const rejectCustomer = event.target.closest('[data-reject-customer]');
+    if (rejectCustomer) {
+      const account = state.data.accounts.find(item => item.id === rejectCustomer.dataset.rejectCustomer);
+      if (!canRejectCustomer(account)) return toast('仅当前仍在 CRM 且有回收权限的客户可标记不对口');
+      openRecycleReasonModal(rejectCustomer.dataset.rejectCustomer, 'reject');
     }
     const trashCustomer = event.target.closest('[data-trash-customer]');
     if (trashCustomer) openRecycleReasonModal(trashCustomer.dataset.trashCustomer, 'trash');
