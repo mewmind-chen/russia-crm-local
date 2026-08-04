@@ -3944,7 +3944,11 @@
       quote: todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote')),
       activity: todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity')),
     }[kind];
-    if (!kind) return '<span class="subtle">暂无对应操作</span>';
+    if (!kind) {
+      return item.action
+        ? `<span class="pill amber">${esc(item.action)}</span>`
+        : '<span class="subtle">暂无对应操作</span>';
+    }
     if (!allowed) {
       return state.data.impersonation && todayTaskSecurityBlocked(kind)
         ? '<span class="subtle">身份检查期间禁止此安全操作</span>'
@@ -6976,6 +6980,7 @@
       actor_name: item.user_name || item.userName || '',
       occurred_at: item.occurred_at || item.occurredAt,
       next_action: item.next_action || item.nextAction,
+      no_plan: Number(item.no_plan || item.noPlan || 0),
     }));
     const canReassign = ['sales_return', 'mismatch'].includes(detail.recycle.kind)
       && detail.actions.includes('reassign');
@@ -7054,7 +7059,7 @@
         <div class="timeline">${history.map(event => {
           const title = timelineEventTitle(event);
           const summary = timelineEventSummary(event);
-          return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}${event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>` : ''}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
+          return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}${event.no_plan ? '<br><strong>下一步：</strong>暂无计划' : (event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '')}</p>` : ''}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
         }).join('') || '<div class="empty">暂无历史记录</div>'}</div>
       </section>
       <section class="insight-section">
@@ -7110,7 +7115,7 @@
     const summary = timelineEventSummary(event);
     return `<div class="timeline-item ${event.superseded ? 'is-superseded' : ''}" data-timeline-kind="${esc(event.kind || 'activity')}">
       <div class="activity-correction-timeline-head"><h4>${esc(title)}</h4>${correctionEntry}</div>
-      ${summary ? `<p>${esc(summary)}${event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>` : ''}
+      ${summary ? `<p>${esc(summary)}${event.no_plan ? '<br><strong>下一步：</strong>暂无计划' : (event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '')}</p>` : ''}
       ${provenanceMarkup}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
   }
 
@@ -7135,7 +7140,7 @@
       ['客户反应', activity.reactionSnapshot || '—'],
       ['渠道', activity.channel || '—'],
       ['详细说明', summary || activity.summary || '—'],
-      ['下一步', activity.nextAction || event.next_action || '—'],
+      ['下一步', (activity.noPlan || event.no_plan) ? '暂无计划' : (activity.nextAction || event.next_action || '—')],
       ['计划时间', activity.nextActionAt || event.next_action_at || '—'],
       ['阶段变化', `${activity.stage_before || '—'} → ${activity.stage_after || '—'}`],
       ['操作人', event.actor_name || event.actorName || '—'],
@@ -8727,6 +8732,10 @@
             <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
             <label>下次跟进时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(2)}"></label>
           </div>
+          <label class="activity-no-plan-check">
+            <input name="noPlan" type="checkbox">
+            <span><strong>暂无计划</strong><small>勾选后清空下一步计划与时间，连续 3 次将提醒经理介入</small></span>
+          </label>
           <label class="activity-manager-check">
             <input name="managerRequired" type="checkbox">
             <span><strong>需要经理协助</strong><small>勾选后提醒销售经理关注并协助本次进展</small></span>
@@ -9581,6 +9590,10 @@
         try {
           const fromTodayTask = payload.todayTaskSource === 'alerts';
           delete payload.todayTaskSource;
+          if (payload.noPlan) {
+            payload.nextAction = '';
+            payload.nextActionAt = '';
+          }
           payload.nextActionAt = apiTime(payload.nextActionAt);
           payload.bomLines = Number(payload.bomLines || 0);
           payload.expectedValue = Number(payload.expectedValue || 0);
@@ -10870,6 +10883,18 @@
   });
 
   document.addEventListener('change', event => {
+    if (event.target.matches('#activityForm input[name="noPlan"]')) {
+      const form = event.target.closest('#activityForm');
+      const checked = event.target.checked;
+      ['nextAction', 'nextActionAt'].forEach(name => {
+        const field = form?.elements?.[name];
+        if (!field) return;
+        field.value = '';
+        field.disabled = checked;
+        field.required = !checked;
+        field.setAttribute('aria-disabled', String(checked));
+      });
+    }
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
     if (event.target.closest('#managerTaskSettingsForm')) {
       event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
