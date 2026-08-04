@@ -595,7 +595,7 @@ test('Issue 212 CRM jump filters are authorized and scoped to intake lifecycle',
   const flowField = schema.schema.fields.find(field => field.key === 'intake_flow');
   assert.deepEqual(flowField.options, [
     { value: 'claimed', label: '销售已领取 / CRM' },
-    { value: 'contacted', label: '已完成触达' },
+    { value: 'contacted', label: '当前触达' },
   ]);
 });
 
