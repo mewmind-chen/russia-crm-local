@@ -161,14 +161,15 @@ test('Issue 148 UI is binary, confirms group replacement, and never restores the
     js.indexOf('function personalPermissionFields'),
     js.indexOf('function openAdminPasswordResetModal'),
   );
-  assert.match(personalEditor, /允许/);
-  assert.match(personalEditor, /拒绝/);
-  assert.doesNotMatch(personalEditor, /继承|组默认|个人开启|个人关闭/);
+  assert.match(personalEditor, /type="checkbox" role="switch" name="personalPermission__/);
+  assert.match(personalEditor, /跟随权限组/);
+  assert.match(personalEditor, /个人调整/);
+  assert.doesNotMatch(personalEditor, /继承|个人开启|个人关闭/);
   assert.match(js, /更换后将清除该用户原有的个人权限调整，并采用新权限组设置。/);
   assert.match(js, /!window\.confirm/);
   assert.doesNotMatch(`${html}\n${js}`, /更多操作/);
   assert.doesNotMatch(`${js}\n${css}`, /user-action-menu/);
   assert.match(css, /flex-wrap:wrap/);
   assert.match(css, /focus-visible/);
-  assert.match(js, /binaryPermission.*Spacebar.*Enter/s);
+  assert.match(js, /permissionSwitch.*Spacebar.*Enter/s);
 });
