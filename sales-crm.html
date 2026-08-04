@@ -194,7 +194,7 @@
               <button data-intake-status="returned">已退回</button>
               <button data-intake-status="rejected">不对口</button>
             </div>
-            <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索企业、网站、产品或联系人"></div>
+            <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>
             <span id="intakeModeLabel" class="toolbar-count"></span>
           </div>
@@ -271,7 +271,7 @@
               <button data-recycle-kind="mismatch">不对口</button>
               <button data-recycle-kind="manual_delete">手动删除</button>
             </div>
-            <input id="recycleSearch" placeholder="搜索客户">
+            <input id="recycleSearch" placeholder="搜索客户昵称、公司名称或客户编号">
             <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
           </div>
           <div class="toolbar"><span id="recycleAuthorizedResultCount" class="toolbar-count"></span></div>
@@ -452,7 +452,7 @@
         <div id="insightsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="toolbar hidden">
-            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索企业、国家或负责人"></div>
+            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索客户昵称、企业、国家或负责人"></div>
             <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
             <span id="insightResultCount" class="toolbar-count"></span>
           </div>
@@ -690,7 +690,7 @@
             <button id="protectedRefreshBtn" class="text-button" type="button">刷新</button>
           </div>
           <div class="protected-toolbar">
-            <label class="protected-search">搜索<input id="protectedSearch" type="search" autocomplete="off" placeholder="输入昵称、公司名或客户编号"></label>
+            <label class="protected-search">搜索<input id="protectedSearch" type="search" autocomplete="off" placeholder="搜索客户昵称、公司名称或客户编号"></label>
             <label>保护状态<select id="protectedStatus"><option value="all">全部状态</option><option value="protected">保护中</option><option value="activated">已激活</option></select></label>
             <span id="protectedListCount" class="toolbar-count">0 个客户</span>
           </div>

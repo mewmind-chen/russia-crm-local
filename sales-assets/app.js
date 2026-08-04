@@ -5844,7 +5844,7 @@
             ])}
             <button class="text-button" type="button" data-toggle-duplicate-search="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>更换疑似客户</button>
             <div class="duplicate-candidate-search ${searchOpen ? '' : 'hidden'}">
-              <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索名称、昵称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
+              <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索客户昵称、公司名称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
               <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span><span>${esc(uiFormat.website(item.website)?.label || '暂无官网')}</span></button>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
             </div>
           </section>
@@ -8430,7 +8430,7 @@
     }
     root.innerHTML = `<div class="activity-customer-search-wrap">
       <label for="activityCustomerSearch">客户搜索</label>
-      <input id="activityCustomerSearch" type="search" autocomplete="off" placeholder="输入昵称、正式公司名称或客户编号"
+      <input id="activityCustomerSearch" type="search" autocomplete="off" placeholder="搜索客户昵称、正式公司名称或客户编号"
         role="combobox" aria-autocomplete="list" aria-controls="activityCustomerResults" aria-expanded="false">
       <div id="activityCustomerResults" class="activity-customer-results" role="listbox"></div>
     </div>`;
