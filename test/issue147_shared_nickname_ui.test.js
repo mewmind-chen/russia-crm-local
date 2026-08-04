@@ -72,14 +72,15 @@ test('a visible nickname action uses the stable master id and synchronizes all l
   assert.match(synchronize, /state\.data\?\.intake\?\.items/);
   assert.match(synchronize, /state\.recycleBin\?\.rows/);
   assert.match(synchronize, /authorizedBusinessLists/);
-  assert.match(profile, /customerAllowsNicknameEdit\(profileCustomer\)/);
+  assert.match(profile, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
+  assert.match(app, /customerAllowsNicknameEdit\(account\)/);
   assert.doesNotMatch(app, /领取并进入 CRM 后才能设置昵称/);
   assert.match(app, /openNicknameModal\(state\.drawerNicknameTarget\)/);
-  assert.match(app, /openNicknameModal\(profileNicknameTarget\(\)\)/);
+  assert.doesNotMatch(app, /openNicknameModal\(profileNicknameTarget\(\)\)/);
 });
 
 test('nickname actions start hidden and the Issue 147 assets are cache-busted', () => {
-  assert.match(html, /id="customerProfileNickname" class="button secondary hidden"/);
+  assert.match(html, /id="customerProfileDataEdit" class="button secondary hidden"/);
   assert.match(html, /id="drawerNicknameBtn" class="button secondary hidden"/);
   assert.match(html, /app\.css\?v=20260804-issue208-duplicate-review/);
   assert.match(html, /app\.js\?v=20260804-issue208-duplicate-review/);

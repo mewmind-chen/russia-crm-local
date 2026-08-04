@@ -12,36 +12,30 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets/app.js'), 'utf8');
 
-test('customer profile and stage-rating actions have separate permission-scoped entry points', () => {
+test('customer profile edit is a single permission-scoped entry point', () => {
   assert.doesNotMatch(`${html}\n${app}`, /调整客户信息/);
-  assert.match(html, /id="customerProfileStageEdit"[\s\S]*?>调整阶段和评级</);
   assert.match(html, /id="customerProfileDataEdit"[\s\S]*?>编辑客户资料</);
-  assert.match(app, /can\('edit_customer'\) \? '<button class="button secondary" data-edit-stage-rating>调整阶段和评级<\/button><button class="button secondary" data-edit-customer-profile>编辑客户资料<\/button>' : ''/);
-  assert.match(app, /#customerProfileStageEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !account \|\| !can\('edit_customer'\)\)/);
+  assert.doesNotMatch(html, /customerProfileStageEdit|customerProfileNickname/);
+  assert.match(app, /can\('edit_customer'\) \? '<button class="button secondary" data-edit-customer-profile>编辑客户资料<\/button>' : ''/);
+  assert.doesNotMatch(app, /data-edit-stage-rating|openStageRatingModal/);
   assert.match(app, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
 });
 
-test('stage and profile forms write disjoint responsibilities and refresh the embedded profile', () => {
-  const stageForm = app.match(/openModal\('调整阶段和评级', 'STAGE & RATING', `([\s\S]*?)<\/form>`/)?.[1] || '';
-  assert.match(stageForm, /id="stageRatingForm"/);
-  for (const name of ['stage', 'ownerId', 'priority', 'nextAction', 'nextActionAt']) {
-    assert.match(stageForm, new RegExp(`name="${name}"`), name);
-  }
-  assert.doesNotMatch(stageForm, /name="potentialValue"/);
-  for (const name of ['country', 'city', 'website', 'industry', 'customerType', 'source', 'productFocus']) {
-    assert.doesNotMatch(stageForm, new RegExp(`name="${name}"`), name);
-  }
-
+test('unified profile form owns stage, owner, priority, plan, nickname and master fields', () => {
   const profileForm = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
-  assert.match(profileForm, /id="customerProfileForm"/);
-  for (const name of ['country', 'city', 'website', 'industry', 'customerType', 'source', 'productFocus']) {
+  assert.match(profileForm, /id="customerProfileEditForm"/);
+  for (const name of [
+    'stage', 'ownerId', 'priority', 'nextAction', 'nextActionAt',
+    'country', 'city', 'website', 'industry', 'customerType', 'source',
+    'establishedYear', 'productFocus',
+  ]) {
     assert.match(profileForm, new RegExp(`name="${name}"`), name);
   }
-  for (const name of ['stage', 'ownerId', 'priority', 'potentialValue', 'nextAction', 'nextActionAt']) {
-    assert.doesNotMatch(profileForm, new RegExp(`name="${name}"`), name);
-  }
-  assert.match(app, /form\.id === 'stageRatingForm'[\s\S]*?reloadCustomerProfileFrame\(\)/);
-  assert.match(app, /form\.id === 'customerProfileForm'[\s\S]*?reloadCustomerProfileFrame\(\)/);
+  assert.match(profileForm, /\$\{nicknameField\}/);
+  assert.match(app, /name="nickname"/);
+  assert.doesNotMatch(profileForm, /name="potentialValue"/);
+  assert.match(app, /form\.id === 'customerProfileEditForm'[\s\S]*?reloadCustomerProfileFrame\(\)/);
+  assert.doesNotMatch(app, /form\.id === 'stageRatingForm'|form\.id === 'customerProfileForm'/);
 });
 
 test('customer profile edits update CRM and master data using standard dropdown values', async t => {
