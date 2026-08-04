@@ -361,8 +361,10 @@ test('notification adapter removes out-of-scope customer rows and facet counts a
   const insert = fx.db.prepare(`INSERT INTO crm_notifications
     (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,wecom_status,created_at,read_at)
     VALUES (?,?,?,?,?,?,?,?,?,'pending',?,'')`);
-  insert.run('NOTE-SCOPE-OWN', 'U-MGR', 'CRM-OWN', 'SELF_VISIBLE', 'info',
+  insert.run('NOTE-SCOPE-OWN', 'U-MGR', 'CRM-OWN', 'MANAGER_TASK_CREATED', 'info',
     '本人客户通知', 'own-scope-detail', 'unread', 'scope-own', '2026-08-01 10:00:00');
+  insert.run('NOTE-SCOPE-UNKNOWN', 'U-MGR', 'CRM-OWN', 'LEGACY_UNKNOWN_CODE', 'warning',
+    '未知代码通知', 'unknown-scope-detail', 'read', 'scope-unknown', '2026-08-01 07:00:00');
   insert.run('NOTE-SCOPE-FOREIGN-ID', 'U-MGR', 'CRM-OTHER', 'SECRET_ACCOUNT_ID', 'critical',
     '越权客户通知', 'secret-account-id-detail', 'read', 'scope-foreign-id', '2026-08-01 09:00:00');
   insert.run('NOTE-SCOPE-FOREIGN-EXTERNAL', 'U-MGR', 'RU-9003', 'SECRET_EXTERNAL_ID', 'warning',
@@ -373,9 +375,9 @@ test('notification adapter removes out-of-scope customer rows and facet counts a
     view_customers: true,
   });
   const result = listNotificationRows(fx.db, manager, ast('notifications'));
-  assert.equal(result.authorizedTotal, 1);
-  assert.equal(result.total, 1);
-  assert.deepEqual(result.rows.map(row => row.id), ['NOTE-SCOPE-OWN']);
+  assert.equal(result.authorizedTotal, 2);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.rows.map(row => row.id), ['NOTE-SCOPE-OWN', 'NOTE-SCOPE-UNKNOWN']);
   const serialized = JSON.stringify(result);
   for (const secret of [
     'NOTE-SCOPE-FOREIGN-ID', 'NOTE-SCOPE-FOREIGN-EXTERNAL',
@@ -387,10 +389,19 @@ test('notification adapter removes out-of-scope customer rows and facet counts a
   const options = businessFilterOptions(fx.db, manager, 'notifications', [
     'recipient', 'notification_status', 'notification_code', 'notification_severity',
   ]);
-  assert.deepEqual(options.recipient, [{ value: 'U-MGR', label: 'U-MGR', count: 1 }]);
-  assert.deepEqual(options.notification_status, [{ value: 'unread', label: 'unread', count: 1 }]);
-  assert.deepEqual(options.notification_code, [{ value: 'SELF_VISIBLE', label: 'SELF_VISIBLE', count: 1 }]);
-  assert.deepEqual(options.notification_severity, [{ value: 'info', label: 'info', count: 1 }]);
+  assert.deepEqual(options.recipient, [{ value: 'U-MGR', label: 'Manager', count: 2 }]);
+  assert.deepEqual(options.notification_status, [
+    { value: 'unread', label: '未读', count: 1 },
+    { value: 'read', label: '已读', count: 1 },
+  ]);
+  assert.deepEqual(options.notification_code, [
+    { value: 'MANAGER_TASK_CREATED', label: '主管任务已创建', count: 1 },
+    { value: 'LEGACY_UNKNOWN_CODE', label: '其他', count: 1 },
+  ]);
+  assert.deepEqual(options.notification_severity, [
+    { value: 'info', label: '信息', count: 1 },
+    { value: 'warning', label: '提醒', count: 1 },
+  ]);
   assert.equal(JSON.stringify(options).includes('SECRET_'), false);
 });
 
@@ -400,7 +411,7 @@ test('notification adapter excludes intake-only rows and facets without intake p
   const insert = fx.db.prepare(`INSERT INTO crm_notifications
     (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,wecom_status,created_at,read_at)
     VALUES (?,?,?,?,?,?,?,?,?,'pending',?,'')`);
-  insert.run('NOTE-ACCOUNT-VISIBLE', 'U-OTHER', 'CRM-OTHER', 'ACCOUNT_VISIBLE', 'info',
+  insert.run('NOTE-ACCOUNT-VISIBLE', 'U-OTHER', 'CRM-OTHER', 'AUTH_REQUIRED', 'info',
     '本人客户通知', 'account-visible-detail', 'unread', 'account-visible', '2026-08-01 10:00:00');
   insert.run('NOTE-INTAKE-HIDDEN', 'U-OTHER', 'BR-9004', 'INTAKE_HIDDEN', 'critical',
     '线索通知', 'intake-hidden-detail', 'read', 'intake-hidden', '2026-08-01 09:00:00');
@@ -422,10 +433,10 @@ test('notification adapter excludes intake-only rows and facets without intake p
   const options = businessFilterOptions(fx.db, sales, 'notifications', [
     'recipient', 'notification_status', 'notification_code', 'notification_severity',
   ]);
-  assert.deepEqual(options.recipient, [{ value: 'U-OTHER', label: 'U-OTHER', count: 1 }]);
-  assert.deepEqual(options.notification_status, [{ value: 'unread', label: 'unread', count: 1 }]);
-  assert.deepEqual(options.notification_code, [{ value: 'ACCOUNT_VISIBLE', label: 'ACCOUNT_VISIBLE', count: 1 }]);
-  assert.deepEqual(options.notification_severity, [{ value: 'info', label: 'info', count: 1 }]);
+  assert.deepEqual(options.recipient, [{ value: 'U-OTHER', label: 'Other', count: 1 }]);
+  assert.deepEqual(options.notification_status, [{ value: 'unread', label: '未读', count: 1 }]);
+  assert.deepEqual(options.notification_code, [{ value: 'AUTH_REQUIRED', label: '需要重新认证', count: 1 }]);
+  assert.deepEqual(options.notification_severity, [{ value: 'info', label: '信息', count: 1 }]);
   assert.equal(JSON.stringify(options).includes('INTAKE_'), false);
 });
 

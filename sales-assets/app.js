@@ -1155,6 +1155,9 @@
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
+      if (pageKey === 'alerts' && state.alertSeverity) {
+        params.set('urgency', state.alertSeverity);
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -1170,8 +1173,7 @@
         error: '',
         summary: result.summary || result.meta?.summary || meta.summary || null,
       });
-      if (result.schema && (pageKey === 'notifications'
-          || String(result.schema.permissionVersion) !== String(payload.permissionVersion))) {
+      if (result.schema) {
         meta.filterController.updateSchema(result.schema);
       }
     } catch (error) {
@@ -10490,12 +10492,7 @@
       state.alertSeverity = alertTab.dataset.severity;
       state.authorizedBusinessLists.alerts.page = 1;
       $$('#alertTabs button').forEach(item => item.classList.toggle('active', item === alertTab));
-      const controller = state.authorizedBusinessLists.alerts.filterController;
-      if (controller) {
-        if (state.alertSeverity) controller.setDraft('urgency', [state.alertSeverity]);
-        else controller.clearField('urgency', { draftOnly: true });
-        controller.apply();
-      } else void loadAuthorizedBusinessPage('alerts', { reset: true });
+      void loadAuthorizedBusinessPage('alerts', { reset: true });
     }
     const toggleUser = event.target.closest('[data-toggle-user]');
     if (toggleUser) {
