@@ -279,6 +279,39 @@
     sales_return: '销售退回',
     manual_delete: '手动删除',
   });
+  const EVENT_LABELS = Object.freeze({
+    claim: { title: '领取客户', summary: actor => (actor ? `${actor}领取该线索并进入 CRM` : '领取该线索并进入 CRM') },
+    assign: { title: '分配线索', summary: (actor, event) => `${actor}将线索分配给 ${event.ownerName || '销售'}` },
+    reassign: { title: '重新分配', summary: (actor, event) => `${actor}将客户重新分配给 ${event.ownerName || '销售'}` },
+    unassign: { title: '取消分配', summary: actor => `${actor}取消分配，线索恢复为待分配` },
+    return: { title: '退回线索池', summary: actor => `${actor}将客户退回线索池` },
+    sales_return: { title: '退回线索池', summary: actor => `${actor}将客户退回线索池` },
+    reject: { title: '标记不对口', summary: actor => `${actor}将客户标记为不对口` },
+    manual_delete: { title: '移入客户回收站', summary: actor => `${actor}将客户移入回收站` },
+    restore: { title: '恢复客户', summary: actor => `${actor}恢复该客户` },
+    nickname_update: { title: '修改客户昵称', summary: actor => `${actor}修改了客户昵称` },
+  });
+
+  function timelineEventTitle(event) {
+    const kind = String(event?.kind || event?.event_type || '');
+    const mapped = EVENT_LABELS[kind];
+    const title = mapped?.title
+      || (event?.kind === 'activity' ? activityMeta[event?.event_type]?.[0] : '')
+      || event?.title
+      || '';
+    if (!title) {
+      console.warn('UNMAPPED_TIMELINE_EVENT', kind);
+      return '系统记录';
+    }
+    return title;
+  }
+
+  function timelineEventSummary(event) {
+    const raw = String(event?.summary || '').trim();
+    if (raw && raw !== '无补充说明') return raw;
+    const mapped = EVENT_LABELS[String(event?.kind || event?.event_type || '')];
+    return mapped?.summary ? String(mapped.summary(event?.actor_name || '', event) || '').trim() : '';
+  }
   const activityProgressOptions = [
     { key: 'email', label: '发送邮件', activityType: 'email', channel: 'email' },
     { key: 'call', label: '电话开发', activityType: 'call', channel: 'call' },
@@ -6980,7 +7013,11 @@
       ${commerceGroups.map(([label, rows, describe]) => `<section class="insight-section"><div class="insight-head"><div><h3>${label}</h3></div><span class="panel-note">${rows.length} 条</span></div><div class="insight-body">${rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>'}</div></section>`).join('')}
       <section class="insight-section">
         <div class="insight-head"><div><p class="eyebrow">FULL TIMELINE</p><h3>完整客户时间线</h3></div><span class="panel-note">${history.length} 条</span></div>
-        <div class="timeline">${history.map(event => `<div class="timeline-item"><h4>${esc(event.title || event.kind || '客户事件')}</h4><p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p><time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`).join('') || '<div class="empty">暂无历史记录</div>'}</div>
+        <div class="timeline">${history.map(event => {
+          const title = timelineEventTitle(event);
+          const summary = timelineEventSummary(event);
+          return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}${event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>` : ''}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
+        }).join('') || '<div class="empty">暂无历史记录</div>'}</div>
       </section>
       <section class="insight-section">
         <div class="insight-head"><div><p class="eyebrow">AUDIT TRAIL</p><h3>客户审计历史</h3></div><span class="panel-note">${auditLog.length} 条</span></div>
@@ -7009,7 +7046,6 @@
   }
 
   function renderActivityTimelineItem(event) {
-    const meta = activityMeta[event.event_type] || [event.title || event.kind || '客户事件', '记'];
     const provenance = event.provenance || {};
     const replacementCustomerId = provenance.replacementCustomerId || provenance.targetCustomerId || '';
     const replacementActivityId = provenance.replacementActivityId || '';
@@ -7032,9 +7068,11 @@
     const correctionEntry = canStartActivityCorrection(event)
       ? `<button class="text-button activity-correction-entry" type="button" data-correct-activity="${esc(activityId)}" ${correctionWriteReady ? '' : `disabled aria-disabled="true" title="${state.activityCorrection.writeEnabled === false ? '更正功能尚未启用' : '正在检查更正功能状态'}"`}>更正归属客户</button>`
       : '';
+    const title = timelineEventTitle(event);
+    const summary = timelineEventSummary(event);
     return `<div class="timeline-item ${event.superseded ? 'is-superseded' : ''}" data-timeline-kind="${esc(event.kind || 'activity')}">
-      <div class="activity-correction-timeline-head"><h4>${esc(event.title || meta[0])}</h4>${correctionEntry}</div>
-      <p>${esc(event.summary || '无补充说明')}${event.next_action && event.next_action !== event.summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>
+      <div class="activity-correction-timeline-head"><h4>${esc(title)}</h4>${correctionEntry}</div>
+      ${summary ? `<p>${esc(summary)}${event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : ''}</p>` : ''}
       ${provenanceMarkup}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
   }
 
