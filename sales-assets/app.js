@@ -6998,9 +6998,6 @@
       </section>
       <div class="commerce-strip recycle-commerce-strip">
         <div class="commerce-card"><span>跟进</span><strong>${activities.length}</strong></div>
-        <div class="commerce-card"><span>询价</span><strong>${rfqs.length}</strong></div>
-        <div class="commerce-card"><span>报价</span><strong>${quotes.length}</strong></div>
-        <div class="commerce-card"><span>订单</span><strong>${orders.length}</strong></div>
       </div>
       <section class="insight-section">
         <div class="insight-head"><div><p class="eyebrow">CONTACT HISTORY</p><h3>联系人历史</h3></div><span class="panel-note">${contacts.length} 人</span></div>
@@ -7886,11 +7883,6 @@
         </div>
       </section>
       ${customerAiSection(state.drawerAiContext)}
-      <div class="commerce-strip">
-        <div class="commerce-card"><span>询价</span><strong>${rfqs.length}</strong></div>
-        <div class="commerce-card"><span>累计报价</span><strong>${money(quotes.reduce((sum, item) => sum + item.amount, 0))}</strong></div>
-        <div class="commerce-card"><span>累计订单</span><strong>${money(orders.reduce((sum, item) => sum + item.amount, 0))}</strong></div>
-      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
         ${quotes.length && can('record_order') ? '<button class="button secondary" data-add-order>＋ 记录订单</button>' : ''}
