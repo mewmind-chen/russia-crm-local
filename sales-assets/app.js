@@ -3454,6 +3454,11 @@
     const time = new Date(String(value).replace(' ', 'T') + (String(value).includes('Z') ? '' : 'Z')).getTime();
     return Number.isNaN(time) ? 0 : time;
   }
+  function creatorDisplayName(account) {
+    if (String(account?.created_by || '') === 'system') return '系统导入';
+    if (account?.creator_name) return account.creator_name;
+    return '历史数据/未知';
+  }
   function matchesTimeBuckets(value, buckets, kind) {
     if (!buckets.length) return true;
     const time = crmTime(value);
@@ -3678,7 +3683,7 @@
         ].filter(Boolean).join('');
         return [
           canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(account.creator_name || '历史数据')}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(creatorDisplayName(account))}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           esc(account.owner_name || '未分配'),
@@ -7881,7 +7886,7 @@
     const canEvaluate = can('manage_evaluations');
     const alert = alertFor(account.id);
     const accountFacts = [
-      ['负责人', account.owner_name || '未分配'], ['创建人', account.creator_name || '历史数据'],
+      ['负责人', account.owner_name || '未分配'], ['创建人', creatorDisplayName(account)],
       ['优先级', account.priority], ['客户来源', account.source],
       ['成立年份', account.established_year || '未填写'],
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
@@ -7937,8 +7942,9 @@
             ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
         }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
       </section>
-      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span></div>
-      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
+      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
+      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div>
+      <div id="customerHistoryList" class="customer-history-list hidden"></div></div>`;
   }
 
   function openModal(title, eyebrow, html, modalClass = '') {
@@ -10326,6 +10332,32 @@
     if (event.target.closest('[data-add-contact]')) openContactModal();
     const editContact = event.target.closest('[data-edit-contact]');
     if (editContact) openContactModal(editContact.dataset.editContact);
+    if (event.target.closest('[data-customer-history]')) {
+      const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
+      const list = $('#customerHistoryList');
+      if (!account || !list) return;
+      list.classList.remove('hidden');
+      list.innerHTML = '<div class="empty">正在读取客户历史…</div>';
+      try {
+        const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(account.id)}/history`);
+        list.innerHTML = (result.timeline || []).length
+          ? result.timeline.map(event => {
+            const title = timelineEventTitle(event);
+            const summary = timelineEventSummary(event);
+            const before = event.before && Object.keys(event.before).length
+              ? Object.entries(event.before).map(([key, value]) => `${key}：${value}`).join('、')
+              : '';
+            const after = event.after && Object.keys(event.after).length
+              ? Object.entries(event.after).map(([key, value]) => `${key}：${value}`).join('、')
+              : '';
+            return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}</p>` : ''}${before || after ? `<p class="subtle">${before ? `变更前：${esc(before)}` : ''}${before && after ? ' → ' : ''}${after ? `变更后：${esc(after)}` : ''}</p>` : ''}<time>${esc(event.actorName || '')}${event.actorName ? ' · ' : ''}${shortDate(event.occurredAt, true)}</time></div>`;
+          }).join('')
+          : '<div class="empty">暂无历史记录</div>';
+      } catch (error) {
+        list.innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+      return;
+    }
     const retryEvaluation = event.target.closest('[data-retry-evaluation]');
     if (retryEvaluation && customerAIEnabled()) {
       try {
