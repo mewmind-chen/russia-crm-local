@@ -8812,17 +8812,15 @@
     return (state.data.permissionGroups || []).find(group => group.id === groupId)?.permissions || fallback;
   }
 
-  function personalPermissionFields(permissions = {}) {
+  function personalPermissionFields(permissions = {}, groupPermissions = {}) {
     return Object.entries(visiblePermissionDefinitions()).map(([key, label]) => {
       const allowed = Boolean(permissions[key]);
+      const followsGroup = allowed === Boolean(groupPermissions[key]);
       const description = state.data.permissionDescriptions?.[key] || '';
-      return `<div class="permission-override-row">
-        <div><strong>${esc(label)}</strong>${description ? `<small>${esc(description)}</small>` : ''}</div>
-        <div class="binary-permission-control" role="radiogroup" aria-label="${esc(label)}">
-          <label><input type="radio" name="personalPermission__${esc(key)}" value="true" ${allowed ? 'checked' : ''}><span>允许</span></label>
-          <label><input type="radio" name="personalPermission__${esc(key)}" value="false" ${allowed ? '' : 'checked'}><span>拒绝</span></label>
-        </div>
-      </div>`;
+      return `<label class="permission-override-row permission-switch-row">
+        <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${description ? `${esc(description)} · ` : ''}${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
+        <input type="checkbox" role="switch" name="personalPermission__${esc(key)}" ${allowed ? 'checked' : ''} aria-label="${esc(label)}">
+      </label>`;
     }).join('');
   }
 
@@ -8896,12 +8894,14 @@
   function openOverridesModal(userId) {
     const user = state.data.users.find(item => item.id === userId);
     if (!user) return;
+    const group = (state.data.permissionGroups || []).find(item => item.id === user.permissionGroupId);
+    const groupPermissions = group?.permissions || {};
     openModal(`个人权限 · ${user.name}`, 'ALLOW OR DENY', `<form id="permissionOverrideForm" class="form-grid">
       <input type="hidden" name="userId" value="${esc(user.id)}">
-      <div class="recommendation"><strong>${esc(user.email)}</strong><br>权限组：${esc(user.permissionGroupName || '未分配')}。请选择该账号每项权限的实际结果；与权限组相同的选择会自动取消个人调整。</div>
-      <div class="permission-override-list" data-personal-permission-editor>${personalPermissionFields(user.permissions)}</div>
+      <div class="recommendation permission-override-user"><div><strong>${esc(user.email)}</strong><br>权限组：${esc(user.permissionGroupName || '未分配')}。开关开启表示允许、关闭表示拒绝；与权限组相同的开关会自动跟随权限组。</div><button type="button" class="button secondary" id="restoreUserPermissions">恢复权限组默认</button></div>
+      <div class="permission-override-list" data-personal-permission-editor>${personalPermissionFields(user.permissions, groupPermissions)}</div>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存个人权限</button></div>
-    </form>`);
+    </form>`, 'permission-modal-wide');
   }
 
   function openAdminPasswordResetModal(userId) {
@@ -9264,7 +9264,7 @@
     const permissions = { ...fallback };
     Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
       const field = `personalPermission__${key}`;
-      if (Object.hasOwn(payload, field)) permissions[key] = payload[field] === 'true';
+      if (Object.hasOwn(payload, field)) permissions[key] = Boolean(payload[field]);
       delete payload[field];
     });
     return permissions;
@@ -10162,6 +10162,21 @@
       if (state.activityDraftBeforeReactionAdmin && $('.activity-reaction-admin')) void restoreActivityDraft();
       else if ($('#modal .modal')?.classList.contains('activity-correction-modal')) closeActivityCorrectionModal();
       else closeModal();
+    }
+    if (event.target.closest('#restoreUserPermissions')) {
+      const form = document.querySelector('#permissionOverrideForm');
+      const userId = form?.elements?.userId?.value || '';
+      if (!userId) return;
+      if (!window.confirm('恢复权限组默认？\n这会清除该用户的全部个人调整，所有权限重新跟随当前权限组。该操作保存后生效。')) return;
+      try {
+        await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, {
+          method: 'PUT',
+          body: JSON.stringify({ restoreDefault: true }),
+        });
+        closeModal();
+        await refresh('已恢复权限组默认');
+      } catch (error) { toast(error.message); }
+      return;
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
@@ -11104,11 +11119,11 @@
         return;
       }
     }
-    const binaryPermission = event.target.closest?.('.binary-permission-control input[type="radio"]');
-    if (binaryPermission && [' ', 'Space', 'Spacebar', 'Enter'].includes(event.key)) {
+    const permissionSwitch = event.target.closest?.('.permission-switch-row input[type="checkbox"]');
+    if (permissionSwitch && [' ', 'Space', 'Spacebar', 'Enter'].includes(event.key)) {
       event.preventDefault();
-      binaryPermission.checked = true;
-      binaryPermission.dispatchEvent(new Event('change', { bubbles: true }));
+      permissionSwitch.checked = !permissionSwitch.checked;
+      permissionSwitch.dispatchEvent(new Event('change', { bubbles: true }));
     }
     const accessTab = event.target.closest?.('[data-access-section]');
     if (accessTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {

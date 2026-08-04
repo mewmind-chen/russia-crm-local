@@ -12,7 +12,8 @@ test('access UI exposes groups binary personal permissions account edits and pas
   const js = readAsset('sales-assets', 'app.js');
   assert.match(html, /id="permissionGroupTable"/);
   assert.match(js, /permissionOverrideForm/);
-  assert.match(js, /binary-permission-control/);
+  assert.match(js, /permission-switch-row/);
+  assert.match(js, /role="switch"/);
   assert.match(js, /name="personalPermission__/);
   assert.match(js, /value="true"/);
   assert.match(js, /value="false"/);

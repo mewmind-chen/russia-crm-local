@@ -214,16 +214,21 @@ button.metric.alert{background:var(--danger-subtle)}
 .user-row-actions .text-button:hover{background:var(--brand-subtle)}
 .current-account-label{display:inline-flex;align-items:center;min-height:32px;padding:4px 8px;color:var(--text-secondary);font-size:11px;white-space:nowrap}
 .access-governance-panel .assistant-runtime-panel,.access-workspace-panel>.assistant-runtime-panel{margin:0;padding:16px 18px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-panel)}
-.permission-override-list{display:grid;gap:8px;max-height:48vh;overflow:auto;padding-right:4px}
-.permission-override-row{display:grid;grid-template-columns:1fr 132px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.permission-override-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:62vh;overflow:auto;padding-right:4px}
+.permission-override-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .permission-override-row strong{font-size:12px}
 .permission-override-row small{display:block;color:var(--muted);margin-top:3px;font-size:10px}
-.binary-permission-control{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border:1px solid var(--line);border-radius:9px;background:var(--surface-subtle)}
-.binary-permission-control label{position:relative;cursor:pointer}
-.binary-permission-control input{position:absolute;opacity:0;pointer-events:none}
-.binary-permission-control span{display:flex;align-items:center;justify-content:center;min-height:32px;padding:5px 10px;border-radius:6px;color:var(--muted);font-size:11px;font-weight:700}
-.binary-permission-control input:checked+span{background:var(--surface-panel);color:var(--ink);box-shadow:0 1px 3px rgba(16,43,34,.12)}
-.binary-permission-control input:focus-visible+span{outline:2px solid var(--brand);outline-offset:1px}
+.permission-switch-label{display:grid;gap:2px;min-width:0}
+.permission-switch-row{cursor:pointer}
+.permission-switch-row input[type="checkbox"]{width:38px;height:22px;appearance:none;-webkit-appearance:none;border-radius:999px;background:var(--border-default);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+.permission-switch-row input[type="checkbox"]::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(16,43,34,.25);transition:transform .15s}
+.permission-switch-row input[type="checkbox"]:checked{background:var(--brand)}
+.permission-switch-row input[type="checkbox"]:checked::after{transform:translateX(16px)}
+.permission-switch-row input[type="checkbox"]:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.permission-override-user{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.permission-override-user .button{flex:none}
+.permission-modal-wide{width:min(960px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
+@media(max-width:700px){.permission-override-list{grid-template-columns:minmax(0,1fr)}}
 .permission-editor fieldset{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 10px}
 .permission-editor legend{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;padding:0 6px}
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
