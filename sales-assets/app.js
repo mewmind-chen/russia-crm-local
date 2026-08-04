@@ -275,6 +275,10 @@
     manager_join: ['管理者介入', '管'], rfq: ['收到询价', '询'], quote: ['发送报价', '报'],
     negotiation: ['商务谈判', '谈'], order: ['首次下单', '单'], repeat_order: ['复购', '复'], lost: ['暂停/流失', '停'],
   };
+  const RECYCLE_KIND_LABELS = Object.freeze({
+    sales_return: '销售退回',
+    manual_delete: '手动删除',
+  });
   const activityProgressOptions = [
     { key: 'email', label: '发送邮件', activityType: 'email', channel: 'email' },
     { key: 'call', label: '电话开发', activityType: 'call', channel: 'call' },
@@ -6887,7 +6891,7 @@
     const auditLog = detail.auditLog || [];
     const customerId = account.id || state.selectedCustomerId;
     const name = accountDisplayName(account) || master.companyName || '未命名客户';
-    const recycleKindLabel = recycle.kind === 'sales_return' ? '销售退回' : '手工删除';
+    const recycleKindLabel = RECYCLE_KIND_LABELS[recycle.kind] || '其他';
     const history = timeline.length ? timeline : activities.map(item => ({
       title: activityMeta[item.activity_type]?.[0] || item.activity_type || '跟进记录',
       summary: item.summary || item.outcome || '',
