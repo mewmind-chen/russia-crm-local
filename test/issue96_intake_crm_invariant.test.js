@@ -19,6 +19,13 @@ function insertAssignedIntake(db, {
     .run(id, externalCustomerId, companyName, ownerId, ownerId);
 }
 
+function testStamp(offsetHours = 0) {
+  const date = new Date(Date.now() + offsetHours * 3600000);
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function insertAccount(db, {
   id,
   externalCustomerId,
@@ -330,8 +337,9 @@ test('assigned intake and CRM expose one overdue-claim business reason', async t
     WHERE id='INTAKE-96-ASSIGNED-PAIR'`).run();
   fx.db.prepare(`UPDATE crm_accounts
     SET assignment_status='assigned',intake_item_id='INTAKE-96-ASSIGNED-PAIR',
-        owner_id='U-MGR',assigned_at='2026-07-20 00:00:00',
-        claim_due_at='2026-07-21 00:00:00',claimed_at=''
+        owner_id='U-MGR',assigned_at='${testStamp(-49)}',
+        claim_due_at='${testStamp(-25)}',claimed_at='',
+        created_at='${testStamp(-1)}',updated_at='${testStamp(-1)}'
     WHERE id='CRM-OWN'`).run();
 
   const bootstrap = await (await fx.request('/api/sales-crm/bootstrap', { cookie: fx.cookie })).json();
