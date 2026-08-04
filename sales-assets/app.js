@@ -9152,7 +9152,7 @@
       <div class="recommendation"><strong>${esc(subjectName || '')}</strong>${subjectTitle ? `<br>${esc(subjectTitle)}` : ''}</div>
       <label>销售经理评价<textarea name="evaluationText" required minlength="8" placeholder="${subjectType === 'company' ? '例如：公司规模很大但采购流程不规范，因此决策快、价格敏感度较低；质检实验室完整，赢单关键是提供可追溯质检服务。' : '例如：采购主管拥有供应商初筛权，重视响应速度和资料完整度；沟通直接，但最终价格需要老板确认。'}"></textarea></label>
       ${showAI ? '<div class="recommendation"><strong>AI如何处理</strong><br>系统会基于这段经理原文提取标签、风险、赢单关键和建议。所有生成内容均明确显示“AI标注”，不会覆盖经理原文。</div>' : ''}
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${showAI ? '保存并生成AI标注' : '保存评价'}</button></div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">${showAI ? '保存并生成AI标注' : '保存评价'}</button></div>
     </form>`);
   }
 
@@ -9895,13 +9895,25 @@
         if (saved?.contact) state.drawerAccountContacts = [saved.contact, ...state.drawerAccountContacts];
         renderDrawer();
       } else if (form.id === 'evaluationForm') {
-        const button = form.querySelector('button[type=submit]');
-        button.disabled = true;
-        button.textContent = customerAIEnabled() ? 'AI分析中…' : '保存中…';
-        const result = await api('/api/sales-crm/evaluations', { method: 'POST', body: JSON.stringify(formPayload(form)) });
-        await refresh(customerAIEnabled()
-          ? (result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成')
-          : '经理评价已保存');
+        const button = form.querySelector('button[type="submit"], button:not([type])');
+        if (button) {
+          button.disabled = true;
+          button.textContent = customerAIEnabled() ? 'AI分析中…' : '保存中…';
+        }
+        try {
+          const result = await api('/api/sales-crm/evaluations', {
+            method: 'POST',
+            body: JSON.stringify(formPayload(form)),
+          });
+          await refresh(customerAIEnabled()
+            ? (result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成')
+            : '经理评价已保存');
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = customerAIEnabled() ? '保存并生成AI标注' : '保存评价';
+          }
+        }
       } else if (form.id === 'drawerAiForm') {
         if (!customerAIEnabled()) return;
         const message = String(new FormData(form).get('message') || '').trim();
