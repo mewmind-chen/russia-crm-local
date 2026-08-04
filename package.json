@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test",
+    "test": "node scripts/run-core-tests.js",
+    "test:ai-legacy": "node scripts/run-core-tests.js --ai",
+    "check:ai-boundary": "node scripts/check-ai-boundary.js",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "crm:setup": "node -e \"require('./lib/sales_crm').installSalesCrm(); console.log('Sales CRM ready')\"",
