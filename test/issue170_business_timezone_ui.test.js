@@ -75,9 +75,9 @@ test('server rejects an invalid CRM business timezone before exposing bootstrap 
 
 test('plan UI uses basis-aware conversion, AI normalization, and the current JS cache key', () => {
   const html = fs.readFileSync(htmlPath, 'utf8');
-  assert.match(source, /storedPlanDateInputWithBasis\(account\.next_action_at, account\.next_action_time_basis\)/);
+  assert.match(source, /function storedPlanDateInputWithBasis\(value, basis\)/);
   assert.match(source, /suggestedPlanDateInput\(value\.nextActionAt\)/);
   assert.match(source, /历史时间待确认/);
-  assert.match(html, /sales-assets\/app\.js\?v=20260804-issue208-duplicate-review/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260804-issue208-duplicate-review/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260805-issue257-workflow-regressions/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260805-issue257-workflow-regressions/);
 });

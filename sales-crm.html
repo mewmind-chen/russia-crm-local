@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260804-issue208-duplicate-review">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260805-issue257-workflow-regressions">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260729-issue137">
 </head>
 <body data-app="sales">
@@ -261,14 +261,14 @@
 
       <section id="recycleBinView" class="view">
         <div class="section-intro">
-          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>退回和手动删除均为软回收，客户主档与经营历史完整保留。</p></div>
+          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>不对口客户和手动删除客户在此保留；销售退回的客户回到线索池等待重新分配。</p></div>
         </div>
         <div id="recycleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="toolbar hidden">
             <div class="segmented" id="recycleTabs">
-              <button class="active" data-recycle-kind="sales_return">销售退回</button>
-              <button data-recycle-kind="mismatch">不对口</button>
+              <button data-recycle-kind="sales_return">历史销售退回</button>
+              <button class="active" data-recycle-kind="mismatch">不对口</button>
               <button data-recycle-kind="manual_delete">手动删除</button>
             </div>
             <input id="recycleSearch" placeholder="搜索客户昵称、公司名称或客户编号">
@@ -777,6 +777,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260803-issue210-customer-controls"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260804-issue208-duplicate-review"></script>
+  <script src="/sales-assets/app.js?v=20260805-issue257-workflow-regressions"></script>
 </body>
 </html>

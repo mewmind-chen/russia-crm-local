@@ -21,11 +21,11 @@ test('customer profile edit is a single permission-scoped entry point', () => {
   assert.match(app, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
 });
 
-test('unified profile form owns stage, owner, priority, plan, nickname and master fields', () => {
+test('unified profile form owns stage, owner, priority, nickname and master fields', () => {
   const profileForm = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
   assert.match(profileForm, /id="customerProfileEditForm"/);
   for (const name of [
-    'stage', 'ownerId', 'priority', 'nextAction', 'nextActionAt',
+    'stage', 'ownerId', 'priority',
     'country', 'city', 'website', 'industry', 'customerType', 'source',
     'establishedYear', 'productFocus',
   ]) {
@@ -33,6 +33,7 @@ test('unified profile form owns stage, owner, priority, plan, nickname and maste
   }
   assert.match(profileForm, /\$\{nicknameField\}/);
   assert.match(app, /name="nickname"/);
+  assert.doesNotMatch(profileForm, /name="nextAction"|name="nextActionAt"|data-future-datetime/);
   assert.doesNotMatch(profileForm, /name="potentialValue"/);
   assert.match(app, /form\.id === 'customerProfileEditForm'[\s\S]*?reloadCustomerProfileFrame\(\)/);
   assert.doesNotMatch(app, /form\.id === 'stageRatingForm'|form\.id === 'customerProfileForm'/);
