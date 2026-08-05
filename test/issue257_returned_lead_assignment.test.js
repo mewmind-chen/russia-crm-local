@@ -124,6 +124,66 @@ test('stale duplicate flags do not block the only linked sales return', async t 
   });
 });
 
+test('legacy duplicate rows reuse the only sales return matched by external customer id', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE crm_accounts SET intake_item_id='',owner_id=NULL,
+    lifecycle_status='recycled',recycle_kind='sales_return',assignment_status='returned'
+    WHERE id='CRM-OTHER'`).run();
+  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',
+    crm_customer_id='',status='duplicate',assigned_owner_id='',
+    duplicate_state='',decision_reason='客户已在CRM' WHERE id='INTAKE-OTHER'`).run();
+
+  const body = await businessList(fx, 'intake', {
+    status: { operator: 'in', values: ['duplicate'] },
+  });
+  const item = body.rows.find(row => row.id === 'INTAKE-OTHER');
+  assert.ok(item);
+  assert.equal(item.assignable, true);
+  assert.equal(item.assignmentBlockReason, '');
+
+  const response = await fx.request('/api/sales-crm/intake/action', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      action: 'manual_assign', itemIds: ['INTAKE-OTHER'], ownerId: 'U-OTHER', amount: 1,
+      idempotencyKey: 'issue259-legacy-external-sales-return',
+    },
+  });
+  const result = await response.json();
+  assert.equal(response.status, 200, result.error);
+  assert.equal(result.assigned, 1);
+  assert.deepEqual(fx.db.prepare(`SELECT status,crm_customer_id,duplicate_state
+    FROM crm_intake_items WHERE id='INTAKE-OTHER'`).get(), {
+    status: 'assigned', crm_customer_id: 'CRM-OTHER', duplicate_state: 'cleared',
+  });
+});
+
+test('legacy duplicate rows remain blocked when another CRM account exists', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE crm_accounts SET intake_item_id='',owner_id=NULL,
+    lifecycle_status='recycled',recycle_kind='sales_return',assignment_status='returned'
+    WHERE id='CRM-OTHER'`).run();
+  fx.db.prepare(`INSERT INTO crm_accounts
+    (id,external_customer_id,intake_item_id,company_name,owner_id,lifecycle_status,
+     assignment_status,created_at,updated_at)
+    VALUES ('CRM-ISSUE259-DUP','LEGACY-DUP','INTAKE-OTHER','Real duplicate','U-WU',
+      'active','claimed',?,?)`)
+    .run('2026-08-05 10:00:00', '2026-08-05 10:00:00');
+  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',
+    crm_customer_id='',status='duplicate',assigned_owner_id='',duplicate_state=''
+    WHERE id='INTAKE-OTHER'`).run();
+
+  const body = await businessList(fx, 'intake', {
+    status: { operator: 'in', values: ['duplicate'] },
+  });
+  const item = body.rows.find(row => row.id === 'INTAKE-OTHER');
+  assert.ok(item);
+  assert.equal(item.assignable, false);
+  assert.equal(item.assignmentBlockReason, '客户已在 CRM');
+});
+
 test('high value review copy does not block a manager manual assignment', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
