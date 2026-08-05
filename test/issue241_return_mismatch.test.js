@@ -124,12 +124,13 @@ test('Issue 241 reject requires recycle permission', async t => {
   assert.equal(denied.status, 403);
 });
 
-test('Issue 241 frontend adds reject entry, mismatch tab and pool jump', () => {
+test('Issue 241 frontend adds reject entry and returns sales returns to the pool', () => {
   assert.match(app, /data-reject-customer/);
   assert.match(app, /canRejectCustomer\(account\)/);
   assert.match(app, /标记不对口/);
   assert.match(app, /\['sales_return', 'mismatch'\]\.includes\(detail\.recycle\.kind\)/);
   assert.match(app, /if \(action === 'bulk'\) switchView\('pool'\)/);
   assert.doesNotMatch(app, /if \(action === 'bulk'\) switchView\('recycleBin'\)/);
-  assert.match(html, /data-recycle-kind="mismatch">不对口<\/button>/);
+  assert.match(html, /不对口客户和手动删除客户在此保留/);
+  assert.doesNotMatch(html, /data-recycle-kind=/);
 });

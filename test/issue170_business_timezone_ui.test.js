@@ -78,6 +78,6 @@ test('plan UI uses basis-aware conversion, AI normalization, and the current JS 
   assert.match(source, /function storedPlanDateInputWithBasis\(value, basis\)/);
   assert.match(source, /suggestedPlanDateInput\(value\.nextActionAt\)/);
   assert.match(source, /历史时间待确认/);
-  assert.match(html, /sales-assets\/app\.js\?v=20260805-issue257-workflow-regressions/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260805-issue257-workflow-regressions/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260805-returned-lead-hotfix/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260805-returned-lead-hotfix/);
 });
