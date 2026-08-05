@@ -54,7 +54,7 @@ The existing manager-task table has a SQLite `CHECK` constraint on `reason`. Sch
 - restores foreign-key enforcement;
 - passes `foreign_key_check` and preserves intervention references.
 
-Completing assistance from Today Tasks resolves the matching active manager task in the same database transaction that writes the `manager_join` activity, updates the customer, and writes the audit row. The task result records the manager response and the linked activity ID. A `manager_advice` intervention row is written for the immutable processing history.
+Completing assistance from Today Tasks resolves the matching active manager task in the same database transaction that writes the `manager_join` activity, updates the customer, and writes the audit row. The task result records the manager response and the linked activity ID. This workflow does not insert or modify `crm_manager_interventions`; supervisor intervention records remain unchanged.
 
 The supervisor task list, detail view, filters, export, labels, and completed summary recognize `manager_assistance`. Completed tasks remain read-only in the existing detail modal.
 

@@ -133,7 +133,7 @@ git commit -m "fix: hide manager-only reasons from sales today tasks"
 - Modify: `sales-assets/app.js`
 
 **Interfaces:**
-- Produces `crm_manager_tasks.reason='manager_assistance'` with stable idempotency, evidence, intervention history, and completed state.
+- Produces `crm_manager_tasks.reason='manager_assistance'` with stable idempotency, evidence, and completed state without adding supervisor intervention records.
 - Existing manager-task list/detail/export response shapes remain compatible.
 
 - [ ] **Step 1: Write failing schema migration tests**
@@ -142,7 +142,7 @@ Build a legacy manager-task schema without `manager_assistance`, insert an exist
 
 - [ ] **Step 2: Write failing request/completion tests**
 
-Record an activity with `managerRequired=true` and assert one open task exists with requester/activity evidence. Replay the request and assert no duplicate. Complete the today task as manager and assert the task is completed, one intervention exists, one `manager_join` activity exists, and the existing audit row exists.
+Record an activity with `managerRequired=true` and assert one open task exists with requester/activity evidence. Replay the request and assert no duplicate. Complete the today task as manager and assert the task is completed, no intervention is added, one `manager_join` activity exists, and the existing audit row exists.
 
 - [ ] **Step 3: Verify RED**
 
@@ -162,7 +162,7 @@ After inserting an activity with `managerRequired=true`, call `upsertManagerTask
 
 - [ ] **Step 6: Complete the task in the today-task transaction**
 
-Locate the active manager-assistance task, write the existing `manager_join` activity and customer/audit changes, insert one immutable intervention containing result/activity ID, and update task status/result/resolver fields before returning.
+Locate the active manager-assistance task, write the existing `manager_join` activity and customer/audit changes, and update task status/result/resolver fields before returning. Do not insert or modify `crm_manager_interventions` records for this workflow.
 
 - [ ] **Step 7: Add UI/filter/export labels**
 
