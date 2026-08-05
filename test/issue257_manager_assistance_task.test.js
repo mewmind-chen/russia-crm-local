@@ -103,6 +103,7 @@ test('sales manager assistance creates one persisted task and manager completion
   assert.ok(task);
   assert.equal(task.status, 'open');
   assert.equal(task.actor_id_snapshot, 'U-OTHER');
+  assert.equal(task.completion_condition, '记录经理协助结果并完成主管任务');
   assert.equal(JSON.parse(task.evidence_json).activityId, first.activityId);
 
   const replayResponse = await fx.request('/api/sales-crm/activities', {
