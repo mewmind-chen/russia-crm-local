@@ -4026,6 +4026,7 @@
     consecutive_deferred: '连续暂未确定',
     first_contact_silence: '首次触达后沉默',
     planned_action_overdue: '计划动作超时',
+    manager_assistance: '销售请求经理协助',
   };
   const managerTaskStatusLabels = {
     open: '待处理', overdue: '已逾期', escalated: '已升级老板', completed: '已完成',
@@ -4072,6 +4073,7 @@
         ['待处理', Number(taskSummary.open || 0)],
         ['已逾期', Number(taskSummary.overdue || 0)],
         ['已升级老板', Number(taskSummary.escalated || 0)],
+        ['已完成', Number(taskSummary.completed || 0)],
         ['当前筛选任务', Number(taskSummary.total || 0)],
       ];
       summary.innerHTML = values.map(([label, value]) =>
@@ -8248,7 +8250,8 @@
             <p>${esc(item.note || item.difficulty || '已形成业务变化')}</p>
             <small>${esc(userById(item.actor_id || item.actorId)?.name || item.actor_id || item.actorId || '未记录')}</small>
           </article>`).join('') : '<span class="subtle">暂无介入记录</span>'}</div></section>
-          ${task.status === 'completed' ? '<div class="recommendation">该任务已通过真实业务变化完结，仅保留历史查看。</div>' : `
+          ${task.status === 'completed' || task.reason === 'manager_assistance'
+          ? `<div class="recommendation">${task.status === 'completed' ? '该任务已完成，仅保留历史查看。' : '请在今日待办中处理该经理协助请求。'}</div>` : `
           <form id="managerTaskResolveForm" class="manager-task-resolve-form">
             <input type="hidden" name="taskId" value="${esc(task.id)}">
             <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
