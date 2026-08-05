@@ -9021,8 +9021,6 @@
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(account.established_year || '')}"></label>
-      <label class="span-2">下一步动作<input name="nextAction" value="${esc(account.next_action)}"></label>
-      <label class="span-2">计划时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${esc(storedPlanDateInputWithBasis(account.next_action_at, account.next_action_time_basis))}">${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</label>
       ${nicknameField}
       <label>国家 / 地区<input name="country" value="${esc(account.country)}"></label>
       <label>城市<input name="city" value="${esc(account.city)}"></label>
@@ -9033,7 +9031,6 @@
       <label class="span-2">重点产品<input name="productFocus" value="${esc(account.product_focus)}"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存资料</button></div>
     </form>`);
-    constrainFutureDateTimes($('#customerProfileEditForm'));
   }
 
   function openCustomerMasterEditModal() {
@@ -9801,7 +9798,6 @@
           if (payload.unassignReason.length < 2) throw new Error('转入CRM未分配范围必须填写至少2个字符的原因');
           payload.unassignConfirmed = true;
         }
-        payload.nextActionAt = apiTime(payload.nextActionAt);
         const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         if (payload.nickname !== undefined && account?.external_customer_id) {
           synchronizeSharedNickname(

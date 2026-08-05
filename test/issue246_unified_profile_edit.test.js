@@ -19,11 +19,11 @@ test('Issue 246 customer profile edit is a single entry on drawer and profile to
   assert.match(app, /#customerProfileDataEdit'\)\.classList\.toggle\('hidden', readOnly \|\| !can\('edit_customer'\)\)/);
 });
 
-test('Issue 246 unified form contains the full profile, stage and nickname field set', () => {
+test('Issue 246 unified form contains profile, stage and nickname fields without plan inputs', () => {
   const form = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
   assert.match(form, /id="customerProfileEditForm"/);
   for (const name of [
-    'stage', 'ownerId', 'priority', 'nextAction', 'nextActionAt',
+    'stage', 'ownerId', 'priority',
     'country', 'city', 'website', 'industry', 'customerType', 'source',
     'establishedYear', 'productFocus',
   ]) {
@@ -32,7 +32,7 @@ test('Issue 246 unified form contains the full profile, stage and nickname field
   assert.match(form, /\$\{nicknameField\}/);
   assert.match(app, /name="nickname"/);
   assert.doesNotMatch(form, /name="potentialValue"/);
-  assert.match(form, /data-future-datetime/);
+  assert.doesNotMatch(form, /name="nextAction"|name="nextActionAt"|data-future-datetime/);
   assert.match(app, /customerAllowsNicknameEdit\(account\)/);
   assert.match(app, /can\('view_all_customers'\) && can\('manage_intake'\)/);
   assert.match(app, /form\.id === 'customerProfileEditForm'[\s\S]*?reloadCustomerProfileFrame\(\)/);
@@ -45,6 +45,6 @@ test('Issue 246 unified save handles owner unassign and nickname sync through on
   assert.match(submit, /\/api\/sales-crm\/accounts\/\$\{encodeURIComponent\(customerId\)\}/);
   assert.match(submit, /__unassigned__/);
   assert.match(submit, /unassignConfirmed/);
-  assert.match(submit, /nextActionAt = apiTime/);
+  assert.doesNotMatch(submit, /nextAction|nextActionAt|apiTime/);
   assert.match(submit, /refresh\('客户资料已更新'\)/);
 });
