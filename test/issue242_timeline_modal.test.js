@@ -10,7 +10,7 @@ const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'sales-assets', 'app.css'), 'utf8');
 
 test('Issue 242 timeline modal exposes expand entry, detail fields and dash placeholders', () => {
-  assert.match(app, /function openTimelineModal\(events\)/);
+  assert.match(app, /function openTimelineModal\(events, options = \{\}\)/);
   assert.match(app, /function renderTimelineEventDetail\(event\)/);
   assert.match(app, /data-open-timeline-modal/);
   assert.match(app, /data-timeline-modal-index/);
@@ -26,8 +26,9 @@ test('Issue 242 timeline modal exposes expand entry, detail fields and dash plac
   assert.match(css, /@media\(max-width:700px\)\{\.timeline-modal-layout\{grid-template-columns:minmax\(0,1fr\)[^}]*\}/);
 });
 
-test('Issue 242 both customer drawer and recycle drawer mount the expand entry', () => {
-  const drawerSection = app.slice(app.indexOf('FULL TIMELINE'), app.indexOf('FULL TIMELINE') + 4000);
-  assert.ok((app.match(/data-open-timeline-modal/g) || []).length >= 2);
-  assert.match(drawerSection, /展开完整时间线/);
+test('customer drawer consolidates history while recycle drawer keeps its timeline entry', () => {
+  const drawer = app.match(/function renderDrawer\(\)([\s\S]*?)\n  function openModal/)?.[1] || '';
+  assert.equal((drawer.match(/data-customer-history/g) || []).length, 1);
+  assert.doesNotMatch(drawer, /data-open-timeline-modal|展开完整时间线/);
+  assert.match(app, /data-open-timeline-modal/);
 });

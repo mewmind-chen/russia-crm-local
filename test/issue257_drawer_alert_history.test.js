@@ -19,7 +19,7 @@ test('alert copy survives redaction while contact fields remain hidden', () => {
     phone: '+7-secret',
     contactTitle: '采购总监',
     reasons: [{ code: 'OVERDUE', title: '跟进超期', detail: '已超期', action: '今天处理' }],
-  });
+  }, { preserveAlertCopy: true });
   assert.equal(redacted.title, '缺少下一步计划');
   assert.equal(redacted.detail, '活跃客户没有明确动作与日期');
   assert.equal(redacted.action, '立即补充计划');

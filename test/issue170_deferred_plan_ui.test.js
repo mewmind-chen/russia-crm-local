@@ -86,7 +86,7 @@ test('missing-plan UI has two truthful paths backed by their real APIs', () => {
   assert.match(submit, /nextActionAt:\s*apiTime\(payload\.nextActionAt\)/);
 });
 
-test('all seven future-time entry points use one min and validation contract', () => {
+test('all plan-writing future-time entry points use one min and validation contract', () => {
   const helpers = [
     functionBlock(app, 'setFutureDateTimeConstraint'),
     functionBlock(app, 'validateFutureDateTime'),
@@ -104,7 +104,6 @@ test('all seven future-time entry points use one min and validation contract', (
     ['customerForm', 'openNewCustomerModal', 'id="customerForm"'],
     ['quoteForm', 'openQuoteModal', 'id="quoteForm"'],
     ['orderForm', 'openOrderModal', 'id="orderForm"'],
-    ['customerProfileEditForm', 'openCustomerProfileEditModal', 'id="customerProfileEditForm"'],
   ];
   for (const [field, functionName, marker] of expectedFields) {
     const constructor = functionBlock(app, functionName);
