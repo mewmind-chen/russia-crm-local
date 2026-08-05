@@ -200,5 +200,6 @@ test('Issue 227 frontend exposes creator mapping and on-demand history', () => {
   assert.match(app, /历史数据\/未知/);
   assert.match(app, /data-customer-history/);
   assert.match(app, /查看客户历史/);
-  assert.match(app, /customerHistoryList/);
+  assert.match(app, /async function openCustomerHistoryModal/);
+  assert.doesNotMatch(app, /customerHistoryList/);
 });

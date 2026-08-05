@@ -1518,6 +1518,10 @@
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
   }
+  function hasMeaningfulAlertCopy(alert) {
+    return Boolean(alert && [alert.title, alert.detail, alert.action]
+      .some(value => String(value || '').trim()));
+  }
   function filteredActivities(accounts = scopedAccounts()) {
     const ids = new Set(accounts.map(item => item.id));
     return state.data.activities.filter(item => ids.has(item.customer_id));
@@ -7148,12 +7152,19 @@
       ['发生时间', shortDate(event.occurred_at || event.occurredAt, true)],
       ['经理介入', activity.managerRequired ? '需要介入' : '—'],
     ];
+    const formatChange = value => Object.entries(value || {})
+      .map(([key, item]) => `${key}：${item ?? '—'}`).join('、');
+    const before = formatChange(event.before);
+    const after = formatChange(event.after);
+    if (before) rows.push(['变更前', before]);
+    if (after) rows.push(['变更后', after]);
     return `<dl class="timeline-modal-facts">${rows.map(([label, value]) =>
       `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>`;
   }
 
-  function openTimelineModal(events) {
+  function openTimelineModal(events, options = {}) {
     state.timelineModalEvents = Array.isArray(events) ? events : [];
+    const emptyText = String(options.emptyText || '暂无时间线记录');
     const list = state.timelineModalEvents.map((event, index) => {
       const title = timelineEventTitle(event);
       const summary = timelineEventSummary(event);
@@ -7162,10 +7173,41 @@
         <time>${esc(event.actor_name || event.actorName || '')}${(event.actor_name || event.actorName) ? ' · ' : ''}${shortDate(event.occurred_at || event.occurredAt, true)}</time>
       </button>`;
     }).join('');
-    openModal(`完整客户时间线 · ${state.timelineModalEvents.length} 条`, 'FULL TIMELINE', `<div class="timeline-modal-layout">
-      <div class="timeline-modal-list">${list || '<div class="empty">暂无时间线记录</div>'}</div>
-      <div id="timelineModalDetail" class="timeline-modal-detail">${renderTimelineEventDetail(state.timelineModalEvents[0] || {})}</div>
+    const modalTitle = options.title
+      || `完整客户时间线 · ${state.timelineModalEvents.length} 条`;
+    const detail = state.timelineModalEvents.length
+      ? renderTimelineEventDetail(state.timelineModalEvents[0])
+      : `<div class="empty">${esc(emptyText)}</div>`;
+    openModal(modalTitle, options.eyebrow || 'FULL TIMELINE', `<div class="timeline-modal-layout">
+      <div class="timeline-modal-list">${list || `<div class="empty">${esc(emptyText)}</div>`}</div>
+      <div id="timelineModalDetail" class="timeline-modal-detail">${detail}</div>
     </div>`, 'timeline-modal-wide');
+  }
+
+  async function openCustomerHistoryModal(account) {
+    const title = `客户历史 · ${accountDisplayName(account)}`;
+    openTimelineModal([], { title, eyebrow: 'CUSTOMER HISTORY', emptyText: '正在读取客户历史' });
+    try {
+      const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(account.id)}/history`);
+      const currentTimeline = (state.data.timeline || [])
+        .filter(item => item.customer_id === account.id);
+      const merged = new Map();
+      [...currentTimeline, ...(result.timeline || [])].forEach((item, index) => {
+        const key = String(item.id || `${item.kind || item.event_type || 'event'}:${item.occurred_at || item.occurredAt || ''}:${index}`);
+        merged.set(key, item);
+      });
+      const events = [...merged.values()].sort((left, right) =>
+        String(right.occurred_at || right.occurredAt || '').localeCompare(
+          String(left.occurred_at || left.occurredAt || ''),
+        ) || String(right.id || '').localeCompare(String(left.id || '')));
+      openTimelineModal(events, { title, eyebrow: 'CUSTOMER HISTORY', emptyText: '暂无历史记录' });
+    } catch (error) {
+      openTimelineModal([], {
+        title,
+        eyebrow: 'CUSTOMER HISTORY',
+        emptyText: `客户历史读取失败：${error.message}`,
+      });
+    }
   }
 
   function newActivityCorrectionIdempotencyKey() {
@@ -7963,7 +8005,7 @@
     ];
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
-      ${alert ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
+      ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
@@ -8010,9 +8052,8 @@
             ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
         }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
       </section>
-      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button><button class="text-button" data-open-timeline-modal>展开完整时间线（${timeline.length} 条）</button></div>
-      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div>
-      <div id="customerHistoryList" class="customer-history-list hidden"></div></div>`;
+      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
+      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
   }
 
   function openModal(title, eyebrow, html, modalClass = '') {
@@ -10400,28 +10441,8 @@
     if (editContact) openContactModal(editContact.dataset.editContact);
     if (event.target.closest('[data-customer-history]')) {
       const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-      const list = $('#customerHistoryList');
-      if (!account || !list) return;
-      list.classList.remove('hidden');
-      list.innerHTML = '<div class="empty">正在读取客户历史…</div>';
-      try {
-        const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(account.id)}/history`);
-        list.innerHTML = (result.timeline || []).length
-          ? result.timeline.map(event => {
-            const title = timelineEventTitle(event);
-            const summary = timelineEventSummary(event);
-            const before = event.before && Object.keys(event.before).length
-              ? Object.entries(event.before).map(([key, value]) => `${key}：${value}`).join('、')
-              : '';
-            const after = event.after && Object.keys(event.after).length
-              ? Object.entries(event.after).map(([key, value]) => `${key}：${value}`).join('、')
-              : '';
-            return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}</p>` : ''}${before || after ? `<p class="subtle">${before ? `变更前：${esc(before)}` : ''}${before && after ? ' → ' : ''}${after ? `变更后：${esc(after)}` : ''}</p>` : ''}<time>${esc(event.actorName || '')}${event.actorName ? ' · ' : ''}${shortDate(event.occurredAt, true)}</time></div>`;
-          }).join('')
-          : '<div class="empty">暂无历史记录</div>';
-      } catch (error) {
-        list.innerHTML = `<div class="empty">${esc(error.message)}</div>`;
-      }
+      if (!account) return;
+      await openCustomerHistoryModal(account);
       return;
     }
     if (event.target.closest('[data-open-timeline-modal]')) {
