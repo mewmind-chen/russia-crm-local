@@ -8,6 +8,7 @@ const { adminFixture } = require('./helpers/permission_fixture');
 
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
+const profileContacts = fs.readFileSync(path.join(root, 'profile-contacts.js'), 'utf8');
 
 test('Issue 233 contact flags persist with Chinese labels', async t => {
   const fx = await adminFixture();
@@ -90,11 +91,10 @@ test('Issue 233 contact writes stay permission-scoped', async t => {
 });
 
 test('Issue 233 frontend contact form exposes the three flags and an edit entry', () => {
-  assert.match(app, /name="matchStatus"/);
-  assert.match(app, /name="procurementRole"/);
-  assert.match(app, /name="workContent"/);
-  assert.match(app, /data-edit-contact/);
-  assert.match(app, /contact\.matchStatusLabel/);
-  assert.match(app, /contact\.procurementRoleLabel/);
-  assert.match(app, /is-mismatch|mismatch[\s\S]*?muted|mismatch/);
+  assert.match(profileContacts, /matchStatus/);
+  assert.match(profileContacts, /procurementRole/);
+  assert.match(profileContacts, /workContent/);
+  assert.match(profileContacts, /data-contact-edit/);
+  assert.match(profileContacts, /sourceLabel/);
+  assert.doesNotMatch(app, /CONTACT PROFILE/);
 });

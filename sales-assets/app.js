@@ -67,7 +67,6 @@
     data: null,
     view: 'dashboard',
     selectedCustomerId: '',
-    drawerAccountContacts: [],
     timelineModalEvents: [],
     alertSeverity: '',
     intakeStatus: '',
@@ -6835,26 +6834,10 @@
     state.recycleCustomerDetail = null;
     state.selectedCustomerId = customerId;
     state.drawerAiContext = null;
-    state.drawerAccountContacts = [];
     renderDrawer();
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
-    if (account?.external_customer_id && can('view_contacts')) {
-      void reloadDrawerContacts(customerId, account.external_customer_id);
-    }
-  }
-
-  async function reloadDrawerContacts(customerId, externalCustomerId) {
-    try {
-      const profile = await api(`/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}`);
-      if (state.selectedCustomerId === customerId) {
-        state.drawerAccountContacts = profile.accountContacts || [];
-        renderDrawer();
-      }
-    } catch (_error) {
-      if (state.selectedCustomerId === customerId) state.drawerAccountContacts = [];
-    }
   }
 
   function customerAiSection(context) {
@@ -8001,11 +7984,6 @@
     const quotes = state.data.quotes.filter(item => item.customer_id === account.id);
     const orders = state.data.orders.filter(item => item.customer_id === account.id);
     const timeline = (state.data.timeline || []).filter(item => item.customer_id === account.id);
-    const insightData = state.data.insights || { contacts: [], evaluations: [] };
-    const contacts = insightData.contacts.filter(item => item.customerId === account.id);
-    const evaluations = insightData.evaluations.filter(item => item.customerId === account.id);
-    const companyEvaluations = evaluations.filter(item => item.subjectType === 'company');
-    const canEvaluate = can('manage_evaluations');
     const alert = alertFor(account.id);
     const accountFacts = [
       ['负责人', account.owner_name || '未分配'], ['创建人', creatorDisplayName(account)],
@@ -8047,26 +8025,6 @@
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
           ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
       </div>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>企业经营评价</h3></div>${canEvaluate ? '<button class="button secondary tiny" data-evaluate-company>＋ 写企业评价</button>' : ''}</div>
-        <div class="insight-body">${companyEvaluations.length ? companyEvaluations.map(evaluationCard).join('') : '<div class="empty">暂无经理评价</div>'}</div>
-      </section>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">CONTACT PROFILE</p><h3>CRM 对接人</h3></div>${can('manage_customer_contacts') ? '<button class="button secondary tiny" data-add-contact>＋ 新增对接人</button>' : ''}</div>
-        <div class="insight-body">${state.drawerAccountContacts.length ? state.drawerAccountContacts.map(contact => `<article class="contact-insight ${contact.matchStatus === 'mismatch' ? 'is-mismatch' : ''}">
-          <div class="contact-insight-head"><div><strong>${esc(contact.name || '未命名联系人')}</strong><span>${esc([contact.title, contact.department].filter(Boolean).join(' · ') || '职位未标注')}</span></div>${can('manage_customer_contacts') ? `<button class="text-button" data-edit-contact="${esc(contact.id)}">编辑</button>` : ''}</div>
-          <p class="contact-flag-row"><span class="pill ${contact.matchStatus === 'match' ? '' : contact.matchStatus === 'mismatch' ? 'gray' : 'amber'}">${esc(contact.matchStatusLabel)}</span><span class="pill ${contact.procurementRole === 'yes' ? '' : 'gray'}">${esc(contact.procurementRoleLabel)}</span>${contact.workContent ? `<small class="subtle">${esc(contact.workContent)}</small>` : ''}</p>
-          <p>${esc([contact.email, contact.phone, contact.social].filter(Boolean).join(' · ') || '联系方式未记录')}</p>
-        </article>`).join('') : '<div class="empty">暂无 CRM 对接人</div>'}</div>
-      </section>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">CONTACT INTELLIGENCE</p><h3>对接人评价</h3></div></div>
-        <div class="insight-body">${contacts.length ? contacts.map(contact => {
-          const contactEvaluations = evaluations.filter(item => item.subjectType === 'contact' && item.subjectId === contact.id);
-          return `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name)}</strong><span>${esc(contact.title || '职位未标注')} · ${esc(contact.department || contact.contactLevel || '')}</span></div>${canEvaluate ? `<button class="text-button" data-evaluate-contact="${esc(contact.id)}">评价此人</button>` : ''}</div>
-            ${contactEvaluations.length ? contactEvaluations.map(evaluationCard).join('') : '<span class="subtle">暂无针对这个对接人的经理评价</span>'}</article>`;
-        }).join('') : '<div class="empty">暂无可评价的对接人</div>'}</div>
-      </section>
       <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
       <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
   }
@@ -9268,24 +9226,6 @@
     </form>`);
   }
 
-  function openContactModal(contactId = '') {
-    const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-    const contact = contactId
-      ? state.drawerAccountContacts.find(item => String(item.id) === String(contactId))
-      : null;
-    openModal(`${contact ? '编辑对接人' : '新增对接人'} · ${accountDisplayName(account)}`, 'CONTACT PROFILE', `<form id="contactForm" class="form-grid two">
-      <input type="hidden" name="customerId" value="${esc(account.id)}">
-      ${contact ? `<input type="hidden" name="contactId" value="${esc(contact.id)}">` : ''}
-      <label>姓名<input name="name" required value="${esc(contact?.name || '')}"></label><label>职位抬头<input name="title" placeholder="老板、采购主管、采购经理" value="${esc(contact?.title || '')}"></label>
-      <label>部门<input name="department" placeholder="采购部、供应链、研发" value="${esc(contact?.department || '')}"></label><label>电话<input name="phone" value="${esc(contact?.phone || '')}"></label>
-      <label>邮箱<input name="email" type="email" value="${esc(contact?.email || '')}"></label><label>社媒账号<input name="social" placeholder="WhatsApp / Telegram / LinkedIn" value="${esc(contact?.social || '')}"></label>
-      <label>对口情况<select name="matchStatus"><option value="pending" ${(contact?.matchStatus || 'pending') === 'pending' ? 'selected' : ''}>待确认</option><option value="match" ${contact?.matchStatus === 'match' ? 'selected' : ''}>对口</option><option value="mismatch" ${contact?.matchStatus === 'mismatch' ? 'selected' : ''}>不对口</option></select></label>
-      <label>采购职责<select name="procurementRole"><option value="pending" ${(contact?.procurementRole || 'pending') === 'pending' ? 'selected' : ''}>待确认</option><option value="yes" ${contact?.procurementRole === 'yes' ? 'selected' : ''}>负责采购</option><option value="no" ${contact?.procurementRole === 'no' ? 'selected' : ''}>不负责采购</option></select></label>
-      <label class="span-2">工作内容<input name="workContent" maxlength="240" placeholder="老板，负责采购与供应商审批" value="${esc(contact?.workContent || '')}"></label>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存对接人</button></div>
-    </form>`);
-  }
-
   async function refresh(message = '') {
     const previous = state.data;
     const previousAIEnabled = Boolean(previous?.features?.aiStations);
@@ -9995,23 +9935,6 @@
           : action === 'reject' ? '客户已标记为不对口'
             : '客户已退回线索池');
         if (action === 'bulk') switchView('pool');
-      } else if (form.id === 'contactForm') {
-        const payload = formPayload(form);
-        const contactId = String(payload.contactId || '').replace(/^local:/, '');
-        const saved = contactId
-          ? await api(`/api/sales-crm/contacts/${encodeURIComponent(contactId)}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          })
-          : await api('/api/sales-crm/contacts', { method: 'POST', body: JSON.stringify(payload) });
-        closeModal();
-        await refresh('对接人已保存');
-        const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
-        if (account?.external_customer_id) {
-          await reloadDrawerContacts(account.id, account.external_customer_id);
-        }
-        if (saved?.contact) state.drawerAccountContacts = [saved.contact, ...state.drawerAccountContacts];
-        renderDrawer();
       } else if (form.id === 'evaluationForm') {
         const button = form.querySelector('button[type="submit"], button:not([type])');
         if (button) {
@@ -10449,11 +10372,6 @@
       openEvaluationModal('company');
     }
     if (event.target.closest('[data-evaluate-company]')) openEvaluationModal('company');
-    const evaluateContact = event.target.closest('[data-evaluate-contact]');
-    if (evaluateContact) openEvaluationModal('contact', evaluateContact.dataset.evaluateContact);
-    if (event.target.closest('[data-add-contact]')) openContactModal();
-    const editContact = event.target.closest('[data-edit-contact]');
-    if (editContact) openContactModal(editContact.dataset.editContact);
     if (event.target.closest('[data-customer-history]')) {
       const account = state.data.accounts.find(item => item.id === state.selectedCustomerId);
       if (!account) return;
