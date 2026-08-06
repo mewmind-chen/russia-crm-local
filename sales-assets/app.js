@@ -1517,6 +1517,15 @@
   function alertFor(customerId) {
     return state.data.alerts.find(alert => alert.customerId === customerId);
   }
+  function customerPrimaryStatus(alert) {
+    if (!alert) return { label: '正常推进', tone: 'good' };
+    const primary = alertReasons(alert)[0];
+    const code = String(primary?.code || '');
+    if (code === 'UNCLAIMED') return { label: '领取超期', tone: 'red' };
+    if (code === 'OVERDUE') return { label: '跟进超期', tone: 'red' };
+    if (code === 'MANAGER_NEEDED') return { label: '需要管理者介入', tone: 'amber' };
+    return { label: primary?.title || '需关注', tone: alert.severity === 'critical' ? 'red' : 'amber' };
+  }
   function hasMeaningfulAlertCopy(alert) {
     return Boolean(alert && [alert.title, alert.detail, alert.action]
       .some(value => String(value || '').trim()));
@@ -3688,7 +3697,7 @@
       return;
     }
     $('#customerTable').innerHTML = table(
-      [canSelectCustomers ? '<input id="selectCustomerPage" type="checkbox" aria-label="选择当前页客户">' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '优先级', '状态'],
+      [canSelectCustomers ? '<input id="selectCustomerPage" type="checkbox" aria-label="选择当前页客户">' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '优先级', '状态', '操作'],
       accounts.map(account => {
         const alert = alertFor(account.id);
         const canReturn = canReturnCustomer(account);
@@ -3700,6 +3709,7 @@
           canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
         ].filter(Boolean).join('');
+        const primaryStatus = customerPrimaryStatus(alert);
         return [
           canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(creatorDisplayName(account))}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
@@ -3709,7 +3719,10 @@
           `<span>${relative(account.last_activity_at)}</span>`,
           `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</span>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div>`,
           `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span>`,
-          `${alert ? `<span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.title)}</span>` : '<span class="good-text">正常推进</span>'}${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
+          `${primaryStatus.tone === 'good'
+            ? `<span class="good-text">${esc(primaryStatus.label)}</span>`
+            : `<span class="pill ${primaryStatus.tone}">${esc(primaryStatus.label)}</span>`}`,
+          `${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
         ];
       }).map((row, index) => {
         row._id = accounts[index].id;
@@ -8007,6 +8020,7 @@
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
+      ${alert && alertReasons(alert).length > 1 ? `<div class="alert-details"><span class="eyebrow">异常明细</span>${alertReasons(alert).map(reason => `<div class="alert-detail-row"><strong>${esc(reason.title)}</strong><p>${esc(reason.detail)}</p><span>${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}</span></div>`).join('')}</div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
