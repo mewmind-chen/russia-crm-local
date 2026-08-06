@@ -1541,7 +1541,14 @@
       $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
       $('#topNotificationCount').classList.toggle('hidden', unreadNotifications === 0);
     }
-    if ($('#navIntakeCount')) $('#navIntakeCount').textContent = state.data.intake?.stats.assigned || 0;
+    const intakeStats = state.data.intake?.stats;
+    if ($('#navIntakeCount')) {
+      const intakeSalesView = !canViewAssignmentDecisions();
+      $('#navIntakeCount').textContent = intakeSalesView
+        ? Number(intakeStats?.assigned || 0)
+        : Number(intakeStats?.pending || 0) + Number(intakeStats?.approved || 0)
+          + Number(intakeStats?.assigned || 0) + Number(intakeStats?.returned || 0) || 0;
+    }
     if ($('#navInsightCount')) $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
     if ($('#navPeopleCount')) $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
     if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
@@ -2289,6 +2296,7 @@
       ['today', '今日收到线索', stats.todayImported, '领取前保留在线索池'],
       ['assigned', '待领取', stats.assigned, `领取时限 ${settings.claimSlaHours} 小时`],
       ['claimed', '已领取', stats.claimed, '已转入个人CRM'],
+      ['crm', '已进入 CRM', stats.claimed, '点击进入 CRM 客户全景'],
       ['contacted', '当前触达', stats.contacted, '当前开发中已触达'],
       ['returned', '已退回', stats.returned, '必须说明原因'],
       ['overdue', '领取超期', stats.overdueClaim, '管理者将收到预警'],
@@ -2296,11 +2304,10 @@
       ['today', '今日同步线索', stats.todayImported, '仍属于线索池'],
       ['unassigned', '待分配', stats.pending + stats.approved, '勾选或筛选后手动指定销售'],
       ['assigned', '待销售领取', stats.assigned, `时限 ${settings.claimSlaHours} 小时`],
-      ['claimed', '销售已领取 / CRM', stats.claimed, `领取后进入CRM，首次触达 ${settings.contactSlaHours} 小时`],
+      ['crm', '已进入 CRM', stats.claimed, '已领取客户进入 CRM 全景'],
       ['contacted', '当前触达', stats.contacted, '当前开发漏斗中已触达'],
       ['idle', '闲置资源', stats.idle, '待分配或退回'],
       ['returned', '退回待处理', stats.returned, '需要重新分配'],
-      ['rejected', '不对口', stats.rejected, '保留判断依据'],
       ['overdue', '领取超期', stats.overdueClaim, '系统异常预警'],
     ];
   }
@@ -2315,7 +2322,7 @@
 
   function intakeActiveStatCard() {
     const requestedLeadView = String(new URLSearchParams(location.search).get('leadView') || '');
-    const poolLeadViews = ['today', 'unassigned', 'assigned', 'idle', 'returned', 'rejected', 'overdue'];
+    const poolLeadViews = ['today', 'unassigned', 'assigned', 'idle', 'returned', 'overdue'];
     if (state.view === 'pool' && poolLeadViews.includes(requestedLeadView)) return requestedLeadView;
     const applied = intakeAppliedFilters();
     const normalize = value => (Array.isArray(value) ? value : [value])
@@ -2344,7 +2351,6 @@
       assigned: { status: ['assigned'] },
       idle: { status: ['pending', 'approved', 'returned'] },
       returned: { status: ['returned'] },
-      rejected: { status: ['rejected'] },
       overdue: { status: ['assigned'], claim_overdue: true },
     }[key] || {};
   }
@@ -2410,7 +2416,7 @@
   }
 
   async function jumpIntakeStatToCrm(key) {
-    const flow = key === 'claimed' ? 'claimed' : 'contacted';
+    const flow = (key === 'claimed' || key === 'crm') ? 'claimed' : 'contacted';
     state.pendingCustomerIntakeFlow = flow;
     updateLeadWorkflowUrl(flow, 'customers');
     switchView('customers');
@@ -2425,14 +2431,12 @@
       '': salesView
         ? Number(stats.assigned || 0)
         : Number(stats.pending || 0) + Number(stats.approved || 0) + Number(stats.assigned || 0)
-          + Number(stats.claimed || 0) + Number(stats.returned || 0) + Number(stats.rejected || 0),
+          + Number(stats.returned || 0),
       unassigned: Number(stats.pending || 0) + Number(stats.approved || 0),
       assigned: Number(stats.assigned || 0),
-      claimed: Number(stats.claimed || 0),
       returned: Number(stats.returned || 0),
-      rejected: Number(stats.rejected || 0),
     };
-    const tabLabels = { '': '全部', unassigned: '待分配', assigned: '待领取', claimed: '已领取', returned: '已退回', rejected: '不对口' };
+    const tabLabels = { '': '全部', unassigned: '待分配', assigned: '待领取', returned: '已退回' };
     $$('#intakeTabs button').forEach(item => {
       const status = item.dataset.intakeStatus;
       item.classList.toggle('active', status === state.intakeStatus);
@@ -2454,7 +2458,7 @@
     renderIntakeActiveFilters();
     const summary = intakeStatCards(salesView, stats, intake.settings);
     const activeStat = intakeActiveStatCard();
-    $('#intakeSummary').innerHTML = summary.map(([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
+    $('#intakeSummary').innerHTML = summary.map(([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' || key === 'crm' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
     const items = intake.items || [];
     const canManualAssign = !salesView && can('manage_intake');
     const assignableItems = items.filter(intakeItemAssignable);
