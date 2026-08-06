@@ -57,11 +57,16 @@ test('Issue 265 lifecycle actions live only in the actions column', () => {
   const render = functionBlock(app, 'renderCustomers');
   assert.match(render, /lifecycleActions = \[[\s\S]*?data-return-customer[\s\S]*?data-reject-customer[\s\S]*?data-trash-customer/);
   assert.match(render, /const primaryStatus = customerPrimaryStatus\(alert\)/);
+  const statusCellEnd = render.indexOf('lifecycleActions ?');
   const statusCell = render.slice(
-    render.indexOf('const primaryStatus = customerPrimaryStatus(alert)'),
-    render.indexOf('const primaryStatus = customerPrimaryStatus(alert)') + 400,
+    render.indexOf("primaryStatus.tone === 'good'"),
+    statusCellEnd,
   );
-  assert.doesNotMatch(statusCell, /退回线索池|标记不对口|删除到回收站/);
+  assert.match(statusCell, /good-text/);
+  assert.doesNotMatch(statusCell, /data-return-customer|data-reject-customer|data-trash-customer|assignment-actions/);
+  const actionsCell = render.slice(statusCellEnd, statusCellEnd + 160);
+  assert.match(actionsCell, /lifecycleActions/);
+  assert.match(actionsCell, /assignment-actions/);
 });
 
 test('Issue 265 drawer lists alert details with time and overdue hours', () => {
