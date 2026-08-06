@@ -70,3 +70,17 @@ test('Issue 264 status filter options only expose actionable statuses', async t 
   const salesStatus = salesSchema.schema.fields.find(field => field.key === 'status');
   assert.deepEqual(salesStatus.options.map(option => option.value), ['assigned']);
 });
+
+test('Issue 264 bootstrap intake items exclude claimed/rejected/duplicate but stats stay complete', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  seedIntakeItems(fx);
+
+  const body = await fx.requestJson('/api/sales-crm/intake?page=1&pageSize=50', {
+    cookie: fx.adminCookie,
+  });
+  const statuses = [...new Set(body.items.map(item => item.status))].sort();
+  assert.deepEqual(statuses, ['approved', 'assigned', 'pending', 'returned']);
+  assert.equal(body.stats.claimed, 1, 'claimed 统计保持全量');
+  assert.equal(body.stats.rejected, 1, 'rejected 统计保持全量');
+});
