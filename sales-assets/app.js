@@ -8020,6 +8020,7 @@
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
+      ${alert && alertReasons(alert).length > 1 ? `<div class="alert-details"><span class="eyebrow">异常明细</span>${alertReasons(alert).map(reason => `<div class="alert-detail-row"><strong>${esc(reason.title)}</strong><p>${esc(reason.detail)}</p><span>${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}</span></div>`).join('')}</div>` : ''}
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">

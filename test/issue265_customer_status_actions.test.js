@@ -63,3 +63,13 @@ test('Issue 265 lifecycle actions live only in the actions column', () => {
   );
   assert.doesNotMatch(statusCell, /退回线索池|标记不对口|删除到回收站/);
 });
+
+test('Issue 265 drawer lists alert details with time and overdue hours', () => {
+  const drawer = functionBlock(app, 'renderDrawer');
+  assert.match(drawer, /alert-details/);
+  assert.match(drawer, /alertReasons\(alert\)\.length > 1/);
+  assert.match(drawer, /overdueHours/);
+  assert.match(drawer, /reason\.dueAt/);
+  assert.match(css, /\.alert-details\{/);
+  assert.match(css, /\.alert-detail-row\{/);
+});
