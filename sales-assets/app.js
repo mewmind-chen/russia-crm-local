@@ -2361,7 +2361,6 @@
       assigned: 'assigned',
       overdue: 'assigned',
       returned: 'returned',
-      rejected: 'rejected',
     })[key] || '';
   }
 
@@ -2376,7 +2375,7 @@
   function leadWorkflowMatchesView(view, key) {
     if (!key) return true;
     if (['pool', 'intake', 'pending'].includes(view)) {
-      return ['today', 'unassigned', 'assigned', 'idle', 'returned', 'rejected', 'overdue'].includes(key);
+      return ['today', 'unassigned', 'assigned', 'idle', 'returned', 'overdue'].includes(key);
     }
     return view === 'customers' && ['claimed', 'contacted'].includes(key);
   }
