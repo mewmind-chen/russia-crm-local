@@ -80,6 +80,9 @@ app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')))
 app.get('/profile-contacts.js', requireUnifiedUser, (_req, res) => {
   res.type('application/javascript').sendFile(path.join(__dirname, 'profile-contacts.js'));
 });
+app.get('/profile-insights.js', requireUnifiedUser, (_req, res) => {
+  res.type('application/javascript').sendFile(path.join(__dirname, 'profile-insights.js'));
+});
 registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   const permissions = req.accessContext.permissions;

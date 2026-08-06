@@ -59,6 +59,9 @@
       <div class="field"><label>电话</label><input class="input" name="phone" value="${escapeHtml(contact.phone || '')}" maxlength="200"></div>
       <div class="field"><label>邮箱</label><input class="input" name="email" type="email" value="${escapeHtml(contact.email || '')}" maxlength="320"></div>
       <div class="field"><label>WhatsApp / Telegram / LinkedIn</label><input class="input" name="social" value="${escapeHtml(contact.social || '')}" maxlength="1000"></div>
+      <div class="field"><label>对口情况</label><select class="input" name="matchStatus"><option value="pending" ${(contact.matchStatus || 'pending') === 'pending' ? 'selected' : ''}>待确认</option><option value="match" ${contact.matchStatus === 'match' ? 'selected' : ''}>对口</option><option value="mismatch" ${contact.matchStatus === 'mismatch' ? 'selected' : ''}>不对口</option></select></div>
+      <div class="field"><label>采购职责</label><select class="input" name="procurementRole"><option value="pending" ${(contact.procurementRole || 'pending') === 'pending' ? 'selected' : ''}>待确认</option><option value="yes" ${contact.procurementRole === 'yes' ? 'selected' : ''}>负责采购</option><option value="no" ${contact.procurementRole === 'no' ? 'selected' : ''}>不负责采购</option></select></div>
+      <div class="field wide"><label>工作内容</label><input class="input" name="workContent" maxlength="240" placeholder="老板，负责采购与供应商审批" value="${escapeHtml(contact.workContent || '')}"></div>
       <div class="tag-editor-actions wide"><button class="btn ghost" type="button" data-contact-cancel>取消</button><button class="btn" type="submit">保存联系人</button></div>
     </form>`;
   }
@@ -69,6 +72,7 @@
     return `<article class="contact-asset-card">
       <div class="contact-asset-head"><div><h3>${escapeHtml(contact.name || '未命名联系人')}</h3><p class="muted">${escapeHtml([contact.title, contact.department].filter(Boolean).join(' · ') || '职位未标注')}</p></div><span class="tag">${escapeHtml(contact.sourceLabel || (contact.source === 'recon' ? '联系人研究' : '人工录入'))}</span></div>
       <div class="contact-asset-methods">${methods.length ? methods.map(value => `<span>${escapeHtml(value)}</span>`).join('<span>·</span>') : '<span class="muted">暂无联系方式</span>'}</div>
+      ${contact.matchStatusLabel || contact.procurementRoleLabel || contact.workContent ? `<div class="contact-asset-flags"><span class="tag ${contact.matchStatus === 'mismatch' ? 'gray' : ''}">${escapeHtml(contact.matchStatusLabel || '待确认')}</span><span class="tag ${contact.procurementRole === 'no' ? 'gray' : ''}">${escapeHtml(contact.procurementRoleLabel || '待确认')}</span>${contact.workContent ? `<span class="muted">${escapeHtml(contact.workContent)}</span>` : ''}</div>` : ''}
       <div class="contact-asset-meta"><span class="muted">联系人编号 ${escapeHtml(contact.id)}</span>${contact.updatedAt ? `<span class="muted">更新 ${escapeHtml(contact.updatedAt)}</span>` : ''}</div>
       ${editable ? `<div class="contact-asset-actions"><button class="btn secondary small" type="button" data-contact-edit="${escapeHtml(contact.id)}">编辑</button><button class="btn ghost small" type="button" data-contact-archive="${escapeHtml(contact.id)}">归档</button></div>` : ''}
     </article>`;
