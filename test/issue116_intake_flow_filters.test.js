@@ -165,8 +165,7 @@ test('manager-wide scope keeps the full list and assigned-owner scope keeps only
     ast('intake'),
   );
   assert.deepEqual(ids(db, manager), [
-    'I-APPROVED', 'I-ASSIGNED-ONE', 'I-CLAIMED-ONE',
-    'I-DUPLICATE', 'I-PENDING', 'I-REJECTED-TWO', 'I-RETURNED-ONE',
+    'I-APPROVED', 'I-ASSIGNED-ONE', 'I-PENDING', 'I-RETURNED-ONE',
   ]);
   db.close();
 });
@@ -213,7 +212,7 @@ test('tag values are OR within one category and AND across categories', () => {
     { key: 'tag_customer_type', operator: 'in', values: ['Manufacturer', 'Distributor'] },
   ]));
   assert.deepEqual(ids(db, withinCategory), [
-    'I-APPROVED', 'I-ASSIGNED-ONE', 'I-CLAIMED-ONE', 'I-PENDING',
+    'I-APPROVED', 'I-ASSIGNED-ONE', 'I-PENDING',
   ]);
 
   const acrossCategories = buildIntakeFlowFilterScope(manager, 'intake', ast('intake', [
@@ -235,7 +234,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
   );
   assert.equal(result.page, 2);
   assert.equal(result.pageSize, 20);
-  assert.equal(result.total, 7);
+  assert.equal(result.total, 4);
   assert.equal(result.items.length, 0);
   assert.equal(result.hasMore, false);
 
@@ -247,7 +246,7 @@ test('pagination is bounded and total remains the exact scoped count', () => {
     { page: 1, pageSize: 999 },
   );
   assert.equal(first.pageSize, 200);
-  assert.equal(first.items.length, 7);
+  assert.equal(first.items.length, 4);
   db.close();
 });
 
@@ -278,10 +277,7 @@ test('filter options expose only requested authorized fields and the same row sc
   ), {
     approved: '待分配',
     assigned: '待领取',
-    claimed: '已领取',
-    duplicate: '已在 CRM',
     pending: '待分配',
-    rejected: '不对口',
     returned: '已退回',
   });
   db.close();

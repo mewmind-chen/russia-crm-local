@@ -24,7 +24,7 @@ test('Issue #103 keeps one canonical lead pool surface and legacy route aliases'
 
 test('Issue #103 exposes the unified status model without a review tab', () => {
   const pool = poolMarkup();
-  for (const status of ['', 'unassigned', 'assigned', 'claimed', 'returned', 'rejected']) {
+  for (const status of ['', 'unassigned', 'assigned', 'returned']) {
     assert.match(pool, new RegExp(`data-intake-status="${status}"`));
   }
   assert.doesNotMatch(pool, /待审核|data-intake-status="pending"|data-intake-status="approved"/);

@@ -75,7 +75,7 @@ async function intakeSchema(fx) {
   return fx.requestJson('/api/sales-crm/filter-schema/intake', { cookie: fx.adminCookie });
 }
 
-test('Issue 212 unifies the lead list scope while keeping every status visible', async t => {
+test('Issue 212 unifies the lead list scope to actionable statuses', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
   seedIntakeItems(fx);
@@ -84,7 +84,7 @@ test('Issue 212 unifies the lead list scope while keeping every status visible',
     search: { operator: 'contains', value: 'Issue212' },
   })}`, { cookie: fx.adminCookie });
   const statuses = [...new Set(result.rows.map(row => row.status))].sort();
-  assert.deepEqual(statuses, ['assigned', 'claimed', 'duplicate', 'pending', 'rejected', 'returned']);
+  assert.deepEqual(statuses, ['assigned', 'pending', 'returned']);
 
   const schema = await intakeSchema(fx);
   const keys = schema.schema.fields.map(field => field.key);
@@ -94,8 +94,7 @@ test('Issue 212 unifies the lead list scope while keeping every status visible',
   assert.deepEqual(
     Object.fromEntries(statusField.options.map(option => [option.value, option.label])),
     {
-      approved: '待分配', assigned: '待领取', claimed: '已领取', duplicate: '已在 CRM',
-      pending: '待分配', rejected: '不对口', returned: '已退回',
+      approved: '待分配', assigned: '待领取', pending: '待分配', returned: '已退回',
     },
   );
 });

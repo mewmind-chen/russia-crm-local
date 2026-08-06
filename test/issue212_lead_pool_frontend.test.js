@@ -43,11 +43,14 @@ test('Issue 212 uses one authorized lead list and removes ambiguous page tabs', 
   assert.doesNotMatch(functionBlock(app, 'renderIntake'), /intakeAuthorizedPage/);
 });
 
-test('Issue 212 renders nine native manager stat buttons with real filter and CRM routes', () => {
+test('Issue 212 renders manager stat buttons with CRM entry and no claimed/rejected cards', () => {
   const cards = functionBlock(app, 'intakeStatCards');
-  for (const key of ['today', 'unassigned', 'assigned', 'claimed', 'contacted', 'idle', 'returned', 'rejected', 'overdue']) {
+  for (const key of ['today', 'unassigned', 'assigned', 'crm', 'contacted', 'idle', 'returned', 'overdue']) {
     assert.match(cards, new RegExp(`\\['${key}',`), key);
   }
+  const managerCards = cards.slice(cards.indexOf('] : [') + 4);
+  assert.doesNotMatch(managerCards, /\['claimed',/);
+  assert.doesNotMatch(managerCards, /\['rejected',/);
   const render = functionBlock(app, 'renderIntake');
   assert.match(render, /<button type="button" class="metric/);
   assert.match(render, /data-intake-stat=/);

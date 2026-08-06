@@ -43,11 +43,13 @@ test('unified pool defaults to all and combines pending states', () => {
   assert.match(appJs, /canonicalView === 'pool' \? '' : state\.intakeStatus/);
   assert.match(html, /data-intake-status="unassigned">待分配/);
   assert.doesNotMatch(html, /data-intake-status="pending"|data-intake-status="approved"|待审核/);
-  assert.match(html, /data-intake-status="rejected">不对口/);
+  assert.doesNotMatch(html, /data-intake-status="rejected">不对口/);
 });
 
 test('intake badge uses the same assigned count as the pending tab', () => {
-  assert.match(appJs, /navIntakeCount'\)\.textContent = state\.data\.intake\?\.stats\.assigned \|\| 0/);
+  assert.match(appJs, /navIntakeCount/);
+  assert.match(appJs, /canViewAssignmentDecisions\(\)/);
+  assert.match(appJs, /intakeStats\?\.assigned/);
   assert.doesNotMatch(`${html}\n${appJs}`, /navPendingCount|navClaimedCount/);
 });
 
