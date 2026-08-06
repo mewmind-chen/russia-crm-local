@@ -95,7 +95,7 @@ test('CRM creation synchronizes a pending lead to a visible non-assignable statu
   const schemaBody = await schemaResponse.json();
   assert.equal(schemaResponse.status, 200, schemaBody.error);
   const statusOptions = schemaBody.schema.fields.find(field => field.key === 'status').options;
-  assert.equal(statusOptions.find(option => option.value === 'duplicate').label, '已在 CRM');
+  assert.equal(statusOptions.find(option => option.value === 'duplicate'), undefined);
   assert.equal(statusOptions.find(option => option.value === 'assigned').label, '待领取');
 
   const listResponse = await fx.request(
@@ -106,8 +106,7 @@ test('CRM creation synchronizes a pending lead to a visible non-assignable statu
   const listBody = await listResponse.json();
   assert.equal(listResponse.status, 200, listBody.error);
   const item = listBody.rows.find(row => row.id === 'INT-143-IN-CRM');
-  assert.equal(item.status, 'duplicate');
-  assert.equal(item.crm_customer_id, 'CRM-143');
+  assert.equal(item, undefined, 'duplicate 线索已移出线索池列表,由已进入 CRM 入口承接');
 
   const appSource = fs.readFileSync(
     path.join(__dirname, '..', 'sales-assets', 'app.js'),
@@ -150,8 +149,7 @@ test('lead pool returns the current intake status together with CRM assignment s
   const byId = new Map(body.items.map(item => [item.external_customer_id, item]));
   assert.equal(byId.get('RU-9145').status, 'assigned');
   assert.equal(byId.get('RU-9145').crm_assignment_status, 'assigned');
-  assert.equal(byId.get('RU-9146').status, 'claimed');
-  assert.equal(byId.get('RU-9146').crm_assignment_status, 'claimed');
+  assert.equal(byId.get('RU-9146'), undefined, 'claimed 线索已移出 bootstrap items');
   assert.equal(byId.get('RU-9147').status, 'returned');
   assert.equal(byId.get('RU-9147').crm_assignment_status, 'returned');
 });

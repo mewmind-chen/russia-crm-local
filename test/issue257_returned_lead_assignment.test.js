@@ -134,14 +134,6 @@ test('legacy duplicate rows reuse the only sales return matched by external cust
     crm_customer_id='',status='duplicate',assigned_owner_id='',
     duplicate_state='',decision_reason='客户已在CRM' WHERE id='INTAKE-OTHER'`).run();
 
-  const body = await businessList(fx, 'intake', {
-    status: { operator: 'in', values: ['duplicate'] },
-  });
-  const item = body.rows.find(row => row.id === 'INTAKE-OTHER');
-  assert.ok(item);
-  assert.equal(item.assignable, true);
-  assert.equal(item.assignmentBlockReason, '');
-
   const response = await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.adminCookie,
     method: 'POST',
@@ -175,13 +167,19 @@ test('legacy duplicate rows remain blocked when another CRM account exists', asy
     crm_customer_id='',status='duplicate',assigned_owner_id='',duplicate_state=''
     WHERE id='INTAKE-OTHER'`).run();
 
-  const body = await businessList(fx, 'intake', {
-    status: { operator: 'in', values: ['duplicate'] },
+  const response = await fx.request('/api/sales-crm/intake/action', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      action: 'manual_assign', itemIds: ['INTAKE-OTHER'], ownerId: 'U-OTHER', amount: 1,
+      idempotencyKey: 'issue259-legacy-duplicate-blocked',
+    },
   });
-  const item = body.rows.find(row => row.id === 'INTAKE-OTHER');
-  assert.ok(item);
-  assert.equal(item.assignable, false);
-  assert.equal(item.assignmentBlockReason, '客户已在 CRM');
+  const result = await response.json();
+  assert.equal(response.status, 200, result.error);
+  assert.equal(result.assigned, 0);
+  assert.equal(result.blocked, 1);
+  assert.equal(result.results.some(item => !item.ok && item.reason === '客户已在 CRM'), true);
 });
 
 test('high value review copy does not block a manager manual assignment', async t => {

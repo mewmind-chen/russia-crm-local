@@ -31,7 +31,7 @@ test('Issue 228 sales lead list contains only pending-claim items', async t => {
   assert.equal(stats.stats.claimed, 1);
 });
 
-test('Issue 228 managers still see the full unified lead list', async t => {
+test('Issue 228 managers see the actionable lead list without claimed rows', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO crm_intake_items
@@ -41,7 +41,7 @@ test('Issue 228 managers still see the full unified lead list', async t => {
   const result = await fx.requestJson('/api/sales-crm/lists/intake?page=1&pageSize=50', {
     cookie: fx.adminCookie,
   });
-  assert.equal(result.rows.some(row => row.status === 'claimed'), true);
+  assert.equal(result.rows.some(row => row.status === 'claimed'), false);
   assert.equal(result.rows.some(row => row.status === 'assigned'), true);
 });
 
