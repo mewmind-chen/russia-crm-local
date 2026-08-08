@@ -15,6 +15,7 @@
     "crm:migrate:unified:dry": "node scripts/migrate-unified-crm.js",
     "crm:migrate:unified": "node scripts/migrate-unified-crm.js --apply",
     "crm:reset-to-leads": "node scripts/reset-crm-to-undeveloped-leads.js",
+    "crm:customer-rebuild": "node scripts/rebuild-customer-data.js",
     "crm:notify": "node scripts/dispatch-crm-notifications.js",
     "crm:smoke:next-action": "node scripts/production-next-action-smoke.js",
     "crm:cleanup:a3-03-smoke": "node scripts/cleanup-a3-03-production-smoke.js",
