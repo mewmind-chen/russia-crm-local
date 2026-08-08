@@ -194,6 +194,34 @@ test('rejects package when file hash differs', () => {
   );
 });
 
+test('rejects empty or malformed packages', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rebuild-pkg-'));
+  const write = (pkg) => {
+    const p = path.join(dir, `pkg-${Math.random()}.json`);
+    fs.writeFileSync(p, JSON.stringify(pkg));
+    return p;
+  };
+  const emptyPath = write({ customers: [], excluded: [] });
+  assert.throws(
+    () => loadRebuildPackage(emptyPath, hashFile(emptyPath)),
+    /no importable customers/,
+  );
+  const badFormat = samplePackage();
+  badFormat.customers[0].customerId = 'RU-1';
+  const badFormatPath = write(badFormat);
+  assert.throws(
+    () => loadRebuildPackage(badFormatPath, hashFile(badFormatPath)),
+    /invalid customerId format/,
+  );
+  const badNumeric = samplePackage();
+  badNumeric.customers[1].customerId = 'BR-1001';
+  const badNumericPath = write(badNumeric);
+  assert.throws(
+    () => loadRebuildPackage(badNumericPath, hashFile(badNumericPath)),
+    /duplicate customerId numeric part/,
+  );
+});
+
 test('approved package partitions all source customers exactly once', () => {
   const pkg = loadRebuildPackage(
     APPROVED_PACKAGE,
@@ -280,10 +308,22 @@ test('apply rebuilds master and intake in one transaction with reconciliation', 
   assert.equal(intake.status, 'pending');
   assert.equal(intake.decision_reason, '数据待核实');
   const audit = db
-    .prepare("SELECT operation, status FROM crm_data_maintenance_runs ORDER BY id DESC LIMIT 1")
+    .prepare("SELECT operation, status, filters_json, backup_file FROM crm_data_maintenance_runs ORDER BY id DESC LIMIT 1")
     .get();
   assert.equal(audit.operation, 'rebuild_customer_master');
   assert.equal(audit.status, 'completed');
+  const auditFilters = JSON.parse(audit.filters_json);
+  assert.equal(
+    auditFilters.packageSha256,
+    sha256Text(JSON.stringify(pkg)),
+  );
+  assert.equal(audit.backup_file, '/tmp/rehearsal.db');
+  const tagCounts = db
+    .prepare("SELECT name, COUNT(*) n FROM tags WHERE name IN ('EMS', '制裁命中-机会') GROUP BY name")
+    .all();
+  for (const row of tagCounts) {
+    assert.equal(row.n, 1);
+  }
   db.close();
 });
 
