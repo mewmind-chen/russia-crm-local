@@ -172,7 +172,11 @@ async function cmdRehearse(args) {
       fs.statSync(database).mtimeMs === beforeStat.mtimeMs &&
       fs.statSync(database).size === beforeStat.size,
     sourceHashUnchanged: hashFile(database) === beforeHash,
-    manifestStable: afterManifest === manifest,
+    schemaFingerprintStable: afterPlan.schemaFingerprint === plan.schemaFingerprint,
+    preservedHashesStable: Object.keys(plan.preservedHashes).every(
+      (table) =>
+        afterPlan.preservedHashes[table] === plan.preservedHashes[table],
+    ),
     integrityOk: integrityOk(db),
     checks: report.checks,
   });
@@ -300,6 +304,7 @@ async function main() {
     await command(args);
   } catch (err) {
     console.error(`error: ${err.message}`);
+    if (process.env.DEBUG) console.error(err.stack);
     process.exit(1);
   }
 }

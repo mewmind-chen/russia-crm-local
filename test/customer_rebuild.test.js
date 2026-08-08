@@ -317,3 +317,58 @@ test('classify rejects unknown customer-linked tables', () => {
   assert.throws(() => planCustomerRebuild(db, samplePackage()), /unclassified customer tables/);
   db.close();
 });
+
+test('immutable triggers on cleared tables are lifted and restored', () => {
+  const db = openFixtureDb();
+  seedSystemRows(db);
+  seedOldData(db);
+  db.exec(
+    "CREATE TRIGGER trg_next_plan_immutable BEFORE DELETE ON crm_next_plan_events BEGIN SELECT RAISE(ABORT, 'crm_next_plan_events are immutable'); END",
+  );
+  insertMinimal(db, 'crm_next_plan_events', {
+    id: '1',
+    customer_id: 'RU-OLD',
+    event_type: 'next',
+    actor_id: '1',
+    next_action: 'follow up',
+    next_action_at: '2026-01-02T00:00:00Z',
+    source: 'manual',
+    created_at: '2026-01-01T00:00:00Z',
+  });
+  const pkg = samplePackage();
+  const plan = planCustomerRebuild(db, pkg);
+  const manifest = createRebuildManifest(plan);
+  const report = applyCustomerRebuild(db, pkg, {
+    packageSha256: sha256Text(JSON.stringify(pkg)),
+    planManifest: manifest,
+  });
+  assert.equal(report.checks.foreignKeyViolations, 0);
+  assert.equal(
+    db.prepare('SELECT COUNT(*) n FROM crm_next_plan_events').get().n,
+    0,
+  );
+  const trigger = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_next_plan_immutable'")
+    .get();
+  assert.ok(trigger);
+  insertMinimal(db, 'crm_next_plan_events', {
+    id: '2',
+    customer_id: 'RU-1001',
+    event_type: 'next',
+    actor_id: '1',
+    next_action: 'follow up',
+    next_action_at: '2026-01-02T00:00:00Z',
+    source: 'manual',
+    created_at: '2026-01-01T00:00:00Z',
+  });
+  assert.throws(
+    () =>
+      db
+        .prepare(
+          "DELETE FROM crm_next_plan_events WHERE customer_id = 'RU-1001'",
+        )
+        .run(),
+    /immutable/,
+  );
+  db.close();
+});
