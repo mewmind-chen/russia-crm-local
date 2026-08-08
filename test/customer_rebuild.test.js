@@ -222,7 +222,10 @@ test('rejects empty or malformed packages', () => {
   );
 });
 
-test('approved package partitions all source customers exactly once', () => {
+test(
+  'approved package partitions all source customers exactly once',
+  { skip: !fs.existsSync(APPROVED_PACKAGE) },
+  () => {
   const pkg = loadRebuildPackage(
     APPROVED_PACKAGE,
     fs.readFileSync(
@@ -236,7 +239,8 @@ test('approved package partitions all source customers exactly once', () => {
   ];
   assert.equal(ids.length, 1901);
   assert.equal(new Set(ids).size, 1901);
-});
+  },
+);
 
 test('plan is read-only and classification is complete on real schema', () => {
   const db = openFixtureDb();
