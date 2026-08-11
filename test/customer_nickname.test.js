@@ -97,8 +97,8 @@ test('nickname search preserves row scope and JSON/CSV exports separate official
     cookie: fx.cookie,
   });
   const csv = await csvResponse.text();
-  assert.match(csv, /^昵称,正式名称,客户编码,/);
-  assert.match(csv, /共享代号,Owned Fixture,RU-9002/);
+  assert.match(csv, /^昵称,正式名称,本地名称\/别名,英文名称,客户编码,/);
+  assert.match(csv, /共享代号,Owned Fixture,,,RU-9002/);
   assert.doesNotMatch(csv, /Other Fixture/);
 });
 

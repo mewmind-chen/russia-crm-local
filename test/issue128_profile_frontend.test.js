@@ -85,7 +85,7 @@ test('issue 128 profile fields are retained in grouped responsive sections', () 
   const poolDetails = functionSource('renderPoolDetails', 'renderTagEditor');
 
   for (const field of [
-    '官网', '俄文名称', '英文名称', '国家/城市', '客户类型', '行业',
+    '官网', '本地名称/别名', '英文名称', '国家/城市', '客户类型', '行业',
     '企业简介', '重点产品', '邮箱', '电话', 'INN', '制裁状态',
     '联系人数量', '深度报告', '来源文件', '创建时间', '最后修改时间',
   ]) {
