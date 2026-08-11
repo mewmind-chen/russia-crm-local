@@ -56,7 +56,7 @@
           <button data-view="contacts" data-permission="view_contacts"><i data-tp-icon="users" aria-hidden="true"></i><span>客户联系人线索</span></button>
           <button data-view="recon" data-permission="view_recon"><i data-tp-icon="search" aria-hidden="true"></i><span>Recon 情报</span></button>
           <button data-view="customers" data-permission="view_customers"><i data-tp-icon="building" aria-hidden="true"></i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
-          <button data-view="recycleBin" data-permission="manage_customer_recycle"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户回收站</span><b id="navRecycleCount">0</b></button>
+          <button data-view="recycleBin" data-permission="view_own_mismatch_history"><i data-tp-icon="archive" aria-hidden="true"></i><span>不对口记录</span><b id="navRecycleCount">0</b></button>
           <button data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
@@ -259,7 +259,7 @@
 
       <section id="recycleBinView" class="view">
         <div class="section-intro">
-          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>客户回收站</h2><p>不对口客户和手动删除客户在此保留；销售退回的客户回到线索池等待重新分配。</p></div>
+          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>不对口记录</h2><p>领取前和进入 CRM 后标记的不对口客户都在此保留；销售可查看本人记录，管理账号可在授权范围内恢复。</p></div>
         </div>
         <div id="recycleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
@@ -770,6 +770,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/sales-assets/filter-component.js?v=20260803-issue210-customer-controls"></script>
   <script src="/sales-assets/ui-format.js?v=20260729-ui-polish"></script>
-  <script src="/sales-assets/app.js?v=20260805-returned-lead-hotfix"></script>
+  <script src="/sales-assets/app.js?v=20260811-issue273-mismatch-recycle"></script>
 </body>
 </html>
