@@ -262,7 +262,7 @@
   };
   const viewPermissions = {
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
-    recycleBin: 'manage_customer_recycle',
+    recycleBin: 'view_own_mismatch_history',
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_customers',
     activityCorrections: 'manage_activity_corrections',
@@ -3609,7 +3609,7 @@
   }
 
   function canRejectCustomer(account) {
-    if (!account || !can('manage_customer_recycle')) return false;
+    if (!account || (!can('manage_customer_recycle') && !can('reject_own_customer_mismatch'))) return false;
     if (String(account.lifecycle_status || 'active') !== 'active') return false;
     if (String(account.assignment_status || '') === 'returned') return false;
     return true;
@@ -3738,7 +3738,7 @@
   }
 
   async function loadRecycleBin({ reset = true, page = 1 } = {}) {
-    if (!can('manage_customer_recycle')) return;
+    if (!can('view_own_mismatch_history') && !can('manage_customer_recycle')) return;
     const meta = state.authorizedBusinessLists.recycle_bin;
     if (!meta?.filterController) {
       await initializeAuthorizedBusinessFilters('recycle_bin', { force: true });
@@ -3753,6 +3753,15 @@
     if (!reset && Number(page) > 1) void loadAuthorizedBusinessPage('recycle_bin', { page });
   }
 
+  async function rejectCustomerAsMismatch(customerId, reason) {
+    await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}/reject`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    });
+    await refresh();
+    await loadRecycleBin();
+    toast('已移入不对口记录，可在“不对口记录”中查看');
+  }
+
   function renderRecycleBin() {
     const root = $('#recycleTable');
     if (!root) return;
@@ -3765,21 +3774,29 @@
     root.innerHTML = table(
       ['客户', '原负责人', '原因', '回收时间', '操作'],
       rows.map(row => {
+        const canOpenProfile = row.sourceType === 'account' && can('manage_customer_recycle');
+        const customerCell = canOpenProfile
+          ? `<button type="button" class="text-button tp-company-anchor" data-open-recycle-customer="${esc(row.customerId)}">${esc(accountDisplayName(row))}</button>`
+          : `<strong class="tp-company-anchor">${esc(accountDisplayName(row))}</strong>`;
+        let actionCell = '<span class="subtle">仅查看记录</span>';
+        if (row.actions?.includes('reassign')) {
+          actionCell = `<div class="assignment-actions"><select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button></div>`;
+        } else if (row.actions?.includes('restore') && row.sourceType === 'intake') {
+          actionCell = `<button class="button secondary tiny" data-restore-mismatch="${esc(row.recordKey)}">恢复到线索池</button>`;
+        } else if (row.actions?.includes('restore')
+          && state.data.user?.role === 'admin'
+          && can('manage_manual_customer_deletion')
+          && !state.data.impersonation) {
+          actionCell = `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`;
+        }
         const cells = [
-          `<div class="company-cell"><button type="button" class="text-button tp-company-anchor" data-open-recycle-customer="${esc(row.customerId)}">${esc(accountDisplayName(row))}</button><span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}</span></div>`,
+          `<div class="company-cell">${customerCell}<span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}${row.sourceType === 'intake' ? ' · 领取前线索' : ''}</span></div>`,
           esc(row.previousOwnerName || '未分配'),
           esc(row.reason || '—'),
           shortDate(row.recycledAt, true),
-          row.actions?.includes('reassign')
-            ? `<div class="assignment-actions"><select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button></div>`
-            : row.actions?.includes('restore')
-              && state.data.user?.role === 'admin'
-              && can('manage_manual_customer_deletion')
-              && !state.data.impersonation
-              ? `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`
-              : '<span class="subtle">当前无可执行操作</span>',
+          actionCell,
         ];
-        row._attrs = `data-open-recycle-customer="${esc(row.customerId)}"`;
+        row._attrs = `data-open-recycle-customer="${esc(row.customerId)}" data-recycle-record="${esc(row.recordKey)}"`;
         cells._attrs = row._attrs;
         return cells;
       }),
@@ -9905,7 +9922,10 @@
       } else if (form.id === 'intakeReasonForm') {
         const payload = formPayload(form);
         await api('/api/sales-crm/intake/action', { method: 'POST', body: JSON.stringify(payload) });
-        await refreshIntakeWorkflow(payload.action === 'reject' ? '客户已标记为不对口' : '客户已退回管理者队列');
+        await refreshIntakeWorkflow(payload.action === 'reject'
+          ? '已移入不对口记录'
+          : '客户已退回管理者队列');
+        if (payload.action === 'reject') await loadRecycleBin();
       } else if (form.id === 'bulkCustomerAssignForm') {
         const payload = formPayload(form);
         if (!payload.ownerId) throw new Error('请选择有效的销售负责人');
@@ -9919,10 +9939,12 @@
       } else if (form.id === 'recycleReasonForm') {
         const payload = formPayload(form);
         const action = payload.action;
+        if (action === 'reject') {
+          await rejectCustomerAsMismatch(payload.customerId, payload.reason);
+          return;
+        }
         const route = action === 'trash'
           ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/trash`
-          : action === 'reject'
-            ? `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/reject`
           : action === 'bulk'
             ? '/api/sales-crm/accounts/bulk-return'
             : `/api/sales-crm/accounts/${encodeURIComponent(payload.customerId)}/return`;
@@ -9931,9 +9953,7 @@
           : { reason: payload.reason };
         await api(route, { method: 'POST', body: JSON.stringify(body) });
         resetCustomerSelection();
-        await refresh(action === 'trash' ? '客户已移入回收站'
-          : action === 'reject' ? '客户已标记为不对口'
-            : '客户已退回线索池');
+        await refresh(action === 'trash' ? '客户已移入回收站' : '客户已退回线索池');
         if (action === 'bulk') switchView('pool');
       } else if (form.id === 'evaluationForm') {
         const button = form.querySelector('button[type="submit"], button:not([type])');
@@ -10542,8 +10562,6 @@
     }
     const rejectCustomer = event.target.closest('[data-reject-customer]');
     if (rejectCustomer) {
-      const account = state.data.accounts.find(item => item.id === rejectCustomer.dataset.rejectCustomer);
-      if (!canRejectCustomer(account)) return toast('仅当前仍在 CRM 且有回收权限的客户可标记不对口');
       openRecycleReasonModal(rejectCustomer.dataset.rejectCustomer, 'reject');
     }
     const trashCustomer = event.target.closest('[data-trash-customer]');
@@ -10561,6 +10579,19 @@
         closeDrawer();
         await refresh('手工客户已恢复');
         await loadRecycleBin();
+      } catch (error) { toast(error.message); }
+    }
+    const restoreMismatch = event.target.closest('[data-restore-mismatch]');
+    if (restoreMismatch) {
+      const reason = window.prompt('请输入恢复原因', '不对口判定有误') || '';
+      if (reason.trim().length < 2) return;
+      try {
+        await api(`/api/sales-crm/mismatch-recycle/${encodeURIComponent(restoreMismatch.dataset.restoreMismatch)}/restore`, {
+          method: 'POST', body: JSON.stringify({ reason }),
+        });
+        await refresh();
+        await loadRecycleBin();
+        toast('不对口记录已恢复到线索池');
       } catch (error) { toast(error.message); }
     }
     const reassignCustomer = event.target.closest('[data-reassign-customer]');

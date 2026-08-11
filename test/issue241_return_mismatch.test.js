@@ -113,9 +113,10 @@ test('Issue 241 mismatch enters the recycle bin and can be reassigned', async t 
   assert.equal(restored.assignment_status, 'assigned');
 });
 
-test('Issue 241 reject requires recycle permission', async t => {
+test('Issue 241 reject requires either recycle management or narrow own-mismatch permission', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
+  fx.setUserPermissions('U-OTHER', { reject_own_customer_mismatch: false });
   const denied = await fx.request('/api/sales-crm/accounts/CRM-OTHER/reject', {
     cookie: fx.otherCookie,
     method: 'POST',
