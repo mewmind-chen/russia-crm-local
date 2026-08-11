@@ -965,6 +965,7 @@
         total: result.total,
         shown: rows.length,
       });
+      renderNavigationCounts();
       renderCustomers();
     } catch (error) {
       if (requestEpoch !== state.customerRequestEpoch) return;
@@ -1232,6 +1233,7 @@
         meta.loading = false;
         applyAuthorizedBusinessRows(pageKey, meta);
         meta.filterMount?.setResultMeta({ total: meta.total, shown: meta.rows.length });
+        renderNavigationCounts();
         config.render();
         updateAuthorizedBusinessMeta(pageKey);
       }
@@ -1542,16 +1544,25 @@
     return state.data.activities.filter(item => ids.has(item.customer_id));
   }
 
-  function renderAll() {
-    if ($('#navCustomerCount')) $('#navCustomerCount').textContent = state.data.accounts.length;
-    if ($('#navAlertCount')) $('#navAlertCount').textContent = state.data.alerts.length;
+  function renderNavigationCounts() {
+    const bootstrapCounts = state.data?.navigationCounts || {};
+    const customerCount = state.customerList.loaded
+      ? Number(state.customerList.authorizedTotal || 0)
+      : Number(bootstrapCounts.customers ?? state.data?.accounts?.length ?? 0);
+    if ($('#navCustomerCount')) $('#navCustomerCount').textContent = customerCount;
+    const alertMeta = state.authorizedBusinessLists.alerts;
+    const alertCount = alertMeta.loaded
+      ? Number(alertMeta.authorizedTotal || 0)
+      : Number(bootstrapCounts.alerts ?? state.data?.alerts?.length ?? 0);
+    if ($('#navAlertCount')) $('#navAlertCount').textContent = alertCount;
     const notificationMeta = state.authorizedBusinessLists.notifications;
     const notificationRows = notificationMeta.loaded ? notificationMeta.rows : (state.data.notifications || []);
     const unreadNotifications = notificationMeta.loaded && notificationMeta.summary
       ? Number(notificationMeta.summary.unread || 0)
-      : notificationRowsAllowedByAIGate(notificationRows)
-        .filter(item => (item.recipientId || item.user_id) === state.data.user.id
-          && item.status === 'unread').length;
+      : Number(bootstrapCounts.notificationsUnread
+        ?? notificationRowsAllowedByAIGate(notificationRows)
+          .filter(item => (item.recipientId || item.user_id) === state.data.user.id
+            && item.status === 'unread').length);
     if ($('#navNotificationCount')) $('#navNotificationCount').textContent = unreadNotifications;
     if ($('#topNotificationCount')) {
       $('#topNotificationCount').textContent = unreadNotifications > 99 ? '99+' : unreadNotifications;
@@ -1565,9 +1576,25 @@
         : Number(intakeStats?.pending || 0) + Number(intakeStats?.approved || 0)
           + Number(intakeStats?.assigned || 0) + Number(intakeStats?.returned || 0) || 0;
     }
-    if ($('#navInsightCount')) $('#navInsightCount').textContent = state.data.insights?.evaluations.length || 0;
-    if ($('#navPeopleCount')) $('#navPeopleCount').textContent = state.data.researchTotals?.people || 0;
-    if ($('#navRecycleCount')) $('#navRecycleCount').textContent = state.recycleBin.total || 0;
+    if ($('#navInsightCount')) {
+      $('#navInsightCount').textContent = Number(
+        bootstrapCounts.insights ?? state.data.insights?.evaluations?.length ?? 0,
+      );
+    }
+    if ($('#navPeopleCount')) {
+      $('#navPeopleCount').textContent = Number(
+        bootstrapCounts.people ?? state.data.researchTotals?.people ?? 0,
+      );
+    }
+    const recycleMeta = state.authorizedBusinessLists.recycle_bin;
+    const recycleCount = recycleMeta.loaded
+      ? Number(recycleMeta.authorizedTotal || 0)
+      : Number(bootstrapCounts.recycleBin || 0);
+    if ($('#navRecycleCount')) $('#navRecycleCount').textContent = recycleCount;
+  }
+
+  function renderAll() {
+    renderNavigationCounts();
     if ($('#lastRefresh')) $('#lastRefresh').textContent = `更新于 ${shortDate(state.data.generatedAt, true)}`;
     renderDashboard();
     renderIntake();
