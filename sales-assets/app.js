@@ -1605,8 +1605,9 @@
   function renderDashboard() {
     const accounts = scopedAccounts();
     const summary = computeSummary(accounts);
+    const intakeStats = state.data.intake?.stats || {};
     const cards = [
-      ['未开发线索', state.data.researchTotals?.poolAvailable || 0, '等待每日分配', ''],
+      ['未开发线索', intakeStats.assigned || 0, '等待领取', ''],
       ['CRM客户', summary.accounts, '已领取并开始开发', ''],
       ['获得回复', summary.replies, `触达后 ${percent(summary.replies, summary.contacted)}`, ''],
       ['深度会议', summary.meetings, `回复后 ${percent(summary.meetings, summary.replies)}`, ''],
@@ -2301,7 +2302,7 @@
 
   function intakeStatCards(salesView, stats, settings) {
     return salesView ? [
-      ['today', '今日收到线索', stats.todayImported, '领取前保留在线索池'],
+      ['today', '今日收到线索', stats.todayAssigned, '今日分配给你'],
       ['assigned', '待领取', stats.assigned, `领取时限 ${settings.claimSlaHours} 小时`],
       ['claimed', '已领取', stats.claimed, '已转入个人CRM'],
       ['crm', '已进入 CRM', stats.claimed, '点击进入 CRM 客户全景'],
