@@ -12,6 +12,8 @@
     "crm:intake:daily": "node scripts/import-daily-sales-crm.js",
     "crm:intake-invariant:check": "node scripts/reconcile-intake-crm-invariant.js",
     "crm:intake-invariant:apply": "node scripts/reconcile-intake-crm-invariant.js --apply",
+    "crm:mismatch:check": "node scripts/reconcile-mismatch-recycle.js",
+    "crm:mismatch:apply": "node scripts/reconcile-mismatch-recycle.js --apply",
     "crm:migrate:unified:dry": "node scripts/migrate-unified-crm.js",
     "crm:migrate:unified": "node scripts/migrate-unified-crm.js --apply",
     "crm:reset-to-leads": "node scripts/reset-crm-to-undeveloped-leads.js",
