@@ -42,6 +42,10 @@ test('mismatch recycle list unifies pre-claim and CRM records with three-role sc
     recycle_reason='Manager mismatch',recycled_by='U-WU',recycled_at='2026-08-11 09:00:00',
     previous_owner_id='U-WU',owner_id=NULL,assignment_status='returned'
     WHERE id='CRM-WU'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='manual_delete',
+    recycle_reason='Manual delete',recycled_by='U-OTHER',recycled_at='2026-08-11 08:00:00',
+    previous_owner_id='U-OTHER',owner_id=NULL,assignment_status='returned'
+    WHERE id='CRM-OWN'`).run();
 
   const sales = await recycleList(fx, fx.otherCookie);
   assert.equal(sales.response.status, 200, sales.body.error);
@@ -50,15 +54,20 @@ test('mismatch recycle list unifies pre-claim and CRM records with three-role sc
     ['account:CRM-OTHER', 'intake:INTAKE-OTHER'],
   );
   assert.equal(sales.body.rows.every(row => row.actions.length === 0), true);
+  assert.equal(sales.body.rows.some(row => row.recordKey === 'account:CRM-OWN'), false);
 
   const manager = await recycleList(fx, fx.cookie);
   assert.equal(manager.response.status, 200, manager.body.error);
   assert.equal(manager.body.rows.some(row => row.recordKey === 'account:CRM-WU'), true);
+  assert.deepEqual(
+    manager.body.rows.find(row => row.recordKey === 'account:CRM-WU').actions,
+    ['reassign'],
+  );
   assert.equal(manager.body.rows.some(row => row.recordKey === 'intake:INTAKE-OTHER'), true);
 
   const admin = await recycleList(fx, fx.adminCookie);
   assert.equal(admin.response.status, 200, admin.body.error);
-  assert.equal(admin.body.rows.length, 3);
+  assert.equal(admin.body.rows.length, 4);
 });
 
 test('sales can reject only an owned CRM customer', async t => {
