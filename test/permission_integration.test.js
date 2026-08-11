@@ -787,8 +787,8 @@ test('Sales bootstrap cross-permissions hide contacts, alerts, and markets', asy
   } });
   t.after(() => fx.close());
   fx.db.prepare(`INSERT INTO crm_account_contacts
-    (id,customer_id,name,title,phone,email,created_by,created_at,updated_at)
-    VALUES ('LOCAL-SECRET','CRM-WU','Secret Buyer','Procurement','+7-local','local@secret.test','U-WU',?,?)`)
+    (id,customer_id,external_customer_id,name,title,phone,email,created_by,created_at,updated_at)
+    VALUES ('LOCAL-SECRET','CRM-WU','RU-9001','Secret Buyer','Procurement','+7-local','local@secret.test','U-WU',?,?)`)
     .run('2026-07-21 08:00:00', '2026-07-21 08:00:00');
   fx.db.prepare(`UPDATE crm_intake_items SET
     contact_name='Bootstrap Intake Buyer',contact_title='Bootstrap Intake Title',
