@@ -392,5 +392,5 @@ test('Issue 171 JavaScript and CSS assets share a new cache-busting release toke
   assert.ok(jsVersion, 'app.js must have a cache-busting version');
   assert.ok(cssVersion, 'app.css must have a cache-busting version');
   assert.equal(jsVersion, cssVersion);
-  assert.match(jsVersion, /issue171|2026080[2-9]/);
+  assert.match(jsVersion, /issue171|202608\d{2}/);
 });
