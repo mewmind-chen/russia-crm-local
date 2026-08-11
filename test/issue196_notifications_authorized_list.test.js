@@ -90,8 +90,8 @@ test('notification page registers, initializes, loads, and renders one authorize
 });
 
 test('notification UI uses authorized aggregate counts and reconciles AI and quick-filter state', () => {
-  const renderAll = functionBlock(app, 'renderAll');
-  assert.match(renderAll, /notificationMeta\.summary\.unread/);
+  const navigationCounts = functionBlock(app, 'renderNavigationCounts');
+  assert.match(navigationCounts, /notificationMeta\.summary\.unread/);
 
   const render = functionBlock(app, 'renderNotifications');
   assert.match(render, /meta\.summary/);
