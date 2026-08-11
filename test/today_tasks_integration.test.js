@@ -58,7 +58,7 @@ test('a saved business action immediately removes the resolved task on the next 
       summary: '已确认下一次真实跟进',
       nextAction: '发送样品清单',
       nextActionAt: '2099-07-28 09:00:00',
-      occurredAt: '2026-07-27 12:00:00',
+      occurredAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
     },
   });
   assert.equal(saved.status, 200);
