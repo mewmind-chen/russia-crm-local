@@ -471,6 +471,14 @@
   function dateInput(days = 1) {
     return businessDateInput(new Date(Date.now() + days * 86400000));
   }
+  function yearOptions(selectedYear = '') {
+    const currentYear = new Date().getFullYear();
+    const selected = String(selectedYear || '');
+    return ['<option value="">未填写</option>', ...Array.from({ length: currentYear - 999 }, (_, index) => {
+      const year = String(currentYear - index);
+      return `<option value="${year}"${year === selected ? ' selected' : ''}>${year}</option>`;
+    })].join('');
+  }
   function businessDateInput(value) {
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -8882,13 +8890,15 @@
     const ownerOptions = `${canLeaveUnassigned ? '<optgroup label="操作"><option value="__unassigned__">暂不分配</option></optgroup>' : ''}<optgroup label="销售人员">${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
     openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two customer-intake-form">
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
-      <label>公司名称<input name="companyName" placeholder="公司名称或官网至少填写一项"></label>
+      <label class="span-2">公司名称<input name="companyName" placeholder="当地官方名称；公司名称或官网至少填写一项"><small>优先填写企业当地官方名称，作为客户主展示名</small></label>
+      <label>本地名称/别名（选填）<input name="russianName"><small>公司名称不是当地官方名称或存在常用别名时填写</small></label>
+      <label>英文名称（选填）<input name="englishName"></label>
       <label>官网<input name="website" type="url" placeholder="https://example.com"></label>
       <label>国家（可选）<input name="country"></label><label>城市<input name="city"></label>
       <label>行业<input name="industry" placeholder="工业控制、汽车电子等"></label><label>客户类型<select name="customerType"><option>终端制造商</option><option>EMS/代工厂</option><option>贸易商</option><option>维修企业</option><option>方案公司</option></select></label>
       <label>客户来源<select name="source"><option>公司指派</option><option>销售自行搜索</option><option>展会</option><option>LinkedIn</option><option>海关数据</option><option>老客户介绍</option></select></label>
       <label>负责人<select name="ownerId" id="newCustomerOwner">${ownerOptions}</select></label>
-      <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" inputmode="numeric" placeholder="例如 2008"></label>
+      <label>重点产品<input name="productFocus" placeholder="IC、连接器、传感器等"></label><label>成立年份（选填）<input name="establishedYear" inputmode="numeric" list="new-customer-year-options" pattern="[0-9]{4}" placeholder="搜索或选择年份"><datalist id="new-customer-year-options">${yearOptions()}</datalist></label>
       <label>优先级<select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label><label>首次行动时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(1)}"></label>
       <label class="span-2">下一步<input name="nextAction" value="完成首次触达"></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" id="newCustomerSubmit">创建客户</button></div>
@@ -9052,7 +9062,7 @@
       <label>阶段<select name="stage">${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
-      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(account.established_year || '')}"></label>
+      <label>成立年份（选填）<input name="establishedYear" inputmode="numeric" list="profile-year-options" pattern="[0-9]{4}" value="${esc(account.established_year || '')}" placeholder="搜索或选择年份"><datalist id="profile-year-options">${yearOptions(account.established_year)}</datalist></label>
       ${nicknameField}
       <label>国家 / 地区<input name="country" value="${esc(account.country)}"></label>
       <label>城市<input name="city" value="${esc(account.city)}"></label>
@@ -9070,15 +9080,15 @@
     if (!master || state.data.user?.role !== 'admin' || state.data.impersonation) return;
     const options = state.data.customerOptions || {};
     openModal('编辑客户主档', 'ADMIN MASTER PROFILE', `<form id="customerMasterForm" class="form-grid two">
-      <label class="span-2">公司名称<input name="companyName" value="${esc(master.companyName)}"></label>
-      <label>俄文名称<input name="russianName" value="${esc(master.russianName)}"></label>
-      <label>英文名称<input name="englishName" value="${esc(master.englishName)}"></label>
+      <label class="span-2">公司名称<input name="companyName" value="${esc(master.companyName)}"><small>优先填写企业当地官方名称，作为客户主展示名</small></label>
+      <label>本地名称/别名（选填）<input name="russianName" value="${esc(master.russianName)}"><small>公司名称不是当地官方名称或存在常用别名时填写</small></label>
+      <label>英文名称（选填）<input name="englishName" value="${esc(master.englishName)}"></label>
       <label>国家 / 地区<input name="country" value="${esc(master.country)}"></label>
       <label>城市<input name="city" value="${esc(master.city)}"></label>
       <label class="span-2">官网<input name="website" type="url" value="${esc(master.website)}" placeholder="https://example.com"></label>
       <label>行业<input name="industry" value="${esc(master.industry)}"></label>
       <label>客户类型<select name="customerType">${selectedOptions(options.customerTypes, master.customerType, '请选择客户类型')}</select></label>
-      <label>成立年份（选填）<input name="establishedYear" type="number" min="1000" max="${new Date().getFullYear()}" value="${esc(master.establishedYear || '')}"></label>
+      <label>成立年份（选填）<input name="establishedYear" inputmode="numeric" list="master-year-options" pattern="[0-9]{4}" value="${esc(master.establishedYear || '')}" placeholder="搜索或选择年份"><datalist id="master-year-options">${yearOptions(master.establishedYear)}</datalist></label>
       <label>评级<input name="rating" value="${esc(master.rating)}"></label>
       <label class="span-2">重点产品<input name="productFocus" value="${esc(master.products)}"></label>
       <label class="span-2">客户简介<textarea name="description">${esc(master.description)}</textarea></label>

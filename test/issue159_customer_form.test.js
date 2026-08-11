@@ -49,6 +49,90 @@ test('established year rejects non-four-digit and future values', async t => {
   }
 });
 
+test('new customer stores optional local alias and English name on the master record', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+
+  const created = await fx.requestJson('/api/sales-crm/accounts', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      companyName: 'ООО Локальное Имя',
+      russianName: 'Local Alias',
+      englishName: 'Local Name LLC',
+      ownerId: '__unassigned__',
+    },
+  });
+  const master = fx.db.prepare(`SELECT company_name,russian_name,english_name
+    FROM customer_pool WHERE customer_id=?`).get(created.externalCustomerId);
+  assert.deepEqual(master, {
+    company_name: 'ООО Локальное Имя',
+    russian_name: 'Local Alias',
+    english_name: 'Local Name LLC',
+  });
+
+  const exported = await fx.requestJson('/api/sales-crm/export?search=Local%20Alias', {
+    cookie: fx.adminCookie,
+  });
+  assert.deepEqual(exported.customers.map(row => row.id), [created.customerId]);
+  assert.equal(exported.customers[0].russian_name, 'Local Alias');
+  assert.equal(exported.customers[0].english_name, 'Local Name LLC');
+  const csv = await (await fx.request('/api/sales-crm/export?format=csv&search=Local%20Alias', {
+    cookie: fx.adminCookie,
+  })).text();
+  assert.match(csv, /本地名称\/别名,英文名称/);
+  assert.match(csv, /Local Alias,Local Name LLC/);
+});
+
+test('profile year accepts empty and boundary values without overwriting historical aliases', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE customer_pool SET russian_name='Исторический псевдоним',english_name='Historic Alias' WHERE customer_id='RU-9002'").run();
+
+  for (const establishedYear of ['', '1000', String(new Date().getFullYear())]) {
+    const response = await fx.request('/api/sales-crm/accounts/CRM-OWN', {
+      cookie: fx.adminCookie,
+      method: 'PATCH',
+      body: { establishedYear },
+    });
+    assert.equal(response.status, 200, establishedYear);
+  }
+  const master = fx.db.prepare(`SELECT russian_name,english_name,established_year
+    FROM customer_pool WHERE customer_id='RU-9002'`).get();
+  assert.deepEqual(master, {
+    russian_name: 'Исторический псевдоним',
+    english_name: 'Historic Alias',
+    established_year: new Date().getFullYear(),
+  });
+});
+
+test('master edit preserves an abnormal historical year unless that field is submitted', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare("UPDATE customer_pool SET russian_name='Старое имя',established_year=999 WHERE customer_id='RU-9002'").run();
+
+  const response = await fx.request('/api/sales-crm/master/RU-9002', {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: { city: 'Новосибирск' },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(fx.db.prepare(`SELECT russian_name,established_year,city
+    FROM customer_pool WHERE customer_id='RU-9002'`).get(), {
+    russian_name: 'Старое имя',
+    established_year: 999,
+    city: 'Новосибирск',
+  });
+
+  const rejected = await fx.request('/api/sales-crm/master/RU-9002', {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: { establishedYear: String(new Date().getFullYear() + 1) },
+  });
+  assert.equal(rejected.status, 400);
+  assert.equal(fx.db.prepare("SELECT established_year FROM customer_pool WHERE customer_id='RU-9002'").get().established_year, 999);
+});
+
 test('sales users cannot leave customers unassigned', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
