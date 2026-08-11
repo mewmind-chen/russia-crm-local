@@ -31,7 +31,8 @@ function seedMaintenanceData(fx) {
   fx.db.prepare(`INSERT INTO crm_orders
     (id,customer_id,quote_id,user_id,ordered_at,created_at) VALUES ('ORDER-RESET','CRM-RESET','QUOTE-RESET','U-OTHER',?,?)`).run(now, now);
   fx.db.prepare(`INSERT INTO crm_account_contacts
-    (id,customer_id,name,created_by,created_at,updated_at) VALUES ('CONTACT-RESET','CRM-RESET','Buyer','U-OTHER',?,?)`).run(now, now);
+    (id,customer_id,external_customer_id,name,created_by,created_at,updated_at)
+    VALUES ('CONTACT-RESET','CRM-RESET','RU-9010','Buyer','U-OTHER',?,?)`).run(now, now);
   fx.db.prepare(`INSERT INTO crm_manager_evaluations
     (id,customer_id,subject_type,evaluation_text,author_id,author_name,created_at,updated_at)
     VALUES ('EVAL-RESET','CRM-RESET','company','test','USR-ADMIN','Admin',?,?)`).run(now, now);

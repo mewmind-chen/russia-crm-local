@@ -22,8 +22,8 @@ function recycleAccount(fx, accountId, {
 
 function seedHistory(fx) {
   fx.db.prepare(`INSERT INTO crm_account_contacts
-    (id,customer_id,name,title,department,phone,email,social,created_by,created_at,updated_at)
-    VALUES ('CONTACT-137','CRM-WU','Ivan Buyer','Buyer','Procurement',
+    (id,customer_id,external_customer_id,name,title,department,phone,email,social,created_by,created_at,updated_at)
+    VALUES ('CONTACT-137','CRM-WU','RU-9001','Ivan Buyer','Buyer','Procurement',
       '+7-issue137','issue137@example.test','Telegram','U-WU',?,?)`).run(NOW, NOW);
   fx.db.prepare(`INSERT INTO crm_activities
     (id,customer_id,user_id,activity_type,channel,outcome,summary,occurred_at,created_at)

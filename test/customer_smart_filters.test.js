@@ -35,8 +35,8 @@ test('customer export applies multi-keyword, multi-select, quick-view and sortin
     next_action='',next_action_at='',created_by='U-WU',created_at='2026-06-01 08:00:00'
     WHERE id='CRM-OWN'`).run();
   fx.db.prepare(`INSERT INTO crm_account_contacts
-    (id,customer_id,name,title,phone,email,created_by,created_at,updated_at)
-    VALUES ('P-FILTER','CRM-WU','Иван Петров','采购经理','+7 900','ivan@wu.example','USR-ADMIN',?,?)`).run(now, now);
+    (id,customer_id,external_customer_id,name,title,phone,email,created_by,created_at,updated_at)
+    VALUES ('P-FILTER','CRM-WU','RU-9001','Иван Петров','采购经理','+7 900','ivan@wu.example','USR-ADMIN',?,?)`).run(now, now);
   fx.db.prepare(`INSERT INTO crm_manager_evaluations
     (id,customer_id,subject_type,evaluation_text,author_id,author_name,ai_labels_json,created_at,updated_at)
     VALUES ('E-FILTER','CRM-WU','company','重点俄罗斯客户','USR-ADMIN','Admin','["高匹配"]',?,?)`).run(now, now);
@@ -83,8 +83,8 @@ test('contact keyword matching follows contact permission and customer scope', a
   t.after(() => fx.close());
   const now = '2026-07-27 10:00:00';
   fx.db.prepare(`INSERT INTO crm_account_contacts
-    (id,customer_id,name,title,phone,email,created_by,created_at,updated_at)
-    VALUES ('P-SECRET-FILTER','CRM-WU','Секретный Покупатель','采购经理','+7 777',
+    (id,customer_id,external_customer_id,name,title,phone,email,created_by,created_at,updated_at)
+    VALUES ('P-SECRET-FILTER','CRM-WU','RU-9001','Секретный Покупатель','采购经理','+7 777',
       'buyer-filter@example.test','USR-ADMIN',?,?)`).run(now, now);
 
   fx.setUserPermissions('U-WU', {
