@@ -135,14 +135,18 @@ test('restore and reassign success close recycle detail then refresh bootstrap a
     clickHandler.indexOf('const reassignCustomer ='),
     reassignEnd,
   );
+  const reassignAction = topLevelFunction('reassignMismatchCustomer');
+  const refreshAction = topLevelFunction('refreshAfterMismatchAction');
 
   assert.match(restore, /\/restore`/);
   assert.match(restore, /closeDrawer\(\)/);
   assert.match(restore, /await refresh\('手工客户已恢复'\)/);
   assert.match(restore, /await loadRecycleBin\(\)/);
 
-  assert.match(reassign, /\/reassign`/);
-  assert.match(reassign, /closeDrawer\(\)/);
-  assert.match(reassign, /await refresh\('客户已重新分配'\)/);
-  assert.match(reassign, /await loadRecycleBin\(\)/);
+  assert.match(reassign, /reassignMismatchCustomer\(reassignCustomer, reason\)/);
+  assert.match(reassignAction, /\/reassign`/);
+  assert.match(reassignAction, /refreshAfterMismatchAction\('客户已重新分配'\)/);
+  assert.match(refreshAction, /closeDrawer\(\)/);
+  assert.match(refreshAction, /await refresh\(message\)/);
+  assert.match(refreshAction, /await loadRecycleBin\(\)/);
 });

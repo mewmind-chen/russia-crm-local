@@ -164,11 +164,16 @@ function mismatchRendererHarness(payload, expanded = false) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[char]));
   const shortDate = value => String(value || '—');
-  const website = Function('esc', `return (${topLevelFunction('mismatchWebsiteMarkup')});`)(esc);
+  const safeObject = Function(`return (${topLevelFunction('mismatchSafeObject')});`)();
+  const safeText = Function('mismatchSafeObject', `return (${topLevelFunction('mismatchSafeText')});`)(safeObject);
+  const safeJoin = Function('mismatchSafeText', `return (${topLevelFunction('mismatchSafeJoin')});`)(safeText);
+  const website = Function('esc', 'mismatchSafeText',
+    `return (${topLevelFunction('mismatchWebsiteMarkup')});`)(esc, safeText);
   const render = Function(
     'state', '$', 'resetDrawerActions', 'esc', 'shortDate', 'mismatchWebsiteMarkup',
+    'mismatchSafeObject', 'mismatchSafeText', 'mismatchSafeJoin',
     `return (${topLevelFunction('renderMismatchRecordDrawer')});`,
-  )(state, $, () => {}, esc, shortDate, website);
+  )(state, $, () => {}, esc, shortDate, website, safeObject, safeText, safeJoin);
   render();
   return { state, elements, html: elements['#drawerContent'].innerHTML, render };
 }
@@ -400,7 +405,7 @@ test('expanded mismatch drawer renders authorized profile and history arrays fro
 
 test('mismatch drawer exposes actions only from the exact server whitelist', () => {
   const render = topLevelFunction('renderMismatchRecordDrawer');
-  assert.match(render, /new Set\(detail\.actions \|\| \[\]\)/);
+  assert.match(render, /new Set\(Array\.isArray\(detail\.actions\) \? detail\.actions : \[\]\)/);
   assert.doesNotMatch(render, /state\.data\.user|can\(/);
   const account = mismatchRendererHarness(mismatchPayload({ actions: ['reassign'] })).html;
   assert.match(account, /data-reassign-customer="CRM-A"/);
@@ -417,6 +422,136 @@ test('mismatch drawer exposes actions only from the exact server whitelist', () 
 
   const none = mismatchRendererHarness(mismatchPayload({ actions: [] })).html;
   assert.doesNotMatch(none, /data-(?:restore-mismatch|reassign-customer)/);
+});
+
+test('mismatch renderer tolerates malformed nested DTO values without object leaks', () => {
+  const base = mismatchPayload();
+  const malformedRows = [null, 'raw', {
+    title: { label: '<Boss>' }, summary: { value: '<Summary>' },
+    contactMethods: ['a', { name: 'b' }], amount: { value: 99 },
+  }];
+  const payload = mismatchPayload({
+    customer: {
+      ...base.customer,
+      companyName: { label: '<Acme>' },
+      products: ['sensor', { name: '<module>' }, { secret: 'must-not-leak' }],
+      description: { summary: '<maker>' },
+      website: { value: 'https://safe.example/path' },
+    },
+    profile: {
+      ...base.profile,
+      customerPool: [null, 'raw', { companyName: { label: '<Pool>' }, products: ['x', { name: 'y' }] }],
+      people: [null, 'raw', { name: 'Buyer', contactMethods: ['a', 'b'], title: { label: 'Boss' } }],
+      accountContacts: malformedRows,
+      reconResults: malformedRows,
+    },
+    history: Object.fromEntries(Object.keys(base.history).map(key => [key, malformedRows])),
+    actions: { reassign: true },
+  });
+
+  let harness;
+  assert.doesNotThrow(() => { harness = mismatchRendererHarness(payload, true); });
+  assert.doesNotMatch(harness.html, /\[object Object\]|must-not-leak/);
+  for (const copy of ['&lt;Acme&gt;', 'sensor · &lt;module&gt;', '&lt;maker&gt;', 'Buyer', 'a · b', 'Boss']) {
+    assert.match(harness.html, new RegExp(copy));
+  }
+  assert.match(harness.html, /href="https:\/\/safe\.example\/path" target="_blank" rel="noopener"/);
+  assert.doesNotMatch(harness.html, /data-(?:restore-mismatch|reassign-customer)/);
+});
+
+function mismatchActionHarness({ rejectApi = false } = {}) {
+  const calls = { api: [], close: 0, refresh: [], load: 0, toast: [] };
+  const api = async (url, options) => {
+    calls.api.push({ url, options });
+    if (rejectApi) throw new Error('network failed');
+    return { ok: true };
+  };
+  const closeDrawer = () => { calls.close += 1; };
+  const refresh = async message => { calls.refresh.push(message); };
+  const loadRecycleBin = async () => { calls.load += 1; };
+  const toast = message => calls.toast.push(message);
+  const refreshAfter = Function(
+    'closeDrawer', 'refresh', 'loadRecycleBin',
+    `return (${topLevelFunction('refreshAfterMismatchAction')});`,
+  )(closeDrawer, refresh, loadRecycleBin);
+  const restore = Function(
+    'api', 'refreshAfterMismatchAction', 'toast',
+    `return (${topLevelFunction('restoreMismatchRecord')});`,
+  )(api, refreshAfter, toast);
+  const reassign = Function(
+    'api', 'refreshAfterMismatchAction', 'toast',
+    `return (${topLevelFunction('reassignMismatchCustomer')});`,
+  )(api, refreshAfter, toast);
+  return { calls, restore, reassign };
+}
+
+test('intake restore executes the record-key route and refreshes once only after success', async () => {
+  const harness = mismatchActionHarness();
+  await harness.restore('intake:INTAKE-A', '判定修正');
+
+  assert.equal(harness.calls.api.length, 1);
+  assert.equal(harness.calls.api[0].url, '/api/sales-crm/mismatch-recycle/intake%3AINTAKE-A/restore');
+  assert.deepEqual(JSON.parse(harness.calls.api[0].options.body), { reason: '判定修正' });
+  assert.equal(harness.calls.close, 1);
+  assert.deepEqual(harness.calls.refresh, [undefined]);
+  assert.equal(harness.calls.load, 1);
+});
+
+test('failed intake restore preserves the open drawer and reports the API error', async () => {
+  const harness = mismatchActionHarness({ rejectApi: true });
+  await harness.restore('intake:INTAKE-A', '判定修正');
+
+  assert.equal(harness.calls.close, 0);
+  assert.deepEqual(harness.calls.refresh, []);
+  assert.equal(harness.calls.load, 0);
+  assert.deepEqual(harness.calls.toast, ['network failed']);
+});
+
+test('account reassign reads customer and selected owner from the actual action control', async () => {
+  const harness = mismatchActionHarness();
+  const button = {
+    dataset: { reassignCustomer: 'CRM-A' },
+    parentElement: { querySelector: selector => selector === 'select' ? { value: 'U-NEW' } : null },
+  };
+  await harness.reassign(button, '重新分配');
+
+  assert.equal(harness.calls.api[0].url, '/api/sales-crm/accounts/CRM-A/reassign');
+  assert.deepEqual(JSON.parse(harness.calls.api[0].options.body), {
+    ownerId: 'U-NEW', reason: '重新分配',
+  });
+  assert.equal(harness.calls.close, 1);
+  assert.deepEqual(harness.calls.refresh, ['客户已重新分配']);
+  assert.equal(harness.calls.load, 1);
+});
+
+test('post-action recycle reload executes against the current page without clearing applied filters', async () => {
+  const calls = { clear: 0, authorized: [] };
+  const controller = {
+    clearAll() { calls.clear += 1; },
+    getSchema() { return { fields: [] }; },
+    apply() {},
+  };
+  const state = {
+    authorizedBusinessLists: { recycle_bin: { filterController: controller, page: 4 } },
+  };
+  const load = Function(
+    'can', 'state', 'initializeAuthorizedBusinessFilters', '$', 'loadAuthorizedBusinessPage',
+    `return (${topLevelFunction('loadRecycleBin')});`,
+  )(
+    () => true,
+    state,
+    async () => { throw new Error('must not reinitialize'); },
+    () => ({ value: '' }),
+    async (pageKey, options) => calls.authorized.push({ pageKey, options }),
+  );
+
+  await load();
+
+  assert.equal(calls.clear, 0);
+  assert.deepEqual(calls.authorized, [{
+    pageKey: 'recycle_bin',
+    options: { reset: false, force: true, page: 4 },
+  }]);
 });
 
 test('expand and collapse rerender the loaded payload without issuing another profile request', async () => {
@@ -449,6 +584,7 @@ test('closing mismatch details clears the expanded state', () => {
 test('successful mismatch actions close the drawer and refresh the same authorized list page', () => {
   const load = topLevelFunction('loadRecycleBin');
   const handler = clickHandler();
+  const refreshAction = topLevelFunction('refreshAfterMismatchAction');
   const restoreStart = handler.indexOf('const restoreMismatch =');
   const reassignStart = handler.indexOf('const reassignCustomer =', restoreStart);
   const reassignEnd = handler.indexOf('const retryResearch =', reassignStart);
@@ -461,9 +597,9 @@ test('successful mismatch actions close the drawer and refresh the same authoriz
   assert.match(load, /loadAuthorizedBusinessPage\('recycle_bin'/);
   assert.match(load, /reset:\s*false/);
   assert.match(load, /page:\s*targetPage/);
-  for (const action of [restoreMismatch, reassignMismatch]) {
-    assert.match(action, /closeDrawer\(\)/);
-    assert.match(action, /await refresh\(/);
-    assert.match(action, /await loadRecycleBin\(\)/);
-  }
+  assert.match(restoreMismatch, /restoreMismatchRecord\(restoreMismatch\.dataset\.restoreMismatch, reason\)/);
+  assert.match(reassignMismatch, /reassignMismatchCustomer\(reassignCustomer, reason\)/);
+  assert.match(refreshAction, /closeDrawer\(\)/);
+  assert.match(refreshAction, /await refresh\(message\)/);
+  assert.match(refreshAction, /await loadRecycleBin\(\)/);
 });
