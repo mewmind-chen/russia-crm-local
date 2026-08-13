@@ -19,7 +19,7 @@ const workbenchHtml = read('Index.html');
 const readme = read('README.md');
 
 const moduleName = '客户联系人线索';
-const permissionName = '查看客户联系人线索';
+const permissionName = '客户联系人线索';
 const description = '寻找并核实客户公司的采购、老板、工程师等潜在联系人；确认后进入正式客户联系人。';
 
 test('Sales CRM names and explains the customer contact lead module consistently', () => {

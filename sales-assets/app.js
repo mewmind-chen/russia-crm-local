@@ -271,7 +271,7 @@
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'view_own_mismatch_history',
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
-    notifications: 'view_customers',
+    notifications: 'view_notifications',
     activityCorrections: 'manage_activity_corrections',
     team: 'view_customers',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
