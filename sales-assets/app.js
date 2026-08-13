@@ -149,6 +149,8 @@
       reviewSubmitting: '', reviewKeys: new Map(), reviewDrafts: new Map(),
     },
     modalReturnFocus: null,
+    drawerOwner: '',
+    drawerRequestEpoch: 0,
     drawerAiContext: null,
     drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
@@ -3876,13 +3878,33 @@
       : `<section class="master-profile"><div class="insight-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><span class="pill amber">只读</span></div><div class="master-profile-grid"><div><span>客户</span><p>${esc(customer.companyName || '未命名客户')}</p></div><div><span>记录编号</span><p>${esc(detail.recordKey)}</p></div></div></section>`;
   }
 
+  function claimCustomerDrawer(owner) {
+    owner = String(owner || '').trim();
+    const request = { owner, epoch: ++state.drawerRequestEpoch };
+    state.drawerOwner = owner;
+    if (!owner.startsWith('mismatch:')) {
+      state.mismatchRecordDetail = null;
+      state.mismatchRecordExpanded = false;
+    }
+    if (!owner.startsWith('recycle:')) state.recycleCustomerDetail = null;
+    return request;
+  }
+
+  function isCustomerDrawerRequestCurrent(request) {
+    return Boolean(request
+      && request.epoch === state.drawerRequestEpoch
+      && request.owner === state.drawerOwner
+      && $('#customerDrawer').classList.contains('open'));
+  }
+
   async function openMismatchRecord(recordKey) {
     recordKey = String(recordKey || '').trim();
     if (!recordKey) return;
-    const epoch = ++state.mismatchRecordRequestEpoch;
+    const request = claimCustomerDrawer(`mismatch:${recordKey}`);
+    state.mismatchRecordRequestEpoch += 1;
     state.mismatchRecordExpanded = false;
     state.mismatchRecordDetail = { recordKey, loading: true, error: '', profile: null };
-    state.recycleCustomerDetail = null;
+    state.selectedCustomerId = '';
     state.drawerAiContext = null;
     renderMismatchRecordDrawer();
     $('#customerDrawer').classList.add('open');
@@ -3890,13 +3912,12 @@
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
     try {
       const profile = await api(`/api/sales-crm/mismatch-recycle/${encodeURIComponent(recordKey)}/profile`);
-      if (epoch !== state.mismatchRecordRequestEpoch
-        || state.mismatchRecordDetail?.recordKey !== recordKey
-        || !$('#customerDrawer').classList.contains('open')) return;
+      if (!isCustomerDrawerRequestCurrent(request)
+        || state.mismatchRecordDetail?.recordKey !== recordKey) return;
       state.mismatchRecordDetail = { recordKey, loading: false, error: '', profile };
       renderMismatchRecordDrawer();
     } catch (error) {
-      if (epoch !== state.mismatchRecordRequestEpoch
+      if (!isCustomerDrawerRequestCurrent(request)
         || state.mismatchRecordDetail?.recordKey !== recordKey) return;
       closeDrawer();
       toast(error.message);
@@ -3907,8 +3928,8 @@
     if (!can('manage_customer_recycle')) return;
     customerId = String(customerId || '').trim();
     if (!customerId) return;
+    const request = claimCustomerDrawer(`recycle:${customerId}`);
     state.selectedCustomerId = customerId;
-    state.recycleCustomerDetail = null;
     state.drawerAiContext = null;
     $('#drawerStage').textContent = '回收站客户';
     $('#drawerCompany').textContent = '正在读取客户资料…';
@@ -3922,11 +3943,12 @@
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
     try {
       const detail = await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}/recycle-profile`);
-      if (state.selectedCustomerId !== customerId || !$('#customerDrawer').classList.contains('open')) return;
+      if (!isCustomerDrawerRequestCurrent(request) || state.selectedCustomerId !== customerId) return;
       state.recycleCustomerDetail = detail;
       renderDrawer();
     } catch (error) {
-      if (state.selectedCustomerId === customerId) closeDrawer();
+      if (!isCustomerDrawerRequestCurrent(request) || state.selectedCustomerId !== customerId) return;
+      closeDrawer();
       toast(error.message);
     }
   }
@@ -6948,7 +6970,7 @@
       resetDrawerActions();
       return toast('当前客户不在可见范围内');
     }
-    state.recycleCustomerDetail = null;
+    claimCustomerDrawer(`crm:${customerId}`);
     state.selectedCustomerId = customerId;
     state.drawerAiContext = null;
     renderDrawer();
@@ -6977,6 +6999,7 @@
       resetDrawerActions();
       return toast('当前线索不在可见范围内');
     }
+    claimCustomerDrawer(`intake:${itemId}`);
     const signals = intakeSignals(item);
     const showAssignmentDecisions = canViewAssignmentDecisions();
     const showAI = customerAIEnabled();
@@ -7053,6 +7076,8 @@
   }
 
   function closeDrawer() {
+    state.drawerRequestEpoch += 1;
+    state.drawerOwner = '';
     state.mismatchRecordRequestEpoch += 1;
     state.mismatchRecordDetail = null;
     state.mismatchRecordExpanded = false;
@@ -8079,6 +8104,18 @@
   }
 
   function renderDrawer() {
+    if (state.drawerOwner.startsWith('mismatch:')) {
+      renderMismatchRecordDrawer();
+      return;
+    }
+    if (state.drawerOwner.startsWith('intake:')) return;
+    if (state.drawerOwner.startsWith('recycle:')) {
+      if (state.recycleCustomerDetail
+        && (state.recycleCustomerDetail.account?.id || state.selectedCustomerId) === state.selectedCustomerId) {
+        renderRecycleDrawer(state.recycleCustomerDetail);
+      }
+      return;
+    }
     if (state.recycleCustomerDetail
       && (state.recycleCustomerDetail.account?.id || state.selectedCustomerId) === state.selectedCustomerId) {
       renderRecycleDrawer(state.recycleCustomerDetail);
