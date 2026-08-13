@@ -78,7 +78,7 @@ test('manager task schema migration preserves legacy tasks and interventions', (
   }
 });
 
-test('sales manager assistance creates one persisted task and manager completion closes it', async t => {
+test('manager reply keeps the task open until the sales confirms a new plan', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   const reaction = await firstReaction(fx, fx.otherCookie);
@@ -103,7 +103,7 @@ test('sales manager assistance creates one persisted task and manager completion
   assert.ok(task);
   assert.equal(task.status, 'open');
   assert.equal(task.actor_id_snapshot, 'U-OTHER');
-  assert.equal(task.completion_condition, '记录经理协助结果并完成主管任务');
+  assert.equal(task.completion_condition, '销售确认回执并保存下一步计划');
   assert.equal(JSON.parse(task.evidence_json).activityId, first.activityId);
 
   const replayResponse = await fx.request('/api/sales-crm/activities', {
@@ -115,25 +115,50 @@ test('sales manager assistance creates one persisted task and manager completion
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_manager_tasks
     WHERE reason='manager_assistance' AND customer_id='RU-9003'`).get().count, 1);
 
-  const completeResponse = await fx.request('/api/sales-crm/today-tasks/actions', {
+  const replyResponse = await fx.request('/api/sales-crm/today-tasks/actions', {
     cookie: fx.adminCookie,
     method: 'POST',
     body: {
       actionType: 'complete_manager_assistance',
       customerId: 'CRM-OTHER',
-      result: '已确认特殊价格，并安排销售继续跟进。',
+      result: '核对旧联系人，再查采购负责人',
       idempotencyKey: 'issue257-manager-assistance-complete',
     },
   });
-  const complete = await completeResponse.json();
-  assert.equal(completeResponse.status, 200, complete.error);
-  assert.equal(fx.db.prepare('SELECT status FROM crm_manager_tasks WHERE id=?').get(task.id).status, 'completed');
+  const reply = await replyResponse.json();
+  assert.equal(replyResponse.status, 200, reply.error);
+  const afterReply = fx.db.prepare('SELECT * FROM crm_manager_tasks WHERE id=?').get(task.id);
+  assert.equal(afterReply.status, 'open');
+  assert.match(afterReply.result_json, /manager_replied/);
+  const accountAfterReply = fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER');
+  assert.equal(accountAfterReply.manager_status, '已回复');
+  assert.equal(accountAfterReply.manager_required, 1);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_manager_interventions
     WHERE task_id=?`).get(task.id).count, 0);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_activities
     WHERE customer_id='CRM-OTHER' AND activity_type='manager_join'`).get().count, 1);
   assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_audit_log
-    WHERE action='today_task_manager_assistance_completed' AND entity_id='CRM-OTHER'`).get().count, 1);
+    WHERE action='today_task_manager_assistance_replied' AND entity_id='CRM-OTHER'`).get().count, 1);
+
+  const confirmResponse = await fx.request('/api/sales-crm/today-tasks/actions', {
+    cookie: fx.otherCookie,
+    method: 'POST',
+    body: {
+      actionType: 'confirm_manager_assistance',
+      customerId: 'CRM-OTHER',
+      nextAction: '两天后电话联系采购负责人',
+      nextActionAt: '2026-08-20 09:00:00',
+      idempotencyKey: 'issue257-manager-assistance-confirm',
+    },
+  });
+  const confirm = await confirmResponse.json();
+  assert.equal(confirmResponse.status, 200, confirm.error);
+  assert.equal(fx.db.prepare('SELECT status FROM crm_manager_tasks WHERE id=?').get(task.id).status, 'completed');
+  const accountAfterConfirm = fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER');
+  assert.equal(accountAfterConfirm.manager_status, '已完成');
+  assert.equal(accountAfterConfirm.manager_required, 0);
+  assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_audit_log
+    WHERE action='today_task_manager_assistance_confirmed' AND entity_id='CRM-OTHER'`).get().count, 1);
   const listedResponse = await fx.request('/api/sales-crm/manager-tasks?page=1&pageSize=50', {
     cookie: fx.adminCookie,
   });

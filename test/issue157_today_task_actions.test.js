@@ -397,15 +397,15 @@ test('manager assistance uses the latest manager-required request and creates on
   const first = await act(fx, fx.adminCookie, request);
   assert.equal(first.response.status, 200, first.body.error);
   assert.match(first.body.activityId, /^ACT-/);
-  assert.ok(first.body.completedAt);
+  assert.ok(first.body.repliedAt);
   assert.deepEqual(
     fx.db.prepare(`SELECT manager_required,manager_status,manager_id,last_activity_at
       FROM crm_accounts WHERE id='CRM-OTHER'`).get(),
     {
-      manager_required: 0,
-      manager_status: '已完成',
+      manager_required: 1,
+      manager_status: '已回复',
       manager_id: 'USR-ADMIN',
-      last_activity_at: first.body.completedAt,
+      last_activity_at: first.body.repliedAt,
     },
   );
   const activity = fx.db.prepare(`SELECT activity_type,progress_key,channel,outcome,summary,user_id,
@@ -415,15 +415,15 @@ test('manager assistance uses the latest manager-required request and creates on
     activity_type: 'manager_join',
     progress_key: 'manager_join',
     channel: '',
-    outcome: '已完成',
+    outcome: '已回复',
     summary: request.result,
     user_id: 'USR-ADMIN',
     manager_required: 0,
     stage_before: 'qualified',
     stage_after: 'qualified',
-    occurred_at: first.body.completedAt,
+    occurred_at: first.body.repliedAt,
   });
-  const audit = auditFor(fx, 'today_task_manager_assistance_completed', 'CRM-OTHER');
+  const audit = auditFor(fx, 'today_task_manager_assistance_replied', 'CRM-OTHER');
   assert.deepEqual(
     {
       requesterId: detail(audit).requesterId,
@@ -431,7 +431,7 @@ test('manager assistance uses the latest manager-required request and creates on
       requestReason: detail(audit).requestReason,
       handlerId: detail(audit).handlerId,
       result: detail(audit).result,
-      completedAt: detail(audit).completedAt,
+      repliedAt: detail(audit).repliedAt,
     },
     {
       requesterId: 'U-OTHER',
@@ -439,11 +439,9 @@ test('manager assistance uses the latest manager-required request and creates on
       requestReason: '最新协助原因：请确认特殊价格和账期',
       handlerId: 'USR-ADMIN',
       result: request.result,
-      completedAt: first.body.completedAt,
+      repliedAt: first.body.repliedAt,
     },
   );
-  assert.equal(taskFor((await bootstrap(fx, fx.adminCookie)).body, { customerId: 'CRM-OTHER' }), undefined);
-
   const ownerPayload = await bootstrap(fx, fx.otherCookie);
   const timelineEvent = ownerPayload.body.timeline.find(item => item.id === `activity:${first.body.activityId}`);
   assert.ok(timelineEvent);
@@ -623,7 +621,7 @@ test('transaction failure preserves the manager task and permits a clean retry w
   ).get().count;
   fx.db.exec(`CREATE TRIGGER issue157_fail_manager_audit
     BEFORE INSERT ON crm_audit_log
-    WHEN NEW.action='today_task_manager_assistance_completed'
+    WHEN NEW.action='today_task_manager_assistance_replied'
     BEGIN SELECT RAISE(ABORT,'issue157 forced audit failure'); END`);
   const request = {
     actionType: 'complete_manager_assistance',

@@ -140,7 +140,7 @@ async function runTodayTaskScenario(impersonated) {
       ['today_task_overdue_lead_resolved', 'I207-REASSIGN'],
       ['today_task_overdue_lead_resolved', 'I207-RETURN'],
       ['today_task_next_plan_added', 'CRM-OTHER'],
-      ['today_task_manager_assistance_completed', 'CRM-OWN'],
+      ['today_task_manager_assistance_replied', 'CRM-OWN'],
     ]) assertIdentity(latestAudit(fx, action, entityId), context);
     return {
       results,
