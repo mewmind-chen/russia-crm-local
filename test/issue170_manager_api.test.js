@@ -389,6 +389,63 @@ test('manager task resolution couples real account changes, interventions, and o
     WHERE code='MANAGER_TASK_ESCALATED' AND user_id='USR-ADMIN'`).get().count, 1);
 });
 
+test('manager terminal action rejects disqualified atomically while allowing lost', async t => {
+  const fx = await managerFixture(t);
+  const rejectedTask = upsertManagerTask(fx.db, {
+    customerId: 'RU-9003',
+    reason: 'consecutive_deferred',
+    actorIdSnapshot: 'U-OTHER',
+    ownerIdSnapshot: 'U-OTHER',
+    triggeredAt: '2026-08-01 03:00:00',
+  });
+  const accountBefore = fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER');
+  const taskBefore = fx.db.prepare('SELECT * FROM crm_manager_tasks WHERE id=?').get(rejectedTask.id);
+  const interventionsBefore = fx.db.prepare('SELECT COUNT(*) count FROM crm_manager_interventions').get().count;
+
+  const rejected = await fx.request(`/api/sales-crm/manager-tasks/${rejectedTask.id}/resolve`, {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      type: 'terminal_stage',
+      stage: 'disqualified',
+      note: '不属于目标客户',
+      idempotencyKey: 'manager-disqualified-rejected',
+    },
+  });
+  const rejectedBody = await rejected.json();
+  assert.equal(rejected.status, 400);
+  assert.equal(rejectedBody.error, '不对口请使用专用“标记不对口”流程');
+  assert.deepEqual(fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER'), accountBefore);
+  assert.deepEqual(fx.db.prepare('SELECT * FROM crm_manager_tasks WHERE id=?').get(rejectedTask.id), taskBefore);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_manager_interventions').get().count,
+    interventionsBefore);
+
+  const lostTask = upsertManagerTask(fx.db, {
+    customerId: 'RU-9003',
+    reason: 'planned_action_overdue',
+    actorIdSnapshot: 'U-OTHER',
+    ownerIdSnapshot: 'U-OTHER',
+    triggeredAt: '2026-08-01 04:00:00',
+  });
+  const lost = await fx.request(`/api/sales-crm/manager-tasks/${lostTask.id}/resolve`, {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      type: 'terminal_stage',
+      stage: 'lost',
+      note: '项目取消',
+      idempotencyKey: 'manager-lost-allowed',
+    },
+  });
+  const lostBody = await lost.json();
+  assert.equal(lost.status, 200, lostBody.error);
+  assert.equal(lostBody.task.status, 'completed');
+  assert.equal(fx.db.prepare('SELECT stage,loss_reason FROM crm_accounts WHERE id=?').get('CRM-OTHER').stage,
+    'lost');
+  assert.equal(fx.db.prepare('SELECT stage,loss_reason FROM crm_accounts WHERE id=?').get('CRM-OTHER').loss_reason,
+    '项目取消');
+});
+
 test('disabled deferred writes roll back plan-forming manager resolutions atomically', async t => {
   const fx = await managerFixture(t, { writesEnabled: false });
   const tasks = [
