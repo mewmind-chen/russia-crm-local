@@ -169,6 +169,9 @@
     notificationStatus: '',
     recycleBin: { rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, hasMore: false, loading: false },
     recycleCustomerDetail: null,
+    mismatchRecordDetail: null,
+    mismatchRecordRequestEpoch: 0,
+    mismatchRecordExpanded: false,
     authorizedBusinessLists: Object.fromEntries([
       'intake', 'pipeline', 'alerts', 'insights', 'recycle_bin',
       'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications',
@@ -3826,10 +3829,7 @@
     root.innerHTML = table(
       ['客户', '原负责人', '原因', '回收时间', '操作'],
       rows.map(row => {
-        const canOpenProfile = row.sourceType === 'account' && can('manage_customer_recycle');
-        const customerCell = canOpenProfile
-          ? `<button type="button" class="text-button tp-company-anchor" data-open-recycle-customer="${esc(row.customerId)}">${esc(accountDisplayName(row))}</button>`
-          : `<strong class="tp-company-anchor">${esc(accountDisplayName(row))}</strong>`;
+        const customerCell = `<button type="button" class="text-button tp-company-anchor" data-open-mismatch-record="${esc(row.recordKey)}">${esc(accountDisplayName(row))}</button>`;
         let actionCell = '<span class="subtle">仅查看记录</span>';
         if (row.actions?.includes('reassign')) {
           actionCell = `<div class="assignment-actions"><select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button></div>`;
@@ -3848,11 +3848,59 @@
           shortDate(row.recycledAt, true),
           actionCell,
         ];
-        row._attrs = `data-open-recycle-customer="${esc(row.customerId)}" data-recycle-record="${esc(row.recordKey)}"`;
+        row._attrs = `data-recycle-record="${esc(row.recordKey)}"`;
         cells._attrs = row._attrs;
         return cells;
       }),
+      'class="mismatch-record-table"',
     );
+  }
+
+  function renderMismatchRecordDrawer() {
+    const detail = state.mismatchRecordDetail;
+    if (!detail) return;
+    const profile = detail.profile || {};
+    const customer = profile.customer || {};
+    resetDrawerActions();
+    $('#drawerUpdateBtn').classList.add('hidden');
+    $('#drawerNicknameBtn').classList.add('hidden');
+    $('#drawerStage').textContent = '不对口记录';
+    $('#drawerCompany').textContent = detail.loading
+      ? '正在读取客户资料…'
+      : customer.companyName || '未命名客户';
+    $('#drawerMeta').textContent = detail.loading
+      ? detail.recordKey
+      : [customer.externalCustomerId, customer.country, customer.city].filter(Boolean).join(' · ');
+    $('#drawerContent').innerHTML = detail.loading
+      ? '<div class="empty">正在读取不对口客户资料…</div>'
+      : `<section class="master-profile"><div class="insight-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><span class="pill amber">只读</span></div><div class="master-profile-grid"><div><span>客户</span><p>${esc(customer.companyName || '未命名客户')}</p></div><div><span>记录编号</span><p>${esc(detail.recordKey)}</p></div></div></section>`;
+  }
+
+  async function openMismatchRecord(recordKey) {
+    recordKey = String(recordKey || '').trim();
+    if (!recordKey) return;
+    const epoch = ++state.mismatchRecordRequestEpoch;
+    state.mismatchRecordExpanded = false;
+    state.mismatchRecordDetail = { recordKey, loading: true, error: '', profile: null };
+    state.recycleCustomerDetail = null;
+    state.drawerAiContext = null;
+    renderMismatchRecordDrawer();
+    $('#customerDrawer').classList.add('open');
+    $('#drawerBackdrop').classList.add('open');
+    $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    try {
+      const profile = await api(`/api/sales-crm/mismatch-recycle/${encodeURIComponent(recordKey)}/profile`);
+      if (epoch !== state.mismatchRecordRequestEpoch
+        || state.mismatchRecordDetail?.recordKey !== recordKey
+        || !$('#customerDrawer').classList.contains('open')) return;
+      state.mismatchRecordDetail = { recordKey, loading: false, error: '', profile };
+      renderMismatchRecordDrawer();
+    } catch (error) {
+      if (epoch !== state.mismatchRecordRequestEpoch
+        || state.mismatchRecordDetail?.recordKey !== recordKey) return;
+      closeDrawer();
+      toast(error.message);
+    }
   }
 
   async function openRecycleCustomer(customerId) {
@@ -7005,6 +7053,9 @@
   }
 
   function closeDrawer() {
+    state.mismatchRecordRequestEpoch += 1;
+    state.mismatchRecordDetail = null;
+    state.mismatchRecordExpanded = false;
     $('#customerDrawer').classList.remove('open');
     $('#drawerBackdrop').classList.remove('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
@@ -10202,6 +10253,8 @@
     if (todayTaskAction) {
       await openTodayTaskAction(todayTaskById(todayTaskAction.dataset.todayTaskId));
     }
+    const mismatchRecord = event.target.closest('[data-open-mismatch-record]');
+    if (mismatchRecord) openMismatchRecord(mismatchRecord.dataset.openMismatchRecord);
     const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
     if (recycleCustomer
       && (!event.target.closest('button,a,input,select,textarea')

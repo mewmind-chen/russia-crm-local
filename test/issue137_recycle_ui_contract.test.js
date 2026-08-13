@@ -29,9 +29,9 @@ function sectionBetween(startText, endText) {
   return app.slice(start, end);
 }
 
-test('recycle-bin names and non-action row areas open the protected read-only detail', () => {
+test('recycle-bin names open the authorized read-only mismatch detail', () => {
   const render = topLevelFunction('renderRecycleBin');
-  const open = topLevelFunction('openRecycleCustomer');
+  const open = topLevelFunction('openMismatchRecord');
   const clickHandler = sectionBetween(
     "document.addEventListener('click', async event => {",
     "document.addEventListener('change',",
@@ -40,28 +40,21 @@ test('recycle-bin names and non-action row areas open the protected read-only de
   assert.match(app, /recycleCustomerDetail:\s*null/);
   assert.match(
     render,
-    /data-open-recycle-customer="\$\{esc\((?:row|item)\.customerId\)\}"/,
+    /data-open-mismatch-record="\$\{esc\((?:row|item)\.recordKey\)\}"/,
   );
-  assert.match(render, /company-cell[\s\S]*data-open-recycle-customer/);
-  assert.match(render, /row\._attrs\s*=\s*`data-open-recycle-customer=/);
+  assert.match(render, /data-open-mismatch-record/);
+  assert.match(render, /<div class="company-cell">\$\{customerCell\}/);
+  assert.doesNotMatch(render, /row\._attrs\s*=\s*`data-open-(?:recycle-customer|mismatch-record)=/);
 
-  assert.match(clickHandler, /closest\('\[data-open-recycle-customer\]'\)/);
-  assert.match(
-    clickHandler,
-    /!event\.target\.closest\('button,a,input,select,textarea'\)/,
-    'clicks in non-action cells must open the detail without hijacking action controls',
-  );
-  assert.match(clickHandler, /openRecycleCustomer\(recycleCustomer\.dataset\.openRecycleCustomer\)/);
+  assert.match(clickHandler, /closest\('\[data-open-mismatch-record\]'\)/);
+  assert.match(clickHandler, /openMismatchRecord\(mismatchRecord\.dataset\.openMismatchRecord\)/);
 
   assert.match(
     open,
-    /api\(`\/api\/sales-crm\/accounts\/\$\{encodeURIComponent\(customerId\)\}\/recycle-profile`\)/,
+    /api\(`\/api\/sales-crm\/mismatch-recycle\/\$\{encodeURIComponent\(recordKey\)\}\/profile`\)/,
   );
-  assert.match(open, /state\.recycleCustomerDetail\s*=\s*(?:payload|detail|profile)/);
-  assert.match(open, /state\.selectedCustomerId\s*=\s*customerId/);
-  assert.match(open, /renderDrawer\(\)/);
-  assert.match(open, /\$\('#drawerUpdateBtn'\)\.classList\.add\('hidden'\)/);
-  assert.match(open, /\$\('#drawerNicknameBtn'\)\.classList\.add\('hidden'\)/);
+  assert.match(open, /state\.mismatchRecordDetail\s*=\s*\{ recordKey, loading: false/);
+  assert.match(open, /renderMismatchRecordDrawer\(\)/);
   assert.match(open, /\$\('#customerDrawer'\)\.classList\.add\('open'\)/);
 });
 
