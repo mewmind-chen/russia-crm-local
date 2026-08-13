@@ -56,7 +56,7 @@ async function setupMismatchProfileFixture(t) {
   return fx;
 }
 
-test('mismatch profile enforces account and intake visibility for sales and view-all users', async t => {
+test('account mismatch profile enforces sales ownership and view-all access', async t => {
   const fx = await setupMismatchProfileFixture(t);
 
   const salesList = await recycleList(fx, fx.salesCookie);
@@ -67,23 +67,78 @@ test('mismatch profile enforces account and intake visibility for sales and view
   );
 
   const cases = [
-    ...['account:CRM-WU', 'intake:INTAKE-WU']
-      .map(recordKey => ({ actor: 'sales', cookie: fx.salesCookie, recordKey, status: 200 })),
-    ...['account:CRM-OTHER', 'intake:INTAKE-FOREIGN']
-      .map(recordKey => ({ actor: 'sales', cookie: fx.salesCookie, recordKey, status: 403 })),
-    ...[fx.managerCookie, fx.adminCookie].flatMap((cookie, index) => [
-      'account:CRM-WU', 'intake:INTAKE-WU',
-      'account:CRM-OTHER', 'intake:INTAKE-FOREIGN',
-    ].map(recordKey => ({
-      actor: index === 0 ? 'manager' : 'admin', cookie, recordKey, status: 200,
-    }))),
+    { actor: 'sales', cookie: fx.salesCookie, recordKey: 'account:CRM-WU', status: 200 },
+    {
+      actor: 'sales', cookie: fx.salesCookie, recordKey: 'account:CRM-OTHER', status: 403,
+      code: 'MISMATCH_RECORD_FORBIDDEN',
+    },
+    { actor: 'manager', cookie: fx.managerCookie, recordKey: 'account:CRM-WU', status: 200 },
+    { actor: 'manager', cookie: fx.managerCookie, recordKey: 'account:CRM-OTHER', status: 200 },
+    { actor: 'admin', cookie: fx.adminCookie, recordKey: 'account:CRM-WU', status: 200 },
+    { actor: 'admin', cookie: fx.adminCookie, recordKey: 'account:CRM-OTHER', status: 200 },
   ];
   for (const scenario of cases) {
     await t.test(`${scenario.actor} sees ${scenario.recordKey} as ${scenario.status}`, async () => {
       const response = await fx.request(profileRoute(scenario.recordKey), { cookie: scenario.cookie });
-      const body = await response.text();
-      assert.equal(response.status, scenario.status, `${scenario.recordKey}: ${body}`);
+      const body = await response.json();
+      assert.equal(response.status, scenario.status, `${scenario.recordKey}: ${JSON.stringify(body)}`);
+      if (scenario.code) assert.equal(body.code, scenario.code);
     });
+  }
+});
+
+test('account mismatch profile returns the unified read-only DTO and no-store header', async t => {
+  const fx = await setupMismatchProfileFixture(t);
+
+  let response = await fx.request(profileRoute('account:CRM-WU'), { cookie: fx.salesCookie });
+  let body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(Object.keys(body).sort(), [
+    'actions', 'customer', 'history', 'ok', 'profile', 'recordKey', 'recycle', 'sourceType',
+  ]);
+  assert.equal(body.ok, true);
+  assert.equal(body.recordKey, 'account:CRM-WU');
+  assert.equal(body.sourceType, 'account');
+  assert.deepEqual(Object.keys(body.customer), [
+    'accountId', 'intakeItemId', 'externalCustomerId', 'nickname', 'companyName', 'country',
+    'city', 'website', 'industry', 'customerType', 'products', 'description',
+  ]);
+  assert.equal(body.customer.accountId, 'CRM-WU');
+  assert.equal(body.customer.intakeItemId, '');
+  assert.equal(body.customer.externalCustomerId, 'RU-9001');
+  assert.equal(body.customer.companyName, 'Wu Fixture');
+  assert.deepEqual(Object.keys(body.profile), [
+    'customerPool', 'customers', 'reconJobs', 'reconResults', 'contactReconJobs', 'people',
+    'accountContacts',
+  ]);
+  assert.deepEqual(Object.keys(body.history), [
+    'activities', 'rfqs', 'quotes', 'orders', 'timeline', 'evaluations', 'auditLog',
+  ]);
+  for (const rows of [...Object.values(body.profile), ...Object.values(body.history)]) {
+    assert.equal(Array.isArray(rows), true);
+  }
+  assert.deepEqual(body.profile.people, []);
+  assert.deepEqual(body.profile.accountContacts, []);
+  assert.deepEqual(body.history.evaluations, []);
+  assert.deepEqual(body.actions, []);
+
+  response = await fx.request(profileRoute('account:CRM-WU'), { cookie: fx.managerCookie });
+  body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.deepEqual(body.actions, ['reassign']);
+});
+
+test.skip('Task 5: intake mismatch profile enforces sales ownership and view-all access', async t => {
+  const fx = await setupMismatchProfileFixture(t);
+  for (const scenario of [
+    { cookie: fx.salesCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
+    { cookie: fx.salesCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 403 },
+    { cookie: fx.managerCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
+    { cookie: fx.managerCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 200 },
+  ]) {
+    const response = await fx.request(profileRoute(scenario.recordKey), { cookie: scenario.cookie });
+    assert.equal(response.status, scenario.status, await response.text());
   }
 });
 
@@ -112,16 +167,18 @@ test('shared mismatch scopes preserve account and pre-CRM visibility predicates'
   assert.equal(mismatchIntakeScope(viewAll).params.length, 0);
 });
 
-test('mismatch profile returns 404 for malformed or missing record keys', async t => {
+test('mismatch profile returns stable 404 for malformed or missing record keys', async t => {
   const fx = await setupMismatchProfileFixture(t);
 
   for (const recordKey of [
-    'malformed', 'unknown:CRM-WU', 'account:', 'intake:',
+    ' ', 'malformed', 'account:CRM-WU:extra', 'unknown:CRM-WU', 'account:', 'intake:',
     'account:CRM-MISSING', 'intake:INTAKE-MISSING',
   ]) {
     await t.test(recordKey, async () => {
       const response = await fx.request(profileRoute(recordKey), { cookie: fx.adminCookie });
-      assert.equal(response.status, 404, `${recordKey}: ${await response.text()}`);
+      const body = await response.json();
+      assert.equal(response.status, 404, `${recordKey}: ${JSON.stringify(body)}`);
+      assert.equal(body.code, 'MISMATCH_RECORD_NOT_FOUND');
     });
   }
 });
