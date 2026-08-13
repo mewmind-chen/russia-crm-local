@@ -2,8 +2,15 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const nextActionTime = require('../sales-assets/next-action-time');
+
+const root = path.join(__dirname, '..');
+const appSource = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
+const cssSource = fs.readFileSync(path.join(root, 'sales-assets', 'app.css'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 
 const nowMs = Date.parse('2026-08-13T00:00:00Z');
 
@@ -39,4 +46,49 @@ test('does not infer relative time for legacy, empty, or invalid plan timestamps
   assert.deepEqual(nextActionTime.describeNextActionTime('', 'utc', nowMs), unavailable);
   assert.deepEqual(nextActionTime.describeNextActionTime('not-a-date', 'utc', nowMs), unavailable);
   assert.deepEqual(nextActionTime.describeNextActionTime(atOffset(60_000), 'utc', NaN), unavailable);
+});
+
+test('loads the browser countdown module before the CRM app', () => {
+  const moduleIndex = htmlSource.indexOf('/sales-assets/next-action-time.js?v=');
+  const appIndex = htmlSource.indexOf('/sales-assets/app.js?v=');
+  assert.ok(moduleIndex >= 0, 'next-action-time browser module must be loaded');
+  assert.ok(moduleIndex < appIndex, 'next-action-time browser module must load before app.js');
+  assert.match(appSource, /const nextActionTime = window\.TradePulseNextActionTime;/);
+  assert.match(appSource, /drawerNextActionTimer: null/);
+});
+
+test('ordinary CRM drawer keeps exact plan time beside a relative countdown', () => {
+  assert.match(appSource, /function nextActionTimeMarkup\(account, nowMs = Date\.now\(\)\)/);
+  assert.match(appSource, /storedPlanDateLabel\(account\.next_action_at, account\.next_action_time_basis\)/);
+  assert.match(appSource, /nextActionTime\?\.describeNextActionTime/);
+  assert.match(appSource, /data-next-action-time/);
+  assert.match(appSource, /<time>\$\{esc\(accurate\)\}<\/time>/);
+  assert.match(appSource, /\$\{nextActionTimeMarkup\(account\)\}/);
+});
+
+test('drawer timer refreshes only each minute and follows drawer and page visibility', () => {
+  const lifecycle = appSource.match(/function stopDrawerNextActionTimer\(\)[\s\S]*?\n\s*function openModal\(/)?.[0] || '';
+  assert.match(appSource, /function stopDrawerNextActionTimer\(\)/);
+  assert.match(appSource, /function refreshDrawerNextActionTime\(\)/);
+  assert.match(appSource, /function startDrawerNextActionTimer\(\)/);
+  assert.match(lifecycle, /setInterval\(refreshDrawerNextActionTime, 60 \* 1000\)/);
+  assert.doesNotMatch(lifecycle, /setInterval\([^,]+,\s*1000\)/);
+  assert.match(appSource, /function closeDrawer\(\)\s*\{\s*stopDrawerNextActionTimer\(\);/);
+  assert.match(appSource, /renderDrawer\(\)[\s\S]*?startDrawerNextActionTimer\(\);\s*\n\s*\}/);
+  assert.match(appSource, /document\.addEventListener\('visibilitychange',[\s\S]*?stopDrawerNextActionTimer\(\)[\s\S]*?startDrawerNextActionTimer\(\)/);
+  assert.match(appSource, /state\.drawerOwner\.startsWith\('crm:'\)/);
+});
+
+test('next-action write paths trigger an immediate visible countdown refresh', () => {
+  const activityHandler = appSource.match(/else if \(form\.id === 'activityForm'\)[\s\S]*?else if \(form\.id === 'customerForm'\)/)?.[0] || '';
+  const editHandler = appSource.match(/else if \(form\.id === 'customerProfileEditForm'\)[\s\S]*?else if \(form\.id === 'customerMasterForm'\)/)?.[0] || '';
+  assert.match(activityHandler, /await refresh(?:TodayTasksAfterAction)?\([\s\S]*?refreshDrawerNextActionTime\(\)/);
+  assert.match(editHandler, /await refresh\('客户资料已更新'\);\s*refreshDrawerNextActionTime\(\);/);
+});
+
+test('countdown presentation is restrained and does not animate or paint the card red', () => {
+  assert.match(cssSource, /\.next-action-time\s*\{/);
+  assert.match(cssSource, /\.next-action-relative\.overdue\s*\{[^}]*color:\s*var\(--danger\)/);
+  const countdownCss = cssSource.match(/\.next-action-time\s*\{[\s\S]*?\.next-action-time\.unavailable\s*\{[^}]*\}/)?.[0] || '';
+  assert.doesNotMatch(countdownCss, /animation|background\s*:\s*(?:var\(--danger\)|#(?:f00|ff0000))/i);
 });

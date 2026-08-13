@@ -4,6 +4,7 @@
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
   const uiFormat = window.TradePulseUIFormat;
+  const nextActionTime = window.TradePulseNextActionTime;
   const dataTableOverflowState = new WeakMap();
   const dataTablesNeedingHintReset = new Set();
   let dataTableOverflowFrame = 0;
@@ -151,6 +152,7 @@
     modalReturnFocus: null,
     drawerOwner: '',
     drawerRequestEpoch: 0,
+    drawerNextActionTimer: null,
     drawerAiContext: null,
     drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
@@ -553,6 +555,21 @@
   }
   function legacyPlanTimeNote(basis) {
     return basis === 'utc' ? '' : '<small class="subtle">历史时间待确认</small>';
+  }
+  function nextActionTimeMarkup(account, nowMs = Date.now()) {
+    const accurate = storedPlanDateLabel(account.next_action_at, account.next_action_time_basis);
+    if (!account.next_action_at) {
+      return '<span class="next-action-time unavailable">尚未安排时间</span>';
+    }
+    const description = nextActionTime?.describeNextActionTime(
+      account.next_action_at,
+      account.next_action_time_basis,
+      nowMs,
+    ) || { state: 'unavailable', label: '', ariaLabel: '' };
+    const relativeMarkup = description.label
+      ? `<strong class="next-action-relative ${esc(description.state)}" aria-label="${esc(description.ariaLabel)}">${esc(description.label)}</strong>`
+      : legacyPlanTimeNote(account.next_action_time_basis);
+    return `<span class="next-action-time" data-next-action-time data-plan-at="${esc(account.next_action_at)}" data-time-basis="${esc(account.next_action_time_basis || '')}">${relativeMarkup}<time>${esc(accurate)}</time></span>`;
   }
   function apiTime(value) {
     return value ? String(value).replace('T', ' ') + (String(value).length === 16 ? ':00' : '') : '';
@@ -4119,6 +4136,7 @@
   }
 
   function claimCustomerDrawer(owner) {
+    stopDrawerNextActionTimer();
     owner = String(owner || '').trim();
     const request = { owner, epoch: ++state.drawerRequestEpoch };
     state.drawerOwner = owner;
@@ -7321,6 +7339,7 @@
   }
 
   function closeDrawer() {
+    stopDrawerNextActionTimer();
     state.drawerRequestEpoch += 1;
     state.drawerOwner = '';
     state.mismatchRecordRequestEpoch += 1;
@@ -8401,7 +8420,7 @@
     $('#drawerContent').innerHTML = `
       ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       ${alert && alertReasons(alert).length > 1 ? `<div class="alert-details"><span class="eyebrow">异常明细</span>${alertReasons(alert).map(reason => `<div class="alert-detail-row"><strong>${esc(reason.title)}</strong><p>${esc(reason.detail)}</p><span>${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}</span></div>`).join('')}</div>` : ''}
-      <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
+      <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div>${nextActionTimeMarkup(account)}</div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
         ${accountFacts.map(drawerFactMarkup).join('')}
@@ -8428,6 +8447,31 @@
       </div>
       <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
       <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
+    startDrawerNextActionTimer();
+  }
+
+  function stopDrawerNextActionTimer() {
+    if (state.drawerNextActionTimer !== null) clearInterval(state.drawerNextActionTimer);
+    state.drawerNextActionTimer = null;
+  }
+
+  function refreshDrawerNextActionTime() {
+    if (!$('#customerDrawer')?.classList.contains('open') || !state.drawerOwner.startsWith('crm:')) return;
+    const account = state.data?.accounts?.find(item => item.id === state.selectedCustomerId);
+    const mount = $('#drawerContent [data-next-action-time]');
+    if (!account || !mount) return;
+    const holder = document.createElement('div');
+    holder.innerHTML = nextActionTimeMarkup(account);
+    if (holder.firstElementChild) mount.replaceWith(holder.firstElementChild);
+  }
+
+  function startDrawerNextActionTimer() {
+    stopDrawerNextActionTimer();
+    if (!state.drawerOwner.startsWith('crm:')) return;
+    refreshDrawerNextActionTime();
+    if (document.visibilityState === 'visible') {
+      state.drawerNextActionTimer = setInterval(refreshDrawerNextActionTime, 60 * 1000);
+    }
   }
 
   function openModal(title, eyebrow, html, modalClass = '') {
@@ -10003,6 +10047,7 @@
             : '进展已记录，客户阶段未发生变化';
           if (fromTodayTask) await refreshTodayTasksAfterAction(message);
           else await refresh(message);
+          refreshDrawerNextActionTime();
         } finally {
           state.activitySubmitting = false;
           if (form.isConnected) submitButtons.forEach(button => { button.disabled = false; });
@@ -10210,6 +10255,7 @@
           );
         }
         await refresh('客户资料已更新');
+        refreshDrawerNextActionTime();
         reloadCustomerProfileFrame();
       } else if (form.id === 'customerMasterForm') {
         const payload = formPayload(form);
@@ -11696,6 +11742,16 @@
     if (viewMeta[view] && state.data) {
       restoreLeadWorkflowFromLocation(view);
       switchView(view, false);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stopDrawerNextActionTimer();
+    } else if ($('#customerDrawer')?.classList.contains('open')
+      && state.drawerOwner.startsWith('crm:')) {
+      refreshDrawerNextActionTime();
+      startDrawerNextActionTimer();
     }
   });
 
