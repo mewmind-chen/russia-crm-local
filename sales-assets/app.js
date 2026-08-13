@@ -9743,14 +9743,15 @@
     if (!target?.externalCustomerId || !can('edit_customer')) {
       return toast('当前客户不在可编辑范围内');
     }
-    openModal(`${target.nickname ? '修改' : '设置'}客户昵称`, 'CUSTOMER NICKNAME', `<form id="nicknameForm" class="form-grid">
+    openModal(`${target.nickname ? '修改' : '创建'}客户昵称`, 'CUSTOMER NICKNAME', `<form id="nicknameForm" class="form-grid">
       <input type="hidden" name="externalCustomerId" value="${esc(target.externalCustomerId)}">
       <input type="hidden" name="nicknameSource" value="${esc(target.source || '')}">
       <input type="hidden" name="crmCustomerId" value="${esc(target.crmCustomerId || '')}">
       <input type="hidden" name="intakeItemId" value="${esc(target.intakeItemId || '')}">
-      <div class="recommendation"><strong>${esc(target.companyName || '未命名客户')}</strong><br>${esc(target.externalCustomerId)}。昵称绑定客户主档并供公司内部共用，不影响正式名称、去重、AI、Recon、制裁核查或外部报告。</div>
+      <label>客户名称<input value="${esc(target.companyName || '')}" readonly></label>
+      <label>客户编号<input value="${esc(target.externalCustomerId)}" readonly></label>
       <label>客户昵称<input name="nickname" value="${esc(target.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符"></label>
-      <div class="form-actions">${target.nickname ? '<button type="button" class="button secondary" data-clear-nickname>清除昵称</button>' : ''}<button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存昵称</button></div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">保存昵称</button></div>
     </form>`);
   }
 
@@ -10986,10 +10987,6 @@
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑资料');
       else if (state.selectedCustomerId) openCustomerProfileEditModal(state.selectedCustomerId);
       else openCustomerMasterEditModal();
-    }
-    if (event.target.closest('[data-clear-nickname]')) {
-      const input = $('#nicknameForm input[name="nickname"]');
-      if (input) { input.value = ''; input.focus(); }
     }
     const notificationRead = event.target.closest('[data-notification-read]');
     if (notificationRead) {
