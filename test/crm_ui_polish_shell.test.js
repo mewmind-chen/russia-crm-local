@@ -95,6 +95,8 @@ test('UI formatter normalizes websites, products, and statuses', () => {
     'data:text/html,<script>alert(1)</script>',
     'ftp://example.com/file',
     'https://',
+    'https://user:pass@example.com/path',
+    'https://example.com@evil.com/path',
   ]) assert.equal(format.website(rejected), null, `must reject unsafe website: ${rejected}`);
   assert.deepEqual(format.products('["MCU","FPGA","电源","连接器"]'), {
     items: ['MCU', 'FPGA', '电源'],

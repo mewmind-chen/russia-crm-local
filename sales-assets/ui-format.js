@@ -60,7 +60,7 @@
     const href = hasScheme ? raw : `https://${raw}`;
     try {
       const url = new URL(href);
-      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) return null;
+      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
       return { href: url.href, label: url.hostname.replace(/^www\./i, '') };
     } catch (_error) {
       return null;

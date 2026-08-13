@@ -38,6 +38,10 @@ test('drawer facts render safe website links without allowing script URLs', () =
   const dangerous = render(['官网', 'javascript:alert(1)', 'website']);
   assert.doesNotMatch(dangerous, /href=|javascript:/i);
   assert.match(dangerous, /暂无官网/);
+
+  const credentialed = render(['官网', 'https://example.com@evil.com/path', 'website']);
+  assert.doesNotMatch(credentialed, /href=|example\.com@evil\.com/i);
+  assert.match(credentialed, /暂无官网/);
 });
 
 test('drawer text facts escape labels and values instead of accepting raw HTML', () => {
