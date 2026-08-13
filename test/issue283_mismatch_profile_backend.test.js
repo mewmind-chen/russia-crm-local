@@ -5,6 +5,10 @@ const assert = require('node:assert/strict');
 const fixtures = require('./helpers/permission_fixture');
 const { recycleScope, mismatchIntakeScope } = require('../lib/business_page_filters');
 
+const SENSITIVE_PRODUCTS = 'Call +7-secret';
+const SENSITIVE_DESCRIPTION = 'Email buyer-secret@example.test';
+const SENSITIVE_RECYCLE_REASON = 'Mismatch buyer-secret@example.test';
+
 async function responseJson(response) {
   return { response, body: await response.json() };
 }
@@ -31,9 +35,11 @@ async function setupMismatchProfileFixture(t) {
   fx.managerCookie = await fx.login('manager@example.com', 'Password123!');
 
   fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='mismatch',
-    recycle_reason='Wu account mismatch',recycled_by='U-WU',recycled_at='2026-08-13 09:00:00',
+    recycle_reason=?,product_focus=?,recycled_by='U-WU',recycled_at='2026-08-13 09:00:00',
     previous_owner_id='U-WU',owner_id=NULL,assignment_status='returned'
-    WHERE id='CRM-WU'`).run();
+    WHERE id='CRM-WU'`).run(SENSITIVE_RECYCLE_REASON, SENSITIVE_PRODUCTS);
+  fx.db.prepare("UPDATE customer_pool SET description=? WHERE customer_id='RU-9001'")
+    .run(SENSITIVE_DESCRIPTION);
   fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='mismatch',
     recycle_reason='Other account mismatch',recycled_by='U-OTHER',recycled_at='2026-08-13 09:01:00',
     previous_owner_id='U-OTHER',owner_id=NULL,assignment_status='returned'
@@ -108,6 +114,13 @@ test('account mismatch profile returns the unified read-only DTO and no-store he
   assert.equal(body.customer.intakeItemId, '');
   assert.equal(body.customer.externalCustomerId, 'RU-9001');
   assert.equal(body.customer.companyName, 'Wu Fixture');
+  assert.equal(body.customer.products, '');
+  assert.equal(body.customer.description, '');
+  assert.deepEqual(Object.keys(body.recycle), [
+    'kind', 'reason', 'previousOwnerId', 'previousOwnerName', 'recycledBy', 'recycledByName',
+    'recycledAt',
+  ]);
+  assert.equal(body.recycle.reason, '');
   assert.deepEqual(Object.keys(body.profile), [
     'customerPool', 'customers', 'reconJobs', 'reconResults', 'contactReconJobs', 'people',
     'accountContacts',
@@ -126,7 +139,17 @@ test('account mismatch profile returns the unified read-only DTO and no-store he
   response = await fx.request(profileRoute('account:CRM-WU'), { cookie: fx.managerCookie });
   body = await response.json();
   assert.equal(response.status, 200, body.error);
+  assert.equal(body.customer.products, SENSITIVE_PRODUCTS);
+  assert.equal(body.customer.description, SENSITIVE_DESCRIPTION);
+  assert.equal(body.recycle.reason, SENSITIVE_RECYCLE_REASON);
   assert.deepEqual(body.actions, ['reassign']);
+
+  response = await fx.request(profileRoute('account:CRM-WU'), { cookie: fx.adminCookie });
+  body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.customer.products, SENSITIVE_PRODUCTS);
+  assert.equal(body.customer.description, SENSITIVE_DESCRIPTION);
+  assert.equal(body.recycle.reason, SENSITIVE_RECYCLE_REASON);
 });
 
 test.skip('Task 5: intake mismatch profile enforces sales ownership and view-all access', async t => {
