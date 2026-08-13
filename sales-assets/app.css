@@ -102,6 +102,8 @@ button.metric.alert{background:var(--danger-subtle)}
 .drawer-master-grid > div{min-width:0;overflow-wrap:anywhere}
 .drawer-master-card-wide{grid-column:1/-1}
 @media(max-width:720px){.drawer-master-grid{grid-template-columns:1fr}.drawer-master-card-wide{grid-column:auto}}
+.account-facts .fact{min-width:0}
+.account-facts .tp-website{display:inline-block;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .next-action-time{display:grid;justify-items:end;gap:3px;min-width:104px}
 .next-action-time time{color:var(--muted);font-size:10px;font-weight:500}
 .next-action-relative{color:var(--green);font-size:11px}

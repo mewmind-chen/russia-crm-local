@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'sales-assets/app.js'), 'utf8');
+const cssSource = fs.readFileSync(path.join(root, 'sales-assets/app.css'), 'utf8');
 const uiFormat = require('../sales-assets/ui-format');
 
 function functionSource(name, nextName) {
@@ -27,6 +28,11 @@ function drawerFactRenderer() {
   return Function('uiFormat', source)(uiFormat);
 }
 
+function cssRule(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return cssSource.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] || '';
+}
+
 test('drawer facts render safe website links without allowing script URLs', () => {
   const render = drawerFactRenderer();
   const safe = render(['官网', 'smcbr.com.br/path', 'website']);
@@ -42,6 +48,23 @@ test('drawer facts render safe website links without allowing script URLs', () =
   const credentialed = render(['官网', 'https://example.com@evil.com/path', 'website']);
   assert.doesNotMatch(credentialed, /href=|example\.com@evil\.com/i);
   assert.match(credentialed, /暂无官网/);
+});
+
+test('drawer website facts keep very long hostnames inside the account-facts grid', () => {
+  const render = drawerFactRenderer();
+  const hostname = `${'customer-portal-'.repeat(12)}example.com`;
+  const fact = render(['官网', `https://${hostname}/catalog`, 'website']);
+  assert.match(fact, new RegExp(`href="https://${hostname}/catalog"`));
+  assert.match(fact, new RegExp(`>${hostname}<svg`));
+
+  const factRule = cssRule('.account-facts .fact');
+  const websiteRule = cssRule('.account-facts .tp-website');
+  assert.match(factRule, /min-width:\s*0/);
+  assert.match(websiteRule, /max-width:\s*100%/);
+  assert.match(websiteRule, /min-width:\s*0/);
+  assert.match(websiteRule, /overflow-wrap:\s*anywhere/);
+  assert.match(websiteRule, /white-space:\s*normal/);
+  assert.match(websiteRule, /word-break:\s*break-word/);
 });
 
 test('drawer text facts escape labels and values instead of accepting raw HTML', () => {
