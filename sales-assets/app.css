@@ -98,6 +98,10 @@ button.metric.alert{background:var(--danger-subtle)}
 @media(max-width:600px){.authorized-filter-host{margin-right:-12px;margin-left:-12px}.authorized-filter-host+.panel .toolbar{overflow:visible}.authorized-filter-host+.panel .toolbar-count{width:100%;margin-left:0;text-align:left}}
 @media(max-width:780px){.decision-review-grid{grid-template-columns:1fr}.audit-line{grid-template-columns:1fr}.audit-line time{display:block}}
 @media(max-width:780px){.master-profile .insight-head{align-items:flex-start;flex-wrap:wrap}.master-profile .assignment-actions{justify-content:flex-start}}
+.drawer-master-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.drawer-master-grid > div{min-width:0;overflow-wrap:anywhere}
+.drawer-master-card-wide{grid-column:1/-1}
+@media(max-width:720px){.drawer-master-grid{grid-template-columns:1fr}.drawer-master-card-wide{grid-column:auto}}
 @media(max-width:600px){.recycle-commerce-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:780px){.action-proposal-compose{grid-column:1;grid-template-columns:1fr}.action-proposal-compose .button{grid-column:1;width:100%}}
 

@@ -8408,8 +8408,8 @@
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
-        <div class="master-profile-grid">
-          <div><span>企业简介</span><p>${esc(account.master_description || '暂无企业简介')}</p></div>
+        <div class="master-profile-grid drawer-master-grid">
+          <div class="drawer-master-card-wide"><span>企业简介</span><p>${esc(account.master_description || '暂无企业简介')}</p></div>
           <div><span>产品与潜在需求</span><p>${esc(account.product_focus || '未标注')}</p></div>
           <div><span>背调与来源</span><p>${esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')}</p></div>
         </div>
