@@ -6292,6 +6292,7 @@
         <footer class="duplicate-review-actions">
           <button class="button secondary danger" type="button" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}>确认同一客户</button>
           <button class="button primary" type="button" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>确认不是同一客户</button>
+          <button class="button secondary" type="button" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>信息不足，要求补充</button>
         </footer>
       </section>`;
     }).join('');
@@ -6412,23 +6413,29 @@
     return preferredIndex;
   }
 
-  async function resolveDuplicateReviewAction(reviewId, resolution, candidateCustomerId = '') {
+  async function resolveDuplicateReviewAction(reviewId, resolution, candidateCustomerId = '', note = '') {
     const model = state.duplicateReviews;
     if (model.pendingAction || model.loading) return;
     if (resolution === 'confirmed_same'
         && !window.confirm('确认双方为同一客户？该结论会阻止新客户进入业务流程，但不会覆盖已有客户资料。')) return;
+    if (resolution === 'needs_info' && !note) {
+      openDuplicateNeedsInfoModal(reviewId);
+      return;
+    }
     const preferredIndex = Math.max(0, model.items.findIndex(item => item.id === reviewId));
     let shouldFocus = false;
     model.pendingAction = reviewId;
     renderDuplicateReviews();
     try {
       const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
-        method: 'POST', body: JSON.stringify({ resolution, candidateCustomerId }),
+        method: 'POST', body: JSON.stringify({ resolution, candidateCustomerId, note }),
       });
       model.selectedIds.delete(reviewId);
       toast(result.deduplicated
         ? '该记录已由其他操作处理，列表已刷新'
-        : resolution === 'confirmed_same' ? '已确认同一客户' : '已确认不是同一客户并放行');
+        : resolution === 'confirmed_same' ? '已确认同一客户'
+          : resolution === 'needs_info' ? '已要求补充资料，记录等待补充'
+            : '已确认不是同一客户并放行');
       await reloadDuplicateReviewsAfterMutation(preferredIndex);
       shouldFocus = true;
     } finally {
@@ -6438,6 +6445,14 @@
         if (shouldFocus) focusDuplicateReview(preferredIndex);
       }
     }
+  }
+
+  function openDuplicateNeedsInfoModal(reviewId) {
+    openModal('信息不足，要求补充', 'DUPLICATE REVIEW', `<form id="duplicateNeedsInfoForm" class="form-grid">
+      <input type="hidden" name="reviewId" value="${esc(reviewId)}">
+      <label class="span-2">需要补充的内容<textarea name="note" rows="3" maxlength="500" required placeholder="例如：请补充采购负责人姓名与官网备案信息"></textarea></label>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认要求补充</button></div>
+    </form>`);
   }
 
   async function bulkResolveDuplicateDistinctAction() {
@@ -10348,6 +10363,15 @@
           body: JSON.stringify({ permissions }),
         });
         await refresh('个人权限已更新');
+      } else if (form.id === 'duplicateNeedsInfoForm') {
+        const payload = formPayload(form);
+        await resolveDuplicateReviewAction(
+          String(payload.reviewId || '').trim(),
+          'needs_info',
+          '',
+          String(payload.note || '').trim(),
+        );
+        closeModal();
       } else if (form.id === 'filterDefinitionForm') {
         const payload = formPayload(form);
         const filterKey = payload.filterKey;
