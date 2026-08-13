@@ -35,5 +35,5 @@ test('all established-year inputs share a searchable selector without number spi
 });
 
 test('sales shell requests the latest master-profile UI asset', () => {
-  assert.match(shell, /sales-assets\/app\.js\?v=20260813-issue284-disqualified-entry/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260813-issue283-mismatch-profile/);
 });

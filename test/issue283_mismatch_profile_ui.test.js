@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
+const shell = fs.readFileSync(path.join(__dirname, '..', 'sales-crm.html'), 'utf8');
 
 function topLevelFunction(name) {
   const pattern = new RegExp(`\\n  (?:async )?function ${name}\\(`);
@@ -177,6 +178,11 @@ function mismatchRendererHarness(payload, expanded = false) {
   render();
   return { state, elements, html: elements['#drawerContent'].innerHTML, render };
 }
+
+test('mismatch profile assets use the Issue 283 production cache token', () => {
+  assert.match(shell, /sales-assets\/app\.css\?v=20260813-issue283-mismatch-profile/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260813-issue283-mismatch-profile/);
+});
 
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
   const render = topLevelFunction('renderRecycleBin');
