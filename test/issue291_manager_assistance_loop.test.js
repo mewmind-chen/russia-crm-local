@@ -119,3 +119,28 @@ test('confirming the receipt without a plan is rejected and keeps the loop open'
   const task = fx.db.prepare("SELECT * FROM crm_manager_tasks WHERE id='MT-1'").get();
   assert.equal(task.status, 'open');
 });
+
+test('manager assistance alert carries original plan, contacts and deadline into managerRequest', async t => {
+  const fx = await fixtures.adminFixture({ permissions: { record_activity: true } });
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO crm_account_contacts
+    (id,customer_id,external_customer_id,name,title,department,phone,email,social,match_status,
+     created_by,archived_at,created_at,updated_at)
+    VALUES ('CT-2','CRM-OTHER','RU-9003','Ivan','Procurement','技术部','','','','mismatch',
+      'U-OTHER','',?,?)`).run(
+    '2026-08-10 08:00:00', '2026-08-10 08:00:00');
+  const created = await fx.request('/api/sales-crm/activities', {
+    cookie: fx.otherCookie, method: 'POST', body: progressPayload({ customerId: 'CRM-OTHER' }),
+  });
+  assert.equal(created.status, 200, await created.clone().text());
+
+  const body = await (await fx.request('/api/sales-crm/lists/alerts?page=1&pageSize=50&filters=%7B%7D', {
+    cookie: fx.adminCookie,
+  })).json();
+  const alert = body.rows.find(row =>
+    row.customerId === 'CRM-OTHER' && row.code === 'MANAGER_NEEDED');
+  assert.ok(alert);
+  assert.equal(alert.managerRequest.originalPlan, '希望主管协助查询联系人');
+  assert.equal(alert.managerRequest.contacts[0].name, 'Ivan');
+  assert.match(alert.managerRequest.dueAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+});

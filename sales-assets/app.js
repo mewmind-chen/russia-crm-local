@@ -8774,21 +8774,28 @@
     ]);
     const requestedAt = managerRequestValue(request, ['requestedAt', 'createdAt', 'occurredAt']);
     const reason = managerRequestValue(request, [
-      'summary', 'reason', 'content', 'progressContent', 'detail',
+      'reason', 'requestReason', 'summary', 'content', 'progressContent', 'detail',
     ]) || item.detail;
-    openModal('处理协助请求', '记录处理意见并明确完成协助', `
+    const originalPlan = managerRequestValue(request, ['originalPlan', 'nextAction', 'plan']) || '未记录';
+    const dueAt = managerRequestValue(request, ['dueAt', 'deadline']);
+    const contacts = Array.isArray(request.contacts) && request.contacts.length
+      ? request.contacts.map(contact => `${esc(contact.name || '未命名')}${contact.title ? ` · ${esc(contact.title)}` : ''}${contact.department ? ` · ${esc(contact.department)}` : ''}${contact.matchStatus === 'mismatch' ? ' · 已标记不对口' : ''}`).join('<br>')
+      : '暂无联系人记录';
+    openModal('处理协助请求', '回复销售并完成主管任务', `
       <form id="todayTaskManagerForm" class="form-grid today-task-form" data-today-task-form>
         <input type="hidden" name="customerId" value="${esc(item.customerId)}">
         <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
         ${todayTaskFactGrid([
           ['客户', accountDisplayName(account || item)],
           ['申请人', requester || '未记录'],
-          ['申请时间', requestedAt ? shortDate(requestedAt, true) : '未记录'],
+          ['处理期限', dueAt ? shortDate(dueAt, true) : '未设置'],
         ])}
-        <div class="today-task-request"><span>申请协助时的进展或原因</span><p>${esc(reason || '未记录具体原因')}</p></div>
-        <label>处理意见或协助结果<textarea name="result" rows="4" maxlength="4000" required placeholder="填写本次处理意见、已完成的协助和后续安排"></textarea></label>
+        <div class="today-task-request"><span>申请原因</span><p>${esc(reason || '未记录具体原因')}</p></div>
+        <div class="today-task-request"><span>销售原计划</span><p>${esc(originalPlan)}</p></div>
+        <div class="today-task-request"><span>现有联系人</span><p>${contacts}</p></div>
+        <label>主管处理意见<textarea name="result" rows="4" maxlength="2000" required placeholder="填写本次处理意见、已完成的协助和后续安排"></textarea></label>
         ${todayTaskErrorMarkup()}
-        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">完成协助</button></div>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">回复销售并完成主管任务</button></div>
       </form>`, 'today-task-modal');
   }
 
@@ -10000,13 +10007,13 @@
       } else if (form.id === 'todayTaskManagerForm') {
         const payload = formPayload(form);
         form._todayTaskSubmitter = event.submitter;
-        if (!String(payload.result || '').trim()) throw new Error('请填写处理意见或协助结果');
+        if (!String(payload.result || '').trim()) throw new Error('请填写主管处理意见');
         await submitTodayTaskAction(form, {
           actionType: 'complete_manager_assistance',
           customerId: payload.customerId,
           result: String(payload.result || '').trim(),
           idempotencyKey: payload.idempotencyKey,
-        }, '协助结果已记录，待办已完成');
+        }, '已回复销售，等待销售确认下一步计划');
       } else if (form.id === 'activityForm') {
         if (state.activitySubmitting) return;
         const payload = formPayload(form);
