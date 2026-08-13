@@ -55,10 +55,13 @@
   function website(value) {
     const raw = String(value || '').trim();
     if (!raw) return null;
-    const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(raw);
+    if (hasScheme && !/^https?:\/\//i.test(raw)) return null;
+    const href = hasScheme ? raw : `https://${raw}`;
     try {
       const url = new URL(href);
-      return { href, label: url.hostname.replace(/^www\./i, '') };
+      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) return null;
+      return { href: url.href, label: url.hostname.replace(/^www\./i, '') };
     } catch (_error) {
       return null;
     }

@@ -344,6 +344,12 @@
       ? `<a class="tp-website" href="${esc(site.href)}" target="_blank" rel="noopener">${esc(site.label)}${uiFormat.icon('external')}</a>`
       : '<span class="tp-empty-value">暂无官网</span>';
   }
+  function drawerFactMarkup([label, value, kind = 'text']) {
+    const content = kind === 'website'
+      ? websiteMarkup(value)
+      : `<strong>${esc(value || '—')}</strong>`;
+    return `<div class="fact"><span>${esc(label)}</span>${content}</div>`;
+  }
   function productChipMarkup(value) {
     const result = uiFormat.products(value);
     if (!result.items.length) return '<span class="tp-empty-value">暂无产品信息</span>';
@@ -8388,7 +8394,7 @@
       ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
       ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
-      ['官网', account.website],
+      ['官网', account.website, 'website'],
       ['联系人质量', account.best_contact_level],
     ];
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
@@ -8398,13 +8404,12 @@
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div><time>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</time></div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
-        ${accountFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${accountFacts.map(drawerFactMarkup).join('')}
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
         <div class="master-profile-grid">
           <div><span>企业简介</span><p>${esc(account.master_description || '暂无企业简介')}</p></div>
-          <div><span>行业与客户类型</span><p>${esc([account.industry, account.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
           <div><span>产品与潜在需求</span><p>${esc(account.product_focus || '未标注')}</p></div>
           <div><span>背调与来源</span><p>${esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')}</p></div>
         </div>
