@@ -104,6 +104,18 @@ test('unknown browser route and action are denied by default', () => {
     policyForSalesRequest('POST', '/ai/jobs/JOB-1/feedback'),
     SALES_ROUTE_POLICIES['POST /ai/jobs/:jobId/feedback'],
   );
+  assert.deepEqual(
+    policyForSalesRequest('GET', '/mismatch-recycle/account%3ACRM-WU/profile'),
+    SALES_ROUTE_POLICIES['GET /mismatch-recycle/:recordKey/profile'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('GET', '/mismatch-recycle//profile'),
+    SALES_ROUTE_POLICIES['GET /mismatch-recycle/:recordKey/profile'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('GET', '/mismatch-recycle//other'),
+    { deny: true },
+  );
   for (const [path, key] of [
     ['/protected-customers/template', 'GET /protected-customers/template'],
     ['/protected-customers/export', 'GET /protected-customers/export'],
@@ -137,6 +149,7 @@ test('every browser API has an explicit permission policy or separate token boun
     'GET /bootstrap', 'GET /research/pool', 'GET /research/people',
     'GET /research/recon', 'GET /export', 'POST /accounts', 'POST /accounts/bulk-assign',
     'GET /accounts/recycle-bin', 'GET /accounts/:customerId/recycle-profile',
+    'GET /mismatch-recycle/:recordKey/profile',
     'POST /accounts/bulk-return',
     'POST /accounts/:customerId/return', 'POST /accounts/:customerId/trash',
     'POST /accounts/:customerId/restore', 'POST /accounts/:customerId/reassign',
