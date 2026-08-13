@@ -118,6 +118,61 @@ function customerDrawerHarness() {
   };
 }
 
+function mismatchPayload(overrides = {}) {
+  return {
+    recordKey: 'account:CRM-A',
+    sourceType: 'account',
+    customer: {
+      accountId: 'CRM-A', intakeItemId: '', externalCustomerId: 'RU-1', nickname: '',
+      companyName: 'Acme', country: '俄罗斯', city: '莫斯科', website: 'https://acme.example',
+      industry: '工业自动化', customerType: '终端制造商', products: '传感器',
+      description: '自动化设备制造商',
+    },
+    recycle: {
+      kind: 'mismatch', reason: '采购方向不符', previousOwnerId: 'U-OLD',
+      previousOwnerName: '原销售', recycledBy: 'U-MGR', recycledByName: '经理',
+      recycledAt: '2026-08-13T02:00:00Z',
+    },
+    profile: {
+      customerPool: [], customers: [], reconJobs: [], reconResults: [], contactReconJobs: [],
+      people: [], accountContacts: [],
+    },
+    history: {
+      activities: [], rfqs: [], quotes: [], orders: [], timeline: [], evaluations: [], auditLog: [],
+    },
+    actions: [],
+    ...overrides,
+  };
+}
+
+function mismatchRendererHarness(payload, expanded = false) {
+  const elements = {
+    '#drawerStage': { textContent: '', classList: classList() },
+    '#drawerCompany': { textContent: '', classList: classList() },
+    '#drawerMeta': { textContent: '', classList: classList() },
+    '#drawerUpdateBtn': { classList: classList() },
+    '#drawerNicknameBtn': { classList: classList() },
+    '#drawerContent': { innerHTML: '', classList: classList() },
+  };
+  const state = {
+    mismatchRecordDetail: { ...payload, loading: false, error: '' },
+    mismatchRecordExpanded: expanded,
+    data: { assignmentCandidates: [{ id: 'U-NEW', name: '新销售' }] },
+  };
+  const $ = selector => elements[selector];
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  }[char]));
+  const shortDate = value => String(value || '—');
+  const website = Function('esc', `return (${topLevelFunction('mismatchWebsiteMarkup')});`)(esc);
+  const render = Function(
+    'state', '$', 'resetDrawerActions', 'esc', 'shortDate', 'mismatchWebsiteMarkup',
+    `return (${topLevelFunction('renderMismatchRecordDrawer')});`,
+  )(state, $, () => {}, esc, shortDate, website);
+  render();
+  return { state, elements, html: elements['#drawerContent'].innerHTML, render };
+}
+
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
   const render = topLevelFunction('renderRecycleBin');
   const handler = clickHandler();
@@ -173,12 +228,12 @@ test('older mismatch profile responses cannot overwrite the newest opened record
   await openingB;
   assert.equal(harness.state.mismatchRecordDetail.recordKey, 'intake:INTAKE-B');
   assert.equal(harness.state.mismatchRecordDetail.loading, false);
-  assert.equal(harness.state.mismatchRecordDetail.profile.companyName, 'B');
+  assert.equal(harness.state.mismatchRecordDetail.companyName, 'B');
 
   harness.pending.get(urlA).resolve({ recordKey: 'account:CRM-A', companyName: 'A' });
   await openingA;
   assert.equal(harness.state.mismatchRecordDetail.recordKey, 'intake:INTAKE-B');
-  assert.equal(harness.state.mismatchRecordDetail.profile.companyName, 'B');
+  assert.equal(harness.state.mismatchRecordDetail.companyName, 'B');
 });
 
 test('closing a loading mismatch drawer invalidates its late response', async () => {
@@ -267,4 +322,148 @@ test('all customer drawer entry points claim unified ownership', () => {
   }
   assert.match(topLevelFunction('closeDrawer'), /state\.drawerRequestEpoch\s*\+=\s*1/);
   assert.match(topLevelFunction('closeDrawer'), /state\.drawerOwner\s*=\s*''/);
+});
+
+test('compact mismatch drawer renders fixed read-only summary with a safe website and expand control', () => {
+  const harness = mismatchRendererHarness(mismatchPayload());
+
+  assert.equal(harness.elements['#drawerCompany'].textContent, 'Acme');
+  assert.match(harness.elements['#drawerMeta'].textContent, /account:CRM-A/);
+  for (const copy of [
+    'CRM客户', '原销售', '采购方向不符', '经理', '2026-08-13T02:00:00Z',
+    '俄罗斯 · 莫斯科', '工业自动化', '终端制造商', '传感器', '自动化设备制造商',
+  ]) assert.match(harness.html, new RegExp(copy));
+  assert.match(harness.html, /data-expand-mismatch-profile/);
+  assert.match(harness.html, /查看完整客户资料 →/);
+  assert.match(harness.html, /href="https:\/\/acme\.example\/" target="_blank" rel="noopener"/);
+  assert.doesNotMatch(harness.html, /完整资料明细/);
+});
+
+test('unsafe mismatch websites and every field are escaped instead of becoming executable markup', () => {
+  const payload = mismatchPayload({
+    customer: {
+      ...mismatchPayload().customer,
+      companyName: '<img src=x onerror=alert(1)>',
+      website: 'javascript:alert(1)',
+      description: '<script>alert(2)</script>',
+    },
+    recycle: { ...mismatchPayload().recycle, reason: '<svg onload=alert(3)>' },
+  });
+  const harness = mismatchRendererHarness(payload);
+
+  assert.doesNotMatch(harness.html, /<script|<svg|<img|href="javascript:/i);
+  assert.match(harness.html, /&lt;script&gt;alert\(2\)&lt;\/script&gt;/);
+  assert.match(harness.html, /&lt;svg onload=alert\(3\)&gt;/);
+  assert.match(harness.html, /javascript:alert\(1\)/);
+});
+
+test('expanded mismatch drawer names every complete profile section and uses concrete empty states', () => {
+  const harness = mismatchRendererHarness(mismatchPayload(), true);
+
+  assert.match(harness.html, /收起完整客户资料/);
+  assert.match(harness.html, /完整资料明细/);
+  for (const copy of [
+    '联系人', '活动', '询价', '报价', '订单', '时间线', '评价', '审计',
+    '暂无联系人记录', '暂无跟进记录', '暂无询价记录', '暂无报价记录',
+    '暂无订单记录', '暂无时间线记录', '暂无评价记录', '暂无审计记录',
+  ]) assert.match(harness.html, new RegExp(copy));
+  assert.doesNotMatch(harness.html, />\s*[—-]\s*</);
+});
+
+test('expanded mismatch drawer renders authorized profile and history arrays from the original payload', () => {
+  const base = mismatchPayload();
+  const harness = mismatchRendererHarness(mismatchPayload({
+    profile: {
+      ...base.profile,
+      customerPool: [{ companyName: '主档企业', industry: '电子制造' }],
+      customers: [{ company_name: 'CRM快照', stage: 'contacted' }],
+      reconResults: [{ summary: '背调摘要' }],
+      people: [{ name: 'Ivan', title: '采购', email: 'ivan@example.com' }],
+      accountContacts: [{ name: 'Anna', phone: '+7 123' }],
+    },
+    history: {
+      activities: [{ activity_type: 'email', summary: '已发送开发信' }],
+      rfqs: [{ subject: '传感器询价', status: 'new' }],
+      quotes: [{ quoteNo: 'Q-1', status: 'sent' }],
+      orders: [{ orderNo: 'O-1', status: 'won' }],
+      timeline: [{ title: '首次触达', summary: '邮件' }],
+      evaluations: [{ authorName: '经理', evaluationText: '继续跟进' }],
+      auditLog: [{ action: 'reject', actorName: '经理' }],
+    },
+  }), true);
+
+  for (const copy of [
+    '主档企业', 'CRM快照', '背调摘要', 'Ivan', 'Anna', '已发送开发信',
+    '传感器询价', 'Q-1', 'O-1', '首次触达', '继续跟进', 'reject',
+  ]) assert.match(harness.html, new RegExp(copy));
+});
+
+test('mismatch drawer exposes actions only from the exact server whitelist', () => {
+  const render = topLevelFunction('renderMismatchRecordDrawer');
+  assert.match(render, /new Set\(detail\.actions \|\| \[\]\)/);
+  assert.doesNotMatch(render, /state\.data\.user|can\(/);
+  const account = mismatchRendererHarness(mismatchPayload({ actions: ['reassign'] })).html;
+  assert.match(account, /data-reassign-customer="CRM-A"/);
+  assert.match(account, /data-mismatch-owner="CRM-A"/);
+  assert.doesNotMatch(account, /data-restore-mismatch/);
+
+  const intake = mismatchRendererHarness(mismatchPayload({
+    recordKey: 'intake:INTAKE-A', sourceType: 'intake',
+    customer: { ...mismatchPayload().customer, accountId: '', intakeItemId: 'INTAKE-A' },
+    actions: ['restore'],
+  })).html;
+  assert.match(intake, /data-restore-mismatch="intake:INTAKE-A"/);
+  assert.doesNotMatch(intake, /data-reassign-customer/);
+
+  const none = mismatchRendererHarness(mismatchPayload({ actions: [] })).html;
+  assert.doesNotMatch(none, /data-(?:restore-mismatch|reassign-customer)/);
+});
+
+test('expand and collapse rerender the loaded payload without issuing another profile request', async () => {
+  const harness = customerDrawerHarness();
+  const opening = harness.openMismatch('account:CRM-A');
+  harness.pending.get('/api/sales-crm/mismatch-recycle/account%3ACRM-A/profile')
+    .resolve(mismatchPayload());
+  await opening;
+  const toggle = Function(
+    'state', 'renderMismatchRecordDrawer',
+    `return (${topLevelFunction('toggleMismatchRecordExpanded')});`,
+  )(harness.state, () => harness.renders.push('toggle'));
+
+  toggle();
+  assert.equal(harness.state.mismatchRecordExpanded, true);
+  toggle();
+  assert.equal(harness.state.mismatchRecordExpanded, false);
+  assert.equal(harness.pending.size, 1);
+  assert.match(clickHandler(), /data-expand-mismatch-profile/);
+  assert.doesNotMatch(topLevelFunction('toggleMismatchRecordExpanded'), /api\(|openCustomerProfile|openCustomer|openRecycleCustomer/);
+});
+
+test('closing mismatch details clears the expanded state', () => {
+  const harness = customerDrawerHarness();
+  harness.state.mismatchRecordExpanded = true;
+  harness.close();
+  assert.equal(harness.state.mismatchRecordExpanded, false);
+});
+
+test('successful mismatch actions close the drawer and refresh the same authorized list page', () => {
+  const load = topLevelFunction('loadRecycleBin');
+  const handler = clickHandler();
+  const restoreStart = handler.indexOf('const restoreMismatch =');
+  const reassignStart = handler.indexOf('const reassignCustomer =', restoreStart);
+  const reassignEnd = handler.indexOf('const retryResearch =', reassignStart);
+  const restoreMismatch = handler.slice(restoreStart, reassignStart);
+  const reassignMismatch = handler.slice(reassignStart, reassignEnd);
+
+  assert.ok(restoreStart > -1 && reassignStart > restoreStart && reassignEnd > reassignStart);
+  assert.match(load, /reset\s*=\s*false/);
+  assert.match(load, /const targetPage\s*=\s*reset\s*\?\s*1\s*:\s*Math\.max\(1, Number\(page \|\| meta\.page \|\| 1\)\)/);
+  assert.match(load, /loadAuthorizedBusinessPage\('recycle_bin'/);
+  assert.match(load, /reset:\s*false/);
+  assert.match(load, /page:\s*targetPage/);
+  for (const action of [restoreMismatch, reassignMismatch]) {
+    assert.match(action, /closeDrawer\(\)/);
+    assert.match(action, /await refresh\(/);
+    assert.match(action, /await loadRecycleBin\(\)/);
+  }
 });

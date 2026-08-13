@@ -3778,7 +3778,7 @@
     }
   }
 
-  async function loadRecycleBin({ reset = true, page = 1 } = {}) {
+  async function loadRecycleBin({ reset = false, page = null } = {}) {
     if (!can('view_own_mismatch_history') && !can('manage_customer_recycle')) return;
     const meta = state.authorizedBusinessLists.recycle_bin;
     if (!meta?.filterController) {
@@ -3786,12 +3786,20 @@
       return;
     }
     const controller = meta.filterController;
-    controller.clearAll({ apply: false });
-    const fields = new Set(controller.getSchema().fields.map(field => field.key));
-    const search = ($('#recycleSearch')?.value || '').trim();
-    if (search && fields.has('search')) controller.setDraft('search', search);
-    controller.apply();
-    if (!reset && Number(page) > 1) void loadAuthorizedBusinessPage('recycle_bin', { page });
+    const targetPage = reset ? 1 : Math.max(1, Number(page || meta.page || 1));
+    if (reset) {
+      controller.clearAll({ apply: false });
+      const fields = new Set(controller.getSchema().fields.map(field => field.key));
+      const search = ($('#recycleSearch')?.value || '').trim();
+      if (search && fields.has('search')) controller.setDraft('search', search);
+      controller.apply();
+      return;
+    }
+    await loadAuthorizedBusinessPage('recycle_bin', {
+      reset: false,
+      force: true,
+      page: targetPage,
+    });
   }
 
   async function rejectCustomerAsMismatch(customerId, reason) {
@@ -3858,11 +3866,101 @@
     );
   }
 
+  function mismatchWebsiteMarkup(value) {
+    const text = String(value || '').trim();
+    if (!text) return '<span class="tp-empty-value">暂无官网</span>';
+    try {
+      const url = new URL(text);
+      if (!['http:', 'https:'].includes(url.protocol)) return `<span>${esc(text)}</span>`;
+      return `<a class="tp-website" href="${esc(url.href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+    } catch (_error) {
+      return `<span>${esc(text)}</span>`;
+    }
+  }
+
   function renderMismatchRecordDrawer() {
     const detail = state.mismatchRecordDetail;
     if (!detail) return;
+    const customer = detail.customer || {};
+    const recycle = detail.recycle || {};
     const profile = detail.profile || {};
-    const customer = profile.customer || {};
+    const history = detail.history || {};
+    const rows = value => Array.isArray(value) ? value : [];
+    const actions = new Set(detail.actions || []);
+    const sourceLabel = detail.sourceType === 'intake' ? '领取前线索' : 'CRM客户';
+    const valueOrEmpty = (value, empty) => esc(String(value || '').trim() || empty);
+    const dateText = value => value ? shortDate(value, true) : '';
+    const list = (items, empty, renderItem) => rows(items).length
+      ? `<div class="mismatch-detail-list">${rows(items).map(renderItem).join('')}</div>`
+      : `<div class="mismatch-detail-empty">${esc(empty)}</div>`;
+    const compactItem = (title, summary, meta = '') => `<article class="mismatch-detail-item"><strong>${valueOrEmpty(title, '未命名记录')}</strong>${summary ? `<p>${esc(summary)}</p>` : ''}${meta ? `<span>${esc(meta)}</span>` : ''}</article>`;
+    const customerSnapshot = item => compactItem(
+      item.companyName || item.company_name || item.nickname || item.externalCustomerId || item.external_customer_id,
+      [item.industry, item.customerType || item.customer_type, item.products || item.product_focus].filter(Boolean).join(' · '),
+      [item.country, item.city, item.website].filter(Boolean).join(' · '),
+    );
+    const reconSnapshot = item => compactItem(
+      item.title || item.provider || item.jobType || item.job_type || '客户背调',
+      item.summary || item.resultSummary || item.result_summary || item.status || '',
+      item.createdAt || item.created_at || item.updatedAt || item.updated_at || '',
+    );
+    const contactItem = item => compactItem(
+      item.name || item.contactName || item.contact_name || '未命名联系人',
+      [item.title, item.department, item.contactLevel || item.contact_level].filter(Boolean).join(' · '),
+      [item.email, item.phone, item.social, item.contactMethods || item.contact_methods].filter(Boolean).join(' · '),
+    );
+    const activityItem = item => compactItem(
+      item.title || item.activityType || item.activity_type || '跟进记录',
+      item.summary || item.outcome || item.nextAction || item.next_action || '',
+      dateText(item.occurredAt || item.occurred_at || item.createdAt || item.created_at),
+    );
+    const commerceItem = (item, fallback) => compactItem(
+      item.subject || item.quoteNo || item.quote_no || item.orderNo || item.order_no || item.id || fallback,
+      [item.status, item.summary, item.amount].filter(value => value !== undefined && value !== null && value !== '').join(' · '),
+      dateText(item.receivedAt || item.received_at || item.sentAt || item.sent_at || item.orderedAt || item.ordered_at || item.createdAt || item.created_at),
+    );
+    const timelineItem = item => compactItem(
+      item.title || item.eventType || item.event_type || item.action || '时间线记录',
+      item.summary || item.description || item.outcome || '',
+      [item.actorName || item.actor_name, dateText(item.occurredAt || item.occurred_at || item.createdAt || item.created_at)].filter(Boolean).join(' · '),
+    );
+    const evaluationItem = item => compactItem(
+      item.subjectName || item.authorName || item.author_name || '经理评价',
+      item.evaluationText || item.evaluation_text || item.summary || '',
+      dateText(item.createdAt || item.created_at),
+    );
+    const auditItem = item => compactItem(
+      item.action || '客户操作',
+      item.detail || item.summary || '',
+      [item.userName || item.actorName || item.actor_name || item.user_id, dateText(item.createdAt || item.created_at)].filter(Boolean).join(' · '),
+    );
+    const contacts = [...rows(profile.people), ...rows(profile.accountContacts)];
+    const reconRows = [
+      ...rows(profile.reconJobs), ...rows(profile.reconResults), ...rows(profile.contactReconJobs),
+    ];
+    const sales = state.data.assignmentCandidates || [];
+    let actionMarkup = '';
+    if (actions.has('reassign') && detail.sourceType === 'account' && customer.accountId) {
+      actionMarkup = `<div class="assignment-actions mismatch-detail-actions"><select data-mismatch-owner="${esc(customer.accountId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary" type="button" data-reassign-customer="${esc(customer.accountId)}">重新分配</button></div>`;
+    } else if (actions.has('restore') && detail.sourceType === 'intake') {
+      actionMarkup = `<button class="button secondary" type="button" data-restore-mismatch="${esc(detail.recordKey)}">恢复到线索池</button>`;
+    }
+    const expandedMarkup = state.mismatchRecordExpanded ? `
+      <section class="mismatch-detail-complete" aria-label="完整资料明细">
+        <div class="mismatch-detail-section-head"><div><p class="eyebrow">AUTHORIZED READ-ONLY DATA</p><h3>完整资料明细</h3></div><span class="pill gray">本次授权数据</span></div>
+        <div class="mismatch-detail-source-grid">
+          <section><h4>客户主档来源</h4>${list([...rows(profile.customerPool), ...rows(profile.customers)], '暂无主档补充记录', customerSnapshot)}</section>
+          <section><h4>Recon 摘要</h4>${list(reconRows, '暂无背调补充记录', reconSnapshot)}</section>
+        </div>
+        <section class="mismatch-detail-group"><h4>联系人</h4>${list(contacts, '暂无联系人记录', contactItem)}</section>
+        <section class="mismatch-detail-group"><h4>活动</h4>${list(history.activities, '暂无跟进记录', activityItem)}</section>
+        <section class="mismatch-detail-group"><h4>询价</h4>${list(history.rfqs, '暂无询价记录', item => commerceItem(item, '询价记录'))}</section>
+        <section class="mismatch-detail-group"><h4>报价</h4>${list(history.quotes, '暂无报价记录', item => commerceItem(item, '报价记录'))}</section>
+        <section class="mismatch-detail-group"><h4>订单</h4>${list(history.orders, '暂无订单记录', item => commerceItem(item, '订单记录'))}</section>
+        <section class="mismatch-detail-group"><h4>时间线</h4>${list(history.timeline, '暂无时间线记录', timelineItem)}</section>
+        <section class="mismatch-detail-group"><h4>评价</h4>${list(history.evaluations, '暂无评价记录', evaluationItem)}</section>
+        <section class="mismatch-detail-group"><h4>审计</h4>${list(history.auditLog, '暂无审计记录', auditItem)}</section>
+      </section>` : '';
     resetDrawerActions();
     $('#drawerUpdateBtn').classList.add('hidden');
     $('#drawerNicknameBtn').classList.add('hidden');
@@ -3872,10 +3970,42 @@
       : customer.companyName || '未命名客户';
     $('#drawerMeta').textContent = detail.loading
       ? detail.recordKey
-      : [customer.externalCustomerId, customer.country, customer.city].filter(Boolean).join(' · ');
+      : [detail.recordKey, sourceLabel, customer.externalCustomerId, customer.country, customer.city].filter(Boolean).join(' · ');
     $('#drawerContent').innerHTML = detail.loading
       ? '<div class="empty">正在读取不对口客户资料…</div>'
-      : `<section class="master-profile"><div class="insight-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><span class="pill amber">只读</span></div><div class="master-profile-grid"><div><span>客户</span><p>${esc(customer.companyName || '未命名客户')}</p></div><div><span>记录编号</span><p>${esc(detail.recordKey)}</p></div></div></section>`;
+      : `<div class="mismatch-detail-drawer">
+        <section class="mismatch-detail-summary">
+          <div class="mismatch-detail-section-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><div class="mismatch-detail-tags"><span class="pill amber">只读</span><span class="pill gray">${sourceLabel}</span></div></div>
+          <div class="mismatch-detail-facts">
+            <div><span>客户</span><strong>${valueOrEmpty(customer.companyName, '未命名客户')}</strong></div>
+            <div><span>记录编号</span><strong>${valueOrEmpty(detail.recordKey, '暂无记录编号')}</strong></div>
+            <div><span>原负责人</span><strong>${valueOrEmpty(recycle.previousOwnerName, '未分配')}</strong></div>
+            <div><span>不对口原因</span><strong>${valueOrEmpty(recycle.reason, '未填写原因')}</strong></div>
+            <div><span>处理人</span><strong>${valueOrEmpty(recycle.recycledByName || recycle.recycledBy, '未记录')}</strong></div>
+            <div><span>处理时间</span><strong>${valueOrEmpty(dateText(recycle.recycledAt), '未记录')}</strong></div>
+          </div>
+        </section>
+        <section class="mismatch-detail-master">
+          <div class="mismatch-detail-section-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>主档摘要</h3></div></div>
+          <div class="mismatch-detail-master-grid">
+            <div><span>地区</span><p>${valueOrEmpty([customer.country, customer.city].filter(Boolean).join(' · '), '未标注地区')}</p></div>
+            <div><span>官网</span><p>${mismatchWebsiteMarkup(customer.website)}</p></div>
+            <div><span>行业</span><p>${valueOrEmpty(customer.industry, '未标注行业')}</p></div>
+            <div><span>客户类型</span><p>${valueOrEmpty(customer.customerType, '未标注类型')}</p></div>
+            <div><span>产品</span><p>${valueOrEmpty(customer.products, '暂无产品信息')}</p></div>
+            <div class="wide"><span>企业简介</span><p>${valueOrEmpty(customer.description, '暂无企业简介')}</p></div>
+          </div>
+        </section>
+        <button class="text-button mismatch-detail-expand" type="button" data-expand-mismatch-profile aria-expanded="${state.mismatchRecordExpanded ? 'true' : 'false'}">${state.mismatchRecordExpanded ? '收起完整客户资料' : '查看完整客户资料 →'}</button>
+        ${expandedMarkup}
+        ${actionMarkup ? `<div class="mismatch-detail-footer">${actionMarkup}</div>` : ''}
+      </div>`;
+  }
+
+  function toggleMismatchRecordExpanded() {
+    if (!state.mismatchRecordDetail || state.mismatchRecordDetail.loading) return;
+    state.mismatchRecordExpanded = !state.mismatchRecordExpanded;
+    renderMismatchRecordDrawer();
   }
 
   function claimCustomerDrawer(owner) {
@@ -3914,7 +4044,12 @@
       const profile = await api(`/api/sales-crm/mismatch-recycle/${encodeURIComponent(recordKey)}/profile`);
       if (!isCustomerDrawerRequestCurrent(request)
         || state.mismatchRecordDetail?.recordKey !== recordKey) return;
-      state.mismatchRecordDetail = { recordKey, loading: false, error: '', profile };
+      state.mismatchRecordDetail = { recordKey, loading: false,
+        ...(profile && typeof profile === 'object' ? profile : {}),
+        recordKey: profile?.recordKey || recordKey,
+        loading: false,
+        error: '',
+      };
       renderMismatchRecordDrawer();
     } catch (error) {
       if (!isCustomerDrawerRequestCurrent(request)
@@ -10721,6 +10856,9 @@
       openRecycleReasonModal('', 'bulk');
     }
     if (event.target.closest('#recycleRefresh')) void loadRecycleBin();
+    if (event.target.closest('[data-expand-mismatch-profile]')) {
+      toggleMismatchRecordExpanded();
+    }
     const restoreCustomer = event.target.closest('[data-restore-customer]');
     if (restoreCustomer) {
       try {
@@ -10738,6 +10876,7 @@
         await api(`/api/sales-crm/mismatch-recycle/${encodeURIComponent(restoreMismatch.dataset.restoreMismatch)}/restore`, {
           method: 'POST', body: JSON.stringify({ reason }),
         });
+        closeDrawer();
         await refresh();
         await loadRecycleBin();
         toast('不对口记录已恢复到线索池');
@@ -11057,7 +11196,7 @@
     }
     if (event.target.id === 'recycleSearch') {
       clearTimeout(loadRecycleBin.timer);
-      loadRecycleBin.timer = setTimeout(() => void loadRecycleBin(), 250);
+      loadRecycleBin.timer = setTimeout(() => void loadRecycleBin({ reset: true }), 250);
     }
     if (event.target.matches('#activityCorrectionReasonForm textarea[name="reason"]')) {
       const nextReason = event.target.value;
