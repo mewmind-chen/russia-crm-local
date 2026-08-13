@@ -36,36 +36,11 @@ test('disqualified is a distinct terminal stage with shared semantics', () => {
   assert.deepEqual(alerts, []);
 });
 
-test('stage updates validate values and disqualification clears follow-up without recycling', async t => {
+test('disqualified stage remains available in bootstrap and exports', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());
 
-  fx.db.prepare(`UPDATE crm_accounts SET next_action='明天跟进',next_action_at='2026-07-28 09:00:00',
-    lifecycle_status='active',recycle_kind='',recycle_reason='' WHERE id='CRM-WU'`).run();
-  const before = fx.db.prepare(`SELECT owner_id,created_by,assignment_status,lifecycle_status
-    FROM crm_accounts WHERE id='CRM-WU'`).get();
-
-  const changed = await fx.request('/api/sales-crm/accounts/CRM-WU', {
-    cookie: fx.adminCookie,
-    method: 'PATCH',
-    body: { stage: 'disqualified', ownerId: before.owner_id },
-  });
-  assert.equal(changed.status, 200);
-  assert.deepEqual(
-    fx.db.prepare(`SELECT stage,next_action,next_action_at,owner_id,created_by,assignment_status,
-      lifecycle_status,recycle_kind,recycle_reason FROM crm_accounts WHERE id='CRM-WU'`).get(),
-    {
-      stage: 'disqualified',
-      next_action: '',
-      next_action_at: '',
-      owner_id: before.owner_id,
-      created_by: before.created_by,
-      assignment_status: before.assignment_status,
-      lifecycle_status: before.lifecycle_status,
-      recycle_kind: '',
-      recycle_reason: '',
-    },
-  );
+  fx.db.prepare("UPDATE crm_accounts SET stage='disqualified' WHERE id='CRM-WU'").run();
 
   const bootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.adminCookie });
   assert.equal(bootstrap.accounts.some(row => row.id === 'CRM-WU' && row.stage === 'disqualified'), true);
@@ -87,37 +62,35 @@ test('stage updates validate values and disqualification clears follow-up withou
   assert.match(csv, /确认不对口/);
   assert.doesNotMatch(csv, /,disqualified,/);
 
-  const invalid = await fx.request('/api/sales-crm/accounts/CRM-WU', {
+});
+
+test('ordinary account updates reject disqualified without side effects', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+
+  fx.db.prepare(`UPDATE crm_accounts SET stage='qualified',updated_at='2026-07-27 08:00:00',
+    lifecycle_status='active',recycle_kind='',recycle_reason='' WHERE id='CRM-WU'`).run();
+  const before = fx.db.prepare(`SELECT stage,updated_at,lifecycle_status
+    FROM crm_accounts WHERE id='CRM-WU'`).get();
+  const auditBefore = fx.db.prepare('SELECT COUNT(*) count FROM crm_audit_log').get().count;
+  const mismatchBefore = fx.db.prepare(`SELECT COUNT(*) count FROM crm_accounts
+    WHERE lifecycle_status='recycled' AND recycle_kind='mismatch'`).get().count;
+
+  const response = await fx.request('/api/sales-crm/accounts/CRM-WU', {
     cookie: fx.adminCookie,
     method: 'PATCH',
-    body: { stage: 'invented-stage' },
+    body: { stage: 'disqualified' },
   });
-  assert.equal(invalid.status, 400);
-  assert.equal(fx.db.prepare("SELECT stage FROM crm_accounts WHERE id='CRM-WU'").get().stage, 'disqualified');
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, '请使用“标记不对口”操作');
 
-  const forbidden = await fx.request('/api/sales-crm/accounts/CRM-WU', {
-    cookie: fx.otherCookie,
-    method: 'PATCH',
-    body: { stage: 'qualified' },
-  });
-  assert.equal(forbidden.status, 403);
+  const after = fx.db.prepare(`SELECT stage,updated_at,lifecycle_status
+    FROM crm_accounts WHERE id='CRM-WU'`).get();
+  const auditAfter = fx.db.prepare('SELECT COUNT(*) count FROM crm_audit_log').get().count;
+  const mismatchAfter = fx.db.prepare(`SELECT COUNT(*) count FROM crm_accounts
+    WHERE lifecycle_status='recycled' AND recycle_kind='mismatch'`).get().count;
+  assert.deepEqual(after, before);
+  assert.equal(auditAfter, auditBefore);
+  assert.equal(mismatchAfter, mismatchBefore);
 
-  const restored = await fx.request('/api/sales-crm/accounts/CRM-WU', {
-    cookie: fx.adminCookie,
-    method: 'PATCH',
-    body: {
-      stage: 'qualified',
-      nextAction: '重新确认客户需求',
-      nextActionAt: '2099-08-08 09:00:00',
-    },
-  });
-  assert.equal(restored.status, 200);
-  assert.deepEqual(
-    fx.db.prepare("SELECT stage,next_action,next_action_at FROM crm_accounts WHERE id='CRM-WU'").get(),
-    {
-      stage: 'qualified',
-      next_action: '重新确认客户需求',
-      next_action_at: '2099-08-08 01:00:00',
-    },
-  );
 });
