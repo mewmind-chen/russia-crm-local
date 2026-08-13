@@ -158,7 +158,7 @@ test('Issue 148 UI is binary, confirms group replacement, and never restores the
   const js = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
   const personalEditor = js.slice(
-    js.indexOf('function personalPermissionFields'),
+    js.indexOf('function permissionCategoryMarkup'),
     js.indexOf('function openAdminPasswordResetModal'),
   );
   assert.match(personalEditor, /type="checkbox" role="switch" name="personalPermission__/);

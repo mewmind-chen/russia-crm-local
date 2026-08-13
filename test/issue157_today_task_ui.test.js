@@ -104,10 +104,12 @@ test('the three compact action modals contain only the context and fields requir
   for (const copy of [
     '处理协助请求',
     '申请人',
-    '申请时间',
-    '申请协助时的进展或原因',
-    '处理意见或协助结果',
-    '完成协助',
+    '处理期限',
+    '申请原因',
+    '销售原计划',
+    '现有联系人',
+    '主管处理意见',
+    '回复销售并完成主管任务',
   ]) assert.match(manager, new RegExp(copy));
   assert.match(manager, /id="todayTaskManagerForm"/);
   assert.match(manager, /name="customerId"/);

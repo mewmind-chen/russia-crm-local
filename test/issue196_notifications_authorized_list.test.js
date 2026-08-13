@@ -128,6 +128,7 @@ test('notification adapter applies hard and runtime AI gates before count, pagin
   t.after(() => fx.close());
   const manager = actor('U-MGR', 'manager', {
     view_customers: true,
+    view_notifications: true,
     view_all_customers: true,
     view_contacts: true,
   });
@@ -298,6 +299,7 @@ test('sales notification rows omit sensitive recipient and contact-detail fields
   t.after(() => fx.close());
   const sales = actor('U-OTHER', 'sales', {
     view_customers: true,
+    view_notifications: true,
     view_contacts: false,
   });
   insertNotification(fx.db, {

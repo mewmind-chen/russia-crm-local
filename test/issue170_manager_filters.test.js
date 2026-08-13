@@ -331,6 +331,7 @@ test('notification adapter isolates recipients and uses one predicate for count 
     '其他主管任务', 'must-not-leak', 'unread', 'manager-task-3', '2026-08-01 09:00:00');
   const manager = actor('U-MGR', 'manager', {
     view_customers: true,
+    view_notifications: true,
     view_all_customers: true,
     resolve_manager_tasks: true,
     view_contacts: true,
@@ -373,6 +374,7 @@ test('notification adapter removes out-of-scope customer rows and facet counts a
   const manager = actor('U-MGR', 'manager', {
     resolve_manager_tasks: true,
     view_customers: true,
+    view_notifications: true,
   });
   const result = listNotificationRows(fx.db, manager, ast('notifications'));
   assert.equal(result.authorizedTotal, 2);
@@ -418,6 +420,7 @@ test('notification adapter excludes intake-only rows and facets without intake p
 
   const sales = actor('U-OTHER', 'sales', {
     view_customers: true,
+    view_notifications: true,
     view_contacts: true,
     view_intake: false,
   });

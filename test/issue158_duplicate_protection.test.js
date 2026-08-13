@@ -54,7 +54,7 @@ test('fuzzy duplicate enters management review, then a distinct decision permits
   const pendingBody = await pending.json();
   assert.equal(pending.status, 202);
   assert.equal(pendingBody.accepted, true);
-  assert.equal(pendingBody.message, '资料已提交，系统将继续处理。');
+  assert.equal(pendingBody.message, '该客户需要管理员确认，确认后可继续领取。');
   assert.equal('reviewRequired' in pendingBody, false);
   assert.equal('reviewId' in pendingBody, false);
   assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts WHERE company_name=?').get('Owned Fixturex').count, 0);

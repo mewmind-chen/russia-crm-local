@@ -48,7 +48,7 @@
         <div class="nav-group"><div class="nav-group-label">今日工作</div>
           <button data-view="dashboard" data-permission="view_dashboard" class="active"><i data-tp-icon="dashboard" aria-hidden="true"></i><span>经营驾驶舱</span></button>
           <button data-view="alerts" data-permission="view_alerts"><i data-tp-icon="alert" aria-hidden="true"></i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
-          <button data-view="notifications" data-permission="view_customers"><i data-tp-icon="bell" aria-hidden="true"></i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
+          <button data-view="notifications" data-permission="view_notifications"><i data-tp-icon="bell" aria-hidden="true"></i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
           <button data-view="aiTasks" data-permission="view_customers" data-ai-business><i data-tp-icon="sparkles" aria-hidden="true"></i><span>AI任务中心</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
@@ -94,7 +94,7 @@
           <h1 id="viewTitle">经营驾驶舱</h1>
         </div>
         <div class="top-actions">
-          <button id="notificationButton" data-view="notifications" data-permission="view_customers" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
+          <button id="notificationButton" data-view="notifications" data-permission="view_notifications" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
             <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
           </button>
           <button id="newCustomerBtn" data-permission="create_customer" class="button secondary">＋ 新增CRM客户</button>
@@ -754,7 +754,7 @@
     <div class="drawer-head">
       <button class="icon-button" type="button" data-close-drawer title="关闭客户详情" aria-label="关闭客户详情"><span data-tp-icon="close" aria-hidden="true"></span></button>
       <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
-      <button id="drawerNicknameBtn" class="button secondary hidden" type="button">共享昵称</button>
+      <button id="drawerNicknameBtn" class="button secondary hidden" type="button">创建昵称</button>
       <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录新进展</button>
     </div>
     <div id="drawerContent" class="drawer-content"></div>
