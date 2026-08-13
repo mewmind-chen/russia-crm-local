@@ -524,6 +524,27 @@ test('account reassign reads customer and selected owner from the actual action 
   assert.equal(harness.calls.load, 1);
 });
 
+test('failed account reassign preserves the drawer and reports the API error', async () => {
+  const harness = mismatchActionHarness({ rejectApi: true });
+  const button = {
+    dataset: { reassignCustomer: 'CRM-A' },
+    parentElement: { querySelector: selector => selector === 'select' ? { value: 'U-NEW' } : null },
+  };
+
+  const result = await harness.reassign(button, '重新分配');
+
+  assert.equal(result, false);
+  assert.equal(harness.calls.api.length, 1);
+  assert.equal(harness.calls.api[0].url, '/api/sales-crm/accounts/CRM-A/reassign');
+  assert.deepEqual(JSON.parse(harness.calls.api[0].options.body), {
+    ownerId: 'U-NEW', reason: '重新分配',
+  });
+  assert.equal(harness.calls.close, 0);
+  assert.deepEqual(harness.calls.refresh, []);
+  assert.equal(harness.calls.load, 0);
+  assert.deepEqual(harness.calls.toast, ['network failed']);
+});
+
 test('post-action recycle reload executes against the current page without clearing applied filters', async () => {
   const calls = { clear: 0, authorized: [] };
   const controller = {
