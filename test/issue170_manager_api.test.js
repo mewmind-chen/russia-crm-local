@@ -446,6 +446,50 @@ test('manager terminal action rejects disqualified atomically while allowing los
     '项目取消');
 });
 
+test('manager terminal disqualified rejection also precedes a legacy intervention replay', async t => {
+  const fx = await managerFixture(t);
+  const task = upsertManagerTask(fx.db, {
+    customerId: 'RU-9003',
+    reason: 'first_contact_silence',
+    actorIdSnapshot: 'U-OTHER',
+    ownerIdSnapshot: 'U-OTHER',
+    triggeredAt: '2026-08-01 05:00:00',
+  });
+  fx.db.prepare(`INSERT INTO crm_manager_interventions
+    (id,idempotency_key,task_id,actor_id,action,note,difficulty,request_hash,
+     business_change_json,result_json,created_at)
+    VALUES (?,?,?,?,?,'不属于目标客户','','','{}','{}',?)`).run(
+    'MTI-LEGACY-DISQUALIFIED',
+    'legacy-manager-disqualified-replay',
+    task.id,
+    'U-WU',
+    'terminal_stage',
+    '2026-08-01 05:00:00',
+  );
+  const accountBefore = fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER');
+  const taskBefore = fx.db.prepare('SELECT * FROM crm_manager_tasks WHERE id=?').get(task.id);
+  const interventionsBefore = fx.db.prepare(`SELECT * FROM crm_manager_interventions
+    WHERE task_id=? ORDER BY created_at,id`).all(task.id);
+
+  const rejected = await fx.request(`/api/sales-crm/manager-tasks/${task.id}/resolve`, {
+    cookie: fx.cookie,
+    method: 'POST',
+    body: {
+      type: 'terminal_stage',
+      stage: 'disqualified',
+      note: '不属于目标客户',
+      idempotencyKey: 'legacy-manager-disqualified-replay',
+    },
+  });
+  const rejectedBody = await rejected.json();
+  assert.equal(rejected.status, 400);
+  assert.equal(rejectedBody.error, '不对口请使用专用“标记不对口”流程');
+  assert.deepEqual(fx.db.prepare('SELECT * FROM crm_accounts WHERE id=?').get('CRM-OTHER'), accountBefore);
+  assert.deepEqual(fx.db.prepare('SELECT * FROM crm_manager_tasks WHERE id=?').get(task.id), taskBefore);
+  assert.deepEqual(fx.db.prepare(`SELECT * FROM crm_manager_interventions
+    WHERE task_id=? ORDER BY created_at,id`).all(task.id), interventionsBefore);
+});
+
 test('disabled deferred writes roll back plan-forming manager resolutions atomically', async t => {
   const fx = await managerFixture(t, { writesEnabled: false });
   const tasks = [
