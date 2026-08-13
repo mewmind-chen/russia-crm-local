@@ -8348,7 +8348,7 @@
       .map(row => row.split('\t'));
     const fields = {
       plan_formed: `<label>明确的下一步计划<input name="nextAction" maxlength="500" required placeholder="例如：确认 BOM 后提交正式报价"></label><label>计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${nextAt}" required></label>`,
-      terminal_stage: `<label>终止阶段<select name="stage" required><option value="lost">已丢失</option><option value="disqualified">不合格客户</option></select></label><label>终止说明（选填）<textarea name="note" maxlength="500"></textarea></label>`,
+      terminal_stage: `<label>终止阶段<select name="stage" required><option value="lost">丢单</option></select></label><label>终止原因<textarea name="note" maxlength="500" required></textarea></label>`,
       reassigned: `<label>新负责人<select name="ownerId" required><option value="">请选择在职销售</option>${salesOptions.map(([id, name]) => `<option value="${esc(id)}">${esc(name || id)}</option>`).join('')}</select></label>`,
       manager_advice: `<label>主管建议<textarea name="note" maxlength="500" required placeholder="记录给销售的具体建议"></textarea></label><label>下一步计划<input name="nextAction" maxlength="500" required></label><label>计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${nextAt}" required></label>`,
       escalate_owner: `<label>需要老板处理的难点<textarea name="difficulty" maxlength="500" required placeholder="说明具体困难和需要的决策"></textarea></label>`,
@@ -9074,6 +9074,11 @@
   function openCustomerProfileEditModal(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     if (!account) return toast('当前客户不在可编辑范围内');
+    if (account.stage === 'disqualified') {
+      toast('历史不对口客户请先通过不对口记录恢复');
+      return;
+    }
+    const editableStages = state.data.stages.filter(item => item.key !== 'disqualified');
     const options = state.data.customerOptions || {};
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active && !user.archived);
     const currentOwner = account.owner_id && !sales.some(user => user.id === account.owner_id)
@@ -9086,7 +9091,7 @@
       : '';
     openModal('编辑客户资料', 'CUSTOMER PROFILE', `<form id="customerProfileEditForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
-      <label>阶段<select name="stage">${state.data.stages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
+      <label>阶段<select name="stage">${editableStages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
       <label>优先级<select name="priority">${['A', 'B', 'C'].map(item => `<option ${item === account.priority ? 'selected' : ''}>${item}</option>`).join('')}</select></label>
       <label>成立年份（选填）<input name="establishedYear" inputmode="numeric" list="profile-year-options" pattern="[0-9]{4}" value="${esc(account.established_year || '')}" placeholder="搜索或选择年份"><datalist id="profile-year-options">${yearOptions(account.established_year)}</datalist></label>

@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { adminFixture } = require('./helpers/permission_fixture');
 const {
   STAGES,
@@ -12,6 +14,18 @@ const {
   isFollowUpTerminalStage,
   hasReachedStage,
 } = require('../lib/customer_stages');
+
+const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+
+function functionBlock(source, name) {
+  const marker = `function ${name}(`;
+  const startAt = source.indexOf(marker);
+  assert.notEqual(startAt, -1, `missing ${marker}`);
+  const next = /\n  (?:async )?function [A-Za-z0-9_$]+\(/g;
+  next.lastIndex = startAt + marker.length;
+  const match = next.exec(source);
+  return source.slice(startAt, match?.index ?? source.length);
+}
 
 test('disqualified is a distinct terminal stage with shared semantics', () => {
   assert.equal(STAGES.some(([key, label]) => key === 'disqualified' && label === '确认不对口'), true);
@@ -34,6 +48,14 @@ test('disqualified is a distinct terminal stage with shared semantics', () => {
     assignment_status: 'claimed',
   }], [], [], []);
   assert.deepEqual(alerts, []);
+});
+
+test('ordinary profile editing protects historical mismatch customers', () => {
+  const editBlock = functionBlock(appSource, 'openCustomerProfileEditModal');
+  assert.match(editBlock, /item\.key !== 'disqualified'/);
+  assert.match(editBlock, /历史不对口客户请先通过不对口记录恢复/);
+  assert.match(appSource, /data-reject-customer/);
+  assert.match(appSource, /rejectCustomerAsMismatch/);
 });
 
 test('disqualified stage remains available in bootstrap and exports', async t => {
