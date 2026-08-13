@@ -921,9 +921,9 @@
       : state.selectedCustomerIds.size;
   }
 
-  async function loadCustomerPage({ reset = true, page } = {}) {
+  async function loadCustomerPage({ reset = true, force = false, page } = {}) {
     if (!state.customerFilterController) return;
-    if (state.customerList.loading && !reset) return;
+    if (state.customerList.loading && !reset && !force) return;
     const requestEpoch = ++state.customerRequestEpoch;
     state.customerList.loading = true;
     state.customerFilterMount?.setResultMeta({
@@ -1168,10 +1168,10 @@
     }
   }
 
-  async function loadAuthorizedBusinessPage(pageKey, { reset = false, page } = {}) {
+  async function loadAuthorizedBusinessPage(pageKey, { reset = false, force = false, page } = {}) {
     const config = authorizedBusinessConfig[pageKey];
     const meta = state.authorizedBusinessLists[pageKey];
-    if (!config || !meta?.filterController || (meta.loading && !reset)) return;
+    if (!config || !meta?.filterController || (meta.loading && !reset && !force)) return;
     if (reset) {
       Object.assign(meta, {
         page: 1,
@@ -3796,7 +3796,7 @@
     closeDrawer();
     await refresh();
     if (state.customerFilterController) {
-      await loadCustomerPage({ reset: false, page: state.customerList.page });
+      await loadCustomerPage({ reset: false, force: true, page: state.customerList.page });
     }
     const reloads = [];
     for (const pageKey of [
@@ -3805,7 +3805,9 @@
     ]) {
       const meta = state.authorizedBusinessLists[pageKey];
       if (meta?.filterController) {
-        reloads.push(loadAuthorizedBusinessPage(pageKey, { reset: false, page: meta.page }));
+        reloads.push(loadAuthorizedBusinessPage(pageKey, {
+          reset: false, force: true, page: meta.page,
+        }));
       }
     }
     await Promise.all(reloads);
