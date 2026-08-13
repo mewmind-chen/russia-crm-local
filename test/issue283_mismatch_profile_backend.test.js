@@ -182,3 +182,20 @@ test('mismatch profile returns stable 404 for malformed or missing record keys',
     });
   }
 });
+
+test('raw empty and invalid-encoding profile URLs return the stable JSON 404', async t => {
+  const fx = await setupMismatchProfileFixture(t);
+
+  for (const route of [
+    '/api/sales-crm/mismatch-recycle//profile',
+    '/api/sales-crm/mismatch-recycle/%ZZ/profile',
+  ]) {
+    await t.test(route, async () => {
+      const response = await fx.request(route, { cookie: fx.salesCookie });
+      const text = await response.text();
+      assert.equal(response.status, 404, `${route}: ${text}`);
+      assert.doesNotThrow(() => JSON.parse(text), `${route}: ${text}`);
+      assert.equal(JSON.parse(text).code, 'MISMATCH_RECORD_NOT_FOUND');
+    });
+  }
+});

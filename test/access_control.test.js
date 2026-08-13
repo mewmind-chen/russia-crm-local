@@ -108,6 +108,14 @@ test('unknown browser route and action are denied by default', () => {
     policyForSalesRequest('GET', '/mismatch-recycle/account%3ACRM-WU/profile'),
     SALES_ROUTE_POLICIES['GET /mismatch-recycle/:recordKey/profile'],
   );
+  assert.deepEqual(
+    policyForSalesRequest('GET', '/mismatch-recycle//profile'),
+    SALES_ROUTE_POLICIES['GET /mismatch-recycle/:recordKey/profile'],
+  );
+  assert.deepEqual(
+    policyForSalesRequest('GET', '/mismatch-recycle//other'),
+    { deny: true },
+  );
   for (const [path, key] of [
     ['/protected-customers/template', 'GET /protected-customers/template'],
     ['/protected-customers/export', 'GET /protected-customers/export'],
