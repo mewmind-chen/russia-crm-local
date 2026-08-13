@@ -45,3 +45,10 @@ test('plan mode routes to plan-only or the receipt today task action and never t
   assert.match(submit, /confirm_manager_assistance/);
   assert.match(submit, /未生成客户进展事件/);
 });
+
+test('timeline titles route request, reply and no-plan states through Chinese labels', () => {
+  const titleFn = section(app, 'function timelineEventTitle', 'function timelineEventSummary');
+  assert.match(titleFn, /暂无计划/);
+  assert.match(titleFn, /主管回复/);
+  assert.match(titleFn, /请求主管协助/);
+});

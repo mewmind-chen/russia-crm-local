@@ -303,6 +303,13 @@
   function timelineEventTitle(event) {
     const kind = String(event?.kind || event?.event_type || '');
     const mapped = EVENT_LABELS[kind];
+    if (event?.kind === 'activity') {
+      if (Number(event.no_plan || 0) === 1) return '暂无计划';
+      if (String(event.event_type || '') === 'manager_join' && String(event.outcome || '') === '已回复') {
+        return '主管回复';
+      }
+      if (Number(event.manager_required || 0) === 1) return '请求主管协助';
+    }
     const title = mapped?.title
       || (event?.kind === 'activity' ? activityMeta[event?.event_type]?.[0] : '')
       || event?.title
