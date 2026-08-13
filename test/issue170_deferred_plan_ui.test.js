@@ -153,6 +153,12 @@ test('manager task detail presents evidence and submits only real domain actions
   assert.doesNotMatch(submit, /actionType:\s*['"](?:dismiss|ignore|close_manager_task)['"]/);
 });
 
+test('manager terminal-stage action keeps mismatch out of ordinary controls', () => {
+  const managerBlock = functionBlock(app, 'setManagerTaskAction');
+  assert.doesNotMatch(managerBlock, /value="disqualified"/);
+  assert.match(managerBlock, /value="lost"/);
+});
+
 test('admin settings round-trip N D G M K R, recipients, version and audit time', () => {
   const render = functionBlock(app, 'renderManagerTaskSettings');
   for (const property of [

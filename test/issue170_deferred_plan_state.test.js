@@ -265,39 +265,34 @@ test('editing only the action converts a legacy local plan time to UTC and marks
   });
 });
 
-test('new terminal customers have no follow-up plan and invalid stages create nothing', async t => {
+test('new lost customers have no follow-up plan and invalid stages create nothing', async t => {
   const fx = await crmFixture(t, true);
   const beforeAccounts = fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts').get().count;
   const beforeCustomers = fx.db.prepare('SELECT COUNT(*) count FROM customer_pool').get().count;
 
-  for (const [stage, companyName] of [
-    ['lost', 'Issue 170 Lost On Create'],
-    ['disqualified', 'Issue 170 Disqualified On Create'],
-  ]) {
-    const response = await fx.request('/api/sales-crm/accounts', {
-      cookie: fx.adminCookie,
-      method: 'POST',
-      body: {
-        companyName,
-        country: '俄罗斯',
-        ownerId: '__unassigned__',
-        stage,
-        nextAction: '不应保留的默认计划',
-        nextActionAt: '2099-08-08 09:00:00',
-      },
-    });
-    const body = await response.json();
-    assert.equal(response.status, 200, body.error);
-    assert.deepEqual(fx.db.prepare(`SELECT stage,next_action,next_action_at,next_action_time_basis
-      FROM crm_accounts WHERE id=?`).get(body.customerId), {
-      stage,
-      next_action: '',
-      next_action_at: '',
-      next_action_time_basis: '',
-    });
-    assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_next_plan_events
-      WHERE customer_id=?`).get(body.externalCustomerId).count, 0);
-  }
+  const response = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      companyName: 'Issue 170 Lost On Create',
+      country: '俄罗斯',
+      ownerId: '__unassigned__',
+      stage: 'lost',
+      nextAction: '不应保留的默认计划',
+      nextActionAt: '2099-08-08 09:00:00',
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.deepEqual(fx.db.prepare(`SELECT stage,next_action,next_action_at,next_action_time_basis
+    FROM crm_accounts WHERE id=?`).get(body.customerId), {
+    stage: 'lost',
+    next_action: '',
+    next_action_at: '',
+    next_action_time_basis: '',
+  });
+  assert.equal(fx.db.prepare(`SELECT COUNT(*) count FROM crm_next_plan_events
+    WHERE customer_id=?`).get(body.externalCustomerId).count, 0);
 
   const invalid = await fx.request('/api/sales-crm/accounts', {
     cookie: fx.adminCookie,
@@ -310,11 +305,55 @@ test('new terminal customers have no follow-up plan and invalid stages create no
     },
   });
   assert.equal(invalid.status, 400, await invalid.text());
-  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts').get().count, beforeAccounts + 2);
-  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_pool').get().count, beforeCustomers + 2);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts').get().count, beforeAccounts + 1);
+  assert.equal(fx.db.prepare('SELECT COUNT(*) count FROM customer_pool').get().count, beforeCustomers + 1);
   assert.equal(fx.db.prepare(
     "SELECT COUNT(*) count FROM crm_accounts WHERE company_name='Issue 170 Invalid Stage'",
   ).get().count, 0);
+});
+
+test('new disqualified customers are rejected before any database write', async t => {
+  const fx = await crmFixture(t, true);
+  const companyName = 'Issue 170 Disqualified On Create';
+  const idempotencyKey = 'issue170-disqualified-create';
+  const tables = [
+    'customer_pool',
+    'crm_accounts',
+    'crm_customer_create_requests',
+    'crm_audit_log',
+  ];
+  const beforeCounts = Object.fromEntries(tables.map(table => [
+    table,
+    fx.db.prepare(`SELECT COUNT(*) count FROM ${table}`).get().count,
+  ]));
+
+  const response = await fx.request('/api/sales-crm/accounts', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      companyName,
+      country: '俄罗斯',
+      ownerId: '__unassigned__',
+      stage: 'disqualified',
+      nextAction: '不应创建的计划',
+      nextActionAt: '2099-08-08 09:00:00',
+      idempotencyKey,
+    },
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, '请使用“标记不对口”操作');
+
+  const afterCounts = Object.fromEntries(tables.map(table => [
+    table,
+    fx.db.prepare(`SELECT COUNT(*) count FROM ${table}`).get().count,
+  ]));
+  assert.deepEqual(afterCounts, beforeCounts);
+  assert.equal(fx.db.prepare('SELECT 1 FROM customer_pool WHERE company_name=?').get(companyName), undefined);
+  assert.equal(fx.db.prepare('SELECT 1 FROM crm_accounts WHERE company_name=?').get(companyName), undefined);
+  assert.equal(fx.db.prepare('SELECT 1 FROM crm_customer_create_requests WHERE idempotency_key=?')
+    .get(idempotencyKey), undefined);
+  assert.equal(fx.db.prepare(`SELECT 1 FROM crm_audit_log
+    WHERE detail_json LIKE ?`).get(`%${companyName}%`), undefined);
 });
 
 test('disabled deferred-plan write gate blocks event services but preserves legacy snapshot writes', async t => {
