@@ -92,3 +92,157 @@ test('countdown presentation is restrained and does not animate or paint the car
   const countdownCss = cssSource.match(/\.next-action-time\s*\{[\s\S]*?\.next-action-time\.unavailable\s*\{[^}]*\}/)?.[0] || '';
   assert.doesNotMatch(countdownCss, /animation|background\s*:\s*(?:var\(--danger\)|#(?:f00|ff0000))/i);
 });
+
+function productionFunction(name, nextName) {
+  const start = appSource.indexOf(`  function ${name}(`);
+  const end = appSource.indexOf(`  function ${nextName}(`, start + 1);
+  assert.notEqual(start, -1, `${name} must exist`);
+  assert.notEqual(end, -1, `${nextName} must follow ${name}`);
+  return appSource.slice(start, end);
+}
+
+function executableDrawerLifecycle() {
+  const elements = new Map();
+  const classList = initial => {
+    const values = new Set(initial);
+    return {
+      add: value => values.add(value),
+      remove: value => values.delete(value),
+      contains: value => values.has(value),
+    };
+  };
+  const drawer = { classList: classList(['open']), setAttribute() {} };
+  const backdrop = { classList: classList(['open']) };
+  const content = { innerHTML: '' };
+  const stage = { textContent: '' };
+  const company = { textContent: '' };
+  const meta = { textContent: '' };
+  let replacements = 0;
+  let mount = { replaceWith() { replacements += 1; } };
+  elements.set('#customerDrawer', drawer);
+  elements.set('#drawerBackdrop', backdrop);
+  elements.set('#drawerContent', content);
+  elements.set('#drawerStage', stage);
+  elements.set('#drawerCompany', company);
+  elements.set('#drawerMeta', meta);
+  const $ = selector => selector === '#drawerContent [data-next-action-time]' ? mount : elements.get(selector) || null;
+
+  const visibilityHandlers = [];
+  const document = {
+    visibilityState: 'visible',
+    createElement() {
+      const holder = { firstElementChild: null };
+      Object.defineProperty(holder, 'innerHTML', {
+        set() { holder.firstElementChild = {}; },
+      });
+      return holder;
+    },
+    addEventListener(type, handler) {
+      if (type === 'visibilitychange') visibilityHandlers.push(handler);
+    },
+  };
+  let nextTimerId = 0;
+  const intervals = new Map();
+  const setInterval = (handler, milliseconds) => {
+    const id = ++nextTimerId;
+    intervals.set(id, { handler, milliseconds });
+    return id;
+  };
+  const clearInterval = id => intervals.delete(id);
+  const account = {
+    id: 'account-1', external_customer_id: 'RU-1', company_name: 'Example',
+    next_action: 'Follow up', next_action_at: '2026-08-14 00:00:00',
+    next_action_time_basis: 'utc', priority: 'B', website: 'https://example.com',
+  };
+  const state = {
+    drawerOwner: '', drawerRequestEpoch: 0, drawerNextActionTimer: null,
+    mismatchRecordRequestEpoch: 0, mismatchRecordDetail: null, mismatchRecordExpanded: false,
+    recycleCustomerDetail: null, selectedCustomerId: account.id, drawerAiContext: null,
+    data: { accounts: [account], activities: [], rfqs: [], quotes: [], orders: [], timeline: [], impersonation: null },
+  };
+  const lifecycleSource = [
+    productionFunction('claimCustomerDrawer', 'isCustomerDrawerRequestCurrent'),
+    productionFunction('closeDrawer', 'evaluationCard'),
+    productionFunction('renderDrawer', 'stopDrawerNextActionTimer'),
+    productionFunction('stopDrawerNextActionTimer', 'openModal'),
+  ].join('\n');
+  const dependencyNames = [
+    'renderMismatchRecordDrawer', 'renderRecycleDrawer', 'resetDrawerActions',
+    'configureDrawerActions', 'stageLabel', 'accountDisplayName', 'accountIdentity',
+    'alertFor', 'creatorDisplayName', 'customerAIEnabled', 'labelsForAccount', 'relative',
+    'hasMeaningfulAlertCopy', 'alertReasons', 'esc', 'shortDate', 'sourceTagMarkup',
+    'drawerFactMarkup', 'customerAiSection', 'can', 'canReturnCustomer',
+    'canRejectCustomer', 'renderActivityTimelineItem', 'nextActionTimeMarkup',
+  ];
+  const identity = value => String(value || '');
+  const dependencyValues = [
+    () => {}, () => {}, () => {}, () => {}, identity, () => 'Example', identity,
+    () => null, () => 'System', () => false, () => [], () => 'never',
+    () => false, () => [], identity, identity, () => '', () => '',
+    () => '', () => '', () => false, () => false, () => false, () => '',
+    value => `<span data-next-action-time>${identity(value.next_action_at)}</span>`,
+  ];
+  const compile = Function(
+    'state', '$', 'document', 'setInterval', 'clearInterval',
+    ...dependencyNames,
+    `${lifecycleSource}\nreturn { claimCustomerDrawer, closeDrawer, renderDrawer, stopDrawerNextActionTimer, refreshDrawerNextActionTime, startDrawerNextActionTimer };`,
+  );
+  const api = compile(state, $, document, setInterval, clearInterval, ...dependencyValues);
+  const visibilityStart = appSource.indexOf("  document.addEventListener('visibilitychange'");
+  const visibilityEnd = appSource.indexOf('\n\n  initializeDataTableOverflowHints', visibilityStart);
+  assert.ok(visibilityStart >= 0 && visibilityEnd > visibilityStart, 'visibility handler must remain executable');
+  Function(
+    'state', '$', 'document', 'stopDrawerNextActionTimer',
+    'refreshDrawerNextActionTime', 'startDrawerNextActionTimer',
+    appSource.slice(visibilityStart, visibilityEnd),
+  )(state, $, document, api.stopDrawerNextActionTimer,
+    api.refreshDrawerNextActionTime, api.startDrawerNextActionTimer);
+
+  return {
+    api, state, account, drawer, document, intervals, visibilityHandlers,
+    replacements: () => replacements,
+    resetMount() { mount = { replaceWith() { replacements += 1; } }; },
+  };
+}
+
+test('executable production lifecycle isolates the minute timer to the ordinary CRM drawer', () => {
+  const harness = executableDrawerLifecycle();
+  harness.api.claimCustomerDrawer(`crm:${harness.account.id}`);
+  harness.api.renderDrawer();
+  assert.equal(harness.intervals.size, 1);
+  assert.equal([...harness.intervals.values()][0].milliseconds, 60 * 1000);
+
+  ['mismatch:record-1', 'recycle:account-1', 'intake:intake-1'].forEach(owner => {
+    harness.api.claimCustomerDrawer(owner);
+    assert.equal(harness.intervals.size, 0, `${owner} must stop the CRM timer`);
+    harness.api.startDrawerNextActionTimer();
+    assert.equal(harness.intervals.size, 0, `${owner} must not start the CRM timer`);
+    harness.api.claimCustomerDrawer(`crm:${harness.account.id}`);
+    harness.api.startDrawerNextActionTimer();
+    assert.equal(harness.intervals.size, 1);
+  });
+
+  harness.api.closeDrawer();
+  assert.equal(harness.intervals.size, 0);
+  assert.equal(harness.state.drawerNextActionTimer, null);
+});
+
+test('executable visibility lifecycle stops hidden work and resumes one immediate minute timer', () => {
+  const harness = executableDrawerLifecycle();
+  const [visibilityChange] = harness.visibilityHandlers;
+  assert.equal(typeof visibilityChange, 'function');
+  harness.api.claimCustomerDrawer(`crm:${harness.account.id}`);
+  harness.api.startDrawerNextActionTimer();
+  assert.equal(harness.intervals.size, 1);
+
+  harness.document.visibilityState = 'hidden';
+  visibilityChange();
+  assert.equal(harness.intervals.size, 0);
+
+  const before = harness.replacements();
+  harness.document.visibilityState = 'visible';
+  visibilityChange();
+  assert.ok(harness.replacements() > before, 'visible restoration must refresh immediately');
+  assert.equal(harness.intervals.size, 1);
+  assert.equal([...harness.intervals.values()][0].milliseconds, 60 * 1000);
+});
