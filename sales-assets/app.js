@@ -9440,16 +9440,60 @@
     return (state.data.permissionGroups || []).find(group => group.id === groupId)?.permissions || fallback;
   }
 
+  const PERMISSION_CATEGORIES = Object.freeze([
+    Object.freeze({
+      key: 'module', label: '模块访问', permissions: Object.freeze([
+        'view_dashboard', 'view_alerts', 'view_notifications', 'view_intake',
+        'view_contacts', 'view_recon', 'view_customers', 'view_own_mismatch_history',
+        'view_pipeline', 'resolve_manager_tasks', 'view_team', 'view_insights',
+        'view_development', 'view_pool', 'view_markets',
+      ]),
+    }),
+    Object.freeze({
+      key: 'customer', label: '客户数据与操作', permissions: Object.freeze([
+        'view_all_customers', 'manage_intake', 'manage_customer_recycle',
+        'reject_own_customer_mismatch', 'manage_manual_customer_deletion',
+        'manage_customer_contacts', 'create_customer', 'edit_customer',
+        'record_activity', 'correct_own_activity', 'manage_activity_corrections',
+        'record_collaboration_support', 'record_quote', 'record_order',
+      ]),
+    }),
+    Object.freeze({
+      key: 'admin', label: '管理与审计', permissions: Object.freeze([
+        'view_users', 'manage_evaluations', 'run_recon', 'use_prospect_agent',
+        'use_ai_assistant', 'cancel_ai_tasks', 'bulk_manage_ai_tasks',
+        'manage_ai_budgets', 'review_ai_tasks', 'manage_users',
+        'manage_data_maintenance', 'manage_protected_customers',
+        'manage_manager_task_settings', 'export_data',
+      ]),
+    }),
+  ]);
+
+  function permissionCategoryMarkup(permissions = {}, groupPermissions = {}, active = 'module') {
+    const definitions = visiblePermissionDefinitions();
+    const descriptions = state.data.permissionDescriptions || {};
+    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === active ? 'active' : ''}"
+      type="button" role="tab" aria-selected="${category.key === active}"
+      data-permission-category="${category.key}">${category.label}</button>`).join('');
+    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
+      data-permission-panel="${category.key}">
+      <div class="permission-switch-grid">${category.permissions.map(key => {
+        const allowed = Boolean(permissions[key]);
+        const followsGroup = allowed === Boolean(groupPermissions[key]);
+        const label = definitions[key];
+        if (!label) return '';
+        const description = descriptions[key] || '';
+        return `<label class="permission-override-row permission-switch-row">
+          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${description ? `${esc(description)} · ` : ''}${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
+          <input type="checkbox" role="switch" name="personalPermission__${esc(key)}" ${allowed ? 'checked' : ''} aria-label="${esc(label)}">
+        </label>`;
+      }).join('')}</div>
+    </section>`).join('');
+    return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
+  }
+
   function personalPermissionFields(permissions = {}, groupPermissions = {}) {
-    return Object.entries(visiblePermissionDefinitions()).map(([key, label]) => {
-      const allowed = Boolean(permissions[key]);
-      const followsGroup = allowed === Boolean(groupPermissions[key]);
-      const description = state.data.permissionDescriptions?.[key] || '';
-      return `<label class="permission-override-row permission-switch-row">
-        <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${description ? `${esc(description)} · ` : ''}${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
-        <input type="checkbox" role="switch" name="personalPermission__${esc(key)}" ${allowed ? 'checked' : ''} aria-label="${esc(label)}">
-      </label>`;
-    }).join('');
+    return permissionCategoryMarkup(permissions, groupPermissions, 'module');
   }
 
   function renderPersonalPermissionEditor(form, permissions) {
@@ -9478,12 +9522,20 @@
   function permissionFields(permissions = {}) {
     const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
-    const groups = [
-      ['可查看模块', Object.keys(definitions).filter(key => key.startsWith('view_') && key !== 'view_all_customers')],
-      ['数据范围与操作', Object.keys(definitions).filter(key => !key.startsWith('view_') || key === 'view_all_customers')],
-    ];
-    return groups.map(([title,keys]) => `<fieldset><legend>${title}</legend><div class="permission-grid">${keys.map(key =>
-      `<label class="permission-check"><input type="checkbox" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''}><span>${esc(definitions[key])}${descriptions[key] ? `<small>${esc(descriptions[key])}</small>` : ''}</span></label>`).join('')}</div></fieldset>`).join('');
+    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === 'module' ? 'active' : ''}"
+      type="button" role="tab" aria-selected="${category.key === 'module'}"
+      data-permission-category="${category.key}">${category.label}</button>`).join('');
+    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === 'module' ? '' : 'hidden'}"
+      data-permission-panel="${category.key}">
+      <div class="permission-switch-grid">${category.permissions.map(key => {
+        const label = definitions[key];
+        if (!label) return '';
+        return `<label class="permission-check permission-switch-row">
+          <input type="checkbox" role="switch" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''} aria-label="${esc(label)}"><span>${esc(label)}${descriptions[key] ? `<small>${esc(descriptions[key])}</small>` : ''}</span>
+        </label>`;
+      }).join('')}</div>
+    </section>`).join('');
+    return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
   }
 
   function openEditUserModal(userId) {
@@ -10835,7 +10887,19 @@
       const form = document.querySelector('#permissionOverrideForm');
       const userId = form?.elements?.userId?.value || '';
       if (!userId) return;
-      if (!window.confirm('恢复权限组默认？\n这会清除该用户的全部个人调整，所有权限重新跟随当前权限组。该操作保存后生效。')) return;
+      const user = state.data.users.find(item => item.id === userId);
+      if (!user) return;
+      openModal('恢复权限组默认？', 'PERMISSION RESTORE', `<form id="restorePermissionsForm" class="form-grid">
+        <input type="hidden" name="userId" value="${esc(user.id)}">
+        <p class="recommendation">将清除${esc(user.name)}的个人权限例外，之后自动跟随“${esc(user.permissionGroupName || '当前权限组')}”权限组。权限组本身不会改变。</p>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button type="button" class="button primary" id="confirmRestorePermissions">确认恢复</button></div>
+      </form>`);
+      return;
+    }
+    if (event.target.closest('#confirmRestorePermissions')) {
+      const form = document.querySelector('#restorePermissionsForm');
+      const userId = form?.elements?.userId?.value || '';
+      if (!userId) return;
       try {
         await api(`/api/sales-crm/users/${encodeURIComponent(userId)}/permission-overrides`, {
           method: 'PUT',
@@ -10844,6 +10908,18 @@
         closeModal();
         await refresh('已恢复权限组默认');
       } catch (error) { toast(error.message); }
+      return;
+    }
+    const permissionCategoryButton = event.target.closest('[data-permission-category]');
+    if (permissionCategoryButton) {
+      $$('#modal [data-permission-category]').forEach(button => {
+        const selected = button === permissionCategoryButton;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-selected', String(selected));
+      });
+      $$('#modal [data-permission-panel]').forEach(panel => {
+        panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
+      });
       return;
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
