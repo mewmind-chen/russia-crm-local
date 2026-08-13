@@ -27,11 +27,60 @@ test('sales navigation and customer actions use narrow mismatch permissions', ()
   assert.match(clickHandler, /openRecycleReasonModal/);
 });
 
-test('reject submission refreshes the server-owned mismatch history', () => {
+test('reject submission closes the drawer and reloads only initialized customer-derived lists', async () => {
   const helper = bodyBetween('async function rejectCustomerAsMismatch', 'function renderRecycleBin');
-  assert.match(helper, /\/api\/sales-crm\/accounts\/\$\{encodeURIComponent\(customerId\)\}\/reject/);
-  assert.match(helper, /await loadRecycleBin/);
-  assert.match(helper, /已移入不对口记录/);
+  const events = [];
+  const state = {
+    customerFilterController: {},
+    customerList: { page: 3 },
+    authorizedBusinessLists: {
+      pipeline: { filterController: {}, page: 2 },
+      alerts: { filterController: {}, page: 4 },
+      insights: { filterController: null, page: 5 },
+      recycle_bin: { filterController: {}, page: 6 },
+      manager_tasks: { filterController: {}, page: 7 },
+      manager_risks: { filterController: null, page: 8 },
+      manager_metrics: { filterController: {}, page: 9 },
+      notifications: { filterController: null, page: 10 },
+    },
+  };
+  const rejectCustomerAsMismatch = Function(
+    'api',
+    'closeDrawer',
+    'refresh',
+    'state',
+    'loadCustomerPage',
+    'loadAuthorizedBusinessPage',
+    'loadRecycleBin',
+    'toast',
+    `'use strict'; ${helper}; return rejectCustomerAsMismatch;`,
+  )(
+    async (url, options) => { events.push(['api', url, options]); },
+    () => { events.push(['closeDrawer']); },
+    async () => { events.push(['refresh']); },
+    state,
+    async options => { events.push(['customers', options]); },
+    async (pageKey, options) => { events.push([pageKey, options]); },
+    async () => { events.push(['legacyRecycleReload']); },
+    message => { events.push(['toast', message]); },
+  );
+
+  await rejectCustomerAsMismatch('CRM / 273', '产品需求不匹配');
+
+  assert.deepEqual(events, [
+    ['api', '/api/sales-crm/accounts/CRM%20%2F%20273/reject', {
+      method: 'POST', body: JSON.stringify({ reason: '产品需求不匹配' }),
+    }],
+    ['closeDrawer'],
+    ['refresh'],
+    ['customers', { reset: false, page: 3 }],
+    ['pipeline', { reset: false, page: 2 }],
+    ['alerts', { reset: false, page: 4 }],
+    ['recycle_bin', { reset: false, page: 6 }],
+    ['manager_tasks', { reset: false, page: 7 }],
+    ['manager_metrics', { reset: false, page: 9 }],
+    ['toast', '已移入不对口记录，可在“不对口记录”中查看'],
+  ]);
 });
 
 test('recycle rows use opaque record keys and expose restore only from server actions', () => {

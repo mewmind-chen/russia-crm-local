@@ -3793,8 +3793,22 @@
     await api(`/api/sales-crm/accounts/${encodeURIComponent(customerId)}/reject`, {
       method: 'POST', body: JSON.stringify({ reason }),
     });
+    closeDrawer();
     await refresh();
-    await loadRecycleBin();
+    if (state.customerFilterController) {
+      await loadCustomerPage({ reset: false, page: state.customerList.page });
+    }
+    const reloads = [];
+    for (const pageKey of [
+      'pipeline', 'alerts', 'insights', 'recycle_bin',
+      'manager_tasks', 'manager_risks', 'manager_metrics', 'notifications',
+    ]) {
+      const meta = state.authorizedBusinessLists[pageKey];
+      if (meta?.filterController) {
+        reloads.push(loadAuthorizedBusinessPage(pageKey, { reset: false, page: meta.page }));
+      }
+    }
+    await Promise.all(reloads);
     toast('已移入不对口记录，可在“不对口记录”中查看');
   }
 
