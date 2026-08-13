@@ -2568,6 +2568,8 @@
         else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
           ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看 CRM 客户</button>`
           : '—';
+        else if (item.status === 'returned' && item.crm_customer_id) actions =
+          `<button class="text-button" type="button" data-returned-history="${esc(item.crm_customer_id)}">查看开发历史</button>`;
         else actions = '—';
         const signals = intakeSignals(item);
         const layers = showAssignmentAI ? intakeDecisionLayers(item) : null;
@@ -7259,6 +7261,34 @@
     }
   }
 
+  async function openReturnedHistoryModal(crmCustomerId) {
+    openModal('查看开发历史', 'READ ONLY', '<div class="empty">正在读取开发历史…</div>', 'returned-history-modal');
+    try {
+      const result = await api(`/api/sales-crm/accounts/${encodeURIComponent(crmCustomerId)}/history`, {
+        preserveOnForbidden: true,
+      });
+      const account = result.account || {};
+      const displayName = account.nickname || account.companyName || account.externalCustomerId;
+      openModal('查看开发历史', 'READ ONLY', `
+        <div class="returned-history-side">
+          <div class="returned-history-head">
+            <span class="pill gray">只读查看</span>
+            <h3>${esc(displayName)}</h3>
+            <p>${esc(account.externalCustomerId)} · ${esc(account.country || '地区未标注')} · ${esc(account.status || '历史客户')}</p>
+          </div>
+          <div class="timeline">${(result.timeline || []).map(event => `
+            <div class="timeline-item"><h4>${esc(timelineEventTitle(event))}</h4>
+              ${event.summary ? `<p>${esc(event.summary)}</p>` : ''}
+              <time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`).join('') || '<div class="empty">暂无开发历史</div>'}
+          </div>
+          <div class="form-actions"><button type="button" class="button secondary" data-close-modal>关闭</button></div>
+        </div>`, 'returned-history-modal');
+    } catch (error) {
+      closeModal();
+      toast(error.message);
+    }
+  }
+
   function openCustomer(customerId) {
     const account = state.data.accounts.find(item => item.id === customerId);
     if (!account) {
@@ -11575,6 +11605,11 @@
     const activityModeButton = event.target.closest('[data-activity-mode]');
     if (activityModeButton) {
       setActivityModalMode(activityModeButton.dataset.activityMode);
+      return;
+    }
+    const returnedHistory = event.target.closest('[data-returned-history]');
+    if (returnedHistory) {
+      void openReturnedHistoryModal(returnedHistory.dataset.returnedHistory);
       return;
     }
     const tab = event.target.closest('[data-notification-status]');
