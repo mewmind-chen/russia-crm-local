@@ -58,8 +58,33 @@ async function setupMismatchProfileFixture(t) {
     'INTAKE-FOREIGN', 'BATCH-TEST', 'RU-9011', 'Foreign Intake Mismatch',
     'U-OTHER', 'U-OTHER', now, 'Foreign intake mismatch', now, now,
   );
+  fx.db.prepare(`INSERT INTO customer_pool
+    (customer_id,company_name,country,city,website,industry,customer_type,products,description)
+    VALUES
+      ('RU-9010','Wu Intake Master','俄罗斯','Moscow','https://intake-wu.example',
+       '工业自动化','终端制造商',?,?),
+      ('RU-9011','Foreign Intake Master','俄罗斯','Kazan','https://intake-foreign.example',
+       '半导体','原厂','Foreign secret products','Foreign secret description')`)
+    .run(SENSITIVE_PRODUCTS, SENSITIVE_DESCRIPTION);
+  fx.db.prepare(`INSERT INTO person_candidates
+    (person_id,customer_id,full_name,title,first_found_at,created_at,updated_at)
+    VALUES ('PERSON-INTAKE-WU','RU-9010','Intake Buyer','Procurement',?,?,?)`)
+    .run(now, now, now);
+  fx.db.prepare(`INSERT INTO contact_methods
+    (contact_id,person_id,customer_id,method_type,value,normalized_value,status)
+    VALUES ('METHOD-INTAKE-WU','PERSON-INTAKE-WU','RU-9010','email',
+      'intake-buyer@example.test','intake-buyer@example.test','verified')`).run();
 
   return fx;
+}
+
+function readOnlySnapshot(fx, itemId) {
+  return {
+    accounts: Number(fx.db.prepare('SELECT COUNT(*) count FROM crm_accounts').get().count),
+    intake: fx.db.prepare(`SELECT status,assigned_owner_id,previous_owner_id,rejected_by,
+      rejected_at,return_reason,crm_customer_id FROM crm_intake_items WHERE id=?`).get(itemId),
+    audit: Number(fx.db.prepare('SELECT COUNT(*) count FROM crm_audit_log').get().count),
+  };
 }
 
 test('account mismatch profile enforces sales ownership and view-all access', async t => {
@@ -152,17 +177,100 @@ test('account mismatch profile returns the unified read-only DTO and no-store he
   assert.equal(body.recycle.reason, SENSITIVE_RECYCLE_REASON);
 });
 
-test.skip('Task 5: intake mismatch profile enforces sales ownership and view-all access', async t => {
+test('intake mismatch profile enforces sales ownership and view-all access', async t => {
   const fx = await setupMismatchProfileFixture(t);
   for (const scenario of [
-    { cookie: fx.salesCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
-    { cookie: fx.salesCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 403 },
-    { cookie: fx.managerCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
-    { cookie: fx.managerCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 200 },
+    { actor: 'sales', cookie: fx.salesCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
+    {
+      actor: 'sales', cookie: fx.salesCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 403,
+      code: 'MISMATCH_RECORD_FORBIDDEN',
+    },
+    { actor: 'manager', cookie: fx.managerCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
+    { actor: 'manager', cookie: fx.managerCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 200 },
+    { actor: 'admin', cookie: fx.adminCookie, recordKey: 'intake:INTAKE-WU', status: 200 },
+    { actor: 'admin', cookie: fx.adminCookie, recordKey: 'intake:INTAKE-FOREIGN', status: 200 },
+    {
+      actor: 'admin', cookie: fx.adminCookie, recordKey: 'intake:INTAKE-MISSING', status: 404,
+      code: 'MISMATCH_RECORD_NOT_FOUND',
+    },
   ]) {
-    const response = await fx.request(profileRoute(scenario.recordKey), { cookie: scenario.cookie });
-    assert.equal(response.status, scenario.status, await response.text());
+    await t.test(`${scenario.actor} sees ${scenario.recordKey} as ${scenario.status}`, async () => {
+      const response = await fx.request(profileRoute(scenario.recordKey), { cookie: scenario.cookie });
+      const body = await response.json();
+      assert.equal(response.status, scenario.status, `${scenario.recordKey}: ${JSON.stringify(body)}`);
+      if (scenario.code) assert.equal(body.code, scenario.code);
+    });
   }
+});
+
+test('intake mismatch profile returns the unified read-only DTO without writes', async t => {
+  const fx = await setupMismatchProfileFixture(t);
+  const before = readOnlySnapshot(fx, 'INTAKE-WU');
+
+  let response = await fx.request(profileRoute('intake:INTAKE-WU'), { cookie: fx.salesCookie });
+  let body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(Object.keys(body).sort(), [
+    'actions', 'customer', 'history', 'ok', 'profile', 'recordKey', 'recycle', 'sourceType',
+  ]);
+  assert.equal(body.ok, true);
+  assert.equal(body.recordKey, 'intake:INTAKE-WU');
+  assert.equal(body.sourceType, 'intake');
+  assert.deepEqual(Object.keys(body.customer), [
+    'accountId', 'intakeItemId', 'externalCustomerId', 'nickname', 'companyName', 'country',
+    'city', 'website', 'industry', 'customerType', 'products', 'description',
+  ]);
+  assert.equal(body.customer.accountId, '');
+  assert.equal(body.customer.intakeItemId, 'INTAKE-WU');
+  assert.equal(body.customer.externalCustomerId, 'RU-9010');
+  assert.equal(body.customer.companyName, 'Wu Intake Master');
+  assert.equal(body.customer.products, '');
+  assert.equal(body.customer.description, '');
+  assert.deepEqual(Object.keys(body.recycle), [
+    'kind', 'reason', 'previousOwnerId', 'previousOwnerName', 'recycledBy', 'recycledByName',
+    'recycledAt',
+  ]);
+  assert.equal(body.recycle.kind, 'mismatch');
+  assert.equal(body.recycle.reason, '');
+  assert.deepEqual(Object.keys(body.profile), [
+    'customerPool', 'customers', 'reconJobs', 'reconResults', 'contactReconJobs', 'people',
+    'accountContacts',
+  ]);
+  assert.deepEqual(Object.keys(body.history), [
+    'activities', 'rfqs', 'quotes', 'orders', 'timeline', 'evaluations', 'auditLog',
+  ]);
+  for (const rows of [...Object.values(body.profile), ...Object.values(body.history)]) {
+    assert.equal(Array.isArray(rows), true);
+  }
+  assert.equal(body.profile.customerPool.length, 1);
+  assert.equal(body.profile.customerPool[0].customerId, 'RU-9010');
+  assert.deepEqual(body.profile.people, []);
+  assert.deepEqual(body.profile.accountContacts, []);
+  assert.deepEqual(body.history, {
+    activities: [], rfqs: [], quotes: [], orders: [], timeline: [], evaluations: [], auditLog: [],
+  });
+  assert.deepEqual(body.actions, []);
+
+  response = await fx.request(profileRoute('intake:INTAKE-WU'), { cookie: fx.managerCookie });
+  body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.customer.products, SENSITIVE_PRODUCTS);
+  assert.equal(body.customer.description, SENSITIVE_DESCRIPTION);
+  assert.equal(body.recycle.reason, 'Wu intake mismatch');
+  assert.equal(body.profile.people.length, 1);
+  assert.equal(body.profile.accountContacts.length, 1);
+  assert.deepEqual(body.actions, ['restore']);
+
+  response = await fx.request(profileRoute('intake:INTAKE-WU'), { cookie: fx.adminCookie });
+  body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.customer.products, SENSITIVE_PRODUCTS);
+  assert.equal(body.customer.description, SENSITIVE_DESCRIPTION);
+  assert.equal(body.recycle.reason, 'Wu intake mismatch');
+  assert.deepEqual(body.actions, ['restore']);
+
+  assert.deepEqual(readOnlySnapshot(fx, 'INTAKE-WU'), before);
 });
 
 test('shared mismatch scopes preserve account and pre-CRM visibility predicates', () => {
