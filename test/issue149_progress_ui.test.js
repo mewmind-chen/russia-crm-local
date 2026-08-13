@@ -49,15 +49,18 @@ test('record progress modal uses the confirmed compact wording and fields', () =
     '进展内容',
     '下一步计划',
     '下次跟进时间',
-    '需要经理协助',
-    '勾选后提醒销售经理关注并协助本次进展',
     '保存进展',
   ]) assert.match(modal, new RegExp(copy));
   assert.match(app, /客户搜索/);
   assert.doesNotMatch(modal, /记录客户动作|本次动作|简短记录|下一步动作|计划时间|这是重点节点，需要管理者介入|保存并更新阶段/);
   assert.doesNotMatch(modal, /<label[^>]*>渠道|name="channel"[^>]*type="(?:text|search)"|<select[^>]*name="channel"/);
   assert.match(modal, /name="summary"[^>]*(?:rows="2"[^>]*|data-[^>]*rows)/);
-  assert.match(modal, /name="managerRequired"[^>]*type="checkbox"|type="checkbox"[^>]*name="managerRequired"/);
+  assert.match(modal, /data-activity-mode="progress"/);
+  assert.match(modal, /data-activity-mode="plan"/);
+  assert.match(modal, /data-activity-mode="noPlan"/);
+  assert.match(modal, /data-activity-mode="manager"/);
+  assert.match(modal, /不会生成“发送邮件”等虚假进展/);
+  assert.match(app, /保存计划/);
 });
 
 test('real admins keep a reaction settings entry when no active options remain', () => {
@@ -92,7 +95,7 @@ test('customer picker searches with q, renders nickname first and pins a replace
   assert.match(app, /更换客户/);
   assert.match(app, /activity-customer-selected|progress-customer-summary/);
   assert.match(app, /openActivityModal\(state\.selectedCustomerId\)/);
-  assert.match(app, /openActivityModal\(customerId\s*=\s*['"]{2}\)/);
+  assert.match(app, /openActivityModal\(customerId\s*=\s*['"]{2},\s*initialMode\s*=\s*['"]progress['"]/);
   assert.match(app, /externalCustomerId \|\| customer\?\.external_customer_id \|\| customer\?\.id/);
   assert.match(css, /\.(?:activity|progress)-customer-results\{[^}]*position:absolute/);
 });
@@ -136,7 +139,7 @@ test('RFQ details live in a separate compact second step and save through one ac
   assert.match(app, /name="expectedValue"/);
   assert.match(app, /name="completeness"/);
   assert.match(app, /name="productCategory"/);
-  const activityWrites = app.match(/api\/sales-crm\/activities/g) || [];
+  const activityWrites = app.match(/api\/sales-crm\/activities'/g) || [];
   assert.equal(activityWrites.length, 1, 'all progress paths should converge on one atomic activity write');
   assert.match(main, /name="idempotencyKey"/);
   assert.match(app, /state\.activitySubmitting/);

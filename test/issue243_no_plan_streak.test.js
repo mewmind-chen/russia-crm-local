@@ -196,11 +196,11 @@ test('Issue 243 a real plan resets the streak and a new streak pushes again', as
   assert.equal(noPlanNotifications(fx, 'CRM-OWN').length, firstPushCount * 2, 'new streak should push again');
 });
 
-test('Issue 243 frontend exposes no-plan checkbox, clears plan fields and renders 暂无计划', () => {
-  assert.match(app, /name="noPlan"/);
+test('Issue 243 frontend exposes the no-plan mode, requires a reason and renders 暂无计划', () => {
+  assert.match(app, /data-activity-mode="noPlan"/);
+  assert.match(app, /name="noPlanReason"/);
+  assert.match(app, /请填写暂无计划的原因/);
   assert.match(app, /暂无计划/);
-  assert.match(app, /input\[name="noPlan"\]/);
-  assert.match(app, /field\.value = ''/);
   assert.match(app, /下一步：<\/strong>暂无计划/);
   assert.match(app, /activity\.noPlan \|\| event\.no_plan/);
 });

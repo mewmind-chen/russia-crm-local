@@ -4280,6 +4280,7 @@
       next_plan: 'next-plan',
       complete_manager_assistance: 'manager-assistance',
       manager_assistance: 'manager-assistance',
+      confirm_manager_assistance: 'manager-receipt',
       record_quote: 'quote',
       quote: 'quote',
       record_activity: 'activity',
@@ -4289,6 +4290,7 @@
     const code = String(item?.code || '').toUpperCase();
     if (['UNCLAIMED', 'UNCLAIMED_LEAD'].includes(code)) return 'overdue-lead';
     if (code === 'NO_NEXT') return 'next-plan';
+    if (code === 'NO_NEXT_DEFERRED') return 'deferred-plan';
     if (code === 'MANAGER_NEEDED') return 'manager-assistance';
     if (code === 'RFQ_UNQUOTED') return 'quote';
     if ([
@@ -4359,6 +4361,12 @@
         ['complete_manager_assistance'],
         ['admin', 'manager'].includes(role) && can('view_team'),
       ),
+      'manager-receipt': todayTaskActionAllowed(
+        item,
+        ['confirm_manager_assistance', 'add_next_plan'],
+        can('record_activity'),
+      ),
+      'deferred-plan': todayTaskActionAllowed(item, ['add_next_plan'], can('record_activity')),
       quote: todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote')),
       activity: todayTaskActionAllowed(item, ['record_activity', 'activity'], can('record_activity')),
     }[kind];
@@ -4376,6 +4384,8 @@
       'overdue-lead': '处理超时线索',
       'next-plan': '立即补计划',
       'manager-assistance': '处理协助请求',
+      'manager-receipt': '确认并制定下一步计划',
+      'deferred-plan': '设置复查时间',
     };
     return `<button class="text-button" type="button" data-today-task-action="${esc(kind)}" data-today-task-id="${esc(item.id)}">${esc(labels[kind] || item.action || '立即处理')} →</button>`;
   }
@@ -8803,7 +8813,17 @@
     if (!item) return toast('待办已更新，请刷新后重试');
     const kind = todayTaskActionKind(item);
     if (kind === 'overdue-lead') return openOverdueLeadTaskModal(item);
-    if (kind === 'next-plan') return openNextPlanTaskModal(item);
+    if (kind === 'deferred-plan') return openNextPlanTaskModal(item);
+    if (kind === 'next-plan') return openActivityModal(item.customerId, 'plan', {
+      todayTaskTitle: item.title,
+      todayTaskAction: '只更新下一步计划，不虚构客户新进展',
+      todayTaskActionType: 'add_next_plan',
+    });
+    if (kind === 'manager-receipt') return openActivityModal(item.customerId, 'plan', {
+      todayTaskTitle: '主管已回复，待销售确认并制定下一步计划',
+      todayTaskAction: item.managerReply?.result || '保存下一步计划后完成协助闭环',
+      todayTaskActionType: 'confirm_manager_assistance',
+    });
     if (kind === 'manager-assistance') return openManagerAssistanceTaskModal(item);
     if (kind === 'quote') {
       if (!todayTaskActionAllowed(item, ['record_quote', 'quote'], can('record_quote'))) {
@@ -9158,8 +9178,33 @@
     resizeActivitySummary(form.elements.summary);
   }
 
-  async function openActivityModal(customerId = '') {
-    const options = openActivityModal.todayTaskContext || {};
+  function setActivityModalMode(mode) {
+    const form = $('#activityForm');
+    if (!form || !['progress', 'plan', 'noPlan', 'manager'].includes(mode)) return;
+    state.activityModalMode = mode;
+    form.elements.activityMode.value = mode;
+    $$('#activityModeTabs [data-activity-mode]').forEach(button => {
+      const selected = button.dataset.activityMode === mode;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+    $('#activityProgressFields')?.classList.toggle('hidden', mode !== 'progress');
+    $('#activityPlanFields')?.classList.toggle('hidden', mode !== 'plan');
+    $('#activityNoPlanFields')?.classList.toggle('hidden', mode !== 'noPlan');
+    $('#activityManagerFields')?.classList.toggle('hidden', mode !== 'manager');
+    const submit = $('#activitySubmit');
+    if (submit) {
+      submit.textContent = {
+        progress: '保存进展',
+        plan: '保存计划',
+        noPlan: '保存暂无计划状态',
+        manager: '提交主管协助请求',
+      }[mode];
+    }
+  }
+
+  async function openActivityModal(customerId = '', initialMode = 'progress', options = {}) {
+    const todayOptions = options.todayTaskActionType ? options : (openActivityModal.todayTaskContext || {});
     openActivityModal.todayTaskContext = null;
     if (!can('record_activity')) return toast('当前账号没有记录进展权限');
     try {
@@ -9173,51 +9218,71 @@
     state.activityCustomerActiveIndex = -1;
     state.activityProgressType = 'email';
     state.activityType = 'email';
+    const initialPlan = account?.next_action || '';
+    const initialPlanAt = account?.next_action_at ? apiTime(account.next_action_at) : dateInput(2);
     openModal('记录新进展', '选择客户后，记录本次进展与下一步计划', `
       <form id="activityForm" class="activity-progress-form">
         <input type="hidden" name="customerId" value="${esc(state.activitySelectedCustomer?.id || '')}">
         <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
-        ${options.todayTaskTitle ? '<input type="hidden" name="todayTaskSource" value="alerts">' : ''}
+        <input type="hidden" name="activityMode" value="${esc(initialMode)}">
+        ${todayOptions.todayTaskTitle ? '<input type="hidden" name="todayTaskSource" value="alerts">' : ''}
+        ${todayOptions.todayTaskActionType ? `<input type="hidden" name="todayTaskActionType" value="${esc(todayOptions.todayTaskActionType)}">` : ''}
         <input type="hidden" name="activityType" value="email">
         <input type="hidden" name="channel" value="email">
         <input type="hidden" name="outcome" value="">
         <input type="hidden" name="proposalJobId" value="">
         <section id="activityMainStep" class="activity-main-step">
-          ${options.todayTaskTitle ? `<div class="today-task-context"><strong>${esc(options.todayTaskTitle)}</strong><span>${esc(options.todayTaskAction || '请记录完成该待办的真实客户进展')}</span></div>` : ''}
+          ${todayOptions.todayTaskTitle ? `<div class="today-task-context"><strong>${esc(todayOptions.todayTaskTitle)}</strong><span>${esc(todayOptions.todayTaskAction || '请记录完成该待办的真实客户进展')}</span></div>` : ''}
+          <div id="activityModeTabs" class="segmented activity-mode-tabs" role="tablist" aria-label="进展记录模式">
+            <button class="active" type="button" role="tab" data-activity-mode="progress">记录新进展</button>
+            <button type="button" role="tab" data-activity-mode="plan">只更新下一步计划</button>
+            <button type="button" role="tab" data-activity-mode="noPlan">暂无计划</button>
+            <button type="button" role="tab" data-activity-mode="manager">请求主管协助</button>
+          </div>
           <div id="activityCustomerPicker" class="activity-customer-picker"></div>
-          <div class="activity-primary-grid">
-            <div class="activity-field">
-              <label for="activityProgressType">本次进展</label>
-              <select id="activityProgressType" name="progressType" required>
-                ${activityProgressOptions.map(item => `<option value="${esc(item.key)}">${esc(item.label)}</option>`).join('')}
-              </select>
+          <section id="activityProgressFields">
+            <div class="activity-primary-grid">
+              <div class="activity-field">
+                <label for="activityProgressType">本次进展</label>
+                <select id="activityProgressType" name="progressType" required>
+                  ${activityProgressOptions.map(item => `<option value="${esc(item.key)}">${esc(item.label)}</option>`).join('')}
+                </select>
+              </div>
+              ${activityReactionField()}
             </div>
-            ${activityReactionField()}
-          </div>
-          <label class="activity-summary-field">进展内容
-            <textarea id="activitySummary" name="summary" rows="2" maxlength="4000" placeholder="记录客户反馈、需求或当前障碍"></textarea>
-          </label>
-          <div class="activity-primary-grid">
-            <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
-            <label>下次跟进时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(2)}"></label>
-          </div>
-          <label class="activity-no-plan-check">
-            <input name="noPlan" type="checkbox">
-            <span><strong>暂无计划</strong><small>勾选后清空下一步计划与时间，连续 3 次将提醒经理介入</small></span>
-          </label>
-          <label class="activity-manager-check">
-            <input name="managerRequired" type="checkbox">
-            <span><strong>需要经理协助</strong><small>勾选后提醒销售经理关注并协助本次进展</small></span>
-          </label>
-          ${customerAIEnabled() && can('use_ai_assistant') ? `<details class="action-proposal-details">
-            <summary>使用 AI 整理本次进展</summary>
-            <section class="action-proposal-compose">
-              <div><strong>AI 整理进展</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
-              <textarea id="actionProposalInput" maxlength="4000" placeholder="例如：客户通过邮件回复，对 STM32 有兴趣，本周五整理 BOM，下周一上午跟进。"></textarea>
-              <button id="actionProposalGenerate" class="button secondary" type="button">整理为进展草稿</button>
-              <p id="actionProposalStatus" class="action-proposal-status" role="status" aria-live="polite"></p>
-            </section>
-          </details>` : ''}
+            <label class="activity-summary-field">进展内容
+              <textarea id="activitySummary" name="summary" rows="2" maxlength="4000" placeholder="记录客户反馈、需求或当前障碍"></textarea>
+            </label>
+            <div class="activity-primary-grid">
+              <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
+              <label>下次跟进时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(2)}"></label>
+            </div>
+            ${customerAIEnabled() && can('use_ai_assistant') ? `<details class="action-proposal-details">
+              <summary>使用 AI 整理本次进展</summary>
+              <section class="action-proposal-compose">
+                <div><strong>AI 整理进展</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
+                <textarea id="actionProposalInput" maxlength="4000" placeholder="例如：客户通过邮件回复，对 STM32 有兴趣，本周五整理 BOM，下周一上午跟进。"></textarea>
+                <button id="actionProposalGenerate" class="button secondary" type="button">整理为进展草稿</button>
+                <p id="actionProposalStatus" class="action-proposal-status" role="status" aria-live="polite"></p>
+              </section>
+            </details>` : ''}
+          </section>
+          <section id="activityPlanFields" class="hidden form-grid activity-plan-fields">
+            <label class="span-2">下一步计划<input name="planNextAction" maxlength="1000" placeholder="例如：联系客户采购负责人，确认是否有新项目"></label>
+            <label class="span-2">下次跟进时间<input name="planNextActionAt" type="datetime-local" data-future-datetime value="${initialPlan ? esc(initialPlanAt) : dateInput(1)}"></label>
+            <label class="span-2">本次说明（选填）<textarea name="planNote" rows="2" maxlength="1000" placeholder="目前没有发生新的客户动作，只补充下一步安排"></textarea></label>
+            <p class="span-2 subtle activity-plan-hint">不会生成“发送邮件”等虚假进展。</p>
+          </section>
+          <section id="activityNoPlanFields" class="hidden form-grid activity-no-plan-fields">
+            <label class="span-2">原因<textarea name="noPlanReason" rows="3" maxlength="1000" placeholder="说明当前为什么没有下一步计划"></textarea></label>
+            <p class="span-2 subtle activity-plan-hint">将保存为真实状态，连续 3 次暂无计划会提醒经理介入。</p>
+          </section>
+          <section id="activityManagerFields" class="hidden form-grid activity-manager-fields">
+            <label class="span-2">申请原因<textarea name="managerReason" rows="3" maxlength="1000" placeholder="例如：已发邮件且社媒无回应，目前没有思路"></textarea></label>
+            <label class="span-2">销售原计划<input name="managerNextAction" maxlength="1000" value="${esc(initialPlan)}" placeholder="希望主管协助查询联系人或给出对接建议"></label>
+            <label class="span-2">原计划跟进时间<input name="managerNextActionAt" type="datetime-local" data-future-datetime value="${account?.next_action_at ? esc(initialPlanAt) : ''}"></label>
+            <p class="span-2 subtle activity-plan-hint">提交后会生成主管待办，包含客户、申请人、申请原因、原计划、联系人、处理期限和完结条件。</p>
+          </section>
           <div class="form-actions activity-form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="activitySubmit" class="button primary">保存进展</button></div>
         </section>
         <section id="activityRfqStep" class="activity-rfq-step hidden">
@@ -9233,6 +9298,7 @@
         </section>
       </form>`, 'activity-progress-modal');
     renderActivityCustomerPicker({ focusSearch: !state.activitySelectedCustomer });
+    setActivityModalMode(initialMode);
     setProgressType('email');
     resizeActivitySummary($('#activitySummary'));
     constrainFutureDateTimes($('#activityForm'));
@@ -10017,10 +10083,72 @@
       } else if (form.id === 'activityForm') {
         if (state.activitySubmitting) return;
         const payload = formPayload(form);
+        const mode = payload.activityMode || 'progress';
         if (!state.activitySelectedCustomer || payload.customerId !== state.activitySelectedCustomer.id) {
           throw new Error('请先搜索并选择客户');
         }
-        if (payload.progressType === 'rfq' && $('#activityRfqStep')?.classList.contains('hidden')) {
+        const fromTodayTask = payload.todayTaskSource === 'alerts';
+        const todayTaskActionType = payload.todayTaskActionType || '';
+        delete payload.todayTaskSource;
+        delete payload.todayTaskActionType;
+        delete payload.activityMode;
+        if (mode === 'plan') {
+          if (!String(payload.planNextAction || '').trim()) throw new Error('请填写下一步计划');
+          if (!payload.planNextActionAt) throw new Error('请选择下次跟进时间');
+          if (!validateFutureDateTime(form.elements.planNextActionAt)) throw new Error('下一步时间必须晚于当前时间');
+          const nextAction = String(payload.planNextAction || '').trim();
+          const nextActionAt = apiTime(payload.planNextActionAt);
+          const note = String(payload.planNote || '').trim();
+          if (fromTodayTask && ['add_next_plan', 'confirm_manager_assistance'].includes(todayTaskActionType)) {
+            await submitTodayTaskAction(form, {
+              actionType: todayTaskActionType,
+              customerId: payload.customerId,
+              nextAction,
+              nextActionAt,
+              idempotencyKey: payload.idempotencyKey,
+            }, todayTaskActionType === 'confirm_manager_assistance'
+              ? '回执已确认，主管协助闭环完成'
+              : '下一步计划已保存，待办已更新');
+          } else {
+            await api('/api/sales-crm/activities/plan-only', {
+              method: 'POST',
+              body: JSON.stringify({
+                customerId: payload.customerId,
+                nextAction,
+                nextActionAt,
+                note,
+                idempotencyKey: payload.idempotencyKey,
+              }),
+            });
+            await refresh('下一步计划已保存，未生成客户进展事件');
+          }
+          refreshDrawerNextActionTime();
+          return;
+        }
+        if (mode === 'noPlan') {
+          if (!String(payload.noPlanReason || '').trim()) throw new Error('请填写暂无计划的原因');
+          payload.summary = String(payload.noPlanReason || '').trim();
+          payload.noPlan = true;
+          payload.nextAction = '';
+          payload.nextActionAt = '';
+          payload.activityType = 'note';
+          payload.channel = '';
+          delete payload.progressType;
+          delete payload.reactionOptionId;
+        }
+        if (mode === 'manager') {
+          if (!String(payload.managerReason || '').trim()) throw new Error('请填写申请原因');
+          payload.summary = String(payload.managerReason || '').trim();
+          payload.managerRequired = true;
+          payload.activityType = 'note';
+          payload.channel = '';
+          payload.nextAction = String(payload.managerNextAction || '').trim();
+          payload.nextActionAt = payload.managerNextActionAt ? apiTime(payload.managerNextActionAt) : '';
+          if (!payload.nextAction) payload.nextActionAt = '';
+          delete payload.progressType;
+          delete payload.reactionOptionId;
+        }
+        if (mode === 'progress' && payload.progressType === 'rfq' && $('#activityRfqStep')?.classList.contains('hidden')) {
           showActivityRfqStep(true);
           return;
         }
@@ -10028,8 +10156,6 @@
         state.activitySubmitting = true;
         submitButtons.forEach(button => { button.disabled = true; });
         try {
-          const fromTodayTask = payload.todayTaskSource === 'alerts';
-          delete payload.todayTaskSource;
           if (payload.noPlan) {
             payload.nextAction = '';
             payload.nextActionAt = '';
@@ -10051,7 +10177,9 @@
           const stageChanged = result.stageChanged ?? Boolean(stageBefore && stageAfter && stageBefore !== stageAfter);
           const message = stageChanged
             ? `进展已记录，客户阶段已更新为“${stageLabel(stageAfter)}”`
-            : '进展已记录，客户阶段未发生变化';
+            : mode === 'noPlan' ? '暂无计划已记录为真实状态'
+              : mode === 'manager' ? '主管协助请求已提交'
+                : '进展已记录，客户阶段未发生变化';
           if (fromTodayTask) await refreshTodayTasksAfterAction(message);
           else await refresh(message);
           refreshDrawerNextActionTime();
@@ -11269,18 +11397,6 @@
   });
 
   document.addEventListener('change', event => {
-    if (event.target.matches('#activityForm input[name="noPlan"]')) {
-      const form = event.target.closest('#activityForm');
-      const checked = event.target.checked;
-      ['nextAction', 'nextActionAt'].forEach(name => {
-        const field = form?.elements?.[name];
-        if (!field) return;
-        field.value = '';
-        field.disabled = checked;
-        field.required = !checked;
-        field.setAttribute('aria-disabled', String(checked));
-      });
-    }
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
     if (event.target.closest('#managerTaskSettingsForm')) {
       event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
@@ -11349,6 +11465,11 @@
   });
 
   document.addEventListener('click', event => {
+    const activityModeButton = event.target.closest('[data-activity-mode]');
+    if (activityModeButton) {
+      setActivityModalMode(activityModeButton.dataset.activityMode);
+      return;
+    }
     const tab = event.target.closest('[data-notification-status]');
     if (tab) {
       const controller = state.authorizedBusinessLists.notifications.filterController;
