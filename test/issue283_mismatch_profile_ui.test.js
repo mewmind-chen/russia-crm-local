@@ -83,16 +83,17 @@ function customerDrawerHarness() {
   const renderMismatchRecordDrawer = () => renders.push(state.mismatchRecordDetail?.recordKey || 'none');
   const renderDrawer = () => renders.push(`drawer:${state.drawerOwner}`);
   const toast = message => toasts.push(message);
+  const stopDrawerNextActionTimer = () => {};
   const claimCustomerDrawer = Function(
-    'state', `return (${topLevelFunction('claimCustomerDrawer')});`,
-  )(state);
+    'state', 'stopDrawerNextActionTimer', `return (${topLevelFunction('claimCustomerDrawer')});`,
+  )(state, stopDrawerNextActionTimer);
   const isCustomerDrawerRequestCurrent = Function(
     'state', '$', `return (${topLevelFunction('isCustomerDrawerRequestCurrent')});`,
   )(state, $);
   const close = Function(
-    'state', '$', 'resetDrawerActions',
+    'state', '$', 'resetDrawerActions', 'stopDrawerNextActionTimer',
     `return (${topLevelFunction('closeDrawer')});`,
-  )(state, $, resetDrawerActions);
+  )(state, $, resetDrawerActions, stopDrawerNextActionTimer);
   const openMismatch = Function(
     'state', 'api', '$', 'resetDrawerActions', 'renderMismatchRecordDrawer', 'toast',
     'claimCustomerDrawer', 'isCustomerDrawerRequestCurrent', 'closeDrawer',
@@ -179,9 +180,9 @@ function mismatchRendererHarness(payload, expanded = false) {
   return { state, elements, html: elements['#drawerContent'].innerHTML, render };
 }
 
-test('mismatch profile assets use the Issue 283 production cache token', () => {
-  assert.match(shell, /sales-assets\/app\.css\?v=20260813-issue283-mismatch-profile/);
-  assert.match(shell, /sales-assets\/app\.js\?v=20260813-issue283-mismatch-profile/);
+test('mismatch profile assets use the current production cache token', () => {
+  assert.match(shell, /sales-assets\/app\.css\?v=20260813-issues285-287-customer-drawer/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260813-issues285-287-customer-drawer/);
 });
 
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {

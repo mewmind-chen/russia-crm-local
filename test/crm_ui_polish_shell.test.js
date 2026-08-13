@@ -81,6 +81,23 @@ test('UI formatter normalizes websites, products, and statuses', () => {
     href: 'https://www.example.com/path?q=1',
     label: 'example.com',
   });
+  assert.deepEqual(format.website('smcbr.com.br/path'), {
+    href: 'https://smcbr.com.br/path',
+    label: 'smcbr.com.br',
+  });
+  assert.deepEqual(format.website('http://www.example.com/path?ref=crm'), {
+    href: 'http://www.example.com/path?ref=crm',
+    label: 'example.com',
+  });
+  for (const rejected of [
+    '',
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'ftp://example.com/file',
+    'https://',
+    'https://user:pass@example.com/path',
+    'https://example.com@evil.com/path',
+  ]) assert.equal(format.website(rejected), null, `must reject unsafe website: ${rejected}`);
   assert.deepEqual(format.products('["MCU","FPGA","电源","连接器"]'), {
     items: ['MCU', 'FPGA', '电源'],
     overflow: 1,
