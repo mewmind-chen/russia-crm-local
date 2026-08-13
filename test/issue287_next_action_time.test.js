@@ -49,10 +49,17 @@ test('does not infer relative time for legacy, empty, or invalid plan timestamps
 });
 
 test('loads the browser countdown module before the CRM app', () => {
+  const cacheToken = '20260813-issues285-287-customer-drawer';
   const moduleIndex = htmlSource.indexOf('/sales-assets/next-action-time.js?v=');
   const appIndex = htmlSource.indexOf('/sales-assets/app.js?v=');
   assert.ok(moduleIndex >= 0, 'next-action-time browser module must be loaded');
   assert.ok(moduleIndex < appIndex, 'next-action-time browser module must load before app.js');
+  for (const asset of ['app.css', 'ui-format.js', 'next-action-time.js', 'app.js']) {
+    assert.ok(
+      htmlSource.includes(`/sales-assets/${asset}?v=${cacheToken}`),
+      `${asset} must use the current customer-drawer cache token`,
+    );
+  }
   assert.match(appSource, /const nextActionTime = window\.TradePulseNextActionTime;/);
   assert.match(appSource, /drawerNextActionTimer: null/);
 });
