@@ -2702,6 +2702,8 @@
         else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
           ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看 CRM 客户</button>`
           : '—';
+        else if (item.duplicate_state === 'exact' && item.crm_customer_id) actions =
+          `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看已关联客户</button>`;
         else if (item.status === 'returned' && item.crm_customer_id) actions =
           `<button class="text-button" type="button" data-returned-history="${esc(item.crm_customer_id)}">查看开发历史</button>`;
         else actions = '—';
