@@ -112,7 +112,7 @@ test('sales UI gates assignment decisions by role and AI subfeatures gate cached
   assert.match(app, /const showAssignmentAI = showAI && !salesView;/);
   assert.match(app, /salesView \? '负责人' : '负责人 \/ 阻断原因'/);
   assert.match(app, /showAssignmentDecisions \? `<section class="decision-review">/);
-  assert.match(app, /showAssignmentDecisions \? `<div><span>分配依据 \/ 阻断原因/);
+  assert.match(app, /const layers = showAssignmentDecisions \? intakeDecisionLayers\(item\) : null/);
 
   assert.match(app, /function renderSalesPack\(payload\) \{\s*if \(!salesPackEnabled\(\)\) return '';/);
   assert.match(app, /function renderCustomerEnrichment\(\) \{\s*if \(!customerEnrichmentEnabled\(\)\) return '';/);

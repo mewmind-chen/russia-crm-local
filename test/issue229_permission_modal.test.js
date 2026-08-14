@@ -55,7 +55,8 @@ test('Issue 229 modal uses one switch per permission with restore-default', () =
   assert.match(app, /将清除[^<]*的个人权限例外，之后自动跟随/);
   assert.match(app, /权限组本身不会改变/);
   assert.match(app, /permission-modal-wide/);
-  assert.match(css, /\.permission-override-list\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.permission-override-list\{display:block;min-height:0\}/);
+  assert.match(css, /\.permission-switch-panel\{max-height:100%;overflow:auto/);
   assert.match(css, /\.permission-switch-row input\[type="checkbox"\]/);
-  assert.match(css, /@media\(max-width:700px\)\{\.permission-override-list\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(css, /\.permission-modal-wide\{[^}]*overflow:hidden/);
 });

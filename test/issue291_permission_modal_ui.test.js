@@ -38,4 +38,14 @@ test('restore default uses an explicit confirm dialog with the required copy', (
 test('permission switch grid is compact two to three columns', () => {
   assert.match(css, /\.permission-switch-grid/);
   assert.match(css, /repeat\(/);
+  assert.match(css, /\.permission-override-list\{display:block/);
+  assert.match(css, /\.permission-switch-panel\{max-height:/);
+  assert.match(css, /\.permission-switch-panel\{[^}]*overflow:auto/);
+});
+
+test('module permissions do not render duplicate or retired navigation entries', () => {
+  const editor = section(app, 'const PERMISSION_CATEGORIES', 'function permissionCategoryMarkup');
+  assert.doesNotMatch(editor, /'view_development'/);
+  assert.doesNotMatch(editor, /'view_pool'/);
+  assert.equal((editor.match(/'view_intake'/g) || []).length, 1);
 });

@@ -144,3 +144,32 @@ test('manager assistance alert carries original plan, contacts and deadline into
   assert.equal(alert.managerRequest.contacts[0].name, 'Ivan');
   assert.match(alert.managerRequest.dueAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
 });
+
+test('manager can open an assistance task backed only by an intake customer', async t => {
+  const fx = await fixtures.adminFixture({ permissions: { resolve_manager_tasks: true } });
+  t.after(() => fx.close());
+  const batch = fx.db.prepare('SELECT id FROM crm_intake_batches ORDER BY created_at LIMIT 1').get();
+  const at = '2026-08-13 13:50:00';
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,created_at,updated_at)
+    VALUES ('INTAKE-291',?,'RU-0436','JSC 机电产品工厂','assigned','U-OTHER',?,?)`)
+    .run(batch.id, at, at);
+  fx.db.prepare(`INSERT INTO crm_manager_tasks
+    (id,idempotency_key,customer_id,reason,status,actor_id_snapshot,owner_id_snapshot,
+     recipient_ids_json,evidence_json,completion_condition,settings_version,
+     threshold_snapshot_json,evaluated_at,triggered_at,due_at,result_json,created_at,updated_at)
+    VALUES ('MT-291','issue291-intake-task','RU-0436','manager_assistance','open',
+      'U-OTHER','U-OTHER','["U-ADMIN"]','{"requestReason":"需要协助"}',
+      '销售确认回执并保存下一步计划',1,'{}',?,?,?,'{}',?,?)`)
+    .run(at, at, '2026-08-16 13:50:00', at, at);
+
+  const response = await fx.request('/api/sales-crm/manager-tasks/MT-291', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = await response.json();
+  assert.equal(body.account.externalCustomerId, 'RU-0436');
+  assert.equal(body.account.companyName, 'JSC 机电产品工厂');
+  assert.equal(body.account.sourceType, 'intake');
+  assert.deepEqual(body.risk.history, []);
+});

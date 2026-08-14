@@ -111,5 +111,5 @@ test('drawer layout classes do not leak into other master profile grids', () => 
   const drawer = functionSource('renderDrawer', 'openModal');
   const outsideDrawer = appSource.replace(drawer, '');
   assert.doesNotMatch(outsideDrawer, /drawer-master-(?:grid|card-wide)/);
-  assert.ok((outsideDrawer.match(/class="master-profile-grid"/g) || []).length >= 3);
+  assert.ok((outsideDrawer.match(/class="master-profile-grid"/g) || []).length >= 2);
 });

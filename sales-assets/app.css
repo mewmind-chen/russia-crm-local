@@ -234,7 +234,7 @@ button.metric.alert{background:var(--danger-subtle)}
 .user-row-actions .text-button:hover{background:var(--brand-subtle)}
 .current-account-label{display:inline-flex;align-items:center;min-height:32px;padding:4px 8px;color:var(--text-secondary);font-size:11px;white-space:nowrap}
 .access-governance-panel .assistant-runtime-panel,.access-workspace-panel>.assistant-runtime-panel{margin:0;padding:16px 18px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-panel)}
-.permission-override-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:62vh;overflow:auto;padding-right:4px}
+.permission-override-list{display:block;min-height:0}
 .permission-override-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .permission-override-row strong{font-size:12px}
 .permission-override-row small{display:block;color:var(--muted);margin-top:3px;font-size:10px}
@@ -247,8 +247,9 @@ button.metric.alert{background:var(--danger-subtle)}
 .permission-switch-row input[type="checkbox"]:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .permission-override-user{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
 .permission-override-user .button{flex:none}
-.permission-modal-wide{width:min(960px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
-@media(max-width:700px){.permission-override-list{grid-template-columns:minmax(0,1fr)}}
+.permission-modal-wide{width:min(960px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:hidden}
+.permission-modal-wide .modal-body{min-height:0;overflow:hidden}
+.permission-modal-wide #permissionOverrideForm{height:min(720px,calc(100dvh - 125px));grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
 .permission-editor fieldset{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 10px}
 .permission-editor legend{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;padding:0 6px}
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
@@ -754,6 +755,8 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .manager-task-card h3,.manager-metric-card h3,.manager-risk-card h3{margin:0;font-size:13px;line-height:1.45}
 .manager-task-card p,.manager-metric-card p,.manager-risk-card p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.55}
 .manager-task-fact{display:grid;gap:3px}
+.manager-task-dates dd{display:grid;gap:3px}
+.manager-task-dates small{display:block;color:var(--muted);font-size:9px}
 .manager-task-fact span,.manager-metric-label,.manager-risk-label{color:var(--muted);font-size:10px;font-weight:700}
 .manager-task-fact strong{font-size:11px;font-weight:700}
 .manager-task-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}
@@ -975,6 +978,8 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .permission-category-tabs button{padding:8px 12px;border-radius:8px}
 .permission-category-tabs button.active{color:#fff;background:var(--accent,#2563eb)}
 .permission-switch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.permission-switch-panel{max-height:100%;overflow:auto;overscroll-behavior:contain;padding-right:4px}
+.permission-switch-panel.hidden{display:none}
 @media (min-width:900px){.permission-switch-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .permission-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 

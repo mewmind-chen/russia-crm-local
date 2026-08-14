@@ -410,13 +410,11 @@ test('expanded mismatch drawer renders authorized profile and history arrays fro
   ]) assert.match(harness.html, new RegExp(copy));
 });
 
-test('mismatch drawer exposes actions only from the exact server whitelist', () => {
+test('mismatch detail drawer remains read-only even when list actions are authorized', () => {
   const render = topLevelFunction('renderMismatchRecordDrawer');
-  assert.match(render, /new Set\(Array\.isArray\(detail\.actions\) \? detail\.actions : \[\]\)/);
-  assert.doesNotMatch(render, /state\.data\.user|can\(/);
+  assert.doesNotMatch(render, /detail\.actions|state\.data\.user|can\(/);
   const account = mismatchRendererHarness(mismatchPayload({ actions: ['reassign'] })).html;
-  assert.match(account, /data-reassign-customer="CRM-A"/);
-  assert.match(account, /data-mismatch-owner="CRM-A"/);
+  assert.doesNotMatch(account, /data-reassign-customer|data-mismatch-owner/);
   assert.doesNotMatch(account, /data-restore-mismatch/);
 
   const intake = mismatchRendererHarness(mismatchPayload({
@@ -424,8 +422,7 @@ test('mismatch drawer exposes actions only from the exact server whitelist', () 
     customer: { ...mismatchPayload().customer, accountId: '', intakeItemId: 'INTAKE-A' },
     actions: ['restore'],
   })).html;
-  assert.match(intake, /data-restore-mismatch="intake:INTAKE-A"/);
-  assert.doesNotMatch(intake, /data-reassign-customer/);
+  assert.doesNotMatch(intake, /data-restore-mismatch|data-reassign-customer/);
 
   const none = mismatchRendererHarness(mismatchPayload({ actions: [] })).html;
   assert.doesNotMatch(none, /data-(?:restore-mismatch|reassign-customer)/);

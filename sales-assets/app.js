@@ -2562,9 +2562,11 @@
       intakeHeaders,
       items.map(item => {
         let actions = '';
-        if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
+        if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
+        else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
-        else if (!salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
+        else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
+        else if (!salesView && item.status === 'assigned') actions = '<span class="pill amber">管理员确认中</span>';
         else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
           ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看 CRM 客户</button>`
           : '—';
@@ -3988,7 +3990,6 @@
     const profile = mismatchSafeObject(detail.profile);
     const history = mismatchSafeObject(detail.history);
     const rows = value => Array.isArray(value) ? value : [];
-    const actions = new Set(Array.isArray(detail.actions) ? detail.actions : []);
     const sourceLabel = detail.sourceType === 'intake' ? '领取前线索' : 'CRM客户';
     const valueOrEmpty = (value, empty) => esc(mismatchSafeText(value) || empty);
     const firstText = (...values) => values.map(value => mismatchSafeText(value)).find(Boolean) || '';
@@ -4072,15 +4073,9 @@
     const reconRows = [
       ...rows(profile.reconJobs), ...rows(profile.reconResults), ...rows(profile.contactReconJobs),
     ];
-    const sales = Array.isArray(state.data.assignmentCandidates) ? state.data.assignmentCandidates : [];
-    let actionMarkup = '';
-    const accountId = mismatchSafeText(customer.accountId);
-    const recordKey = mismatchSafeText(detail.recordKey);
-    if (actions.has('reassign') && detail.sourceType === 'account' && accountId) {
-      actionMarkup = `<div class="assignment-actions mismatch-detail-actions"><select data-mismatch-owner="${esc(accountId)}">${sales.map(value => { const user = mismatchSafeObject(value); return `<option value="${esc(mismatchSafeText(user.id))}">${esc(mismatchSafeText(user.name))}</option>`; }).join('')}</select><button class="button primary" type="button" data-reassign-customer="${esc(accountId)}">重新分配</button></div>`;
-    } else if (actions.has('restore') && detail.sourceType === 'intake' && recordKey) {
-      actionMarkup = `<button class="button secondary" type="button" data-restore-mismatch="${esc(recordKey)}">恢复到线索池</button>`;
-    }
+    const defaultHistory = rows(history.timeline).length
+      ? rows(history.timeline)
+      : rows(history.activities);
     const expandedMarkup = state.mismatchRecordExpanded ? `
       <section class="mismatch-detail-complete" aria-label="完整资料明细">
         <div class="mismatch-detail-section-head"><div><p class="eyebrow">AUTHORIZED READ-ONLY DATA</p><h3>完整资料明细</h3></div><span class="pill gray">本次授权数据</span></div>
@@ -4132,9 +4127,12 @@
             <div class="wide"><span>企业简介</span><p>${valueOrEmpty(customer.description, '暂无企业简介')}</p></div>
           </div>
         </section>
+        <section class="mismatch-detail-complete mismatch-detail-history" aria-label="开发历史">
+          <div class="mismatch-detail-section-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div><span class="pill gray">只读</span></div>
+          ${list(defaultHistory, '暂无开发历史', timelineItem)}
+        </section>
         <button class="text-button mismatch-detail-expand" type="button" data-expand-mismatch-profile aria-expanded="${state.mismatchRecordExpanded ? 'true' : 'false'}">${state.mismatchRecordExpanded ? '收起完整客户资料' : '查看完整客户资料 →'}</button>
         ${expandedMarkup}
-        ${actionMarkup ? `<div class="mismatch-detail-footer">${actionMarkup}</div>` : ''}
       </div>`;
   }
 
@@ -4526,7 +4524,7 @@
           <header class="manager-task-heading"><div><h3>${esc(managerTaskName(task))}</h3><p>${esc(task.customerId)}</p></div><span class="pill ${task.status === 'overdue' || task.status === 'escalated' ? 'red' : task.status === 'completed' ? 'gray' : 'amber'}">${esc(managerTaskStatusLabels[task.status] || task.status)}</span></header>
           <dl><div class="manager-task-fact"><dt>负责人</dt><dd>${esc(task.ownerName || userById(task.ownerId)?.name || task.ownerId || '未记录')}</dd></div>
           <div class="manager-task-fact"><dt>触发原因</dt><dd>${esc(managerTaskReasonLabels[task.reason] || task.reason)}</dd></div>
-          <div class="manager-task-fact"><dt>处理期限</dt><dd>${esc(shortDate(task.dueAt, true))}<small>${esc(shortDate(task.triggeredAt, true))} 触发</small></dd></div></dl>
+          <div class="manager-task-fact manager-task-dates"><dt>处理期限</dt><dd><strong>${esc(shortDate(task.dueAt, true))}</strong><small>${esc(shortDate(task.triggeredAt, true))} 触发</small></dd></div></dl>
           <footer class="manager-task-actions">${managerTaskButton(task)}</footer>
         </article>`).join('')
         : `<div class="empty">${esc(meta.error || '当前授权范围内没有主管任务')}</div>`;
@@ -7349,7 +7347,7 @@
     $('#drawerStage').textContent = intakeStatusLabel(item.status);
     $('#drawerCompany').textContent = accountDisplayName(item) || '未命名客户';
     $('#drawerMeta').textContent = [
-      accountIdentity(item), item.country, item.customer_type || item.industry,
+      accountIdentity(item), item.country, item.industry, item.customer_type,
     ].filter(Boolean).join(' · ');
     configureDrawerActions({
       customer: item,
@@ -7358,41 +7356,50 @@
       readOnly: false,
     });
     const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
+    const customerTags = Array.isArray(item.customerTags) ? item.customerTags : [];
+    const assignmentAction = showAssignmentDecisions && can('manage_intake')
+      && ['pending', 'approved', 'assigned', 'returned'].includes(item.status)
+      && !item.claimBlocked && !item.identityWarning
+      ? `<button class="button primary" type="button" data-intake-assign="${esc(item.id)}">${item.status === 'assigned' ? '重新分配' : '分配客户'}</button>`
+      : '';
+    const developmentTimeline = item.developmentTimeline || [];
+    const recommendation = item.reviewVagueHint
+      || item.assignmentBlockReason
+      || item.decision_reason
+      || (showAI ? `${signals.fitGrade} · ${signals.priority}` : '')
+      || '待人工判断';
     $('#drawerContent').innerHTML = `
-      <div class="next-step"><div><span class="eyebrow">ASSIGNMENT STATUS</span><p>${esc(item.reviewVagueHint || (item.status === 'assigned' ? '公司已分配，领取后进入 CRM 并开始跟进。' : '查看客户资料与匹配依据。'))}</p></div><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span></div>
+      <div class="next-step"><div><span class="eyebrow">LEAD PROFILE</span><p>${esc(item.reviewVagueHint || '查看企业背景、需求依据和完整开发历史。')}</p></div><div class="assignment-actions"><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span>${assignmentAction}</div></div>
+      ${customerTags.length ? `<div class="customer-tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag.name || tag)}</span>`).join('')}</div>` : ''}
       <div class="account-facts">
         ${[
-          ['负责人', item.assigned_owner_name || (showAssignmentAI ? item.suggested_owner_name : '')],
-          ...(showAI ? [['Fit评分 / 等级', `${signals.fitScore} / ${signals.fitGrade}`], ['readiness', signals.readiness], ['优先级', signals.priority]] : []),
-          ['联系人等级', item.contact_level], ['领取截止', shortDate(item.claim_due_at, true)],
-          ...(item.status === 'returned' ? [['退回原因', item.return_reason || '未填写']] : []),
+          ['官网', item.website],
+          ['联系人等级', item.contact_level],
+          ['成立年份', item.established_year],
+          ['来源', item.batch_source || item.source_file || '线索池'],
+          ['更新时间', shortDate(item.master_updated_at || item.updated_at, true)],
+          ['推荐结论', recommendation],
         ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
-      ${item.developmentHistory ? `<section class="development-history">
-        <div class="insight-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div><span class="pill ${item.developmentHistory.recycled ? 'amber' : ''}">${item.developmentHistory.recycled ? '曾退回线索池' : '历史已延续'}</span></div>
+      <section class="master-profile">
+        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
         <div class="master-profile-grid">
-          <div><span>上次触达</span><p>${item.developmentHistory.lastActivityAt ? `${esc(item.developmentHistory.lastActivityType || '活动')} · ${esc(shortDate(item.developmentHistory.lastActivityAt, true))}` : '暂无活动记录'}</p></div>
-          <div><span>触达摘要</span><p>${esc(item.developmentHistory.lastActivitySummary || '—')}</p></div>
-          <div><span>开发记录</span><p>活动 ${item.developmentHistory.activityCount} · 询价 ${item.developmentHistory.rfqCount} · 报价 ${item.developmentHistory.quoteCount} · 订单 ${item.developmentHistory.orderCount}</p></div>
-          <div><span>上次阶段</span><p>${esc(item.developmentHistory.stage || '—')}</p></div>
+          <div class="wide"><span>企业背景</span><p>${esc(item.master_description || '暂无企业简介')}</p></div>
+          <div><span>主营产品</span><p>${esc(item.master_products || item.product_focus || '暂无产品信息')}</p></div>
+          <div><span>潜在需求</span><p>${esc(item.product_focus || item.master_products || '待进一步确认')}</p></div>
+          ${item.status === 'returned' ? `<div class="wide"><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
+          <div class="wide"><span>研究与来源证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : esc(item.source_file || item.batch_source || '暂无关联证据')}</p></div>
         </div>
-      </section>` : ''}
+      </section>
+      <section class="development-history">
+        <div class="insight-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div>${item.developmentHistory ? `<span class="pill ${item.developmentHistory.recycled ? 'amber' : ''}">${item.developmentHistory.recycled ? '曾退回线索池' : '历史已延续'}</span>` : ''}</div>
+        <div class="timeline">${developmentTimeline.length ? developmentTimeline.map(event => `<div class="timeline-item"><h4>${esc(timelineEventTitle(event))}</h4>${event.summary ? `<p>${esc(event.summary)}</p>` : ''}<time>${esc(event.actor_name || event.actorName || '')}${event.actor_name || event.actorName ? ' · ' : ''}${shortDate(event.occurred_at || event.occurredAt, true)}</time></div>`).join('') : '<div class="empty">暂无开发历史</div>'}</div>
+      </section>
       ${showAssignmentDecisions ? `<section class="decision-review">
         <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>${showAI ? '分配三层裁决' : '分配裁决'}</h3></div>${showAI ? `<span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span>` : ''}</div>
         <div class="decision-review-grid ${showAI ? '' : 'without-ai'}">${showAI ? layers.ai : ''}${layers.rule}${layers.manual}</div>
         <div class="decision-audit"><span class="eyebrow">AUDIT TRAIL</span>${intakeAuditMarkup(item)}</div>
       </section>` : ''}
-      <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER PROFILE</p><h3>客户资料</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
-        <div class="master-profile-grid">
-          <div><span>企业与地区</span><p>${esc([item.company_name, item.country].filter(Boolean).join(' · ') || '未标注')}</p></div>
-          <div><span>行业与类型</span><p>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
-          <div><span>联系人</span><p>${esc([item.contact_name, item.contact_title, item.contact_methods].filter(Boolean).join(' · ') || '暂无具名联系人')}</p></div>
-          ${showAssignmentDecisions ? `<div><span>分配依据 / 阻断原因</span><p>${esc(item.decision_reason || item.arbitration?.ruleDecision?.reason || '暂无')}</p></div>` : ''}
-          ${item.status === 'returned' ? `<div><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
-          <div><span>筛选证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : '暂无关联证据'}</p></div>
-        </div>
-      </section>
       ${customerAiSection(state.drawerAiContext)}
     `;
     $('#customerDrawer').classList.add('open');
@@ -8746,7 +8753,7 @@
         <div class="manager-task-detail">
           <div class="manager-task-detail-grid">
             <div><span class="manager-risk-label">客户</span><strong>${esc(account.companyName || task.customerId)}</strong><p>${esc(account.externalCustomerId || task.customerId)}</p></div>
-            <div><span class="manager-risk-label">当前负责人</span><strong>${esc(userById(account.ownerId)?.name || account.ownerId || '未记录')}</strong><p>${esc(stageLabel(account.stage))}</p></div>
+            <div><span class="manager-risk-label">当前负责人</span><strong>${esc(userById(account.ownerId)?.name || account.ownerId || '未记录')}</strong><p>${esc(account.sourceType === 'intake' ? '线索池' : stageLabel(account.stage))}</p></div>
             <div><span class="manager-risk-label">触发 / 到期</span><strong>${esc(shortDate(task.triggeredAt, true))}</strong><p>${esc(shortDate(task.dueAt, true))}</p></div>
             <div><span class="manager-risk-label">完成条件</span><strong>${esc(task.completionCondition || '必须形成真实业务变化')}</strong><p>${esc(managerTaskStatusLabels[task.status] || task.status)}</p></div>
           </div>
@@ -9271,7 +9278,12 @@
     state.activityProgressType = 'email';
     state.activityType = 'email';
     const initialPlan = account?.next_action || '';
-    const initialPlanAt = account?.next_action_at ? apiTime(account.next_action_at) : dateInput(2);
+    const initialPlanAt = account?.next_action_at
+      ? storedPlanDateInputWithBasis(
+        account.next_action_at,
+        account.next_action_time_basis || 'legacy_local',
+      )
+      : dateInput(2);
     openModal('记录新进展', '选择客户后，记录本次进展与下一步计划', `
       <form id="activityForm" class="activity-progress-form">
         <input type="hidden" name="customerId" value="${esc(state.activitySelectedCustomer?.id || '')}">
@@ -9491,7 +9503,7 @@
         'view_dashboard', 'view_alerts', 'view_notifications', 'view_intake',
         'view_contacts', 'view_recon', 'view_customers', 'view_own_mismatch_history',
         'view_pipeline', 'resolve_manager_tasks', 'view_team', 'view_insights',
-        'view_development', 'view_pool', 'view_markets',
+        'view_markets',
       ]),
     }),
     Object.freeze({
