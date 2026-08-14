@@ -1807,6 +1807,18 @@
     return `<table ${attrs}><thead><tr>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
+  function applyTableColumnClasses(container, columnClasses = []) {
+    if (!container || !Array.isArray(columnClasses) || !columnClasses.length) return;
+    container.querySelectorAll('thead th').forEach((cell, index) => {
+      if (columnClasses[index]) cell.classList.add(columnClasses[index]);
+    });
+    container.querySelectorAll('tbody tr').forEach(row => {
+      Array.from(row.children).forEach((cell, index) => {
+        if (columnClasses[index]) cell.classList.add(columnClasses[index]);
+      });
+    });
+  }
+
   function refreshDataTableOverflowHint(element, { resetHint = false } = {}) {
     if (!element?.classList) return;
     let meta = dataTableOverflowState.get(element);
@@ -2675,6 +2687,13 @@
         return row;
       }),
     );
+    applyTableColumnClasses($('#intakeTable'), [
+      canManualAssign ? 'col-check' : '',
+      'col-company',
+      ...(showAI ? ['col-fit'] : []),
+      ...(showAssignmentAI ? ['col-candidates'] : []),
+      'col-contact', 'col-owner', 'col-status', 'col-actions',
+    ]);
     if (!items.length) $('#intakeTable').innerHTML = '<div class="empty">暂无符合条件的线索</div>';
     const selectVisible = $('#selectVisibleIntake');
     if (selectVisible) {
@@ -3869,6 +3888,11 @@
         return row;
       }),
     );
+    applyTableColumnClasses($('#customerTable'), [
+      canSelectCustomers ? 'col-check' : '',
+      'col-company', 'col-country', 'col-stage', 'col-owner', 'col-last', 'col-next',
+      'col-priority', 'col-status', 'col-actions',
+    ]);
     const pageCheckbox = $('#selectCustomerPage');
     if (pageCheckbox) {
       pageCheckbox.checked = Boolean(selectableIds.length && selectedVisibleCount === selectableIds.length);
