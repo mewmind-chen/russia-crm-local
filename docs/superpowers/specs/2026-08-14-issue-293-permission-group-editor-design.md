@@ -73,6 +73,8 @@ The editor owns a presentation map:
   obsolete navigation name.
 - Module-like keys for `用户与权限`, `跟进更正`, `客户保护与查重`, and `数据维护`
   move into the module category. They are not duplicated in another category.
+- The `团队状态` navigation route uses `view_team`, matching its server APIs,
+  instead of the broader `view_customers` permission.
 
 All category counts are calculated from definitions that are actually visible
 after AI feature gating. They must not use raw category-array lengths.
@@ -133,9 +135,10 @@ server-provided descriptions take precedence. Missing descriptions use concise
 category-aware fallback copy (`允许进入…` for module access and `允许执行…` for
 actions), so no card renders without explanatory text.
 
-Tabs retain `role="tab"`, `aria-selected`, and associated panels. Switches retain
-their accessible names. The inline reset confirmation uses a status/alert region,
-and all actions remain keyboard reachable within the existing focus trap.
+Tabs use roving `tabindex`, `aria-controls`, labelled `role="tabpanel"` panels,
+and Left/Right/Home/End keyboard navigation. Switches retain their accessible
+names. The inline reset confirmation uses a status/alert region, and all actions
+remain keyboard reachable within the existing focus trap.
 
 ## Error Handling And Security
 
@@ -145,6 +148,9 @@ and all actions remain keyboard reachable within the existing focus trap.
   valid administrator rule.
 - No front-end label grants access; every API remains server-authorized.
 - Existing personal overrides remain stored and effective after group reset.
+- This release does not add a new permission-group audit event. It preserves the
+  existing write and audit contract; adding a new audited mutation protocol is a
+  separate backend governance change outside the confirmed Issue #293 scope.
 
 ## Testing
 
