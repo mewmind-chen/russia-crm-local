@@ -2125,6 +2125,52 @@
       && !String(item?.crm_customer_id || '').trim();
   }
 
+  function intakeNeedsIdentityReview(item = {}) {
+    return Boolean(item.identityWarning?.active)
+      || item.claimBlocked === true
+      || String(item.duplicate_state || '') === 'review';
+  }
+
+  function intakeBlockStatusLabel(item = {}) {
+    const state = String(item.duplicate_state || '');
+    const supplement = String(item.supplement_requirement || item.supplementRequirement || '').trim();
+    const needsInfo = Boolean(supplement)
+      || String(item.decision_reason || '').includes('补充')
+      || String(item.assignmentBlockReason || '').includes('补充');
+    if (needsInfo) return supplement ? `资料不足，需要补充${supplement}` : '资料不足，需要补充资料';
+    if (state === 'exact') {
+      const master = String(
+        item.linked_master_name || item.linkedMasterName || item.master_company_name || '',
+      ).trim();
+      return master ? `已关联主客户：${master}` : '已关联主客户';
+    }
+    if (state === 'cleared') return '已确认不是同一客户，可以分配';
+    if (state === 'review') return '疑似重名，等待管理员确认';
+    if (item.identityWarning?.active || item.claimBlocked === true) return '管理员确认后才能分配';
+    return '';
+  }
+
+  function intakeReviewActionMarkup(item = {}) {
+    const id = esc(item.id);
+    if (canAccessProtectionAndDedupe()) {
+      return `<button class="button secondary tiny" type="button" data-intake-review="${id}" title="前往客户保护与查重处理">去处理核验</button>`;
+    }
+    return `<button class="button secondary tiny" type="button" disabled title="管理员确认后才能分配">等待管理员核验</button>`;
+  }
+
+  function intakeReviewDeepLink(item = {}) {
+    const reviewId = String(item.duplicate_review_id || '').trim();
+    if (reviewId) return `#protectedCustomers?review=${encodeURIComponent(reviewId)}`;
+    const externalCustomerId = String(item.external_customer_id || '').trim();
+    if (externalCustomerId) return `#protectedCustomers?customer=${encodeURIComponent(externalCustomerId)}`;
+    return '#protectedCustomers';
+  }
+
+  function openIntakeReview(item = {}) {
+    switchView('protectedCustomers');
+    location.hash = intakeReviewDeepLink(item);
+  }
+
   const intakeFilterControls = {
     customerTag: 'intakeCustomerTagFilter',
     country: 'intakeCountryFilter',
@@ -2637,6 +2683,7 @@
         if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
+        else if (!salesView && intakeNeedsIdentityReview(item)) actions = `<div class="assignment-actions">${intakeReviewActionMarkup(item)}</div>`;
         else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
         else if (!salesView && item.status === 'assigned') actions = '<span class="pill amber">管理员确认中</span>';
         else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
@@ -2661,9 +2708,11 @@
         const contactCompleteness = item.contact_name && item.contact_methods
           ? '具名联系人与联系方式完备'
           : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
-        const assignmentBlock = item.assignable === false
-          ? (item.assignmentBlockReason || item.decision_reason || (showAI ? signals.riskStatus : '') || '')
-          : '';
+        const blockCopy = intakeBlockStatusLabel(item);
+        const assignmentBlock = blockCopy
+          || (item.assignable === false
+            ? (item.assignmentBlockReason || item.decision_reason || (showAI ? signals.riskStatus : '') || '')
+            : '');
         const businessColumns = [
           `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
@@ -7452,7 +7501,8 @@
       ? `<button class="button primary" type="button" data-intake-assign="${esc(item.id)}">${item.status === 'assigned' ? '重新分配' : '分配客户'}</button>`
       : '';
     const developmentTimeline = item.developmentTimeline || [];
-    const recommendation = item.reviewVagueHint
+    const recommendation = intakeBlockStatusLabel(item)
+      || item.reviewVagueHint
       || item.assignmentBlockReason
       || item.decision_reason
       || (showAI ? `${signals.fitGrade} · ${signals.priority}` : '')
@@ -10168,6 +10218,9 @@
   function openIntakeAssignModal(itemId) {
     const item = state.data.intake.items.find(row => row.id === itemId);
     if (!item) return toast('线索已更新，请刷新后重试');
+    if (intakeNeedsIdentityReview(item)) {
+      return toast(item.identityWarning?.message || item.assignmentBlockReason || '该线索需要管理员核验客户身份后才能分配');
+    }
     const sales = intakeAssignmentCandidates()
       .filter(user => String(user.id) !== String(item.assigned_owner_id || ''));
     if (!sales.length) return toast(item.assigned_owner_id ? '暂无其他可接收线索的在职销售' : '暂无可接收线索的在职销售');
@@ -11795,6 +11848,13 @@
         syncIntakeFilterControls();
         void loadIntakePage({ reset: true });
       }
+    }
+    const reviewIntake = event.target.closest('[data-intake-review]');
+    if (reviewIntake) {
+      const reviewItem = (state.data?.intake?.items || [])
+        .find(row => String(row.id) === String(reviewIntake.dataset.intakeReview));
+      if (reviewItem) openIntakeReview(reviewItem);
+      return;
     }
     const assignIntake = event.target.closest('[data-intake-assign]');
     if (assignIntake) openIntakeAssignModal(assignIntake.dataset.intakeAssign);
