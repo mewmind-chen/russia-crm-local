@@ -831,6 +831,13 @@
   function roleLabel(role) {
     return ({ admin: '系统管理员', manager: '销售经理', sales: '销售代表' })[role] || role || '—';
   }
+  function renderAppVersionBadge() {
+    const badge = $('#appVersionBadge');
+    if (!badge) return;
+    const version = document.documentElement.dataset.appVersion || document.body.dataset.appVersion || '';
+    if (version) badge.textContent = '界面版本 ' + version;
+  }
+
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -1427,6 +1434,7 @@
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
       const bootstrapReactions = bootstrapActivityReactions(state.data);
+      renderAppVersionBadge();
       state.activityReactions = normalizeActivityReactions(bootstrapReactions);
       state.activityReactionsLoaded = Array.isArray(bootstrapReactions);
       state.activitySelectedCustomer = null;
