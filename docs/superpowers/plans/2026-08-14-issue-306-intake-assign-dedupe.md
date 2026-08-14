@@ -90,3 +90,59 @@
 ## Commit and release boundaries
 
 One PR (Tasks 1–5) or two sequential PRs if review prefers (pool buttons/backend reasons first, then protection page + linkage). No half state: a resolution must always be followed by the pool reflecting it; rollback reverts the whole PR. No schema/table rebuilds; new linkage columns must be additive with an idempotent installer.
+
+---
+
+# Detailed Execution Plan (step level)
+
+> Live status: Task 1 ✅ complete (5e33941 + review fix 61a1217), Task 2 ✅ complete (dc009d6 + perf fix d30db61, re-review in flight), docs 633323a. Task 3–6 steps below are ready to execute.
+
+## Progress record
+
+| Task | Commits | Tests | Review |
+| --- | --- | --- | --- |
+| Task 1 线索池按钮状态化 | 5e33941, 61a1217 | 13 focused / full 1194 | APPROVED + re-review APPROVED (docs ruling) |
+| Task 2 阻断原因业务化 | dc009d6, d30db61 | 4+1 focused / full 1199 | FINDINGS(perf) → fix → re-review in flight |
+| docs (plans + roadmap) | 633323a | — | — |
+
+## Task 3: 查重页面工作台 — step detail
+
+**Files:** `sales-assets/app.js` (~6353 duplicate-review list, viewMeta ~267), `sales-assets/app.css`, new `test/issue306_protection_workbench.test.js`.
+
+- [ ] **Step 1 — RED:** contract tests: (a) each review renders a COLLAPSED card with 名称/疑似重复数量/建议/状态 + `查看并处理` primary; (b) expanded view contains `它是不是同一个客户？` and three business-labeled resolution buttons; (c) no `规则 legacy-v1`, no `提交人`, no raw `客户编号` field-name labels; (d) deep-link hash `#protectedCustomers?review=<id>` / `?customer=<externalId>` expands + scrolls to the card; (e) CSS contract for collapsed grid + expanded two-column + mobile fallback.
+- [ ] **Step 2 — Run RED** (`node --test test/issue306_protection_workbench.test.js`) and record failures.
+- [ ] **Step 3 — Implement:** collapsed/expand state per review id (state.duplicateReviews.expandedId or per-item); business summary labels (`待处理/已确认同一客户/已确认不是同一客户/待补充资料`); title 客户保护与查重处理; remove technical copy; keep checkbox/candidate-search/bulk/recalculate/pagination/protectedExact guards intact; honor deep-link on view load.
+- [ ] **Step 4 — GREEN:** focused tests pass; run headless Chrome 1440x900: collapsed list renders, expand works, no raw keys in DOM text.
+- [ ] **Step 5 — Full suite** `npm test` once; commit `feat: rebuild protection and dedupe page as business workbench (#306)`.
+
+## Task 4: 三裁决 + 关联主客户 — step detail
+
+**Files:** `lib/sales_crm.js` (resolveDuplicateReviewRow ~8970, resolveDuplicateReview ~9029), possibly additive schema, new `test/issue306_dedupe_resolution_linkage.test.js`.
+
+- [ ] **Step 1 — RED (backend fixtures):**
+  - `confirmed_same`: intake item marked linked (`已关联已有客户`), master customer id recorded as authoritative; original name/website/source batch/created/discoverer/handler/reason preserved; timeline + audit rows (actor, time, linked-to, reason); linked id never reusable; complementary-info flag when new contacts/website/industry tags present with ONLY `补充到主客户`/`暂不补充` actions; conflicting fields (website/country/name) never auto-overwrite.
+  - `confirmed_distinct`: block cleared, item assignable again.
+  - `needs_info`: supplement requirement recorded; pool copy exposes it.
+  - Assert NO physical deletion anywhere in these paths.
+- [ ] **Step 2 — Run RED**, confirm failures.
+- [ ] **Step 3 — Implement:** extend resolveDuplicateReviewRow payload handling; additive columns only (idempotent installer pattern in lib); reuse existing audit helpers (recordTodayTaskAudit/crm_audit_log + timeline write patterns).
+- [ ] **Step 4 — GREEN:** focused pass; grep-assert no DELETE of customer/intake rows in the new path.
+- [ ] **Step 5 — Full suite**; commit `feat: dedupe resolutions link master customer without deletion (#306)`.
+
+## Task 5: 裁决后联动 — step detail
+
+**Files:** `sales-assets/app.js` (post-resolution refresh), tests.
+
+- [ ] **Step 1 — RED:** contract tests: after resolution the UI refreshes pool list + protection list + counts (calls existing loadAuthorizedBusinessPage/refresh intake + duplicate review reload); pool renders post-resolution copy from Task 1 label helper.
+- [ ] **Step 2 — GREEN:** implement refresh wiring; end-to-end headless Chrome: manager 超时领取 → pool blocked lead → 去处理核验 → resolve distinct → pool shows 已确认不是同一客户，可以分配 without manual reload.
+- [ ] **Step 3 — Full suite**; commit `feat: refresh pool and counts after dedupe resolution (#306)`.
+
+## Task 6: 权限隔离 + 回归 + 发布 — step detail
+
+- [ ] Sales browser check: no 去处理核验, no dedupe/protection details, no out-of-scope master info in pool copy.
+- [ ] Admin/manager browser matrix: resolve all three ways; screenshots before/after.
+- [ ] Full `npm test`; `git diff --check`; push; PR (describe linkage rules + permission boundary); CI green; squash merge; auto-deploy; production `/healthz` == merged SHA; record evidence in Issue #306 and close it.
+
+## Commit & release boundaries
+
+One PR (Tasks 1–6) or sequential PRs (pool buttons+backend reasons first — already implemented — then protection page + linkage). No half state: every resolution must immediately reflect in the pool; rollback reverts the whole PR. Schema changes must be additive with idempotent installers.
