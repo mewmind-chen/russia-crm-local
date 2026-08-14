@@ -11,6 +11,7 @@ const fixtures = require('./helpers/permission_fixture');
 const {
   auditProtectedCustomerIdentities,
   leadIdentityWarningsForExternalCustomerIds,
+  leadIdentityWarningsForExternalIds,
 } = require('../lib/customer_identity_registry');
 
 const ROOT = path.join(__dirname, '..');
@@ -69,6 +70,31 @@ test('lead-only and lead-to-CRM name collisions are warnings while two CRM owner
   assert.equal(warnings.get('LEAD-2').code, 'LEAD_IDENTITY_REVIEW_REQUIRED');
   assert.equal(warnings.get('CRM-1'), undefined);
   assert.equal(warnings.get('CRM-2'), undefined);
+});
+
+test('scoped identity-warning lookup matches the full audit for the same ids', t => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  installSources(db);
+  db.exec(`
+    INSERT INTO customer_pool(customer_id,company_name) VALUES
+      ('LEAD-1','Lead Shared'),
+      ('LEAD-2','Lead Shared'),
+      ('CRM-1','Mixed Shared'),
+      ('LEAD-3','Mixed Shared'),
+      ('CRM-2','CRM Shared'),
+      ('CRM-3','CRM Shared');
+    INSERT INTO crm_accounts(id,external_customer_id,company_name) VALUES
+      ('ACCOUNT-1','CRM-1','Mixed Shared'),
+      ('ACCOUNT-2','CRM-2','CRM Shared'),
+      ('ACCOUNT-3','CRM-3','CRM Shared');
+  `);
+
+  const ids = ['LEAD-1', 'LEAD-2', 'LEAD-3', 'CRM-1', 'CRM-2', 'CRM-3'];
+  const full = leadIdentityWarningsForExternalCustomerIds(db, ids);
+  const scoped = leadIdentityWarningsForExternalIds(db, ids);
+  assert.deepEqual([...scoped.entries()], [...full.entries()]);
+  assert.deepEqual([...scoped.keys()].sort(), ['LEAD-1', 'LEAD-2', 'LEAD-3']);
 });
 
 test('lead warning is visible without candidate disclosure and blocks claim until the name changes', async t => {
