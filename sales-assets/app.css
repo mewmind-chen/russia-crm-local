@@ -250,6 +250,14 @@ button.metric.alert{background:var(--danger-subtle)}
 .permission-modal-wide{width:min(960px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:hidden}
 .permission-modal-wide .modal-body{min-height:0;overflow:hidden}
 .permission-modal-wide #permissionOverrideForm{height:min(720px,calc(100dvh - 125px));grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.permission-modal-wide .permission-switch-panel{max-height:100%;overflow:auto;overscroll-behavior:contain;padding-right:4px}
+.permission-group-modal{width:min(1320px,calc(100vw - 48px));max-height:calc(100dvh - 32px);overflow:hidden}
+.permission-group-modal .modal-body{min-height:0;overflow:hidden;padding:16px 24px 0}
+.permission-group-form{max-height:calc(100dvh - 112px);grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:10px;overflow:hidden}
+.permission-group-modal .permission-switch-panel{max-height:none;overflow:visible;padding-right:0}
+.permission-group-footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 -24px;padding:12px 24px;border-top:1px solid var(--line);background:#fff;z-index:1}
+.permission-category-status{margin:9px 0 0;color:var(--muted);font-size:10px}
+.permission-mobile-status{display:none}
 .permission-editor fieldset{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 10px}
 .permission-editor legend{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;padding:0 6px}
 .permission-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
@@ -982,6 +990,8 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .permission-switch-panel.hidden{display:none}
 @media (min-width:900px){.permission-switch-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .permission-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+@media(max-width:1099px),(max-height:760px){.permission-group-modal{overflow:auto}.permission-group-modal .modal-body{overflow:auto}.permission-group-form{max-height:none;overflow:visible}.permission-group-form .permission-switch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.permission-group-modal{width:calc(100vw - 20px)}.permission-group-form .permission-switch-grid{grid-template-columns:minmax(0,1fr)}.permission-mobile-status{display:inline}.permission-desktop-status{display:none}.permission-group-footer{align-items:stretch;flex-direction:column}.permission-group-footer .button{width:auto}}
 
 .returned-history-side{min-width:360px}
 .returned-history-head h3{margin:8px 0 4px}

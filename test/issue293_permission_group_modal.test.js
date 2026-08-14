@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.css'), 'utf8');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
@@ -40,4 +41,26 @@ test('category counts use only definitions that are actually rendered', () => {
   assert.match(app, /function visibleCategoryPermissions\(/);
   assert.match(app, /visiblePermissions\.length/);
   assert.match(app, /本分类共 \$\{visiblePermissions\.length\} 项/);
+});
+
+test('group editor uses a dedicated wide modal shell and layout contracts', () => {
+  const modal = section(app, 'function openPermissionGroupModal', 'function openOverridesModal');
+  assert.match(modal, /permission-group-modal/);
+  assert.match(modal, /permission-group-form/);
+  assert.match(modal, /permission-group-metadata/);
+  assert.match(modal, /permission-group-description/);
+  assert.match(modal, /permission-group-guidance/);
+  assert.match(modal, /permission-group-footer/);
+  assert.match(css, /\.permission-group-modal\{[^}]*width:min\(1320px,calc\(100vw - 48px\)\)/);
+  assert.match(css, /\.permission-group-modal\{[^}]*overflow:hidden/);
+  assert.match(css, /\.permission-group-modal \.permission-switch-panel\{[^}]*overflow:visible/);
+  assert.match(css, /\.permission-group-footer\{[^}]*position:sticky/);
+  assert.match(css, /@media\(max-width:1099px\)[\s\S]*permission-group-modal[\s\S]*overflow:auto/);
+});
+
+test('permission category tabs connect named panels and support keyboard navigation', () => {
+  assert.match(app, /aria-controls="permission-group-panel-/);
+  assert.match(app, /role="tabpanel"/);
+  assert.match(app, /ArrowLeft|ArrowRight/);
+  assert.match(app, /event\.key === 'Home'|event\.key === 'End'/);
 });

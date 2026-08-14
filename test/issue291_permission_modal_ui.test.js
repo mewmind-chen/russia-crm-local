@@ -39,8 +39,8 @@ test('permission switch grid is compact two to three columns', () => {
   assert.match(css, /\.permission-switch-grid/);
   assert.match(css, /repeat\(/);
   assert.match(css, /\.permission-override-list\{display:block/);
-  assert.match(css, /\.permission-switch-panel\{max-height:/);
-  assert.match(css, /\.permission-switch-panel\{[^}]*overflow:auto/);
+  assert.match(css, /\.permission-modal-wide \.permission-switch-panel\{[^}]*overflow:auto/);
+  assert.match(css, /\.permission-group-modal \.permission-switch-panel\{[^}]*overflow:visible/);
 });
 
 test('module permissions do not render duplicate or retired navigation entries', () => {

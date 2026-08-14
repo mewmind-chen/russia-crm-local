@@ -9564,16 +9564,23 @@
     }),
   ]);
 
-  function permissionCategoryMarkup(permissions = {}, groupPermissions = {}, active = 'module') {
+  function permissionCategoryMarkup(permissions = {}, groupPermissions = {}, active = 'module', prefix = 'personal') {
     const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
-    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === active ? 'active' : ''}"
-      type="button" role="tab" aria-selected="${category.key === active}"
-      data-permission-category="${category.key}">${category.label}</button>`).join('');
+    const tabs = PERMISSION_CATEGORIES.map(category => {
+      const selected = category.key === active;
+      const tabId = `permission-${prefix}-tab-${category.key}`;
+      const panelId = `permission-${prefix}-panel-${category.key}`;
+      return `<button id="${tabId}" class="${selected ? 'active' : ''}"
+        type="button" role="tab" aria-selected="${selected}" tabindex="${selected ? '0' : '-1'}"
+        aria-controls="${panelId}" data-permission-category="${category.key}">${category.label}</button>`;
+    }).join('');
     const panels = PERMISSION_CATEGORIES.map(category => {
       const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      const tabId = `permission-${prefix}-tab-${category.key}`;
+      const panelId = `permission-${prefix}-panel-${category.key}`;
       return `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
-      data-permission-panel="${category.key}">
+      id="${panelId}" role="tabpanel" aria-labelledby="${tabId}" data-permission-panel="${category.key}">
       <div class="permission-switch-grid">${visiblePermissions.map(key => {
         const allowed = Boolean(permissions[key]);
         const followsGroup = allowed === Boolean(groupPermissions[key]);
@@ -9622,13 +9629,16 @@
   function permissionFields(permissions = {}) {
     const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
-    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === 'module' ? 'active' : ''}"
-      type="button" role="tab" aria-selected="${category.key === 'module'}"
-      data-permission-category="${category.key}">${category.label}</button>`).join('');
+    const tabs = PERMISSION_CATEGORIES.map(category => {
+      const selected = category.key === 'module';
+      return `<button id="permission-group-tab-${category.key}" class="${selected ? 'active' : ''}"
+        type="button" role="tab" aria-selected="${selected}" tabindex="${selected ? '0' : '-1'}"
+        aria-controls="permission-group-panel-${category.key}" data-permission-category="${category.key}">${category.label}</button>`;
+    }).join('');
     const panels = PERMISSION_CATEGORIES.map(category => {
       const visiblePermissions = visibleCategoryPermissions(category, definitions);
       return `<section class="permission-switch-panel ${category.key === 'module' ? '' : 'hidden'}"
-      data-permission-panel="${category.key}">
+      id="permission-group-panel-${category.key}" role="tabpanel" aria-labelledby="permission-group-tab-${category.key}" data-permission-panel="${category.key}">
       <div class="permission-switch-grid">${visiblePermissions.map(key => {
         const label = definitions[key];
         const description = permissionDescription(category, key, label, descriptions);
@@ -9664,17 +9674,17 @@
     const group = groupId ? (state.data.permissionGroups || []).find(item => item.id === groupId) : null;
     if (groupId && !group) return;
     const permissions = group?.permissions || state.data.rolePermissions?.sales || {};
-    openModal(group ? `编辑权限组 · ${group.name}` : '新建权限组', 'PERMISSION GROUP', `<form id="permissionGroupForm" class="form-grid">
+    openModal(group ? `编辑权限组 · ${group.name}` : '新建权限组', 'PERMISSION GROUP', `<form id="permissionGroupForm" class="form-grid permission-group-form">
       <input type="hidden" name="groupId" value="${esc(group?.id || '')}">
-      <div class="form-grid two">
+      <div class="form-grid two permission-group-metadata">
         <label>名称<input name="name" value="${esc(group?.name || '')}" required></label>
         <label>角色<select name="role" ${group ? 'disabled' : ''}>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === (group?.role || 'sales') ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
       </div>
-      <label>描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
-      <div class="recommendation"><strong>权限组设置</strong><br>这里是成员的基础权限；个人权限页面可直接选择允许或拒绝。${group ? '' : '切换角色会套用该角色的权限模板。'}</div>
+      <label class="permission-group-description">描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
+      <div class="recommendation permission-group-guidance"><strong>权限组设置</strong><br>这里是成员的基础权限；个人权限页面可直接选择允许或拒绝。${group ? '' : '切换角色会套用该角色的权限模板。'}</div>
       <div class="permission-editor">${permissionFields(permissions)}</div>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
-    </form>`);
+      <div class="form-actions permission-group-footer"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
+    </form>`, 'permission-group-modal');
   }
 
   function openOverridesModal(userId) {
@@ -11032,6 +11042,7 @@
         const selected = button === permissionCategoryButton;
         button.classList.toggle('active', selected);
         button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
       });
       $$('#modal [data-permission-panel]').forEach(panel => {
         panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
@@ -11972,6 +11983,20 @@
         event.target.setAttribute('aria-expanded', 'false');
         return;
       }
+    }
+    const permissionCategoryTab = event.target.closest?.('#modal [data-permission-category][role="tab"]');
+    if (permissionCategoryTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      const tabs = $$('#modal [data-permission-category][role="tab"]').filter(tab => !tab.disabled);
+      const currentIndex = tabs.indexOf(permissionCategoryTab);
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      tabs[nextIndex]?.click();
+      tabs[nextIndex]?.focus();
+      return;
     }
     const duplicateSearch = event.target.closest?.('[data-duplicate-candidate-search]');
     if (duplicateSearch) {
