@@ -9701,6 +9701,21 @@
     </form>`);
   }
 
+  function permissionGroupRole(form, group) {
+    return group?.role || form?.querySelector('select[name="role"]:not([disabled])')?.value || '';
+  }
+
+  function applyPermissionGroupDefaults(form, defaults = {}) {
+    let firstChanged = null;
+    form?.querySelectorAll('[name^="permission__"]').forEach(input => {
+      const key = input.name.slice('permission__'.length);
+      const checked = Boolean(defaults[key]);
+      if (input.checked !== checked && !firstChanged) firstChanged = input;
+      input.checked = checked;
+    });
+    return firstChanged;
+  }
+
   function openPermissionGroupModal(groupId = '') {
     const group = groupId ? (state.data.permissionGroups || []).find(item => item.id === groupId) : null;
     if (groupId && !group) return;
@@ -9714,7 +9729,17 @@
       <label class="permission-group-description">描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
       <div class="recommendation permission-group-guidance"><strong>权限组设置</strong><br>这里是成员的基础权限；个人权限页面可直接选择允许或拒绝。${group ? '' : '切换角色会套用该角色的权限模板。'}</div>
       <div class="permission-editor">${permissionFields(permissions)}</div>
-      <div class="form-actions permission-group-footer"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
+      ${group ? `<div class="permission-group-reset-confirm hidden" role="alert">
+        <p><strong>恢复当前权限组默认？</strong><br>只恢复当前权限组的权限开关；个人权限例外、其他权限组、名称、角色和描述不会改变。保存权限组后生效。</p>
+        <div class="assignment-actions">
+          <button type="button" class="button secondary" id="cancelPermissionGroupDefaults">暂不恢复</button>
+          <button type="button" class="button primary" id="confirmPermissionGroupDefaults">确认恢复</button>
+        </div>
+      </div>` : ''}
+      <div class="form-actions permission-group-footer">
+        ${group ? '<button type="button" class="button secondary" id="restorePermissionGroupDefaults">恢复权限组默认</button>' : '<span></span>'}
+        <div class="assignment-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
+      </div>
     </form>`, 'permission-group-modal');
   }
 
@@ -10473,7 +10498,10 @@
         const existingGroup = groupId
           ? (state.data.permissionGroups || []).find(group => group.id === groupId)
           : null;
-        const permissionFallback = existingGroup?.permissions || state.data.rolePermissions?.[payload.role] || {};
+        const groupRole = existingGroup?.role || payload.role;
+        const permissionFallback = form.dataset.permissionsReset === 'true'
+          ? state.data.rolePermissions?.[groupRole] || {}
+          : existingGroup?.permissions || state.data.rolePermissions?.[groupRole] || {};
         const body = {
           name: String(payload.name || '').trim(),
           description: String(payload.description || ''),
@@ -11065,6 +11093,31 @@
         closeModal();
         await refresh('已恢复权限组默认');
       } catch (error) { toast(error.message); }
+      return;
+    }
+    if (event.target.closest('#restorePermissionGroupDefaults')) {
+      const confirmation = document.querySelector('#permissionGroupForm .permission-group-reset-confirm');
+      confirmation?.classList.remove('hidden');
+      confirmation?.querySelector('#cancelPermissionGroupDefaults')?.focus();
+      return;
+    }
+    if (event.target.closest('#cancelPermissionGroupDefaults')) {
+      const confirmation = document.querySelector('#permissionGroupForm .permission-group-reset-confirm');
+      confirmation?.classList.add('hidden');
+      document.querySelector('#restorePermissionGroupDefaults')?.focus();
+      return;
+    }
+    if (event.target.closest('#confirmPermissionGroupDefaults')) {
+      const form = document.querySelector('#permissionGroupForm');
+      const groupId = form?.elements?.groupId?.value || '';
+      const group = groupId
+        ? (state.data.permissionGroups || []).find(item => item.id === groupId)
+        : null;
+      const role = permissionGroupRole(form, group);
+      const firstChanged = applyPermissionGroupDefaults(form, state.data.rolePermissions?.[role] || {});
+      if (form) form.dataset.permissionsReset = 'true';
+      form?.querySelector('.permission-group-reset-confirm')?.classList.add('hidden');
+      (firstChanged || form?.querySelector('#restorePermissionGroupDefaults'))?.focus();
       return;
     }
     const permissionCategoryButton = event.target.closest('[data-permission-category]');
@@ -11960,11 +12013,12 @@
       if (submit) submit.textContent = event.target.value ? '创建并分配' : '创建客户';
     }
     if (event.target.matches('#permissionGroupForm select[name="role"]')) {
-      const defaults = state.data.rolePermissions?.[event.target.value] || {};
-      Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-        const input = document.querySelector(`#permissionGroupForm [name="permission__${CSS.escape(key)}"]`);
-        if (input) input.checked = Boolean(defaults[key]);
-      });
+      const form = event.target.closest('form');
+      if (form && !form.elements.groupId.value) {
+        const defaults = state.data.rolePermissions?.[permissionGroupRole(form)] || {};
+        applyPermissionGroupDefaults(form, defaults);
+        delete form.dataset.permissionsReset;
+      }
     }
   });
 

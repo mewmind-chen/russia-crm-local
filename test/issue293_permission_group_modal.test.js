@@ -228,6 +228,61 @@ test('group footer padding outranks the later generic modal action rule', () => 
   );
 });
 
+test('existing group reset uses inline confirmation and role-template serialization', () => {
+  const groupModal = section(app, 'function openPermissionGroupModal', 'function openOverridesModal');
+  const submit = section(
+    app,
+    "else if (form.id === 'permissionGroupForm')",
+    "else if (form.id === 'permissionOverrideForm')",
+  );
+  assert.match(groupModal, /id="restorePermissionGroupDefaults"/);
+  assert.match(groupModal, /只恢复当前权限组的权限开关/);
+  assert.match(groupModal, /个人权限例外、其他权限组、名称、角色和描述不会改变/);
+  assert.match(groupModal, /保存权限组后生效/);
+  assert.match(app, /form\.dataset\.permissionsReset = 'true'/);
+  assert.match(submit, /form\.dataset\.permissionsReset === 'true'/);
+  assert.match(submit, /state\.data\.rolePermissions/);
+});
+
+test('group defaults update only rendered switches', () => {
+  const rendered = [
+    { name: 'permission__view_dashboard', checked: false },
+    { name: 'permission__view_contacts', checked: true },
+  ];
+  const unrelated = { name: 'description', checked: true };
+  const form = {
+    querySelectorAll(selector) {
+      assert.equal(selector, '[name^="permission__"]');
+      return rendered;
+    },
+  };
+  const source = `${functionBlock(app, 'applyPermissionGroupDefaults')}; applyPermissionGroupDefaults`;
+  const applyPermissionGroupDefaults = vm.runInNewContext(source);
+  applyPermissionGroupDefaults(form, { view_dashboard: true, view_contacts: false, view_development: true });
+  assert.deepEqual(rendered.map(input => input.checked), [true, false]);
+  assert.equal(unrelated.checked, true);
+});
+
+test('cancelling group reset leaves switches and reset state unchanged', () => {
+  const cancellation = section(
+    app,
+    "if (event.target.closest('#cancelPermissionGroupDefaults'))",
+    "if (event.target.closest('#confirmPermissionGroupDefaults'))",
+  );
+  assert.doesNotMatch(cancellation, /applyPermissionGroupDefaults|\.checked|permissionsReset/);
+});
+
+test('new-group role changes reapply defaults and clear stale reset state', () => {
+  const roleChange = section(
+    app,
+    "if (event.target.matches('#permissionGroupForm select[name=\"role\"]'))",
+    '\n    }\n  });',
+  );
+  assert.match(roleChange, /applyPermissionGroupDefaults\(form, defaults\)/);
+  assert.match(roleChange, /delete form\.dataset\.permissionsReset/);
+  assert.match(roleChange, /!form\.elements\.groupId\.value/);
+});
+
 test('rendered group and personal tabs reciprocally link panels with one tab stop', () => {
   const editors = renderedPermissionEditors();
   for (const markup of Object.values(editors)) {
