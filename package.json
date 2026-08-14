@@ -46,6 +46,7 @@
     "recon:regrade": "node scripts/regrade-recon-results.js",
     "recon:regrade:apply": "node scripts/regrade-recon-results.js --apply",
     "quality:audit": "node scripts/audit-data-quality.js",
+    "check:copy": "node scripts/check-forbidden-copy.js",
     "quality:audit:strict": "node scripts/audit-data-quality.js --strict",
     "quality:normalize": "node scripts/normalize-data-quality.js",
     "quality:normalize:apply": "node scripts/normalize-data-quality.js --apply",
