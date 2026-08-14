@@ -6317,7 +6317,7 @@
       const resolved = item.status === 'resolved';
       const warning = item.disposition === 'lead_warning';
       return `<section class="protected-conflict-item" data-protected-conflict="${esc(item.conflictId)}">
-        <div class="protected-conflict-head"><div><strong>${esc(item.normalizedName || '未命名身份')}</strong><small>版本 ${esc(item.expectedVersion || '—')} · 更新 ${esc(shortDate(item.updatedAt, true))}</small></div>${protectedStatusMarkup(warning && !resolved ? 'retry' : item.status)}</div>
+        <div class="protected-conflict-head"><div><strong>${esc(item.normalizedName || '未命名身份')}</strong><small>更新 ${esc(shortDate(item.updatedAt, true))}</small></div>${protectedStatusMarkup(warning && !resolved ? 'retry' : item.status)}</div>
         <div class="protected-conflict-evidence">${warning ? '<span class="pill amber">仅线索提示，不阻断后续</span>' : '<span class="pill red">阻断冲突</span>'}${candidates.map(id => `<span class="pill">当前 ${esc(id)}</span>`).join('')}${previousOnly.map(id => `<span class="pill amber">上一轮 ${esc(id)}</span>`).join('')}</div>
         ${resolved ? `<div class="subtle">已执行：${esc(item.decision || '—')} · 归属 ${esc(item.targetExternalCustomerId || '—')} · ${esc(item.details?.reason || '')}</div>` : `<div class="protected-conflict-form">
           <label>处理方式<select data-conflict-decision>${conflictDecisionOptions(item)}</select></label>
@@ -6400,12 +6400,12 @@
       const protectedExact = review.protectedExact === true;
       const expanded = model.expandedId === review.id;
       const duplicateCount = candidate.customerId ? 1 : 0;
-      const summaryStatus = ({ pending: '待处理', confirmed_same: '已关联已有客户', confirmed_distinct: '已确认不是同一客户', needs_info: '待补充资料' })[review.status] || '待处理';
-      const summaryAdvice = review.status === 'pending' ? '需确认是否同一客户' : summaryStatus;
+      const summaryStatus = ({ pending: '等待管理员核验', confirmed_same: '已关联已有客户', confirmed_distinct: '已确认不是同一客户', needs_info: '待补充资料' })[review.status] || '等待管理员核验';
+      const summaryAdvice = review.status === 'pending' ? '疑似重名，需确认是否同一客户' : summaryStatus;
       return `<section class="duplicate-review-item${expanded ? ' expanded' : ''}" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
         <header class="duplicate-review-item-head">
           <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
-          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · ${esc(shortDate(review.createdAt, true))}</span></div>
+          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span><span class="subtle">不是直接拦死，只是先保护客户不被误分配。</span></div>
           <span class="pill">${esc(summaryAdvice)}</span>
           <span class="pill amber">${esc(summaryStatus)}</span>
           <button class="button secondary tiny" type="button" data-toggle-duplicate-review="${esc(review.id)}" ${interactionPending ? 'disabled' : ''}>${expanded ? '收起' : '查看并处理'}</button>
@@ -6437,13 +6437,17 @@
             </div>
           </section>
         </div>
-        <div class="duplicate-review-question"><strong>它是不是同一个客户？</strong><span>请判断这条新线索与疑似已有客户是否同一家公司。</span></div>
+        <div class="duplicate-review-question"><strong>管理员只需要确认：它是不是已有客户？</strong><span>线索池会同步更新。</span></div>
         <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
+        <div class="duplicate-review-options">
+          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_same" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}><strong>是同一个客户</strong></span><small>关联已有客户，不再分配成新客户。</small></label>
+          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_distinct" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>不是同一个客户</strong></span><small>放行，主管可以继续分配。</small></label>
+          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="needs_info" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>资料还不够</strong></span><small>要求补充官网、联系人或来源说明。</small></label>
+        </div>
         <footer class="duplicate-review-actions">
-          <button class="button secondary danger" type="button" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}>是同一个客户，关联已有客户</button>
-          <button class="button primary" type="button" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>不是同一个客户，允许继续分配</button>
-          <button class="button secondary" type="button" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>资料不够，要求补充</button>
+          <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存处理结果</button>
         </footer>
+        <p class="duplicate-review-sync-note">保存后，主管在线索池看到明确结果，不再卡在转圈。</p>
       </section>`;
     }).join('');
   }
@@ -12013,7 +12017,7 @@
       try { await stopIdentityInspection(); }
       catch (error) { toast(error.message); }
     }
-    const duplicateResolution = event.target.closest('[data-duplicate-resolution]');
+    const duplicateResolution = event.target.closest('button[data-duplicate-resolution]');
     if (duplicateResolution) {
       try {
         await resolveDuplicateReviewAction(
@@ -12021,6 +12025,19 @@
           duplicateResolution.dataset.duplicateResolution,
           duplicateResolution.dataset.candidateId || '',
         );
+      } catch (error) { toast(error.message); }
+    }
+    const duplicateResolutionSave = event.target.closest('[data-duplicate-resolution-save]');
+    if (duplicateResolutionSave && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
+      const reviewId = duplicateResolutionSave.dataset.duplicateResolutionSave;
+      const radio = document.querySelector(
+        `input[data-duplicate-resolution][data-review-id="${CSS.escape(reviewId)}"]:checked`,
+      );
+      if (!radio) { toast('请先选择处理方式'); return; }
+      const resolution = radio.value;
+      if (resolution === 'needs_info') { openDuplicateNeedsInfoModal(reviewId); return; }
+      try {
+        await resolveDuplicateReviewAction(reviewId, resolution, duplicateResolutionSave.dataset.candidateId || '');
       } catch (error) { toast(error.message); }
     }
     const duplicateReviewToggle = event.target.closest('[data-toggle-duplicate-review]');
