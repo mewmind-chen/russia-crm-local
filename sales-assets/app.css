@@ -765,7 +765,7 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .duplicate-review-list{display:grid;min-width:0}
 .duplicate-review-item{min-width:0;padding:16px 18px;border-top:1px solid var(--line);outline:none}
 .duplicate-review-item:first-child{border-top:0}.duplicate-review-item:focus{box-shadow:inset 3px 0 var(--brand)}
-.duplicate-review-item-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;margin-bottom:12px}
+.duplicate-review-item-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:10px;align-items:center;margin-bottom:12px}.duplicate-review-item:not(.expanded) .duplicate-review-item-head{margin-bottom:0}.duplicate-card-summary{display:grid;gap:3px;min-width:0}.duplicate-review-question{display:grid;gap:3px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#f6f9f7;margin-bottom:10px}.duplicate-review-question strong{font-size:13px}.duplicate-review-question span{color:#52635f;font-size:11.5px;line-height:1.45}.duplicate-review-comparison.hidden{display:none}
 .duplicate-review-item-head label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700}
 .duplicate-review-item-head>div{display:grid;gap:3px;min-width:0}.duplicate-review-item-head strong{font-size:13px;overflow-wrap:anywhere}.duplicate-review-item-head span{color:var(--muted);font-size:10px;overflow-wrap:anywhere}
 .duplicate-review-comparison{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-width:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -1067,3 +1067,5 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 
 .returned-history-side{min-width:360px}
 .returned-history-head h3{margin:8px 0 4px}
+
+@media(max-width:700px){.duplicate-review-item-head{grid-template-columns:auto 1fr;grid-template-areas:'checkbox toggle' 'summary summary' 'advice status'}.duplicate-review-item-head>label{grid-area:checkbox}.duplicate-review-item-head .duplicate-card-summary{grid-area:summary}.duplicate-review-item-head .pill{justify-self:start}.duplicate-review-item-head .button{grid-area:toggle;justify-self:end}.duplicate-review-item-head span.pill:nth-of-type(1){grid-area:advice}.duplicate-review-item-head span.pill:nth-of-type(2){grid-area:status}}

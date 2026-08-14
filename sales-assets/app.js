@@ -219,7 +219,7 @@
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
       loaded: false, loading: false, error: '', pendingAction: '',
       requestEpoch: 0,
-      selectedIds: new Set(), searchOpenId: '', searchResults: {},
+      selectedIds: new Set(), searchOpenId: '', expandedId: '', searchResults: {},
       searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
     },
     assistantRuntime: null,
@@ -264,7 +264,7 @@
     team: ['团队状态', '团队状态'],
     markets: ['市场策略', '市场策略'],
     users: ['用户与权限', '用户与权限'],
-    protectedCustomers: ['客户保护与查重', '客户保护与查重'],
+    protectedCustomers: ['客户保护与查重', '客户保护与查重处理'],
     maintenance: ['数据维护', '数据维护'],
   };
   const viewPermissions = {
@@ -1459,7 +1459,7 @@
       });
       Object.assign(state.duplicateReviews, {
         items: [], total: 0, page: 1, totalPages: 0, loaded: false, loading: false,
-        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '',
+        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '', expandedId: '',
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
       clearTimeout(state.managerAnomalies.timer);
@@ -1480,7 +1480,7 @@
           && (can('correct_own_activity') || can('manage_activity_corrections'))) {
         void loadActivityCorrectionWriteStatus();
       }
-      const requestedView = location.hash.replace(/^#/, '');
+      const requestedView = location.hash.replace(/^#/, '').split('?')[0];
       const requestedParams = new URLSearchParams(location.search);
       const requestedCustomerId = requestedParams.get('customer') || '';
       const requestedIntakeItemId = requestedParams.get('intake') || '';
@@ -6398,13 +6398,19 @@
       const activeSearchIndex = Number(model.searchActiveIndexes[review.id] ?? -1);
       const searchListId = `duplicate-candidate-results-${review.id}`;
       const protectedExact = review.protectedExact === true;
-      return `<section class="duplicate-review-item" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
+      const expanded = model.expandedId === review.id;
+      const duplicateCount = candidate.customerId ? 1 : 0;
+      const summaryStatus = ({ pending: '待处理', confirmed_same: '已关联已有客户', confirmed_distinct: '已确认不是同一客户', needs_info: '待补充资料' })[review.status] || '待处理';
+      const summaryAdvice = review.status === 'pending' ? '需确认是否同一客户' : summaryStatus;
+      return `<section class="duplicate-review-item${expanded ? ' expanded' : ''}" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
         <header class="duplicate-review-item-head">
           <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
-          <div><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>提交人 ${esc(review.submittedByName || review.submittedBy || '—')} · ${esc(shortDate(review.createdAt, true))}</span></div>
-          <span class="pill">规则 ${esc(review.evaluatedRuleVersion || 'legacy-v1')}</span>
+          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · ${esc(shortDate(review.createdAt, true))}</span></div>
+          <span class="pill">${esc(summaryAdvice)}</span>
+          <span class="pill amber">${esc(summaryStatus)}</span>
+          <button class="button secondary tiny" type="button" data-toggle-duplicate-review="${esc(review.id)}" ${interactionPending ? 'disabled' : ''}>${expanded ? '收起' : '查看并处理'}</button>
         </header>
-        <div class="duplicate-review-comparison">
+        <div class="duplicate-review-comparison${expanded ? '' : ' hidden'}">
           <section class="duplicate-review-side submitted">
             <div class="duplicate-review-side-title"><span>员工新提交</span><strong>${esc(input.companyName || '未填写公司名称')}</strong></div>
             ${duplicateFacts([
@@ -6431,14 +6437,35 @@
             </div>
           </section>
         </div>
+        <div class="duplicate-review-question"><strong>它是不是同一个客户？</strong><span>请判断这条新线索与疑似已有客户是否同一家公司。</span></div>
         <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
         <footer class="duplicate-review-actions">
-          <button class="button secondary danger" type="button" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}>确认同一客户</button>
-          <button class="button primary" type="button" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>确认不是同一客户</button>
-          <button class="button secondary" type="button" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>信息不足，要求补充</button>
+          <button class="button secondary danger" type="button" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}>是同一个客户，关联已有客户</button>
+          <button class="button primary" type="button" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>不是同一个客户，允许继续分配</button>
+          <button class="button secondary" type="button" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>资料不够，要求补充</button>
         </footer>
       </section>`;
     }).join('');
+  }
+
+  function applyDuplicateReviewDeepLink() {
+    const hash = String(location.hash || '');
+    if (!hash.startsWith('#protectedCustomers')) return;
+    const params = new URLSearchParams(hash.split('?')[1] || '');
+    const reviewId = String(params.get('review') || '');
+    const customerId = String(params.get('customer') || '');
+    if (!reviewId && !customerId) return;
+    const model = state.duplicateReviews;
+    const matched = model.items.find(item =>
+      (reviewId && item.id === reviewId)
+      || (customerId && String(item.input?.externalCustomerId || '') === customerId)
+      || (customerId && String(item.input?.customerId || '') === customerId));
+    if (!matched) return;
+    model.expandedId = matched.id;
+    renderDuplicateReviews();
+    requestAnimationFrame(() => document.querySelector(
+      `[data-duplicate-review-item="${CSS.escape(matched.id)}"]`,
+    )?.scrollIntoView({ block: 'nearest' }));
   }
 
   async function loadDuplicateReviews({ page } = {}) {
@@ -6461,6 +6488,7 @@
       model.pageSize = Number(result.pageSize || model.pageSize);
       model.totalPages = Number(result.totalPages || 0);
       model.loaded = true;
+      applyDuplicateReviewDeepLink();
     } catch (error) {
       if (model.requestEpoch === epoch) model.error = error.message || '核验记录加载失败';
     } finally {
@@ -6654,6 +6682,7 @@
     $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManageProtectedCustomers());
     $$('.protected-intro-actions').forEach(root => root.classList.toggle('hidden', !canManageProtectedCustomers()));
     renderDuplicateReviews();
+    applyDuplicateReviewDeepLink();
     if (!canManageProtectedCustomers()) return;
     renderProtectedWriteGate();
     renderProtectedCustomers();
@@ -6687,6 +6716,7 @@
       model.hasMore = Boolean(result.hasMore);
       model.writeEnabled = result.writeEnabled === true;
       model.loaded = true;
+      applyDuplicateReviewDeepLink();
     } catch (error) {
       model.error = error.message || '保护名单加载失败';
     } finally {
@@ -11981,6 +12011,12 @@
         );
       } catch (error) { toast(error.message); }
     }
+    const duplicateReviewToggle = event.target.closest('[data-toggle-duplicate-review]');
+    if (duplicateReviewToggle && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
+      const reviewId = duplicateReviewToggle.dataset.toggleDuplicateReview;
+      state.duplicateReviews.expandedId = state.duplicateReviews.expandedId === reviewId ? '' : reviewId;
+      renderDuplicateReviews();
+    }
     const duplicateSearchToggle = event.target.closest('[data-toggle-duplicate-search]');
     if (duplicateSearchToggle && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
       const reviewId = duplicateSearchToggle.dataset.toggleDuplicateSearch;
@@ -12242,7 +12278,7 @@
     closeCustomerFilterPanel();
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
-    if (location.hash !== `#${canonicalView}`) {
+    if (location.hash.replace(/^#/, '').split('?')[0] !== canonicalView) {
       const navigationUrl = leadWorkflowNavigationUrl(canonicalView);
       if (pushHistory && !intakeAlias) history.pushState(null, '', navigationUrl);
       else history.replaceState(null, '', navigationUrl);
