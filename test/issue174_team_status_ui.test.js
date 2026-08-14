@@ -22,7 +22,7 @@ function functionBlock(source, name) {
 
 test('team navigation becomes a three-section team status workspace', () => {
   assert.match(html, /data-view="team"[^>]*>[\s\S]*?<span>团队状态<\/span>/);
-  assert.match(app, /team:\s*\[['"]TEAM STATUS['"],\s*['"]团队状态['"]\]/);
+  assert.match(app, /team:\s*\[['"]团队状态['"],\s*['"]团队状态['"]\]/);
   for (const [section, label] of [
     ['progress', '业务推进'], ['capability', '销售能力'], ['collaboration', '协作支持'],
   ]) {

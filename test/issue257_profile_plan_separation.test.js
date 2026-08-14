@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '..');
 
 test('customer profile form and submit payload contain no plan fields', () => {
   const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
-  const form = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
+  const form = app.match(/openModal\('编辑客户资料', '客户资料', `([\s\S]*?)<\/form>`/)?.[1] || '';
   const submit = app.match(/form\.id === 'customerProfileEditForm'([\s\S]*?)\} else if \(form\.id === 'customerMasterForm'\)/)?.[1] || '';
   assert.match(form, /id="customerProfileEditForm"/);
   assert.doesNotMatch(form, /name="nextAction"|name="nextActionAt"|data-future-datetime/);

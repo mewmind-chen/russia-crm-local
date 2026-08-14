@@ -243,29 +243,29 @@
   };
 
   const viewMeta = {
-    dashboard: ['MANAGEMENT OVERVIEW', '经营驾驶舱'],
-    intake: ['LEAD POOL', '线索池'],
-    pending: ['CUSTOMER INTAKE', '待领取'],
-    claimed: ['CUSTOMER INTAKE', '已领取'],
-    customers: ['CRM CUSTOMER PORTFOLIO', 'CRM客户全景'],
-    recycleBin: ['CUSTOMER RECYCLE BIN', '客户回收站'],
-    customerProfile: ['CUSTOMER PROFILE', '客户资料'],
-    pool: ['LEAD POOL', '线索池'],
-    contacts: ['CONTACT EVIDENCE', '客户联系人线索'],
-    recon: ['RECON INTELLIGENCE', 'Recon 情报'],
-    pipeline: ['PIPELINE CONTROL', '推进管道'],
-    alerts: ['TODAY TASKS', '今日待办'],
-    managerTasks: ['MANAGER INTERVENTION', '主管任务'],
-    managerMetrics: ['DEFERRED PLAN METRICS', '延期统计'],
-    notifications: ['CRM NOTIFICATIONS', '通知中心'],
-    activityCorrections: ['ACTIVITY CORRECTIONS', '跟进归属更正'],
-    aiTasks: ['AI CONTROL PLANE', 'AI任务中心'],
-    insights: ['MANAGER INTELLIGENCE', '经理评价'],
-    team: ['TEAM STATUS', '团队状态'],
-    markets: ['MARKET INTELLIGENCE', '市场策略'],
-    users: ['ACCESS CONTROL', '用户与权限'],
-    protectedCustomers: ['CUSTOMER IDENTITY', '客户保护与查重'],
-    maintenance: ['DATA MAINTENANCE', '数据维护'],
+    dashboard: ['经营概览', '经营驾驶舱'],
+    intake: ['线索池', '线索池'],
+    pending: ['客户录入', '待领取'],
+    claimed: ['客户录入', '已领取'],
+    customers: ['CRM 客户全景', 'CRM客户全景'],
+    recycleBin: ['不对口记录', '不对口记录'],
+    customerProfile: ['客户资料', '客户资料'],
+    pool: ['线索池', '线索池'],
+    contacts: ['联系人凭证', '客户联系人线索'],
+    recon: ['Recon 情报', 'Recon 情报'],
+    pipeline: ['推进管道', '推进管道'],
+    alerts: ['今日待办', '今日待办'],
+    managerTasks: ['主管协助事项', '主管协助事项'],
+    managerMetrics: ['计划跟进与协助统计', '计划跟进与协助统计'],
+    notifications: ['通知中心', '通知中心'],
+    activityCorrections: ['跟进更正', '跟进更正'],
+    aiTasks: ['AI 任务中心', 'AI任务中心'],
+    insights: ['客户经营复盘', '客户经营复盘'],
+    team: ['团队状态', '团队状态'],
+    markets: ['市场策略', '市场策略'],
+    users: ['用户与权限', '用户与权限'],
+    protectedCustomers: ['客户保护与查重', '客户保护与查重'],
+    maintenance: ['数据维护', '数据维护'],
   };
   const viewPermissions = {
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
@@ -782,14 +782,14 @@
     }),
     view_pipeline: Object.freeze({ label: '推进管道' }),
     resolve_manager_tasks: Object.freeze({
-      label: '主管介入任务',
-      description: '查看并处理主管介入任务及相关统计。',
+      label: '主管协助事项',
+      description: '查看并处理主管协助事项及相关统计。',
     }),
     view_team: Object.freeze({
       label: '查看团队状态',
       description: '可查看被授权团队的推进、延期和主管处理结果。',
     }),
-    manage_evaluations: Object.freeze({ label: '经理评价' }),
+    manage_evaluations: Object.freeze({ label: '客户经营复盘' }),
     view_users: Object.freeze({ label: '用户与权限' }),
     manage_protected_customers: Object.freeze({
       label: '查看查重候选与保护名单',
@@ -1627,7 +1627,7 @@
     const code = String(primary?.code || '');
     if (code === 'UNCLAIMED') return { label: '领取超期', tone: 'red' };
     if (code === 'OVERDUE') return { label: '跟进超期', tone: 'red' };
-    if (code === 'MANAGER_NEEDED') return { label: '需要管理者介入', tone: 'amber' };
+    if (code === 'MANAGER_NEEDED') return { label: '需要主管协助', tone: 'amber' };
     return { label: primary?.title || '需关注', tone: alert.severity === 'critical' ? 'red' : 'amber' };
   }
   function hasMeaningfulAlertCopy(alert) {
@@ -2223,7 +2223,7 @@
     return {
       ai: `<div class="decision-layer"><span>AI 推荐</span><strong>${ranking}</strong><small>${ai.confidence == null ? '—' : `置信度 ${(Number(ai.confidence) * 100).toFixed(0)}%`}${ai.reviewRequired ? ' · 建议复核' : ''}</small></div>`,
       rule: `<div class="decision-layer"><span>规则裁决</span><strong>${esc(rule.disposition === 'manager_review' ? '待分配' : rule.disposition === 'blocked' ? '规则阻止' : rule.disposition === 'assign' ? '可分配' : '待裁决')}</strong><small>${esc(rule.reason || item.decision_reason || '暂无')}</small></div>`,
-      manual: `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待经理处理'))}</small></div>`,
+      manual: `<div class="decision-layer"><span>人工最终决定</span><strong>${manual ? esc(manual.ownerId || (manual.status === 'rejected' ? '不对口' : manual.status === 'returned' ? '退回' : manual.status)) : '尚未操作'}</strong><small>${esc(manual?.reason || (manual ? manual.action : '等待主管回复'))}</small></div>`,
     };
   }
 
@@ -3067,7 +3067,7 @@
       <div class="next-action-suggestion-fields">
         <label>下一步动作<input id="nextActionSuggestion" value="${esc(value.nextAction || '')}" ${editable ? '' : 'readonly'}></label>
         <label>计划时间<input id="nextActionSuggestionAt" type="datetime-local" data-future-datetime value="${esc(suggestedPlanDateInput(value.nextActionAt))}" ${editable ? '' : 'readonly'}></label>
-        <label class="check"><input id="nextActionSuggestionManager" type="checkbox" ${value.managerRequired ? 'checked' : ''} ${editable ? '' : 'disabled'}> 需要经理介入</label>
+        <label class="check"><input id="nextActionSuggestionManager" type="checkbox" ${value.managerRequired ? 'checked' : ''} ${editable ? '' : 'disabled'}> 需要主管协助</label>
       </div>
       ${editable ? `<div class="next-action-suggestion-actions"><button class="button primary tiny" type="button" data-adopt-next-action="${esc(job.id)}">采纳下一步建议</button><span>采纳前可编辑；不会自动修改客户。</span></div>` : ''}
     </section>`;
@@ -3331,7 +3331,7 @@
   const aiTaskTypeLabels = {
     customer_fit: '客户匹配', company_recon: '公司 Recon', contact_recon: '联系人 Recon',
     sales_pack: '销售资料包', action_proposal: '活动提案', next_action: '下一步建议', prospect_discovery: 'Prospect',
-    manager_evaluation: '经理评价', manager_anomaly: '经理异常', sales_coaching: '销售辅导', assistant_chat: '对话 AI',
+    manager_evaluation: '客户经营复盘', manager_anomaly: '需主管关注', sales_coaching: '销售辅导', assistant_chat: '对话 AI',
   };
 
   function aiTaskFilters() {
@@ -3491,7 +3491,7 @@
     openModal('新建影子版本', 'AI VERSION GOVERNANCE', `<form id="aiStrategyForm" class="form-grid two">
       <label>策略键<input name="strategyKey" required placeholder="customer-fit-default"></label>
       <label>版本<input name="version" required placeholder="2026.07.1"></label>
-      <label>工作站<select name="station"><option value="customer_fit">客户匹配</option><option value="contact_readiness">联系人就绪</option><option value="distribution_priority">分配优先级</option><option value="manager_anomaly">经理异常</option><option value="sales_coaching">销售辅导</option></select></label>
+      <label>工作站<select name="station"><option value="customer_fit">客户匹配</option><option value="contact_readiness">联系人就绪</option><option value="distribution_priority">分配优先级</option><option value="manager_anomaly">需主管关注</option><option value="sales_coaching">销售辅导</option></select></label>
       <label>模型<input name="model" required value="qwen3.7-flash"></label>
       <label>Prompt 版本<input name="promptVersion" required value="v1"></label>
       <label>规则版本<input name="ruleVersion" required value="v1"></label>
@@ -3565,7 +3565,7 @@
       <div class="ai-task-trace-values"><span>证据 ID</span><code>${esc((trace.evidenceIds || []).join('、') || '无')}</code></div>
       ${trace.stale ? `<div class="customer-ai-error"><strong>过期原因</strong><span>${esc(trace.staleReason || '上下文已变化')}</span></div>` : ''}
     </section>` : '';
-    openModal('AI 任务详情', 'AI CONTROL PLANE', `<div class="ai-task-detail">
+    openModal('AI 任务详情', 'AI 任务中心', `<div class="ai-task-detail">
       <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
       ${task.errorSummary ? `<div class="customer-ai-error"><strong>错误</strong><span>${esc(task.errorSummary)}</span></div>` : ''}
       <section><h3>模型尝试</h3><ul class="ai-task-events">${attempts || '<li>无模型尝试记录</li>'}</ul></section>
@@ -4116,7 +4116,7 @@
     const evaluationItem = value => {
       const item = mismatchSafeObject(value);
       return compactItem(
-        firstText(item.subjectName, item.authorName, item.author_name) || '经理评价',
+        firstText(item.subjectName, item.authorName, item.author_name) || '客户经营复盘',
         firstText(item.evaluationText, item.evaluation_text, item.summary),
         dateText(firstText(item.createdAt, item.created_at)),
       );
@@ -4483,7 +4483,7 @@
     const objectCount = Number(summary.objects ?? summary.objectCount ?? summary.total ?? meta.total ?? all.length);
     $('#alertSummary').innerHTML = [
       ['待处理对象', objectCount, reasonText],
-      ['立即处理', counts.immediate, '询价、经理介入或领取时限事项'],
+      ['立即处理', counts.immediate, '询价、主管协助或领取时限事项'],
       ['今天完成', counts.today, '超期、缺少下一步或未首次触达'],
       ['需要关注', counts.attention, '存在阶段停滞风险'],
     ].map(([label, value, text]) => `<article class="alert-kpi"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></article>`).join('');
@@ -4526,7 +4526,7 @@
     manager_assistance: '销售请求经理协助',
   };
   const managerTaskStatusLabels = {
-    open: '待处理', overdue: '已逾期', escalated: '已升级老板', completed: '已完成',
+    open: '待处理', overdue: '已逾期', escalated: '已升级为经营决策事项', completed: '已完成',
   };
 
   function managerTaskRows(pageKey) {
@@ -4569,7 +4569,7 @@
       const values = [
         ['待处理', Number(taskSummary.open || 0)],
         ['已逾期', Number(taskSummary.overdue || 0)],
-        ['已升级老板', Number(taskSummary.escalated || 0)],
+        ['已升级为经营决策事项', Number(taskSummary.escalated || 0)],
         ['已完成', Number(taskSummary.completed || 0)],
         ['当前筛选任务', Number(taskSummary.total || 0)],
       ];
@@ -4742,7 +4742,7 @@
       const severity = item.severity === 'critical' ? 'red' : item.severity === 'warning' ? 'amber' : '';
       const recipient = isOwn ? '发给我' : `发给 ${item.recipientName || '团队成员'}`;
       const action = item.code === 'ACTIVITY_CORRECTION_REVIEW'
-        ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="activityCorrections">处理审批</button>`
+        ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="activityCorrections">处理更正申请</button>`
         : item.code === 'ACTIVITY_CORRECTION_COMPLETED' && account
           ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看目标客户</button>`
           : account
@@ -4805,16 +4805,16 @@
     const pending = rows.filter(item =>
       ['queued', 'running', 'retry_wait'].includes(item.ai?.job?.state)).length;
     status.textContent = meta.loading
-      ? '正在读取经理异常…'
+      ? '正在读取需主管关注事项…'
       : meta.error
-        ? `经理异常暂不可用：${meta.error}`
+        ? `需主管关注事项暂不可用：${meta.error}`
         : `${rows.length} 条规则异常 · ${ready} 条 AI 建议已生成${pending ? ` · ${pending} 条处理中` : ''} · AI建议仅供经理复核`;
     if (meta.loading && !meta.loaded) {
-      root.innerHTML = '<div class="empty">正在加载经理异常…</div>';
+      root.innerHTML = '<div class="empty">正在加载需主管关注事项…</div>';
       return;
     }
     if (!rows.length) {
-      root.innerHTML = `<div class="empty">${meta.loaded ? '当前授权范围内没有五类经理异常' : '尚未读取经理异常'}</div>`;
+      root.innerHTML = `<div class="empty">${meta.loaded ? '当前授权范围内没有五类需主管关注事项' : '尚未读取需主管关注事项'}</div>`;
       return;
     }
     root.innerHTML = table(
@@ -4869,7 +4869,7 @@
         body: '{}',
       });
       await loadManagerAnomalies({ quiet: true });
-      toast(payload.jobs.length ? `已提交 ${payload.jobs.length} 条经理异常建议` : '当前没有需要生成建议的异常');
+      toast(payload.jobs.length ? `已提交 ${payload.jobs.length} 条需主管关注事项建议` : '当前没有需要生成建议的异常');
       clearTimeout(state.managerAnomalies.timer);
       state.managerAnomalies.pollCount = 0;
       const poll = async () => {
@@ -4911,7 +4911,7 @@
       $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
         <article class="insight-hub-card">
           <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(accountDisplayName(item))}</h3><p>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
-          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>经理评价：</strong>${esc(item.evaluationText || (showAI ? item.aiSummary : '') || '已有评价')}` : '尚未填写企业经营评价'}</div>
+          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>客户经营复盘：</strong>${esc(item.evaluationText || (showAI ? item.aiSummary : '') || '已有评价')}` : '尚未填写企业经营评价'}</div>
           <div>${showAI ? `<div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
           <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>
         </article>`).join('') : '<div class="empty">没有符合条件的客户</div>';
@@ -4951,7 +4951,7 @@
       const labels = customerAIEnabled() ? evaluations.flatMap(item => item.aiLabels).slice(0, 5) : [];
       return `<article class="insight-hub-card">
         <div><span class="status-pill">${esc(stageLabel(account.stage))}</span><h3>${esc(accountDisplayName(account))}</h3><p>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.country)} · ${esc(account.owner_name)}</p></div>
-        <div class="insight-preview ${companyEval ? '' : 'empty-preview'}">${companyEval ? `<strong>经理评价：</strong>${esc(companyEval.evaluationText)}` : '尚未填写企业经营评价'}</div>
+        <div class="insight-preview ${companyEval ? '' : 'empty-preview'}">${companyEval ? `<strong>客户经营复盘：</strong>${esc(companyEval.evaluationText)}` : '尚未填写企业经营评价'}</div>
         <div>${customerAIEnabled() ? `<div class="ai-tag-row">${labels.length ? labels.map(label => `<span class="ai-tag">AI · ${esc(label.name)}</span>`).join('') : '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${contactCount} 位对接人 · ${contactEvalCount} 条联系人评价</p></div>
         <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${account.id}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${account.id}">${companyEval ? '追加评价' : '写企业评价'}</button></div>
       </article>`;
@@ -5659,7 +5659,7 @@
         ['firstContactSilence', '首次触达后无二次动作', '天', 'Days', rules.firstContactSilence],
         ['plannedActionOverdue', '计划动作超时', '小时', 'Hours', rules.plannedActionOverdue],
       ].map(([key, label, unit, suffix, rule]) => `<fieldset class="manager-task-rule manager-rule-row">
-        <div class="manager-task-rule-head"><div><strong>${esc(label)}</strong><span>达到阈值后创建主管介入任务</span></div><label class="check"><input name="${key}Enabled" type="checkbox" ${rule?.enabled ? 'checked' : ''}><span>启用</span></label></div>
+        <div class="manager-task-rule-head"><div><strong>${esc(label)}</strong><span>达到阈值后创建主管协助事项</span></div><label class="check"><input name="${key}Enabled" type="checkbox" ${rule?.enabled ? 'checked' : ''}><span>启用</span></label></div>
         <div class="manager-task-rule-fields"><label>阈值（${esc(unit)}）<input name="${key}${suffix}" type="number" min="1" step="1" value="${Number(rule?.value || 1)}" required></label></div>
       </fieldset>`).join('') + `<fieldset class="manager-task-rule manager-rule-row manager-anomaly-rule">
         <div class="manager-task-rule-head"><div><strong>销售维度复盘</strong><span>只用于统计，不创建客户任务</span></div><label class="check"><input name="salesAnomalyEnabled" type="checkbox" ${rules.salesAnomaly?.enabled ? 'checked' : ''}><span>启用</span></label></div>
@@ -6508,7 +6508,7 @@
   }
 
   function openDuplicateNeedsInfoModal(reviewId) {
-    openModal('信息不足，要求补充', 'DUPLICATE REVIEW', `<form id="duplicateNeedsInfoForm" class="form-grid">
+    openModal('信息不足，要求补充', '重复客户确认', `<form id="duplicateNeedsInfoForm" class="form-grid">
       <input type="hidden" name="reviewId" value="${esc(reviewId)}">
       <label class="span-2">需要补充的内容<textarea name="note" rows="3" maxlength="500" required placeholder="例如：请补充采购负责人姓名与官网备案信息"></textarea></label>
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认要求补充</button></div>
@@ -6782,7 +6782,7 @@
   async function openProtectedProfileModal(externalCustomerId) {
     const result = await api(`/api/sales-crm/protected-customers/${encodeURIComponent(externalCustomerId)}`);
     const item = result.customer || {};
-    openModal(`保护资料 · ${item.alphaNickname || externalCustomerId}`, 'PROTECTED CUSTOMER PROFILE', `<form id="protectedProfileForm" class="form-grid">
+    openModal(`保护资料 · ${item.alphaNickname || externalCustomerId}`, '客户保护资料', `<form id="protectedProfileForm" class="form-grid">
       <input type="hidden" name="externalCustomerId" value="${esc(externalCustomerId)}">
       <div class="protected-modal-fields">
         <label>正式公司名称<input name="companyName" value="${esc(item.companyName || '')}"></label>
@@ -6868,7 +6868,7 @@
     const metrics = [
       ['线索', counts.intakeItems], ['CRM客户', counts.accounts], ['跟进', counts.activities],
       ['询价', counts.rfqs], ['报价', counts.quotes], ['订单', counts.orders],
-      ['CRM联系人', counts.contacts], ['经理评价', counts.evaluations], ['通知', counts.notifications],
+      ['CRM联系人', counts.contacts], ['客户经营复盘', counts.evaluations], ['通知', counts.notifications],
     ];
     const blocked = Number(counts.conflicts || 0) > 0;
     panel.innerHTML = `<div class="panel-head"><div><p class="eyebrow red">IMPACT PREVIEW</p><h2>影响范围预览</h2></div><span class="panel-note">预览有效至 ${esc(shortDate(preview.expiresAt, true))}</span></div>
@@ -7484,7 +7484,7 @@
   function evaluationCard(item) {
     const ai = !customerAIEnabled() ? '' : item.aiStatus === 'completed' ? `
       <div class="ai-analysis">
-        <div class="ai-analysis-head"><span class="ai-badge">AI 标注</span><span>${esc(item.aiModel || 'AI')} · 基于经理评价自动提取 · 非人工结论</span></div>
+        <div class="ai-analysis-head"><span class="ai-badge">AI 标注</span><span>${esc(item.aiModel || 'AI')} · 基于客户经营复盘自动提取 · 非人工结论</span></div>
         ${item.aiSummary ? `<div class="evaluation-text">${esc(item.aiSummary)}</div>` : ''}
         <div class="ai-tag-row">${item.aiLabels.map(label => `<span class="ai-tag" title="${esc(label.rationale || '')}">AI · ${esc(label.name)}</span>`).join('')}</div>
         ${item.aiOrderKeys.length ? `<div class="ai-strategy"><strong>AI提取的赢单关键：</strong>${esc(item.aiOrderKeys.join('、'))}</div>` : ''}
@@ -7493,7 +7493,7 @@
       </div>` : item.aiStatus === 'failed' ? `<div class="ai-analysis"><div class="ai-analysis-head"><span class="ai-badge">AI 标注失败</span><button class="text-button" data-retry-evaluation="${item.id}">重新生成</button></div><span class="subtle">${esc(item.aiError || 'AI服务暂时不可用')}</span></div>`
         : '<div class="ai-analysis"><div class="ai-analysis-head"><span class="ai-badge">AI 分析中</span></div></div>';
     return `<article class="evaluation-card manager-note">
-      <div class="evaluation-meta"><span>经理评价 · ${esc(item.authorName)}</span><time>${shortDate(item.createdAt, true)}</time></div>
+      <div class="evaluation-meta"><span>客户经营复盘 · ${esc(item.authorName)}</span><time>${shortDate(item.createdAt, true)}</time></div>
       <div class="evaluation-text">${esc(item.evaluationText)}</div>${ai}
     </article>`;
   }
@@ -7590,8 +7590,8 @@
         <div class="insight-body">${contacts.length ? contacts.map(contact => `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name || '未命名联系人')}</strong><span>${esc([contact.title, contact.department, contact.contactLevel].filter(Boolean).join(' · ') || '职位未标注')}</span></div></div><p>${esc([contact.email, contact.phone, contact.social].filter(Boolean).join(' · ') || '联系方式受权限保护或未记录')}</p></article>`).join('') : '<div class="empty">暂无联系人历史</div>'}</div>
       </section>
       <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>经理评价历史</h3></div><span class="panel-note">${evaluations.length} 条</span></div>
-        <div class="insight-body">${evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '经理评价')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无经理评价</div>'}</div>
+        <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>客户经营复盘历史</h3></div><span class="panel-note">${evaluations.length} 条</span></div>
+        <div class="insight-body">${evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '客户经营复盘')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无客户经营复盘</div>'}</div>
       </section>
       ${commerceGroups.map(([label, rows, describe]) => `<section class="insight-section"><div class="insight-head"><div><h3>${label}</h3></div><span class="panel-note">${rows.length} 条</span></div><div class="insight-body">${rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>'}</div></section>`).join('')}
       <section class="insight-section">
@@ -7685,7 +7685,7 @@
       ['阶段变化', `${activity.stage_before || '—'} → ${activity.stage_after || '—'}`],
       ['操作人', event.actor_name || event.actorName || '—'],
       ['发生时间', shortDate(event.occurred_at || event.occurredAt, true)],
-      ['经理介入', activity.managerRequired ? '需要介入' : '—'],
+      ['主管协助', activity.managerRequired ? '需要协助' : '—'],
     ];
     const formatChange = value => Object.entries(value || {})
       .map(([key, item]) => `${key}：${item ?? '—'}`).join('、');
@@ -7921,7 +7921,7 @@
     const filters = $('#activityCorrectionProposalFilters');
     if (filters) filters.innerHTML = '';
     const list = $('#activityCorrectionProposalList');
-    if (list) list.innerHTML = '<div class="empty">进入页面后读取审批队列</div>';
+    if (list) list.innerHTML = '<div class="empty">进入页面后读取更正待处理</div>';
     const count = $('#activityCorrectionProposalCount');
     if (count) count.textContent = '';
     $('#activityCorrectionProposalMore')?.classList.add('hidden');
@@ -8176,7 +8176,7 @@
       ? '更正写入尚未启用，审批操作暂不可用。'
       : '正在检查更正功能状态，审批操作暂不可用。';
     return `<article class="activity-correction-proposal" data-correction-proposal="${esc(proposal.proposalId)}">
-      <header><div><strong>${esc(correctionProposalCustomer(proposal, 'source'))} → ${esc(correctionProposalCustomer(proposal, 'target'))}</strong><small>${shortDate(proposal.createdAt, true)}</small></div><span class="pill ${proposal.status === 'pending' ? 'amber' : proposal.status === 'approved' ? '' : 'gray'}">${esc(({ pending: '待审批', approved: '已批准', rejected: '已拒绝' })[proposal.status] || proposal.status)}</span></header>
+      <header><div><strong>${esc(correctionProposalCustomer(proposal, 'source'))} → ${esc(correctionProposalCustomer(proposal, 'target'))}</strong><small>${shortDate(proposal.createdAt, true)}</small></div><span class="pill ${proposal.status === 'pending' ? 'amber' : proposal.status === 'approved' ? '' : 'gray'}">${esc(({ pending: '待确认', approved: '已通过', rejected: '未通过' })[proposal.status] || proposal.status)}</span></header>
       <p>${esc(proposal.reason || '未填写更正原因')}</p>
       ${proposal.status === 'pending' ? `<div class="activity-correction-review-fields">
         ${mappingResolution?.required ? `<label>业务记录处理<select data-correction-resolution ${unavailable ? 'disabled' : ''}><option value="">请选择处理方式</option>${resolutionOptions}</select></label>` : ''}
@@ -8184,7 +8184,7 @@
         ${writesDisabled ? `<div class="activity-correction-review-warning">${writeWarning}</div>` : ''}
         <label>审批意见<textarea data-correction-review-reason maxlength="2000" placeholder="拒绝时必须填写原因">${esc(reviewDraft.reason || '')}</textarea></label>
         <p class="activity-correction-review-status" data-correction-review-status role="alert" aria-live="polite"></p>
-        <div class="activity-correction-review-actions"><button class="button secondary" type="button" data-review-correction="rejected" ${writesDisabled ? 'disabled' : ''}>拒绝</button><button class="button primary" type="button" data-review-correction="approved" ${unavailable || writesDisabled ? 'disabled' : ''}>批准</button></div>
+        <div class="activity-correction-review-actions"><button class="button secondary" type="button" data-review-correction="rejected" ${writesDisabled ? 'disabled' : ''}>不通过</button><button class="button primary" type="button" data-review-correction="approved" ${unavailable || writesDisabled ? 'disabled' : ''}>通过</button></div>
       </div>` : `<small>${esc(proposal.reviewReason || '审批已完成')}</small>`}
     </article>`;
   }
@@ -8193,7 +8193,7 @@
     const correction = state.activityCorrection;
     const list = $('#activityCorrectionProposalList');
     if (list) list.innerHTML = correction.proposalLoading && !correction.proposalRows.length
-      ? '<div class="empty">正在读取审批队列…</div>'
+      ? '<div class="empty">正在读取更正待处理…</div>'
       : correction.proposalRows.map(renderActivityCorrectionProposal).join('') || '<div class="empty">当前筛选下没有更正申请</div>';
     const count = $('#activityCorrectionProposalCount');
     if (count) count.textContent = `已显示 ${correction.proposalRows.length} / ${correction.proposalTotal} 条（授权范围 ${correction.proposalAuthorizedTotal} 条）`;
@@ -8302,11 +8302,11 @@
     }
     const root = button?.closest('[data-correction-proposal]');
     const reason = String(root?.querySelector('[data-correction-review-reason]')?.value || '').trim();
-    if (decision === 'rejected' && !reason) return toast('拒绝申请时必须填写审批原因');
+    if (decision === 'rejected' && !reason) return toast('不通过更正时必须填写说明原因');
     const resolution = proposalResolutionFromControl(root);
     if (decision === 'approved' && proposal?.mappingResolution?.required
         && proposal.mappingResolution.available === false) {
-      return toast('当前业务映射不可批准，请刷新或重新加载后处理');
+      return toast('当前业务映射不可通过，请刷新或重新加载后处理');
     }
     if (decision === 'approved' && proposal?.mappingResolution?.required && !resolution) {
       return toast('请选择业务记录处理方式；无法确认时请拒绝或刷新');
@@ -8341,7 +8341,7 @@
       await refreshAfterActivityCorrection({
         ...(response.result || {}), sourceCustomerId: proposal.sourceCustomerId,
         targetCustomerId: proposal.targetCustomerId,
-      }, decision === 'approved' ? '更正申请已批准' : '更正申请已拒绝');
+      }, decision === 'approved' ? '更正申请已通过' : '更正申请未通过');
     } catch (error) {
       if (error.code === 'ACTIVITY_CORRECTIONS_DISABLED' || error.status === 503) {
         state.activityCorrection.writeEnabled = false;
@@ -8780,7 +8780,7 @@
 
   async function openManagerTaskDetail(taskId) {
     if (!can('resolve_manager_tasks') || !taskId) return toast('当前账号无权处理主管任务');
-    openModal('主管任务详情', 'MANAGER INTERVENTION', '<div class="empty">正在读取任务事实和客户风险历史…</div>', 'manager-task-modal');
+    openModal('主管任务详情', '主管协助事项', '<div class="empty">正在读取任务事实和客户风险历史…</div>', 'manager-task-modal');
     try {
       const result = await api(`/api/sales-crm/manager-tasks/${encodeURIComponent(taskId)}`, {
         preserveOnForbidden: true,
@@ -8807,7 +8807,7 @@
         ...(can('manage_intake') ? [['reassigned', '重新分配负责人']] : []),
         ...(can('edit_customer') && can('record_activity')
           ? [['manager_advice', '记录主管建议并安排动作']] : []),
-        ['escalate_owner', '升级老板处理'],
+        ['escalate_owner', '升级为经营决策事项'],
       ];
       openModal(`主管任务 · ${account.companyName || task.customerId}`, managerTaskReasonLabels[task.reason] || task.reason, `
         <div class="manager-task-detail">
@@ -8872,7 +8872,7 @@
       terminal_stage: `<label>终止阶段<select name="stage" required><option value="lost">丢单</option></select></label><label>终止原因<textarea name="note" maxlength="500" required></textarea></label>`,
       reassigned: `<label>新负责人<select name="ownerId" required><option value="">请选择在职销售</option>${salesOptions.map(([id, name]) => `<option value="${esc(id)}">${esc(name || id)}</option>`).join('')}</select></label>`,
       manager_advice: `<label>主管建议<textarea name="note" maxlength="500" required placeholder="记录给销售的具体建议"></textarea></label><label>下一步计划<input name="nextAction" maxlength="500" required></label><label>计划执行时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${nextAt}" required></label>`,
-      escalate_owner: `<label>需要老板处理的难点<textarea name="difficulty" maxlength="500" required placeholder="说明具体困难和需要的决策"></textarea></label>`,
+      escalate_owner: `<label>需进一步决策的难点<textarea name="difficulty" maxlength="500" required placeholder="说明具体困难和需要的决策"></textarea></label>`,
     };
     root.innerHTML = fields[action] || fields.plan_formed;
     constrainFutureDateTimes(root);
@@ -9417,7 +9417,7 @@
           </section>
           <section id="activityNoPlanFields" class="hidden form-grid activity-no-plan-fields">
             <label class="span-2">原因<textarea name="noPlanReason" rows="3" maxlength="1000" placeholder="说明当前为什么没有下一步计划"></textarea></label>
-            <p class="span-2 subtle activity-plan-hint">将保存为真实状态，连续 3 次暂无计划会提醒经理介入。</p>
+            <p class="span-2 subtle activity-plan-hint">将保存为真实状态，连续 3 次暂无计划会提醒主管关注。</p>
           </section>
           <section id="activityManagerFields" class="hidden form-grid activity-manager-fields">
             <label class="span-2">需要主管协助的原因<textarea name="managerReason" rows="3" maxlength="1000" placeholder="例如：已发邮件且社媒无回应，目前没有思路"></textarea></label>
@@ -9522,7 +9522,7 @@
     const sales = state.data.todayTaskAssignmentCandidates || [];
     const canLeaveUnassigned = can('view_all_customers') && can('manage_intake');
     const ownerOptions = `${canLeaveUnassigned ? '<optgroup label="操作"><option value="__unassigned__">暂不分配</option></optgroup>' : ''}<optgroup label="销售人员">${sales.map(user => `<option value="${user.id}" ${user.id === state.data.user.id ? 'selected' : ''}>${esc(user.name)}</option>`).join('')}</optgroup>`;
-    openModal('新增对口客户', 'CUSTOMER INTAKE', `<form id="customerForm" class="form-grid two customer-intake-form">
+    openModal('新增对口客户', '客户录入', `<form id="customerForm" class="form-grid two customer-intake-form">
       <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
       <label class="span-2">公司名称<input name="companyName" placeholder="当地官方名称；公司名称或官网至少填写一项"><small>优先填写企业当地官方名称，作为客户主展示名</small></label>
       <label>本地名称/别名（选填）<input name="russianName"><small>公司名称不是当地官方名称或存在常用别名时填写</small></label>
@@ -9954,7 +9954,7 @@
     const nicknameField = customerAllowsNicknameEdit(account)
       ? `<label class="span-2">客户昵称<input name="nickname" value="${esc(account.nickname || '')}" maxlength="40" autocomplete="off" placeholder="最多40个字符，公司内部共用"></label>`
       : '';
-    openModal('编辑客户资料', 'CUSTOMER PROFILE', `<form id="customerProfileEditForm" class="form-grid two">
+    openModal('编辑客户资料', '客户资料', `<form id="customerProfileEditForm" class="form-grid two">
       <input type="hidden" name="customerId" value="${esc(customerId)}">
       <label>阶段<select name="stage">${editableStages.map(item => `<option value="${item.key}" ${item.key === account.stage ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select></label>
       <label>负责人<select name="ownerId" ${canAssign ? '' : 'disabled'}>${ownerOptions}</select></label>
@@ -10107,12 +10107,12 @@
       bulk: ['批量退回客户', '选中的客户会一次性退回，任一客户校验失败则全部不变。'],
     };
     const [title, note] = labels[action] || labels.return;
-    openModal(title, 'CUSTOMER RECYCLE BIN', `<form id="recycleReasonForm" class="form-grid">
+    openModal(title, '不对口记录', `<form id="recycleReasonForm" class="form-grid">
       <input type="hidden" name="customerId" value="${esc(customerId || '')}">
       <input type="hidden" name="action" value="${esc(action)}">
       <div class="recommendation">${esc(note)}</div>
       <label>原因<textarea name="reason" minlength="2" maxlength="500" required placeholder="请输入2至500个字符的原因"></textarea></label>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button danger">确认操作</button></div>
+      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button danger">确认${esc(title)}</button></div>
     </form>`);
   }
 
@@ -10146,7 +10146,7 @@
       <input type="hidden" name="subjectId" value="${esc(contactId)}"><input type="hidden" name="subjectName" value="${esc(subjectName || '')}">
       <input type="hidden" name="subjectTitle" value="${esc(subjectTitle || '')}">
       <div class="recommendation"><strong>${esc(subjectName || '')}</strong>${subjectTitle ? `<br>${esc(subjectTitle)}` : ''}</div>
-      <label>销售经理评价<textarea name="evaluationText" required minlength="8" placeholder="${subjectType === 'company' ? '例如：公司规模很大但采购流程不规范，因此决策快、价格敏感度较低；质检实验室完整，赢单关键是提供可追溯质检服务。' : '例如：采购主管拥有供应商初筛权，重视响应速度和资料完整度；沟通直接，但最终价格需要老板确认。'}"></textarea></label>
+      <label>客户经营复盘<textarea name="evaluationText" required minlength="8" placeholder="${subjectType === 'company' ? '例如：公司规模很大但采购流程不规范，因此决策快、价格敏感度较低；质检实验室完整，赢单关键是提供可追溯质检服务。' : '例如：采购主管拥有供应商初筛权，重视响应速度和资料完整度；沟通直接，但最终价格需要老板确认。'}"></textarea></label>
       ${showAI ? '<div class="recommendation"><strong>AI如何处理</strong><br>系统会基于这段经理原文提取标签、风险、赢单关键和建议。所有生成内容均明确显示“AI标注”，不会覆盖经理原文。</div>' : ''}
       <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">${showAI ? '保存并生成AI标注' : '保存评价'}</button></div>
     </form>`);
@@ -10431,7 +10431,7 @@
           body.ownerId = payload.ownerId;
         }
         if (payload.action === 'escalate_owner') {
-          if (!String(payload.difficulty || '').trim()) throw new Error('请说明需要老板处理的难点');
+          if (!String(payload.difficulty || '').trim()) throw new Error('请说明需进一步决策的难点');
           body.difficulty = String(payload.difficulty).trim();
         }
         const status = $('#managerResolveStatus');
@@ -10448,7 +10448,7 @@
           loadAuthorizedBusinessPage('manager_risks', { reset: true }),
           loadAuthorizedBusinessPage('manager_metrics', { reset: true }),
         ]);
-        toast(payload.action === 'escalate_owner' ? '任务已升级老板处理' : '主管处理已记录，业务状态已更新');
+        toast(payload.action === 'escalate_owner' ? '任务已升级为经营决策事项' : '主管处理已记录，业务状态已更新');
       } else if (form.id === 'todayTaskPlanForm') {
         const payload = formPayload(form);
         form._todayTaskSubmitter = event.submitter;
@@ -10955,8 +10955,8 @@
             body: JSON.stringify(formPayload(form)),
           });
           await refresh(customerAIEnabled()
-            ? (result.aiWarning ? '经理评价已保存；AI标注暂时失败，可稍后重试' : '经理评价和AI标注已生成')
-            : '经理评价已保存');
+            ? (result.aiWarning ? '客户经营复盘已保存；AI标注暂时失败，可稍后重试' : '客户经营复盘和AI标注已生成')
+            : '客户经营复盘已保存');
         } finally {
           if (button) {
             button.disabled = false;

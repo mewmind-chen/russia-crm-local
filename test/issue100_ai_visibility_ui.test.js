@@ -43,7 +43,7 @@ test('disabled customer, evaluation and notification views omit historical AI pr
   assert.match(app, /visiblePermissionDefinitions\(\)/);
   const aiPermissions = app.match(/const aiPermissionKeys = new Set\(\[[\s\S]*?\]\);/)?.[0] || '';
   assert.doesNotMatch(aiPermissions, /manage_evaluations/);
-  assert.match(app, /manage_evaluations: Object\.freeze\(\{ label: '经理评价' \}\)/);
+  assert.match(app, /manage_evaluations: Object\.freeze\(\{ label: '客户经营复盘' \}\)/);
 });
 
 test('legacy workbench removes assistant, customer AI route and AI-only tags from the DOM', () => {

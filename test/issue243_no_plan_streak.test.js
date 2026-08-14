@@ -143,13 +143,13 @@ test('Issue 243 three consecutive no-plan records push manager alert and in-app 
   assert.equal(reason.noPlanStreak, 3);
   assert.match(reason.title, /暂无计划/);
   assert.match(reason.detail, /当前负责人/);
-  assert.match(reason.detail, /经理介入/);
-  assert.match(reason.action, /经理介入/);
+  assert.match(reason.detail, /主管协助/);
+  assert.match(reason.action, /主管协助/);
 
   const notifications = noPlanNotifications(fx, 'CRM-OWN');
   assert.ok(notifications.length >= 2, 'manager/admin recipients should be notified');
   assert.ok(notifications.every(row => row.title.includes('暂无计划')));
-  assert.ok(notifications.every(row => row.detail.includes('建议经理介入并协助形成明确下一步')));
+  assert.ok(notifications.every(row => row.detail.includes('建议主管协助并形成明确下一步')));
 
   const fourth = await recordActivity(fx, fx.adminCookie, noPlanPayload(reaction.id, 4));
   assert.equal(fourth.response.status, 200);

@@ -25,7 +25,7 @@ const description = '寻找并核实客户公司的采购、老板、工程师�
 test('Sales CRM names and explains the customer contact lead module consistently', () => {
   assert.match(salesHtml, new RegExp(`data-view="contacts"[^>]*>[\\s\\S]*?<span>${moduleName}</span>`));
   assert.match(salesHtml, new RegExp(`<h2>${moduleName}</h2><p>${description}</p>`));
-  assert.match(salesJs, new RegExp(`contacts: \\['CONTACT EVIDENCE', '${moduleName}'\\]`));
+  assert.match(salesJs, new RegExp(`contacts: \\['联系人凭证', '${moduleName}'\\]`));
   assert.doesNotMatch(`${salesHtml}\n${salesJs}`, /负责人线索/);
 });
 

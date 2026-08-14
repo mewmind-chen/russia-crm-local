@@ -20,7 +20,7 @@ test('Issue 246 customer profile edit is a single entry on drawer and profile to
 });
 
 test('Issue 246 unified form contains profile, stage and nickname fields without plan inputs', () => {
-  const form = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
+  const form = app.match(/openModal\('编辑客户资料', '客户资料', `([\s\S]*?)<\/form>`/)?.[1] || '';
   assert.match(form, /id="customerProfileEditForm"/);
   for (const name of [
     'stage', 'ownerId', 'priority',

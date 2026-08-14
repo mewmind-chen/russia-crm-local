@@ -142,7 +142,7 @@ test('manager task detail presents evidence and submits only real domain actions
   assert.match(detail, /can\('edit_customer'\)[\s\S]*?plan_formed[\s\S]*?terminal_stage/);
   assert.match(detail, /can\('manage_intake'\)[\s\S]*?reassigned/);
   assert.match(detail, /can\('edit_customer'\) && can\('record_activity'\)[\s\S]*?manager_advice/);
-  assert.match(detail, /\['escalate_owner', '升级老板处理'\]/);
+  assert.match(detail, /\['escalate_owner', '升级为经营决策事项'\]/);
   assert.match(detail, /setManagerTaskAction\(managerTaskActions\[0\]\[0\]\)/);
 
   const submit = block(app, "document.addEventListener('submit'", "document.addEventListener('click'");

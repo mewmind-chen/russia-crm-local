@@ -52,7 +52,7 @@ test('record progress modal uses the confirmed compact wording and fields', () =
     '保存进展',
   ]) assert.match(modal, new RegExp(copy));
   assert.match(app, /客户搜索/);
-  assert.doesNotMatch(modal, /记录客户动作|本次动作|简短记录|下一步动作|计划时间|这是重点节点，需要管理者介入|保存并更新阶段/);
+  assert.doesNotMatch(modal, /记录客户动作|本次动作|简短记录|下一步动作|计划时间|这是重点节点|保存并更新阶段/);
   assert.doesNotMatch(modal, /<label[^>]*>渠道|name="channel"[^>]*type="(?:text|search)"|<select[^>]*name="channel"/);
   assert.match(modal, /name="summary"[^>]*(?:rows="2"[^>]*|data-[^>]*rows)/);
   assert.match(modal, /data-activity-mode="progress"/);

@@ -22,7 +22,7 @@ test('customer profile edit is a single permission-scoped entry point', () => {
 });
 
 test('unified profile form owns stage, owner, priority, nickname and master fields', () => {
-  const profileForm = app.match(/openModal\('编辑客户资料', 'CUSTOMER PROFILE', `([\s\S]*?)<\/form>`/)?.[1] || '';
+  const profileForm = app.match(/openModal\('编辑客户资料', '客户资料', `([\s\S]*?)<\/form>`/)?.[1] || '';
   assert.match(profileForm, /id="customerProfileEditForm"/);
   for (const name of [
     'stage', 'ownerId', 'priority',

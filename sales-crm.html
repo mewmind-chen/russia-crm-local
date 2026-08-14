@@ -60,11 +60,11 @@
           <button data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进管道</span></button>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
-          <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管介入任务</span></button>
+          <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管协助事项</span></button>
           <button data-view="activityCorrections" data-permission="manage_activity_corrections"><i data-tp-icon="note" aria-hidden="true"></i><span>跟进更正</span></button>
-          <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>延期与介入统计</span></button>
+          <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>计划跟进与协助统计</span></button>
           <button data-view="team" data-permission="view_customers"><i data-tp-icon="chart" aria-hidden="true"></i><span>团队状态</span></button>
-          <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>经理评价</span><b id="navInsightCount">0</b></button>
+          <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>客户经营复盘</span><b id="navInsightCount">0</b></button>
           <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
           <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
           <button data-view="protectedCustomers"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户保护与查重</span><b id="navProtectedConflictCount" class="danger-count hidden">0</b></button>
@@ -90,7 +90,7 @@
       <header class="topbar">
         <button id="salesMenuBtn" class="menu-button icon-button" type="button" aria-label="打开导航" title="打开导航"><span data-tp-icon="menu" aria-hidden="true"></span></button>
         <div>
-          <p id="viewEyebrow" class="eyebrow">MANAGEMENT OVERVIEW</p>
+          <p id="viewEyebrow" class="eyebrow">经营概览</p>
           <h1 id="viewTitle">经营驾驶舱</h1>
         </div>
         <div class="top-actions">
@@ -141,12 +141,12 @@
         <div id="aiTaskDegraded" class="ai-task-degraded hidden" role="status"></div>
         <article class="panel">
           <div class="section-intro ai-task-intro">
-            <div><p class="eyebrow">AI CONTROL PLANE</p><h2>统一 AI 任务中心</h2><p>查看任务排队、模型尝试、成本、失败降级与人工复核，不展示完整提示词、密钥或 Worker 标识。</p></div>
+            <div><p class="eyebrow">AI 任务中心</p><h2>统一 AI 任务中心</h2><p>查看任务排队、模型尝试、成本、失败降级与人工复核，不展示完整提示词、密钥或 Worker 标识。</p></div>
             <button id="aiTaskRefresh" class="button secondary" type="button">刷新</button>
           </div>
           <div class="toolbar ai-task-filters">
             <select id="aiTaskStateFilter"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">执行中</option><option value="retry_wait">等待重试</option><option value="needs_review">待复核</option><option value="succeeded">已完成</option><option value="failed,dead_letter">失败</option><option value="cancelled">已取消</option></select>
-            <select id="aiTaskTypeFilter"><option value="">全部类型</option><option value="customer_fit">客户匹配</option><option value="sales_pack">销售资料包</option><option value="action_proposal">活动提案</option><option value="manager_anomaly">经理异常</option><option value="sales_coaching">销售辅导</option><option value="company_recon">公司 Recon</option><option value="contact_recon">联系人 Recon</option><option value="prospect_discovery">Prospect</option><option value="manager_evaluation">经理评价</option><option value="assistant_chat">对话 AI</option></select>
+            <select id="aiTaskTypeFilter"><option value="">全部类型</option><option value="customer_fit">客户匹配</option><option value="sales_pack">销售资料包</option><option value="action_proposal">活动提案</option><option value="manager_anomaly">需主管关注</option><option value="sales_coaching">销售辅导</option><option value="company_recon">公司 Recon</option><option value="contact_recon">联系人 Recon</option><option value="prospect_discovery">Prospect</option><option value="manager_evaluation">客户经营复盘</option><option value="assistant_chat">对话 AI</option></select>
             <input id="aiTaskCustomerFilter" placeholder="客户编码">
             <input id="aiTaskOwnerFilter" placeholder="发起人 ID">
             <input id="aiTaskModelFilter" placeholder="模型">
@@ -174,7 +174,7 @@
       <section id="poolView" class="view">
         <div id="intakeSummary" class="metric-grid"></div>
         <div class="section-intro">
-          <div><p class="eyebrow">LEAD POOL</p><h2 id="intakeHeading">线索池</h2><p id="intakeSubheading">集中查看线索资料、分配、领取、退回和后续流转。</p></div>
+          <div><p class="eyebrow">线索池</p><h2 id="intakeHeading">线索池</h2><p id="intakeSubheading">集中查看线索资料、分配、领取、退回和后续流转。</p></div>
           <div id="intakeManagerActions" class="top-actions">
             <button id="intakeSettingsBtn" class="button secondary">同步设置</button>
             <button id="scanIntakeBtn" class="button primary">⇣ 同步线索</button>
@@ -259,7 +259,7 @@
 
       <section id="recycleBinView" class="view">
         <div class="section-intro">
-          <div><p class="eyebrow">CUSTOMER RECYCLE BIN</p><h2>不对口记录</h2><p>不对口客户和手动删除客户在此保留；领取前和进入 CRM 后的记录统一展示。销售可查看本人记录，管理账号可在授权范围内恢复。</p></div>
+          <div><p class="eyebrow">不对口记录</p><h2>不对口记录</h2><p>不对口客户和手动删除客户在此保留；领取前和进入 CRM 后的记录统一展示。销售可查看本人记录，管理账号可在授权范围内恢复。</p></div>
         </div>
         <div id="recycleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
@@ -293,13 +293,13 @@
       </section>
 
       <section id="contactsView" class="view">
-        <div class="section-intro"><div><p class="eyebrow">CONTACT EVIDENCE</p><h2>客户联系人线索</h2><p>寻找并核实客户公司的采购、老板、工程师等潜在联系人；确认后进入正式客户联系人。</p></div></div>
+        <div class="section-intro"><div><p class="eyebrow">联系人凭证</p><h2>客户联系人线索</h2><p>寻找并核实客户公司的采购、老板、工程师等潜在联系人；确认后进入正式客户联系人。</p></div></div>
         <div id="peopleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel"><div class="toolbar"><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div id="peoplePagination" class="shared-pagination" data-pagination="contacts"></div></article>
       </section>
 
       <section id="reconView" class="view">
-        <div class="section-intro"><div><p class="eyebrow">RECON INTELLIGENCE</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
+        <div class="section-intro"><div><p class="eyebrow">Recon 情报</p><h2>Recon 情报</h2><p>所有背调结论均保留来源、证据数量和生成时间，并直接关联客户经营档案。</p></div></div>
         <div id="reconAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel"><div class="toolbar"><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div id="reconPagination" class="shared-pagination" data-pagination="recon"></div></article>
       </section>
@@ -320,7 +320,7 @@
         <div id="alertsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel manager-anomaly-panel" data-permission="view_team" data-ai-business>
           <div class="panel-head">
-            <div><p class="eyebrow">MANAGER ANOMALY</p><h2>经理异常优先队列</h2></div>
+            <div><p class="eyebrow">需主管关注</p><h2>需主管关注优先队列</h2></div>
             <button id="runManagerAnomaly" data-permission="view_team" class="button primary" type="button">✦ 生成 AI 介入建议</button>
           </div>
           <div id="managerAnomalyStatus" class="manager-anomaly-status" role="status" aria-live="polite">进入页面后读取授权范围内的异常。</div>
@@ -347,7 +347,7 @@
         <div id="notificationsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="section-intro notification-intro">
-            <div><p class="eyebrow">CRM NOTIFICATIONS</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
+            <div><p class="eyebrow">通知中心</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
             <button id="notificationRefresh" class="button secondary" type="button">刷新</button>
           </div>
           <div class="toolbar">
@@ -364,7 +364,7 @@
 
       <section id="activityCorrectionsView" class="view" data-view-panel="activityCorrections">
         <div class="section-intro">
-          <div><p class="eyebrow">ACTIVITY CORRECTIONS</p><h2>跟进归属更正</h2><p>查看更正审计历史，并处理授权范围内的待审批申请。</p></div>
+          <div><p class="eyebrow">跟进更正</p><h2>跟进归属更正</h2><p>查看更正审计历史，并处理授权范围内的待确认更正。</p></div>
           <button id="activityCorrectionWorkspaceRefresh" class="button secondary" type="button">刷新</button>
         </div>
         <div id="activityCorrectionWriteStatus" class="activity-correction-write-status" role="status" aria-live="polite">正在读取更正功能状态…</div>
@@ -376,10 +376,10 @@
           <div id="activityCorrectionHistoryPagination" class="shared-pagination" data-pagination="correction_history"></div>
         </article>
         <article class="panel activity-correction-workspace">
-          <div class="panel-head"><div><p class="eyebrow">CORRECTION REVIEW</p><h2>待审批申请</h2></div><span id="activityCorrectionProposalCount" class="panel-note"></span></div>
+          <div class="panel-head"><div><p class="eyebrow">CORRECTION REVIEW</p><h2>待确认更正</h2></div><span id="activityCorrectionProposalCount" class="panel-note"></span></div>
           <div id="activityCorrectionProposalFilters" class="authorized-filter-host" aria-live="polite"></div>
           <p id="activityCorrectionProposalStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
-          <div id="activityCorrectionProposalList" class="activity-correction-proposal-list"><div class="empty">进入页面后读取审批队列</div></div>
+          <div id="activityCorrectionProposalList" class="activity-correction-proposal-list"><div class="empty">进入页面后读取更正待处理</div></div>
           <div id="activityCorrectionProposalPagination" class="shared-pagination" data-pagination="correction_proposals"></div>
         </article>
       </section>
@@ -387,7 +387,7 @@
       <section id="managerTasksView" class="view manager-workspace-view">
         <div id="managerTaskSummary" class="metric-grid manager-task-summary" aria-live="polite"></div>
         <div class="section-intro manager-workspace-intro">
-          <div><p class="eyebrow">MANAGER INTERVENTION</p><h2>主管介入任务</h2><p>按授权范围处理延期计划、首次触达停滞和已计划动作超时。</p></div>
+          <div><p class="eyebrow">主管协助事项</p><h2>主管协助事项</h2><p>按授权范围处理延期计划、首次触达停滞和已计划动作超时。</p></div>
           <div class="manager-workspace-actions">
             <button id="managerTaskRefresh" class="button secondary" type="button">刷新</button>
             <button id="managerTaskExport" class="button secondary" type="button" data-permission="export_data">导出当前结果</button>
@@ -405,7 +405,7 @@
 
       <section id="managerMetricsView" class="view manager-workspace-view">
         <div class="section-intro manager-workspace-intro">
-          <div><p class="eyebrow">DEFERRED PLAN REVIEW</p><h2>延期与介入统计</h2><p>查看计划形成、按时执行、首次触达停滞和主管介入后的改善情况。</p></div>
+          <div><p class="eyebrow">计划跟进与协助统计 REVIEW</p><h2>延期与介入统计</h2><p>查看计划形成、按时执行、首次触达停滞和主管介入后的改善情况。</p></div>
           <div class="manager-metric-controls">
             <div id="managerMetricRange" class="segmented manager-metric-range" role="group" aria-label="统计周期">
               <button class="active" data-manager-range="30" type="button">近 30 天</button>
@@ -439,7 +439,7 @@
       <section id="insightsView" class="view">
         <div id="insightSummary" class="metric-grid"></div>
         <div class="section-intro">
-          <div><p class="eyebrow">MANAGER INTELLIGENCE</p><h2>经理评价中心</h2><p>集中维护企业判断和对接人评价。<span data-ai-business>AI 标注用于辅助整理历史评价。</span></p></div>
+          <div><p class="eyebrow">客户经营复盘</p><h2>客户经营复盘中心</h2><p>集中维护企业判断和对接人评价。<span data-ai-business>AI 标注用于辅助整理历史评价。</span></p></div>
           <div class="method-note" data-ai-business><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
         </div>
         <div id="insightsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
@@ -457,7 +457,7 @@
 
       <section id="teamView" class="view team-status-workspace">
         <div class="section-intro team-status-intro">
-          <div><p class="eyebrow">TEAM STATUS</p><h2>团队状态</h2><p>以真实推进和协作事实了解团队，不按登录、点击或记录数量评价人员。</p></div>
+          <div><p class="eyebrow">团队状态</p><h2>团队状态</h2><p>以真实推进和协作事实了解团队，不按登录、点击或记录数量评价人员。</p></div>
           <div class="team-status-actions">
             <select id="teamRange" aria-label="团队状态时间范围">
               <option value="7d">最近 7 天</option>
@@ -530,7 +530,7 @@
 
       <section id="usersView" class="view access-admin-view">
         <div class="section-intro access-intro">
-          <div><p class="eyebrow">ACCESS CONTROL</p><h2>用户与权限</h2><p>集中管理成员账号、权限基线与关键系统操作。</p></div>
+          <div><p class="eyebrow">用户与权限</p><h2>用户与权限</h2><p>集中管理成员账号、权限基线与关键系统操作。</p></div>
           <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
         </div>
         <div id="accessSummary" class="access-summary-grid" aria-label="用户与权限概况">
@@ -562,7 +562,7 @@
         <section id="accessAccountsPanel" class="access-workspace-panel" role="tabpanel" aria-labelledby="accessAccountsTab">
           <article class="panel access-panel access-user-panel">
             <div class="panel-head">
-              <div><p class="eyebrow">TEAM ACCOUNTS</p><h2>成员账号</h2><p>常用账号操作直接展示；个人权限只需选择允许或拒绝。</p></div>
+              <div><p class="eyebrow">团队账号</p><h2>成员账号</h2><p>常用账号操作直接展示；个人权限只需选择允许或拒绝。</p></div>
               <span id="activeUserPanelCount" class="panel-note"></span>
             </div>
             <div id="userTable" class="data-table access-user-table"></div>
@@ -579,14 +579,14 @@
         <section id="accessPermissionsPanel" class="access-workspace-panel hidden" role="tabpanel" aria-labelledby="accessPermissionsTab">
           <article class="panel access-panel">
             <div class="panel-head">
-              <div><p class="eyebrow">PERMISSION GROUPS</p><h2>权限组</h2><p>先用权限组建立角色基线，再为少数成员设置个人例外。</p></div>
+              <div><p class="eyebrow">权限组</p><h2>权限组</h2><p>先用权限组建立角色基线，再为少数成员设置个人例外。</p></div>
               <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
             </div>
             <div id="permissionGroupTable" class="data-table"></div>
           </article>
           <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
             <div class="panel-head">
-              <div><p class="eyebrow">AUTHORIZED FILTERS</p><h2>筛选权限配置</h2><p>权限组提供基础范围；个人调整只能追加授权或恢复权限组设置。</p></div>
+              <div><p class="eyebrow">筛选权限</p><h2>筛选权限配置</h2><p>权限组提供基础范围；个人调整只能追加授权或恢复权限组设置。</p></div>
               <div class="top-actions">
                 <button id="newFilterDefinitionBtn" class="button secondary" type="button" disabled>新增筛选定义</button>
                 <button class="button secondary" type="button" data-filter-permission-entry>配置销售筛选权限</button>
@@ -623,7 +623,7 @@
             </section>
           <article id="managerTaskSettingsPanel" class="panel access-panel manager-task-settings-panel hidden" data-permission="manage_manager_task_settings">
             <div class="panel-head">
-              <div><p class="eyebrow">MANAGER TASK RULES</p><h2>主管介入规则</h2><p>管理员设置触发阈值和具体接收人；规则变更保留版本与审计时间。</p></div>
+              <div><p class="eyebrow">主管协助规则</p><h2>主管介入规则</h2><p>管理员设置触发阈值和具体接收人；规则变更保留版本与审计时间。</p></div>
               <div class="manager-task-settings-meta">
                 <span>版本 <strong id="managerTaskSettingsVersion">—</strong></span>
                 <span>更新于 <time id="managerTaskSettingsUpdatedAt">—</time></span>
@@ -643,13 +643,13 @@
             </form>
           </article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
-          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AUDIT LOG</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
+          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">操作记录</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
         </section>
       </section>
 
       <section id="protectedCustomersView" class="view protected-customers-view">
         <div class="section-intro protected-intro">
-          <div><p class="eyebrow">CUSTOMER IDENTITY</p><h2>客户保护与查重</h2><p>在同一工作区处理客户身份保护、疑似重复核验与可审计的身份结论。</p></div>
+          <div><p class="eyebrow">客户保护与查重</p><h2>客户保护与查重</h2><p>在同一工作区处理客户身份保护、疑似重复核验与可审计的身份结论。</p></div>
           <div class="protected-intro-actions">
             <button id="protectedTemplateBtn" class="button secondary" type="button">下载导入模板</button>
             <button id="protectedExportBtn" class="button secondary" type="button">导出身份映射</button>
@@ -658,7 +658,7 @@
 
         <article id="duplicateReviewPanel" class="panel duplicate-review-panel hidden">
           <div class="panel-head">
-            <div><p class="eyebrow">DUPLICATE REVIEW</p><h2>疑似重复客户核验</h2><p>对照员工提交与已有客户资料；相似度只供参考，所有结论保留审计。</p></div>
+            <div><p class="eyebrow">重复客户确认</p><h2>疑似重复客户核验</h2><p>对照员工提交与已有客户资料；相似度只供参考，所有结论保留审计。</p></div>
             <div class="duplicate-review-head-actions">
               <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
               <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
@@ -712,7 +712,7 @@
 
         <article class="panel protected-conflict-panel">
           <div class="panel-head">
-            <div><p class="eyebrow">IDENTITY REVIEW</p><h2>身份冲突裁决</h2><p>仅根据服务端当前证据关联已有、确认新建或登记补充资料后重试。</p></div>
+            <div><p class="eyebrow">身份检查</p><h2>身份冲突裁决</h2><p>仅根据服务端当前证据关联已有、确认新建或登记补充资料后重试。</p></div>
             <div class="protected-panel-head-actions">
               <label>显示<select id="protectedConflictStatus"><option value="unresolved">待处理</option><option value="all">全部记录</option><option value="resolved">已解决</option><option value="retry">待补充</option></select></label>
               <button id="protectedRescanBtn" class="button secondary" type="button">重新扫描</button>
@@ -727,7 +727,7 @@
 
       <section id="maintenanceView" class="view">
         <div class="section-intro">
-          <div><p class="eyebrow red">ADMIN DATA MAINTENANCE</p><h2>数据维护</h2><p>先预览影响范围并自动备份，再把指定客户安全恢复到待分配状态。</p></div>
+          <div><p class="eyebrow red">ADMIN 数据维护</p><h2>数据维护</h2><p>先预览影响范围并自动备份，再把指定客户安全恢复到待分配状态。</p></div>
           <span class="pill red">仅真实管理员可执行</span>
         </div>
         <article class="panel maintenance-panel">
@@ -737,7 +737,7 @@
             <label>当前负责人<select id="maintenanceOwner"><option value="">全部负责人</option></select></label>
             <label class="span-2">指定线索 ID<textarea id="maintenanceItemIds" rows="2" placeholder="多个 ID 用逗号或换行分隔；留空则按上方范围"></textarea></label>
             <label class="maintenance-check span-2"><input id="maintenanceAllAssigned" type="checkbox"> 明确重置全部已分配、已领取和已退回线索</label>
-            <div class="maintenance-warning span-2"><strong>将删除：</strong>目标 CRM 客户及其跟进、询价、报价、订单、CRM 联系人、经理评价和直接通知。<br><strong>将保留：</strong>客户主档、导入批次、Recon、联系人研究、AI 索引、用户和权限。</div>
+            <div class="maintenance-warning span-2"><strong>将删除：</strong>目标 CRM 客户及其跟进、询价、报价、订单、CRM 联系人、客户经营复盘和直接通知。<br><strong>将保留：</strong>客户主档、导入批次、Recon、联系人研究、AI 索引、用户和权限。</div>
             <div class="form-actions span-2"><button id="maintenancePreviewBtn" class="button secondary" type="button">预览影响范围</button></div>
           </div>
         </article>
