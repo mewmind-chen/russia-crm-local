@@ -9702,18 +9702,42 @@
   }
 
   function permissionGroupRole(form, group) {
-    return group?.role || form?.querySelector('select[name="role"]:not([disabled])')?.value || '';
+    const roleSelect = form?.querySelector('select[name="role"]');
+    return group?.role || (!roleSelect?.disabled ? roleSelect?.value : '') || '';
   }
 
   function applyPermissionGroupDefaults(form, defaults = {}) {
-    let firstChanged = null;
     form?.querySelectorAll('[name^="permission__"]').forEach(input => {
       const key = input.name.slice('permission__'.length);
-      const checked = Boolean(defaults[key]);
-      if (input.checked !== checked && !firstChanged) firstChanged = input;
-      input.checked = checked;
+      input.checked = Boolean(defaults[key]);
     });
-    return firstChanged;
+  }
+
+  function hidePermissionGroupResetConfirmation(form) {
+    const confirmation = form?.querySelector('.permission-group-reset-confirm');
+    confirmation?.classList.add('hidden');
+    form?.classList.remove('permission-group-reset-visible');
+    form?.querySelector('#restorePermissionGroupDefaults')?.focus();
+  }
+
+  function showPermissionGroupResetConfirmation(form) {
+    const confirmation = form?.querySelector('.permission-group-reset-confirm');
+    if (!form || !confirmation) return;
+    form.classList.add('permission-group-reset-visible');
+    confirmation.classList.remove('hidden');
+    confirmation.querySelector('#cancelPermissionGroupDefaults')?.focus();
+  }
+
+  function cancelPermissionGroupReset(form) {
+    hidePermissionGroupResetConfirmation(form);
+  }
+
+  function confirmPermissionGroupReset(form, group) {
+    if (!form) return;
+    const role = permissionGroupRole(form, group);
+    applyPermissionGroupDefaults(form, state.data.rolePermissions?.[role] || {});
+    form.dataset.permissionsReset = 'true';
+    hidePermissionGroupResetConfirmation(form);
   }
 
   function openPermissionGroupModal(groupId = '') {
@@ -10081,6 +10105,14 @@
       delete payload[`permission__${key}`];
     });
     return permissions;
+  }
+
+  function permissionGroupPermissions(form, payload, existingGroup) {
+    const groupRole = permissionGroupRole(form, existingGroup) || payload.role;
+    const permissionFallback = form.dataset.permissionsReset === 'true'
+      ? state.data.rolePermissions?.[groupRole] || {}
+      : existingGroup?.permissions || state.data.rolePermissions?.[groupRole] || {};
+    return permissionsFromPayload(payload, permissionFallback);
   }
 
   function personalPermissionsFromPayload(payload, fallback = {}) {
@@ -10498,14 +10530,10 @@
         const existingGroup = groupId
           ? (state.data.permissionGroups || []).find(group => group.id === groupId)
           : null;
-        const groupRole = existingGroup?.role || payload.role;
-        const permissionFallback = form.dataset.permissionsReset === 'true'
-          ? state.data.rolePermissions?.[groupRole] || {}
-          : existingGroup?.permissions || state.data.rolePermissions?.[groupRole] || {};
         const body = {
           name: String(payload.name || '').trim(),
           description: String(payload.description || ''),
-          permissions: permissionsFromPayload(payload, permissionFallback),
+          permissions: permissionGroupPermissions(form, payload, existingGroup),
         };
         if (groupId) {
           await api(`/api/sales-crm/permission-groups/${encodeURIComponent(groupId)}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -11096,15 +11124,11 @@
       return;
     }
     if (event.target.closest('#restorePermissionGroupDefaults')) {
-      const confirmation = document.querySelector('#permissionGroupForm .permission-group-reset-confirm');
-      confirmation?.classList.remove('hidden');
-      confirmation?.querySelector('#cancelPermissionGroupDefaults')?.focus();
+      showPermissionGroupResetConfirmation(document.querySelector('#permissionGroupForm'));
       return;
     }
     if (event.target.closest('#cancelPermissionGroupDefaults')) {
-      const confirmation = document.querySelector('#permissionGroupForm .permission-group-reset-confirm');
-      confirmation?.classList.add('hidden');
-      document.querySelector('#restorePermissionGroupDefaults')?.focus();
+      cancelPermissionGroupReset(document.querySelector('#permissionGroupForm'));
       return;
     }
     if (event.target.closest('#confirmPermissionGroupDefaults')) {
@@ -11113,11 +11137,7 @@
       const group = groupId
         ? (state.data.permissionGroups || []).find(item => item.id === groupId)
         : null;
-      const role = permissionGroupRole(form, group);
-      const firstChanged = applyPermissionGroupDefaults(form, state.data.rolePermissions?.[role] || {});
-      if (form) form.dataset.permissionsReset = 'true';
-      form?.querySelector('.permission-group-reset-confirm')?.classList.add('hidden');
-      (firstChanged || form?.querySelector('#restorePermissionGroupDefaults'))?.focus();
+      confirmPermissionGroupReset(form, group);
       return;
     }
     const permissionCategoryButton = event.target.closest('[data-permission-category]');

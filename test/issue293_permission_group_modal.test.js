@@ -104,6 +104,71 @@ function renderedElements(markup, tagName) {
   return elements;
 }
 
+function trackedClassList(initial = []) {
+  const values = new Set(initial);
+  return {
+    add(name) { values.add(name); },
+    remove(name) { values.delete(name); },
+    contains(name) { return values.has(name); },
+  };
+}
+
+function permissionGroupFormHarness({ groupId = 'PGRP-EDIT', role = 'sales', roleDisabled = true } = {}) {
+  const resetButton = { focused: false, focus() { this.focused = true; } };
+  const cancelButton = { focused: false, focus() { this.focused = true; } };
+  const confirmation = {
+    classList: trackedClassList(['hidden']),
+    querySelector(selector) { return selector === '#cancelPermissionGroupDefaults' ? cancelButton : null; },
+  };
+  const roleSelect = { value: role, disabled: roleDisabled };
+  const inputs = [
+    { name: 'permission__view_dashboard', checked: false, focused: false, focus() { this.focused = true; } },
+    { name: 'permission__view_contacts', checked: true, focused: false, focus() { this.focused = true; } },
+  ];
+  const form = {
+    dataset: {},
+    classList: trackedClassList(),
+    elements: { groupId: { value: groupId } },
+    entries: [
+      ['groupId', groupId],
+      ['name', 'Executable group'],
+      ['description', 'Behavior test'],
+    ],
+    querySelector(selector) {
+      if (selector.startsWith('select[name="role"]')) return roleSelect;
+      if (selector === '.permission-group-reset-confirm') return confirmation;
+      if (selector === '#restorePermissionGroupDefaults') return resetButton;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '[name^="permission__"]' || selector === 'input[type=checkbox]') return inputs;
+      return [];
+    },
+  };
+  return { form, roleSelect, inputs, confirmation, resetButton, cancelButton };
+}
+
+function permissionGroupProductionApi(state) {
+  class TestFormData {
+    constructor(form) { this.form = form; }
+    entries() { return this.form.entries[Symbol.iterator](); }
+  }
+  const source = `
+    ${functionBlock(app, 'formPayload')}
+    ${functionBlock(app, 'permissionsFromPayload')}
+    ${functionBlock(app, 'permissionGroupRole')}
+    ${functionBlock(app, 'applyPermissionGroupDefaults')}
+    ${functionBlock(app, 'hidePermissionGroupResetConfirmation')}
+    ${functionBlock(app, 'showPermissionGroupResetConfirmation')}
+    ${functionBlock(app, 'cancelPermissionGroupReset')}
+    ${functionBlock(app, 'confirmPermissionGroupReset')}
+    ${functionBlock(app, 'permissionGroupPermissions')}
+    ({ formPayload, permissionGroupRole, showPermissionGroupResetConfirmation,
+      cancelPermissionGroupReset, confirmPermissionGroupReset, permissionGroupPermissions });
+  `;
+  return vm.runInNewContext(source, { state, FormData: TestFormData, Object, Boolean });
+}
+
 function permissionTabHarness() {
   const tabs = ['module', 'customer', 'admin'].map((key, index) => {
     const classNames = new Set(index === 0 ? ['active'] : []);
@@ -228,20 +293,21 @@ test('group footer padding outranks the later generic modal action rule', () => 
   );
 });
 
+test('reset confirmation replaces guidance in the existing five-row desktop grid', () => {
+  assert.match(css, /\.permission-group-form\{[^}]*grid-template-areas:"metadata" "description" "guidance" "permissions" "footer"/);
+  assert.match(css, /\.permission-group-guidance\{grid-area:guidance/);
+  assert.match(css, /\.permission-group-reset-confirm\{grid-area:guidance/);
+  assert.match(css, /\.permission-group-form\.permission-group-reset-visible \.permission-group-guidance\{display:none/);
+  assert.match(css, /\.permission-group-form>\.permission-editor\{grid-area:permissions;min-height:0/);
+  assert.match(css, /#modal \.permission-group-footer\{[^}]*grid-area:footer/);
+});
+
 test('existing group reset uses inline confirmation and role-template serialization', () => {
   const groupModal = section(app, 'function openPermissionGroupModal', 'function openOverridesModal');
-  const submit = section(
-    app,
-    "else if (form.id === 'permissionGroupForm')",
-    "else if (form.id === 'permissionOverrideForm')",
-  );
   assert.match(groupModal, /id="restorePermissionGroupDefaults"/);
   assert.match(groupModal, /只恢复当前权限组的权限开关/);
   assert.match(groupModal, /个人权限例外、其他权限组、名称、角色和描述不会改变/);
   assert.match(groupModal, /保存权限组后生效/);
-  assert.match(app, /form\.dataset\.permissionsReset = 'true'/);
-  assert.match(submit, /form\.dataset\.permissionsReset === 'true'/);
-  assert.match(submit, /state\.data\.rolePermissions/);
 });
 
 test('group defaults update only rendered switches', () => {
@@ -264,12 +330,77 @@ test('group defaults update only rendered switches', () => {
 });
 
 test('cancelling group reset leaves switches and reset state unchanged', () => {
-  const cancellation = section(
-    app,
-    "if (event.target.closest('#cancelPermissionGroupDefaults'))",
-    "if (event.target.closest('#confirmPermissionGroupDefaults'))",
-  );
-  assert.doesNotMatch(cancellation, /applyPermissionGroupDefaults|\.checked|permissionsReset/);
+  const state = { data: { rolePermissions: { sales: {} } } };
+  const api = permissionGroupProductionApi(state);
+  const harness = permissionGroupFormHarness();
+  const checksBefore = harness.inputs.map(input => input.checked);
+
+  api.showPermissionGroupResetConfirmation(harness.form);
+  assert.equal(harness.form.classList.contains('permission-group-reset-visible'), true);
+  assert.equal(harness.confirmation.classList.contains('hidden'), false);
+  assert.equal(harness.cancelButton.focused, true);
+
+  api.cancelPermissionGroupReset(harness.form);
+  assert.deepEqual(harness.inputs.map(input => input.checked), checksBefore);
+  assert.equal(Object.hasOwn(harness.form.dataset, 'permissionsReset'), false);
+  assert.equal(harness.confirmation.classList.contains('hidden'), true);
+  assert.equal(harness.form.classList.contains('permission-group-reset-visible'), false);
+  assert.equal(harness.resetButton.focused, true);
+});
+
+test('production role and serialization helpers preserve complete hidden maps', () => {
+  const roleTemplate = {
+    view_dashboard: true,
+    view_contacts: true,
+    view_development: true,
+    view_pool: true,
+  };
+  const existingGroup = {
+    role: 'sales',
+    permissions: {
+      view_dashboard: false,
+      view_contacts: true,
+      view_development: false,
+      view_pool: false,
+    },
+  };
+  const state = { data: {
+    permissionDefinitions: Object.fromEntries(Object.keys(roleTemplate).map(key => [key, key])),
+    rolePermissions: { sales: roleTemplate },
+  } };
+  const api = permissionGroupProductionApi(state);
+  const harness = permissionGroupFormHarness({ role: 'manager', roleDisabled: true });
+  harness.inputs.find(input => input.name === 'permission__view_dashboard').checked = true;
+  harness.inputs.find(input => input.name === 'permission__view_contacts').checked = false;
+
+  assert.equal(api.permissionGroupRole(harness.form, existingGroup), 'sales');
+  let payload = api.formPayload(harness.form);
+  let permissions = api.permissionGroupPermissions(harness.form, payload, existingGroup);
+  assert.deepEqual({ ...permissions }, {
+    view_dashboard: true,
+    view_contacts: false,
+    view_development: false,
+    view_pool: false,
+  });
+  assert.equal(Object.hasOwn(payload, 'permission__view_dashboard'), false);
+
+  api.confirmPermissionGroupReset(harness.form, existingGroup);
+  assert.equal(harness.form.dataset.permissionsReset, 'true');
+  assert.equal(harness.inputs.some(input => input.focused), false);
+  assert.equal(harness.resetButton.focused, true);
+  assert.equal(harness.confirmation.classList.contains('hidden'), true);
+  assert.equal(harness.form.classList.contains('permission-group-reset-visible'), false);
+
+  harness.inputs.find(input => input.name === 'permission__view_contacts').checked = false;
+  payload = api.formPayload(harness.form);
+  permissions = api.permissionGroupPermissions(harness.form, payload, existingGroup);
+  assert.deepEqual({ ...permissions }, {
+    view_dashboard: true,
+    view_contacts: false,
+    view_development: true,
+    view_pool: true,
+  });
+  assert.deepEqual(Object.keys(permissions).sort(), Object.keys(roleTemplate).sort());
 });
 
 test('new-group role changes reapply defaults and clear stale reset state', () => {

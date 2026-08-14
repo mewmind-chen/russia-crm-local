@@ -49,6 +49,8 @@ test('restoring a group role template preserves personal overrides', async t => 
     },
   });
   assert.ok(created.groupId, created.error);
+  const secondGroupBefore = fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get(fx.salesGroupId).permissions_json;
 
   const assigned = await fx.request('/api/sales-crm/users/U-OTHER', {
     cookie: fx.adminCookie,
@@ -82,6 +84,9 @@ test('restoring a group role template preserves personal overrides', async t => 
     .get(created.groupId).permissions_json);
   assert.equal(stored.view_development, ROLE_PERMISSIONS.sales.view_development);
   assert.equal(stored.view_pool, ROLE_PERMISSIONS.sales.view_pool);
+  const secondGroupAfter = fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get(fx.salesGroupId).permissions_json;
+  assert.equal(secondGroupAfter, secondGroupBefore);
   const overrideAfter = fx.db.prepare(`SELECT permission_key,effect,created_at,updated_at
     FROM user_permission_overrides WHERE user_id=? AND permission_key=?`)
     .get('U-OTHER', 'view_contacts');
