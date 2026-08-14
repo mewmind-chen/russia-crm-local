@@ -18,7 +18,7 @@ test('Issue 242 timeline modal exposes expand entry, detail fields and dash plac
   assert.match(app, /timelineModalDetail/);
   assert.match(app, /timeline-modal-wide/);
   assert.match(app, /timeline-modal-layout/);
-  for (const field of ['进展类型', '进展说明', '客户反应', '渠道', '详细说明', '下一步', '计划时间', '阶段变化', '操作人', '发生时间', '经理介入']) {
+  for (const field of ['进展类型', '进展说明', '客户反应', '渠道', '详细说明', '下一步', '计划时间', '阶段变化', '操作人', '发生时间', '主管协助']) {
     assert.match(app, new RegExp(field));
   }
   assert.match(app, /\|\| '—'/);

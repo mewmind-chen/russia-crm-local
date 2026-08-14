@@ -255,8 +255,8 @@ test('Issue 293 uses current module names once and removes stale navigation word
   const categories = section(app, 'const PERMISSION_CATEGORIES', 'function permissionCategoryMarkup');
   const permissionPresentationSource = section(app, 'function visiblePermissionDefinitions', 'function applyBusinessAIVisibility');
   for (const label of ['经营驾驶舱', '今日待办', '通知中心', '查看线索池', '查看客户联系人线索',
-    'Recon 情报', '查看本人负责客户', '查看团队与全公司客户', '查看不对口记录', '推进管道', '主管介入任务',
-    '查看团队状态', '经理评价', '用户与权限', '查看查重候选与保护名单', '数据维护']) {
+    'Recon 情报', '查看本人负责客户', '查看团队与全公司客户', '查看不对口记录', '推进管道', '主管协助事项',
+    '查看团队状态', '客户经营复盘', '用户与权限', '查看查重候选与保护名单', '数据维护']) {
     assert.match(permissionPresentationSource, new RegExp(label));
   }
   assert.doesNotMatch(permissionPresentationSource, /客户回收站|客户开发工作台/);

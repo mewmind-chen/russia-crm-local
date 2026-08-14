@@ -15,7 +15,7 @@ test('bootstrap exposes menu-aligned permission labels and notification permissi
   assert.equal(definitions.view_recon, 'Recon 情报');
   assert.equal(definitions.view_customers, 'CRM客户全景');
   assert.equal(definitions.view_own_mismatch_history, '不对口记录');
-  assert.equal(definitions.resolve_manager_tasks, '主管介入任务');
+  assert.equal(definitions.resolve_manager_tasks, '主管协助事项');
   assert.equal(definitions.manage_protected_customers, '客户保护与查重');
   for (const key of ['view_dashboard', 'view_alerts', 'view_customers', 'resolve_manager_tasks']) {
     assert.ok(definitions[key]);

@@ -41,7 +41,7 @@ test('Issue 265 primary status maps codes to short labels', () => {
   assert.match(fn, /OVERDUE/);
   assert.match(fn, /跟进超期/);
   assert.match(fn, /MANAGER_NEEDED/);
-  assert.match(fn, /需要管理者介入/);
+  assert.match(fn, /需要主管协助/);
   assert.match(fn, /正常推进/);
   assert.match(fn, /primary\?\.title/);
   assert.match(fn, /tone: 'red'/);
