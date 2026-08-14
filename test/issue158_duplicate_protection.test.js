@@ -133,7 +133,7 @@ test('manual create idempotency returns the same customer and intake fuzzy prote
   const previewBody = await preview.json();
   assert.equal(preview.status, 200);
   assert.equal(previewBody.eligibleCount, 0);
-  assert.equal(previewBody.blockedReasons['待管理层查重核验'], 1);
+  assert.equal(previewBody.blockedReasons['疑似重名，等待管理员确认'], 1);
 });
 
 test('concurrent exact creates allocate only one customer identity', async t => {
