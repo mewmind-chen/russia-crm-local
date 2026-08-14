@@ -2127,17 +2127,14 @@
 
   function intakeNeedsIdentityReview(item = {}) {
     return Boolean(item.identityWarning?.active)
-      || item.claimBlocked === true
+      || Boolean(item.claimBlocked)
       || String(item.duplicate_state || '') === 'review';
   }
 
   function intakeBlockStatusLabel(item = {}) {
     const state = String(item.duplicate_state || '');
-    const supplement = String(item.supplement_requirement || item.supplementRequirement || '').trim();
-    const needsInfo = Boolean(supplement)
-      || String(item.decision_reason || '').includes('补充')
-      || String(item.assignmentBlockReason || '').includes('补充');
-    if (needsInfo) return supplement ? `资料不足，需要补充${supplement}` : '资料不足，需要补充资料';
+    // Resolved states win over any stale supplement/needs-info marker so a
+    // lead that was later linked or released never regresses to 资料不足.
     if (state === 'exact') {
       const master = String(
         item.linked_master_name || item.linkedMasterName || item.master_company_name || '',
@@ -2145,8 +2142,13 @@
       return master ? `已关联主客户：${master}` : '已关联主客户';
     }
     if (state === 'cleared') return '已确认不是同一客户，可以分配';
+    const supplement = String(item.supplement_requirement || item.supplementRequirement || '').trim();
+    const needsInfo = Boolean(supplement)
+      || String(item.decision_reason || '').includes('补充')
+      || String(item.assignmentBlockReason || '').includes('补充');
+    if (needsInfo) return supplement ? `资料不足，需要补充${supplement}` : '资料不足，需要补充资料';
     if (state === 'review') return '疑似重名，等待管理员确认';
-    if (item.identityWarning?.active || item.claimBlocked === true) return '管理员确认后才能分配';
+    if (item.identityWarning?.active || Boolean(item.claimBlocked)) return '管理员确认后才能分配';
     return '';
   }
 
@@ -2683,6 +2685,9 @@
         if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
+        // Identity-review branch: the backend marks these items with the boolean
+        // assignable=false (plus identityWarning/claimBlocked), so this must run
+        // after the assignable branch above and before the plain assigned row.
         else if (!salesView && intakeNeedsIdentityReview(item)) actions = `<div class="assignment-actions">${intakeReviewActionMarkup(item)}</div>`;
         else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
         else if (!salesView && item.status === 'assigned') actions = '<span class="pill amber">管理员确认中</span>';

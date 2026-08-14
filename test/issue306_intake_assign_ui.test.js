@@ -128,10 +128,23 @@ test('intakeBlockStatusLabel emits no raw internal keys in user copy', () => {
   }
 });
 
+test('resolved states win over a stale supplement marker', () => {
+  const { label } = blockStatusApi();
+  assert.equal(
+    label({ duplicate_state: 'exact', linkedMasterName: 'ACME', supplementRequirement: '营业执照' }),
+    '已关联主客户：ACME',
+  );
+  assert.equal(
+    label({ duplicate_state: 'cleared', supplementRequirement: '营业执照' }),
+    '已确认不是同一客户，可以分配',
+  );
+});
+
 test('intakeNeedsIdentityReview identifies blocked identity-review items only', () => {
   const { needsReview } = blockStatusApi();
   assert.equal(needsReview({ identityWarning: { active: true } }), true);
   assert.equal(needsReview({ claimBlocked: true }), true);
+  assert.equal(needsReview({ claimBlocked: 1 }), true, 'truthy claimBlocked is treated as blocked');
   assert.equal(needsReview({ duplicate_state: 'review' }), true);
   assert.equal(needsReview({ duplicate_state: 'cleared' }), false);
   assert.equal(needsReview({ duplicate_state: 'exact' }), false);
