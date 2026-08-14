@@ -30,6 +30,72 @@ test('group edits and allow/deny overrides affect members without relogin', asyn
   assert.deepEqual(bootstrap.user.permissionOverrides, { view_contacts: 'deny', view_recon: 'allow' });
 });
 
+test('restoring a group role template preserves personal overrides', async t => {
+  const fx = await fixtures.adminFixture();
+  t.after(() => fx.close());
+  const customPermissions = {
+    ...ROLE_PERMISSIONS.sales,
+    view_development: false,
+    view_pool: false,
+  };
+  const created = await fx.requestJson('/api/sales-crm/permission-groups', {
+    cookie: fx.adminCookie,
+    method: 'POST',
+    body: {
+      name: 'Resettable sales',
+      role: 'sales',
+      description: 'Hidden keys differ from the sales role template',
+      permissions: customPermissions,
+    },
+  });
+  assert.ok(created.groupId, created.error);
+  const secondGroupBefore = fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get(fx.salesGroupId).permissions_json;
+
+  const assigned = await fx.request('/api/sales-crm/users/U-OTHER', {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: { role: 'sales', permissionGroupId: created.groupId },
+  });
+  assert.equal(assigned.status, 200, await assigned.clone().text());
+  const overridden = await fx.request('/api/sales-crm/users/U-OTHER/permission-overrides', {
+    cookie: fx.adminCookie,
+    method: 'PUT',
+    body: { permissions: { ...customPermissions, view_contacts: false } },
+  });
+  assert.equal(overridden.status, 200, await overridden.clone().text());
+  const overrideBefore = fx.db.prepare(`SELECT permission_key,effect,created_at,updated_at
+    FROM user_permission_overrides WHERE user_id=? AND permission_key=?`)
+    .get('U-OTHER', 'view_contacts');
+  assert.ok(overrideBefore, 'personal override row is created');
+  assert.deepEqual(
+    { permission_key: overrideBefore.permission_key, effect: overrideBefore.effect },
+    { permission_key: 'view_contacts', effect: 'deny' },
+  );
+
+  const reset = await fx.request(`/api/sales-crm/permission-groups/${encodeURIComponent(created.groupId)}`, {
+    cookie: fx.adminCookie,
+    method: 'PATCH',
+    body: { permissions: { ...ROLE_PERMISSIONS.sales } },
+  });
+  assert.equal(reset.status, 200, await reset.clone().text());
+
+  const stored = JSON.parse(fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get(created.groupId).permissions_json);
+  assert.equal(stored.view_development, ROLE_PERMISSIONS.sales.view_development);
+  assert.equal(stored.view_pool, ROLE_PERMISSIONS.sales.view_pool);
+  const secondGroupAfter = fx.db.prepare('SELECT permissions_json FROM permission_groups WHERE id=?')
+    .get(fx.salesGroupId).permissions_json;
+  assert.equal(secondGroupAfter, secondGroupBefore);
+  const overrideAfter = fx.db.prepare(`SELECT permission_key,effect,created_at,updated_at
+    FROM user_permission_overrides WHERE user_id=? AND permission_key=?`)
+    .get('U-OTHER', 'view_contacts');
+  assert.deepEqual(overrideAfter, overrideBefore);
+  const bootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
+  assert.equal(bootstrap.user.permissions.view_contacts, false);
+  assert.equal(bootstrap.user.permissionOverrides.view_contacts, 'deny');
+});
+
 test('group metadata is available only to users who can view users', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());

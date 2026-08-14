@@ -141,6 +141,6 @@ test('Issue 212 assignment dialogs use authorized candidates and no handwritten 
 test('Issue 212 explicitly describes empty lead results and refreshes asset versions', () => {
   assert.match(functionBlock(app, 'renderIntake'), /暂无符合条件的线索/);
   assert.match(html, /id="intakeSelectionCount" aria-live="polite"/);
-  assert.match(html, /app\.css\?v=20260814-issue291-browser-regressions/);
-  assert.match(html, /app\.js\?v=20260814-issue291-browser-regressions/);
+  assert.match(html, /app\.css\?v=20260814-issue293-permission-group-editor/);
+  assert.match(html, /app\.js\?v=20260814-issue293-permission-group-editor/);
 });

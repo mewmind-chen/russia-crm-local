@@ -17,11 +17,12 @@ function section(source, start, end) {
   return source.slice(from, to);
 }
 
-test('permission editor renders three categories with switches', () => {
+test('permission editor renders four business categories with switches', () => {
   const editor = section(app, 'const PERMISSION_CATEGORIES', 'function personalPermissionFields');
-  assert.match(editor, /模块访问/);
-  assert.match(editor, /客户数据与操作/);
+  assert.match(editor, /客户范围/);
+  assert.match(editor, /客户动作/);
   assert.match(editor, /管理与审计/);
+  assert.match(editor, /模块入口/);
   const fields = section(app, 'function permissionCategoryMarkup', 'function personalPermissionFields');
   assert.match(fields, /role="switch"/);
   assert.match(fields, /data-permission-category/);
@@ -39,8 +40,8 @@ test('permission switch grid is compact two to three columns', () => {
   assert.match(css, /\.permission-switch-grid/);
   assert.match(css, /repeat\(/);
   assert.match(css, /\.permission-override-list\{display:block/);
-  assert.match(css, /\.permission-switch-panel\{max-height:/);
-  assert.match(css, /\.permission-switch-panel\{[^}]*overflow:auto/);
+  assert.match(css, /\.permission-modal-wide \.permission-switch-panel\{[^}]*overflow:auto/);
+  assert.match(css, /\.permission-group-modal \.permission-switch-panel\{[^}]*overflow:visible/);
 });
 
 test('module permissions do not render duplicate or retired navigation entries', () => {

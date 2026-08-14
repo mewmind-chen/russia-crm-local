@@ -273,7 +273,7 @@
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_notifications',
     activityCorrections: 'manage_activity_corrections',
-    team: 'view_customers',
+    team: 'view_team',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -746,12 +746,72 @@
   }
   function visiblePermissionDefinitions() {
     const definitions = state.data?.permissionDefinitions || {};
-    if (customerAIEnabled()) return definitions;
+    const aiEnabled = customerAIEnabled();
     const visible = Object.fromEntries(
-      Object.entries(definitions).filter(([key]) => !aiPermissionKeys.has(key)),
+      Object.entries(definitions)
+        .filter(([key]) => !retiredPermissionKeys.has(key) && (aiEnabled || !aiPermissionKeys.has(key)))
+        .map(([key, label]) => [key, permissionPresentation[key]?.label || label]),
     );
-    if (visible.manage_evaluations) visible.manage_evaluations = '维护经理评价';
     return visible;
+  }
+  const retiredPermissionKeys = new Set(['view_development', 'view_pool']);
+  const permissionPresentation = Object.freeze({
+    view_dashboard: Object.freeze({ label: '经营驾驶舱' }),
+    view_alerts: Object.freeze({ label: '今日待办' }),
+    view_notifications: Object.freeze({ label: '通知中心' }),
+    view_intake: Object.freeze({
+      label: '查看线索池',
+      description: '可查看允许分配或领取的线索；敏感候选仍按后端范围过滤。',
+    }),
+    view_contacts: Object.freeze({
+      label: '查看客户联系人线索',
+      description: '可维护授权范围内的联系人线索，不自动扩大客户资料范围。',
+    }),
+    view_recon: Object.freeze({ label: 'Recon 情报' }),
+    view_customers: Object.freeze({
+      label: '查看本人负责客户',
+      description: '可查看自己名下客户、联系人、跟进记录和下一步计划。',
+    }),
+    view_all_customers: Object.freeze({
+      label: '查看团队与全公司客户',
+      description: '可跨团队查看客户资料，仅限老板、管理员或明确授权人员。',
+    }),
+    view_own_mismatch_history: Object.freeze({
+      label: '查看不对口记录',
+      description: '可查看本人或授权范围内的不对口记录，支持后续纠正。',
+    }),
+    view_pipeline: Object.freeze({ label: '推进管道' }),
+    resolve_manager_tasks: Object.freeze({
+      label: '主管介入任务',
+      description: '查看并处理主管介入任务及相关统计。',
+    }),
+    view_team: Object.freeze({
+      label: '查看团队状态',
+      description: '可查看被授权团队的推进、延期和主管处理结果。',
+    }),
+    manage_evaluations: Object.freeze({ label: '经理评价' }),
+    view_users: Object.freeze({ label: '用户与权限' }),
+    manage_protected_customers: Object.freeze({
+      label: '查看查重候选与保护名单',
+      description: '会看到疑似重复客户依据和保护名单，默认只给管理员。',
+    }),
+    manage_data_maintenance: Object.freeze({ label: '数据维护' }),
+    manage_customer_recycle: Object.freeze({
+      label: '管理不对口记录',
+      description: '恢复、重新分配或处理不对口记录。',
+    }),
+    manage_manual_customer_deletion: Object.freeze({
+      label: '手工移除客户',
+      description: '将确认需要移除的客户转入受控历史记录。',
+    }),
+  });
+  function visibleCategoryPermissions(category, definitions) {
+    return category.permissions.filter(key => Boolean(definitions[key]));
+  }
+  function permissionDescription(category, key, label, descriptions) {
+    return permissionPresentation[key]?.description
+      || descriptions[key]
+      || (category.key === 'module' ? `允许进入“${label}”。` : `允许执行“${label}”。`);
   }
   function applyBusinessAIVisibility() {
     const enabled = customerAIEnabled();
@@ -9499,53 +9559,148 @@
 
   const PERMISSION_CATEGORIES = Object.freeze([
     Object.freeze({
-      key: 'module', label: '模块访问', permissions: Object.freeze([
-        'view_dashboard', 'view_alerts', 'view_notifications', 'view_intake',
-        'view_contacts', 'view_recon', 'view_customers', 'view_own_mismatch_history',
-        'view_pipeline', 'resolve_manager_tasks', 'view_team', 'view_insights',
-        'view_markets',
+      key: 'scope', label: '客户范围',
+      description: '决定这个角色能看到哪些客户资料，这是最容易造成数据泄露的部分。',
+      sensitivity: 'danger',
+      permissions: Object.freeze([
+        'view_customers', 'view_all_customers', 'view_intake', 'view_contacts',
+        'view_own_mismatch_history', 'manage_protected_customers', 'view_team',
       ]),
     }),
     Object.freeze({
-      key: 'customer', label: '客户数据与操作', permissions: Object.freeze([
-        'view_all_customers', 'manage_intake', 'manage_customer_recycle',
-        'reject_own_customer_mismatch', 'manage_manual_customer_deletion',
-        'manage_customer_contacts', 'create_customer', 'edit_customer',
-        'record_activity', 'correct_own_activity', 'manage_activity_corrections',
+      key: 'action', label: '客户动作',
+      description: '决定这个角色能对客户执行哪些业务动作。',
+      sensitivity: '',
+      permissions: Object.freeze([
+        'manage_intake', 'manage_customer_recycle', 'reject_own_customer_mismatch',
+        'manage_manual_customer_deletion', 'manage_customer_contacts', 'create_customer',
+        'edit_customer', 'record_activity', 'correct_own_activity',
         'record_collaboration_support', 'record_quote', 'record_order',
       ]),
     }),
     Object.freeze({
-      key: 'admin', label: '管理与审计', permissions: Object.freeze([
-        'view_users', 'manage_evaluations', 'run_recon', 'use_prospect_agent',
-        'use_ai_assistant', 'cancel_ai_tasks', 'bulk_manage_ai_tasks',
-        'manage_ai_budgets', 'review_ai_tasks', 'manage_users',
-        'manage_data_maintenance', 'manage_protected_customers',
-        'manage_manager_task_settings', 'export_data',
+      key: 'admin', label: '管理与审计',
+      description: '管理、审计、导出与权限维护能力，只开放给需要的人。',
+      sensitivity: '',
+      permissions: Object.freeze([
+        'manage_evaluations', 'manage_activity_corrections', 'view_users', 'manage_users',
+        'manage_manager_task_settings', 'resolve_manager_tasks', 'export_data',
+        'run_recon', 'use_prospect_agent', 'use_ai_assistant', 'cancel_ai_tasks',
+        'bulk_manage_ai_tasks', 'manage_ai_budgets', 'review_ai_tasks',
+      ]),
+    }),
+    Object.freeze({
+      key: 'module', label: '模块入口',
+      description: '决定这个角色可以进入哪些页面。',
+      sensitivity: '',
+      permissions: Object.freeze([
+        'view_dashboard', 'view_alerts', 'view_notifications', 'view_recon',
+        'view_pipeline', 'view_insights', 'view_markets', 'manage_data_maintenance',
       ]),
     }),
   ]);
 
-  function permissionCategoryMarkup(permissions = {}, groupPermissions = {}, active = 'module') {
+  const PERMISSION_PACKS = Object.freeze([
+    Object.freeze({
+      key: 'sales', role: 'sales', name: '销售基础包',
+      description: '适合普通销售：跟进本人客户，记录进展和订单里程碑。',
+    }),
+    Object.freeze({
+      key: 'manager', role: 'manager', name: '主管协作包',
+      description: '适合主管：查看团队问题、处理协助、做常规分配。',
+    }),
+    Object.freeze({
+      key: 'admin', role: 'admin', name: '管理员维护包',
+      description: '适合少数管理员：权限、查重、数据维护和导出。',
+    }),
+  ]);
+
+  function permissionConclusion(permissions = {}) {
+    const on = key => Boolean(permissions[key]);
+    const parts = [];
+    if (on('view_customers')) parts.push('可查看并处理本人负责的客户');
+    if (on('view_all_customers')) parts.push('可查看团队与全公司客户');
+    else if (on('view_customers')) parts.push('不能查看团队全部客户');
+    if (on('manage_users')) parts.push('可管理账号与权限');
+    else parts.push('不能管理权限');
+    if (on('export_data')) parts.push('可导出数据');
+    else parts.push('不能导出数据');
+    if (on('manage_protected_customers')) parts.push('可维护客户保护名单');
+    else parts.push('不能维护客户保护名单');
+    if (on('manage_data_maintenance')) parts.push('可做数据维护');
+    else parts.push('不能做数据维护');
+    return parts.join('；') + '。';
+  }
+
+  function permissionPackActive(role, permissions = {}) {
+    const template = state.data.rolePermissions?.[role] || {};
+    const keys = Object.keys(visiblePermissionDefinitions());
+    if (!keys.length) return false;
+    return keys.every(key => Boolean(permissions[key]) === Boolean(template[key]));
+  }
+
+  function applyPermissionPack(form, role) {
+    if (!form) return;
+    const template = state.data.rolePermissions?.[role] || {};
+    form.querySelectorAll('[name^="permission__"]').forEach(input => {
+      const key = input.name.slice('permission__'.length);
+      input.checked = Boolean(template[key]);
+    });
+    refreshPermissionGroupSummary(form);
+  }
+
+  function refreshPermissionGroupSummary(form) {
+    if (!form) return;
+    const permissions = Object.fromEntries(
+      Array.from(form.querySelectorAll('[name^="permission__"]'))
+        .map(input => [input.name.slice('permission__'.length), input.checked]),
+    );
+    const conclusion = form.querySelector('[data-permission-conclusion] p');
+    if (conclusion) conclusion.textContent = permissionConclusion(permissions);
+    form.querySelectorAll('[data-permission-panel]').forEach(panel => {
+      const inputs = Array.from(panel.querySelectorAll('[name^="permission__"]'));
+      const onCount = inputs.filter(input => input.checked).length;
+      const counter = panel.querySelector('[data-permission-counts]');
+      if (counter) counter.textContent = `本页 ${inputs.length} 项 · 已开启 ${onCount} 项`;
+    });
+    form.querySelectorAll('[data-permission-pack]').forEach(button => {
+      const pack = PERMISSION_PACKS.find(item => item.key === button.dataset.permissionPack);
+      if (pack) button.classList.toggle('active', permissionPackActive(pack.role, permissions));
+    });
+  }
+
+  function permissionCategoryMarkup(permissions = {}, groupPermissions = {}, active = 'module', prefix = 'personal') {
     const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
-    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === active ? 'active' : ''}"
-      type="button" role="tab" aria-selected="${category.key === active}"
-      data-permission-category="${category.key}">${category.label}</button>`).join('');
-    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
-      data-permission-panel="${category.key}">
-      <div class="permission-switch-grid">${category.permissions.map(key => {
+    const tabs = PERMISSION_CATEGORIES.map(category => {
+      const selected = category.key === active;
+      const tabId = `permission-${prefix}-tab-${category.key}`;
+      const panelId = `permission-${prefix}-panel-${category.key}`;
+      return `<button id="${tabId}" class="${selected ? 'active' : ''}"
+        type="button" role="tab" aria-selected="${selected}" tabindex="${selected ? '0' : '-1'}"
+        aria-controls="${panelId}" data-permission-category="${category.key}">${category.label}</button>`;
+    }).join('');
+    const panels = PERMISSION_CATEGORIES.map(category => {
+      const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      const tabId = `permission-${prefix}-tab-${category.key}`;
+      const panelId = `permission-${prefix}-panel-${category.key}`;
+      return `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
+      id="${panelId}" role="tabpanel" aria-labelledby="${tabId}" data-permission-panel="${category.key}">
+      <div class="permission-switch-grid">${visiblePermissions.map(key => {
         const allowed = Boolean(permissions[key]);
         const followsGroup = allowed === Boolean(groupPermissions[key]);
         const label = definitions[key];
-        if (!label) return '';
-        const description = descriptions[key] || '';
+        const description = permissionDescription(category, key, label, descriptions);
         return `<label class="permission-override-row permission-switch-row">
-          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${description ? `${esc(description)} · ` : ''}${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
+          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${esc(description)} · ${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
           <input type="checkbox" role="switch" name="personalPermission__${esc(key)}" ${allowed ? 'checked' : ''} aria-label="${esc(label)}">
         </label>`;
       }).join('')}</div>
-    </section>`).join('');
+      <p class="permission-category-status">
+        本分类共 ${visiblePermissions.length} 项，<span class="permission-desktop-status">已完整显示，无需滚动</span><span class="permission-mobile-status">全部权限均在当前分类中</span>
+      </p>
+    </section>`;
+    }).join('');
     return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
   }
 
@@ -9579,20 +9734,72 @@
   function permissionFields(permissions = {}) {
     const definitions = visiblePermissionDefinitions();
     const descriptions = state.data.permissionDescriptions || {};
-    const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === 'module' ? 'active' : ''}"
-      type="button" role="tab" aria-selected="${category.key === 'module'}"
-      data-permission-category="${category.key}">${category.label}</button>`).join('');
-    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === 'module' ? '' : 'hidden'}"
-      data-permission-panel="${category.key}">
-      <div class="permission-switch-grid">${category.permissions.map(key => {
+    const tabs = PERMISSION_CATEGORIES.map(category => {
+      const selected = category.key === 'scope';
+      const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      return `<button id="permission-group-tab-${category.key}" class="${selected ? 'active' : ''}"
+        type="button" role="tab" aria-selected="${selected}" tabindex="${selected ? '0' : '-1'}"
+        aria-controls="permission-group-panel-${category.key}" data-permission-category="${category.key}">${category.label}<span class="permission-tab-count">${visiblePermissions.length}</span></button>`;
+    }).join('');
+    const panels = PERMISSION_CATEGORIES.map(category => {
+      const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      const onCount = visiblePermissions.filter(key => Boolean(permissions[key])).length;
+      return `<section class="permission-switch-panel ${category.key === 'scope' ? '' : 'hidden'}"
+      id="permission-group-panel-${category.key}" role="tabpanel" aria-labelledby="permission-group-tab-${category.key}" data-permission-panel="${category.key}">
+      <div class="permission-section-head">
+        <div><h2>${category.label}</h2><p>${esc(category.description || '')}</p></div>
+        <div class="permission-section-meta">
+          ${category.sensitivity ? `<span class="permission-badge ${category.sensitivity}">${category.sensitivity === 'danger' ? '高敏感' : '需谨慎'}</span>` : ''}
+          <span class="permission-category-counts" data-permission-counts>本页 ${visiblePermissions.length} 项 · 已开启 ${onCount} 项</span>
+        </div>
+      </div>
+      <div class="permission-switch-grid permission-card-grid">${visiblePermissions.map(key => {
         const label = definitions[key];
-        if (!label) return '';
-        return `<label class="permission-check permission-switch-row">
-          <input type="checkbox" role="switch" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''} aria-label="${esc(label)}"><span>${esc(label)}${descriptions[key] ? `<small>${esc(descriptions[key])}</small>` : ''}</span>
+        const description = permissionDescription(category, key, label, descriptions);
+        return `<label class="permission-card permission-switch-row">
+          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${esc(description)}</small></span>
+          <input type="checkbox" role="switch" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''} aria-label="${esc(label)}">
         </label>`;
       }).join('')}</div>
-    </section>`).join('');
-    return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
+    </section>`;
+    }).join('');
+    return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}
+    <div class="permission-principles">
+      <div><b>命名原则</b>不再出现"客户回收站"等旧入口；所有名称必须对应当前左侧菜单或真实业务动作。</div>
+      <div><b>配置原则</b>先定义数据范围，再定义可执行动作；避免销售因为一个开关看到范围外客户。</div>
+      <div><b>保存原则</b>前端名称可以更清楚，但后端权限 key 必须兼容旧数据并继续服务端校验。</div>
+    </div>`;
+  }
+
+  function selectPermissionCategoryTab(permissionCategoryButton) {
+    if (!permissionCategoryButton || permissionCategoryButton.disabled) return false;
+    $$('#modal [data-permission-category]').forEach(button => {
+      const selected = button === permissionCategoryButton;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    $$('#modal [data-permission-panel]').forEach(panel => {
+      panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
+    });
+    return true;
+  }
+
+  function navigatePermissionCategoryTab(event) {
+    const permissionCategoryTab = event.target.closest?.('#modal [data-permission-category][role="tab"]');
+    if (!permissionCategoryTab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return false;
+    const tabs = $$('#modal [data-permission-category][role="tab"]').filter(tab => !tab.disabled);
+    const currentIndex = tabs.indexOf(permissionCategoryTab);
+    if (currentIndex < 0 || !tabs.length) return false;
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[nextIndex].click();
+    tabs[nextIndex].focus();
+    return true;
   }
 
   function openEditUserModal(userId) {
@@ -9611,21 +9818,80 @@
     </form>`);
   }
 
+  function permissionGroupRole(form, group) {
+    const roleSelect = form?.querySelector('select[name="role"]');
+    return group?.role || (!roleSelect?.disabled ? roleSelect?.value : '') || '';
+  }
+
+  function applyPermissionGroupDefaults(form, defaults = {}) {
+    form?.querySelectorAll('[name^="permission__"]').forEach(input => {
+      const key = input.name.slice('permission__'.length);
+      input.checked = Boolean(defaults[key]);
+    });
+  }
+
+  function hidePermissionGroupResetConfirmation(form) {
+    const confirmation = form?.querySelector('.permission-group-reset-confirm');
+    confirmation?.classList.add('hidden');
+    form?.classList.remove('permission-group-reset-visible');
+    form?.querySelector('#restorePermissionGroupDefaults')?.focus();
+  }
+
+  function showPermissionGroupResetConfirmation(form) {
+    const confirmation = form?.querySelector('.permission-group-reset-confirm');
+    if (!form || !confirmation) return;
+    form.classList.add('permission-group-reset-visible');
+    confirmation.classList.remove('hidden');
+    confirmation.querySelector('#cancelPermissionGroupDefaults')?.focus();
+  }
+
+  function cancelPermissionGroupReset(form) {
+    hidePermissionGroupResetConfirmation(form);
+  }
+
+  function confirmPermissionGroupReset(form, group) {
+    if (!form) return;
+    const role = permissionGroupRole(form, group);
+    applyPermissionGroupDefaults(form, state.data.rolePermissions?.[role] || {});
+    form.dataset.permissionsReset = 'true';
+    hidePermissionGroupResetConfirmation(form);
+    refreshPermissionGroupSummary(form);
+  }
+
   function openPermissionGroupModal(groupId = '') {
     const group = groupId ? (state.data.permissionGroups || []).find(item => item.id === groupId) : null;
     if (groupId && !group) return;
     const permissions = group?.permissions || state.data.rolePermissions?.sales || {};
-    openModal(group ? `编辑权限组 · ${group.name}` : '新建权限组', 'PERMISSION GROUP', `<form id="permissionGroupForm" class="form-grid">
+    openModal(group ? `编辑权限组 · ${group.name}` : '新建权限组', '权限组', `<form id="permissionGroupForm" class="form-grid permission-group-form">
       <input type="hidden" name="groupId" value="${esc(group?.id || '')}">
-      <div class="form-grid two">
-        <label>名称<input name="name" value="${esc(group?.name || '')}" required></label>
-        <label>角色<select name="role" ${group ? 'disabled' : ''}>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === (group?.role || 'sales') ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
+      <div class="permission-group-layout">
+        <aside class="permission-group-profile">
+          <label class="permission-group-field">权限组名称<input name="name" value="${esc(group?.name || '')}" required placeholder="例如：销售经理权限"></label>
+          <label class="permission-group-field">适用角色<select name="role" ${group ? 'disabled' : ''}>${['sales', 'manager', 'admin'].map(role => `<option value="${role}" ${role === (group?.role || 'sales') ? 'selected' : ''}>${roleLabel(role)}</option>`).join('')}</select></label>
+          <label class="permission-group-field">业务说明<input name="description" value="${esc(group?.description || '')}" placeholder="例如：普通销售经理"></label>
+          <div class="permission-conclusion" data-permission-conclusion>
+            <strong>当前权限结论</strong>
+            <p>${esc(permissionConclusion(permissions))}</p>
+          </div>
+          <div class="permission-packs" data-permission-packs>
+            <div class="permission-packs-title">权限包</div>
+            ${PERMISSION_PACKS.map(pack => `<button type="button" class="permission-pack${permissionPackActive(pack.role, permissions) ? ' active' : ''}" data-permission-pack="${pack.key}"><b>${pack.name}</b><span>${pack.description}</span></button>`).join('')}
+          </div>
+        </aside>
+        <div class="permission-group-editor">${permissionFields(permissions)}</div>
       </div>
-      <label>描述<input name="description" value="${esc(group?.description || '')}" placeholder="该组的适用团队与用途"></label>
-      <div class="recommendation"><strong>权限组设置</strong><br>这里是成员的基础权限；个人权限页面可直接选择允许或拒绝。${group ? '' : '切换角色会套用该角色的权限模板。'}</div>
-      <div class="permission-editor">${permissionFields(permissions)}</div>
-      <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
-    </form>`);
+      ${group ? `<div class="permission-group-reset-confirm hidden" role="alert">
+        <p><strong>恢复当前权限组默认？</strong><br>只恢复当前权限组的权限开关；个人权限例外、其他权限组、名称、角色和描述不会改变。保存权限组后生效。</p>
+        <div class="assignment-actions">
+          <button type="button" class="button secondary" id="cancelPermissionGroupDefaults">暂不恢复</button>
+          <button type="button" class="button primary" id="confirmPermissionGroupDefaults">确认恢复</button>
+        </div>
+      </div>` : ''}
+      <div class="form-actions permission-group-footer">
+        ${group ? '<button type="button" class="button secondary" id="restorePermissionGroupDefaults">恢复权限组默认</button>' : '<span></span>'}
+        <div class="assignment-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary">${group ? '保存权限组' : '创建权限组'}</button></div>
+      </div>
+    </form>`, 'permission-group-modal');
   }
 
   function openOverridesModal(userId) {
@@ -9966,6 +10232,14 @@
       delete payload[`permission__${key}`];
     });
     return permissions;
+  }
+
+  function permissionGroupPermissions(form, payload, existingGroup) {
+    const groupRole = permissionGroupRole(form, existingGroup) || payload.role;
+    const permissionFallback = form.dataset.permissionsReset === 'true'
+      ? state.data.rolePermissions?.[groupRole] || {}
+      : existingGroup?.permissions || state.data.rolePermissions?.[groupRole] || {};
+    return permissionsFromPayload(payload, permissionFallback);
   }
 
   function personalPermissionsFromPayload(payload, fallback = {}) {
@@ -10383,11 +10657,10 @@
         const existingGroup = groupId
           ? (state.data.permissionGroups || []).find(group => group.id === groupId)
           : null;
-        const permissionFallback = existingGroup?.permissions || state.data.rolePermissions?.[payload.role] || {};
         const body = {
           name: String(payload.name || '').trim(),
           description: String(payload.description || ''),
-          permissions: permissionsFromPayload(payload, permissionFallback),
+          permissions: permissionGroupPermissions(form, payload, existingGroup),
         };
         if (groupId) {
           await api(`/api/sales-crm/permission-groups/${encodeURIComponent(groupId)}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -10977,16 +11250,32 @@
       } catch (error) { toast(error.message); }
       return;
     }
+    if (event.target.closest('#restorePermissionGroupDefaults')) {
+      showPermissionGroupResetConfirmation(document.querySelector('#permissionGroupForm'));
+      return;
+    }
+    if (event.target.closest('#cancelPermissionGroupDefaults')) {
+      cancelPermissionGroupReset(document.querySelector('#permissionGroupForm'));
+      return;
+    }
+    if (event.target.closest('#confirmPermissionGroupDefaults')) {
+      const form = document.querySelector('#permissionGroupForm');
+      const groupId = form?.elements?.groupId?.value || '';
+      const group = groupId
+        ? (state.data.permissionGroups || []).find(item => item.id === groupId)
+        : null;
+      confirmPermissionGroupReset(form, group);
+      return;
+    }
     const permissionCategoryButton = event.target.closest('[data-permission-category]');
     if (permissionCategoryButton) {
-      $$('#modal [data-permission-category]').forEach(button => {
-        const selected = button === permissionCategoryButton;
-        button.classList.toggle('active', selected);
-        button.setAttribute('aria-selected', String(selected));
-      });
-      $$('#modal [data-permission-panel]').forEach(panel => {
-        panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
-      });
+      selectPermissionCategoryTab(permissionCategoryButton);
+      return;
+    }
+    const permissionPackButton = event.target.closest('[data-permission-pack]');
+    if (permissionPackButton && !permissionPackButton.disabled) {
+      const pack = PERMISSION_PACKS.find(item => item.key === permissionPackButton.dataset.permissionPack);
+      if (pack) applyPermissionPack(permissionPackButton.closest('#permissionGroupForm'), pack.role);
       return;
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
@@ -11544,6 +11833,9 @@
 
   document.addEventListener('change', event => {
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
+    if (event.target.name?.startsWith('permission__') && event.target.closest('#permissionGroupForm')) {
+      refreshPermissionGroupSummary(event.target.closest('#permissionGroupForm'));
+    }
     if (event.target.closest('#managerTaskSettingsForm')) {
       event.target.closest('#managerTaskSettingsForm').dataset.dirty = 'true';
     }
@@ -11877,11 +12169,12 @@
       if (submit) submit.textContent = event.target.value ? '创建并分配' : '创建客户';
     }
     if (event.target.matches('#permissionGroupForm select[name="role"]')) {
-      const defaults = state.data.rolePermissions?.[event.target.value] || {};
-      Object.keys(state.data.permissionDefinitions || {}).forEach(key => {
-        const input = document.querySelector(`#permissionGroupForm [name="permission__${CSS.escape(key)}"]`);
-        if (input) input.checked = Boolean(defaults[key]);
-      });
+      const form = event.target.closest('form');
+      if (form && !form.elements.groupId.value) {
+        const defaults = state.data.rolePermissions?.[permissionGroupRole(form)] || {};
+        applyPermissionGroupDefaults(form, defaults);
+        delete form.dataset.permissionsReset;
+      }
     }
   });
 
@@ -11924,6 +12217,7 @@
         return;
       }
     }
+    if (navigatePermissionCategoryTab(event)) return;
     const duplicateSearch = event.target.closest?.('[data-duplicate-candidate-search]');
     if (duplicateSearch) {
       const reviewId = duplicateSearch.dataset.duplicateCandidateSearch;
