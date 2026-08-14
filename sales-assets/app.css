@@ -120,6 +120,7 @@ button.metric.alert{background:var(--danger-subtle)}
 .activity-progress-modal .modal-body{min-width:0;padding:16px 18px;overflow:visible}
 .activity-progress-form,.activity-main-step,.activity-rfq-step{min-width:0}
 .activity-progress-form{display:block}
+.activity-manager-plan-time{margin:0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#f6f9f7;color:#52635f;font-size:12px;font-weight:650}
 .activity-main-step,.activity-rfq-step{display:grid;gap:11px}
 .activity-progress-form label,.activity-field{min-width:0;display:grid;gap:5px;color:#435149;font-size:12px;font-weight:700}
 .activity-progress-form input:not([type="hidden"]):not([type="checkbox"]),.activity-progress-form select,.activity-progress-form textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#fafcfb;color:var(--ink);padding:9px 10px;outline:none}

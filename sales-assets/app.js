@@ -9297,6 +9297,23 @@
     resizeActivitySummary(form.elements.summary);
   }
 
+  function syncActivityModeSections(mode) {
+    const form = $('#activityForm');
+    if (!form) return;
+    const sections = {
+      progress: $('#activityProgressFields'),
+      plan: $('#activityPlanFields'),
+      noPlan: $('#activityNoPlanFields'),
+      manager: $('#activityManagerFields'),
+    };
+    Object.entries(sections).forEach(([key, section]) => {
+      if (!section) return;
+      section.querySelectorAll('input, select, textarea').forEach(el => {
+        el.disabled = key !== mode;
+      });
+    });
+  }
+
   function setActivityModalMode(mode) {
     const form = $('#activityForm');
     if (!form || !['progress', 'plan', 'noPlan', 'manager'].includes(mode)) return;
@@ -9311,6 +9328,7 @@
     $('#activityPlanFields')?.classList.toggle('hidden', mode !== 'plan');
     $('#activityNoPlanFields')?.classList.toggle('hidden', mode !== 'noPlan');
     $('#activityManagerFields')?.classList.toggle('hidden', mode !== 'manager');
+    syncActivityModeSections(mode);
     const submit = $('#activitySubmit');
     if (submit) {
       submit.textContent = {
@@ -9402,10 +9420,10 @@
             <p class="span-2 subtle activity-plan-hint">将保存为真实状态，连续 3 次暂无计划会提醒经理介入。</p>
           </section>
           <section id="activityManagerFields" class="hidden form-grid activity-manager-fields">
-            <label class="span-2">申请原因<textarea name="managerReason" rows="3" maxlength="1000" placeholder="例如：已发邮件且社媒无回应，目前没有思路"></textarea></label>
-            <label class="span-2">销售原计划<input name="managerNextAction" maxlength="1000" value="${esc(initialPlan)}" placeholder="希望主管协助查询联系人或给出对接建议"></label>
-            <label class="span-2">原计划跟进时间<input name="managerNextActionAt" type="datetime-local" data-future-datetime value="${account?.next_action_at ? esc(initialPlanAt) : ''}"></label>
-            <p class="span-2 subtle activity-plan-hint">提交后会生成主管待办，包含客户、申请人、申请原因、原计划、联系人、处理期限和完结条件。</p>
+            <label class="span-2">需要主管协助的原因<textarea name="managerReason" rows="3" maxlength="1000" placeholder="例如：已发邮件且社媒无回应，目前没有思路"></textarea></label>
+            <label class="span-2">原计划<input name="managerNextAction" maxlength="1000" value="${esc(initialPlan)}" placeholder="希望主管协助查询联系人或给出对接建议"></label>
+            ${account?.next_action_at ? `<p class="span-2 activity-manager-plan-time">原定 ${esc(String(initialPlanAt).replace('T', ' ').replace(/-/g, '/'))}</p>` : ''}
+            <p class="span-2 subtle activity-plan-hint">提交后会生成主管待办，包含客户、申请人、协助原因、原计划、联系人、处理期限和完结条件。</p>
           </section>
           <div class="form-actions activity-form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button id="activitySubmit" class="button primary">保存进展</button></div>
         </section>
@@ -10528,14 +10546,13 @@
           delete payload.reactionOptionId;
         }
         if (mode === 'manager') {
-          if (!String(payload.managerReason || '').trim()) throw new Error('请填写申请原因');
+          if (!String(payload.managerReason || '').trim()) throw new Error('请填写需要主管协助的原因');
           payload.summary = String(payload.managerReason || '').trim();
           payload.managerRequired = true;
           payload.activityType = 'note';
           payload.channel = '';
           payload.nextAction = String(payload.managerNextAction || '').trim();
-          payload.nextActionAt = payload.managerNextActionAt ? apiTime(payload.managerNextActionAt) : '';
-          if (!payload.nextAction) payload.nextActionAt = '';
+          payload.nextActionAt = '';
           delete payload.progressType;
           delete payload.reactionOptionId;
         }
@@ -11282,7 +11299,24 @@
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
     if (event.target.closest('#customerProfileActivity')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能记录跟进');
-      else void openActivityModal(state.selectedCustomerId);
+      else if (state.selectedCustomerId) void openActivityModal(state.selectedCustomerId);
+      else {
+        const matchedAccount = (state.data.accounts || []).find(item =>
+          item.external_customer_id === state.customerProfileExternalId);
+        if (matchedAccount) void openActivityModal(matchedAccount.id);
+        else toast('该线索尚未进入 CRM，请先在线索池领取后再记录跟进');
+      }
+    }
+    const activitySubmitButton = event.target.closest('#activitySubmit');
+    if (activitySubmitButton && !activitySubmitButton.disabled) {
+      const activityForm = activitySubmitButton.closest('#activityForm');
+      if (activityForm && !activityForm.checkValidity()) {
+        activityForm.reportValidity();
+        const firstInvalid = activityForm.querySelector(':invalid');
+        if (firstInvalid && firstInvalid.closest('.hidden')) {
+          toast('存在未完成的必填项或无效时间，请检查表单');
+        }
+      }
     }
     if (event.target.closest('#customerProfileDataEdit')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑资料');
