@@ -65,6 +65,29 @@ button.metric.alert{background:var(--danger-subtle)}
 .toolbar{padding:14px 16px;border-bottom:1px solid var(--border-default);display:flex;align-items:center;gap:9px}.search-box{display:flex;gap:8px;align-items:center;min-width:280px}.search-box input{border:0;background:transparent;outline:0;width:100%}.toolbar select{padding:9px 28px 9px 10px}.check{display:flex;gap:6px;align-items:center;color:var(--text-secondary);font-size:12px}.toolbar-count{margin-left:auto;color:var(--text-secondary);font-size:12px}
 .data-table{width:100%;overflow:auto;border:1px solid var(--border-default);border-radius:7px;background:var(--surface-panel)}
 .data-table table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0}
+/* Issue #302 stable column lines for high-frequency lists */
+#customerTable .col-check,#intakeTable .col-check{width:36px}
+#customerTable table,#intakeTable table{table-layout:fixed}#customerTable .col-company,#intakeTable .col-company{width:auto;min-width:200px}#customerTable .col-company,#intakeTable .col-company{overflow:hidden;text-overflow:ellipsis}
+#customerTable .col-country{width:120px}
+#customerTable .col-stage{width:100px}
+#customerTable .col-owner{width:84px}
+#customerTable .col-last{width:88px}
+#customerTable .col-next{width:140px}
+#customerTable .col-priority{width:56px}
+#customerTable .col-status{width:104px}
+#customerTable .col-actions{width:190px;white-space:nowrap}
+#intakeTable .col-fit{width:150px}
+#intakeTable .col-candidates{width:160px}
+#intakeTable .col-contact{width:190px}
+#intakeTable .col-owner{width:150px}
+#intakeTable .col-status{width:160px}
+#intakeTable .col-actions{width:180px;white-space:nowrap}
+#customerTable .col-priority,#customerTable .col-status,#customerTable .col-actions,
+#intakeTable .col-status,#intakeTable .col-actions{vertical-align:middle}
+#customerTable .col-priority .priority,#customerTable .col-status .pill,#customerTable .col-status .good-text,
+#intakeTable .col-status .pill,#intakeTable .col-status .good-text{display:inline-block;line-height:1.6}
+#customerTable .col-actions .assignment-actions,#intakeTable .col-actions .assignment-actions{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:nowrap}
+#customerTable .col-actions .text-button,#intakeTable .col-actions .text-button,#customerTable .col-actions .button,#intakeTable .col-actions .button{white-space:nowrap;flex:none}
 .data-table th{position:sticky;top:0;z-index:2;padding:10px 12px;background:var(--surface-subtle);border-bottom:1px solid var(--border-default);color:var(--text-secondary);font-size:12px;font-weight:600;line-height:1.45;text-align:left;white-space:nowrap}
 .data-table td{padding:11px 12px;border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:13px;line-height:1.45;vertical-align:top}
 .data-table tbody tr{transition:background-color .16s}.data-table tbody tr:hover{background:var(--brand-subtle)}
