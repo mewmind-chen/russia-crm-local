@@ -3334,6 +3334,11 @@
     manager_evaluation: '客户经营复盘', manager_anomaly: '需主管关注', sales_coaching: '销售辅导', assistant_chat: '对话 AI',
   };
 
+  const aiTaskStateLabels = {
+    queued: '排队中', running: '执行中', retry_wait: '等待重试', needs_review: '待复核',
+    succeeded: '已完成', failed: '失败', cancelled: '已取消', dead_letter: '失败待处理',
+  };
+
   function aiTaskFilters() {
     return {
       state: $('#aiTaskStateFilter')?.value || '',
@@ -3566,7 +3571,7 @@
       ${trace.stale ? `<div class="customer-ai-error"><strong>过期原因</strong><span>${esc(trace.staleReason || '上下文已变化')}</span></div>` : ''}
     </section>` : '';
     openModal('AI 任务详情', 'AI 任务中心', `<div class="ai-task-detail">
-      <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(task.state)}</strong></div></div>
+      <div class="ai-task-detail-grid"><div><span>任务 ID</span><strong>${esc(task.taskId)}</strong></div><div><span>类型</span><strong>${esc(aiTaskTypeLabels[task.taskType] || task.taskType)}</strong></div><div><span>客户</span><strong>${esc(task.customerId || '工作区')}</strong></div><div><span>状态</span><strong>${esc(aiTaskStateLabels[task.state] || task.state)}</strong></div></div>
       ${task.errorSummary ? `<div class="customer-ai-error"><strong>错误</strong><span>${esc(task.errorSummary)}</span></div>` : ''}
       <section><h3>模型尝试</h3><ul class="ai-task-events">${attempts || '<li>无模型尝试记录</li>'}</ul></section>
       ${decisionTrace}
@@ -4523,7 +4528,7 @@
     consecutive_deferred: '连续暂未确定',
     first_contact_silence: '首次触达后沉默',
     planned_action_overdue: '计划动作超时',
-    manager_assistance: '销售请求经理协助',
+    manager_assistance: '销售请求主管协助',
   };
   const managerTaskStatusLabels = {
     open: '待处理', overdue: '已逾期', escalated: '已升级为经营决策事项', completed: '已完成',
@@ -8778,9 +8783,41 @@
     [nextActionAt, reviewAt].filter(Boolean).forEach(input => validateFutureDateTime(input));
   }
 
+  function managerEvidencePresentation(key) {
+    return ({
+      activityId: '关联跟进记录',
+      nextAction: '原下一步计划',
+      nextActionAt: '原计划时间',
+      dueAt: '处理期限',
+      progressType: '原跟进方式',
+      requestReason: '请求协助原因',
+      requestedAt: '请求时间',
+      contacts: '已记录联系人',
+      summary: '情况摘要',
+      originalPlan: '原下一步计划',
+    })[key] || '';
+  }
+
+  function managerEvidenceDisplayValue(key, value) {
+    if (value === undefined || value === null || value === '') return '未记录';
+    if (key === 'nextActionAt' || key === 'requestedAt' || key === 'dueAt') return shortDate(String(value), true);
+    if (key === 'progressType') {
+      const progress = activityProgressOptions.find(item => item.key === value)
+        || activityProgressOptions.find(item => item.activityType === value);
+      return progress ? progress.label : String(value);
+    }
+    if (key === 'contacts' && Array.isArray(value)) {
+      return value.map(contact =>
+        `${contact.name || '未命名'}${contact.title ? ` · ${contact.title}` : ''}${contact.department ? ` · ${contact.department}` : ''}${contact.matchStatus === 'mismatch' ? ' · 已标记不对口' : ''}`,
+      ).join('；') || '暂无联系人记录';
+    }
+    if (typeof value === 'object') return '';
+    return String(value);
+  }
+
   async function openManagerTaskDetail(taskId) {
     if (!can('resolve_manager_tasks') || !taskId) return toast('当前账号无权处理主管任务');
-    openModal('主管任务详情', '主管协助事项', '<div class="empty">正在读取任务事实和客户风险历史…</div>', 'manager-task-modal');
+    openModal('主管协助事项详情', '主管协助事项', '<div class="empty">正在读取任务事实和客户风险历史…</div>', 'manager-task-modal');
     try {
       const result = await api(`/api/sales-crm/manager-tasks/${encodeURIComponent(taskId)}`, {
         preserveOnForbidden: true,
@@ -8809,49 +8846,80 @@
           ? [['manager_advice', '记录主管建议并安排动作']] : []),
         ['escalate_owner', '升级为经营决策事项'],
       ];
-      openModal(`主管任务 · ${account.companyName || task.customerId}`, managerTaskReasonLabels[task.reason] || task.reason, `
+      const assistanceHistory = result.customerAssistanceHistory || [];
+      const evidenceRows = evidence.map(([key, value]) => {
+        const label = managerEvidencePresentation(key);
+        const display = managerEvidenceDisplayValue(key, value);
+        if (!label || !display) return '';
+        return `<div><span>${label}</span><strong>${esc(display)}</strong></div>`;
+      }).join('');
+      const assistanceCanReply = task.reason === 'manager_assistance'
+        && task.status !== 'completed'
+        && ['admin', 'manager'].includes(state.data?.user?.role)
+        && can('view_team');
+      openModal(`主管协助 · ${account.companyName || task.customerId}`, managerTaskReasonLabels[task.reason] || task.reason, `
         <div class="manager-task-detail">
-          <div class="manager-task-detail-grid">
-            <div><span class="manager-risk-label">客户</span><strong>${esc(account.companyName || task.customerId)}</strong><p>${esc(account.externalCustomerId || task.customerId)}</p></div>
-            <div><span class="manager-risk-label">当前负责人</span><strong>${esc(userById(account.ownerId)?.name || account.ownerId || '未记录')}</strong><p>${esc(account.sourceType === 'intake' ? '线索池' : stageLabel(account.stage))}</p></div>
-            <div><span class="manager-risk-label">触发 / 到期</span><strong>${esc(shortDate(task.triggeredAt, true))}</strong><p>${esc(shortDate(task.dueAt, true))}</p></div>
-            <div><span class="manager-risk-label">完成条件</span><strong>${esc(task.completionCondition || '必须形成真实业务变化')}</strong><p>${esc(managerTaskStatusLabels[task.status] || task.status)}</p></div>
-          </div>
-          <section><h3>触发证据</h3><div class="manager-evidence-list">${evidence.length
-            ? evidence.map(([key, value]) => `<div><span>${esc(key)}</span><strong>${esc(typeof value === 'object' ? JSON.stringify(value) : value)}</strong></div>`).join('')
-            : '<span class="subtle">未记录补充证据</span>'}</div></section>
-          <section id="managerRiskDetail" class="manager-risk-detail">
-            <h3>客户计划风险历史</h3>
-            <div class="manager-risk-facts">
-              <div><span>当前连续暂未确定</span><strong>${Number(risk.currentConsecutiveDeferredCount || 0)} 次</strong></div>
-              <div><span>累计暂未确定</span><strong>${Number(risk.cumulativeDeferredCount || 0)} 次</strong></div>
-              <div><span>无明确计划持续</span><strong>${Number(risk.unplannedDurationDays || 0)} 天</strong></div>
-              <div><span>首次达到阈值</span><strong>${esc(risk.thresholdAt ? shortDate(risk.thresholdAt, true) : '尚未达到')}</strong></div>
+          <div class="manager-task-layout">
+            <div class="manager-task-main">
+              <div class="manager-task-detail-grid">
+                <div><span class="manager-risk-label">客户</span><strong>${esc(account.companyName || task.customerId)}</strong><p>${esc(account.externalCustomerId || task.customerId)}</p></div>
+                <div><span class="manager-risk-label">当前负责人</span><strong>${esc(userById(account.ownerId)?.name || account.ownerId || '未记录')}</strong><p>${esc(account.sourceType === 'intake' ? '线索池' : stageLabel(account.stage))}</p></div>
+                <div><span class="manager-risk-label">触发 / 到期</span><strong>${esc(shortDate(task.triggeredAt, true))}</strong><p>${esc(shortDate(task.dueAt, true))}</p></div>
+                <div><span class="manager-risk-label">完成条件</span><strong>${esc(task.completionCondition || '必须形成真实业务变化')}</strong><p>${esc(managerTaskStatusLabels[task.status] || task.status)}</p></div>
+              </div>
+              <section><h3>${task.reason === 'manager_assistance' ? '协助请求' : '触发证据'}</h3>
+                <div class="manager-evidence-list">${evidenceRows || '<span class="subtle">未记录补充证据</span>'}</div></section>
+              ${task.reason === 'manager_assistance'
+                ? (assistanceCanReply ? `
+              <form id="managerAssistanceReplyForm" class="manager-task-resolve-form">
+                <input type="hidden" name="taskId" value="${esc(task.id)}">
+                <input type="hidden" name="customerId" value="${esc(account.id)}">
+                <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+                <label>主管处理意见<textarea name="result" rows="3" maxlength="2000" required placeholder="填写本次处理意见、已完成的协助和后续安排"></textarea></label>
+                <p id="managerAssistanceStatus" class="today-task-form-error" role="alert" aria-live="polite"></p>
+                <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">回复销售并完成协助</button></div>
+              </form>`
+                  : `<div class="recommendation">该任务已完成，仅保留历史查看。</div>`)
+                : `
+              <form id="managerTaskResolveForm" class="manager-task-resolve-form">
+                <input type="hidden" name="taskId" value="${esc(task.id)}">
+                <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
+                <label>处理方式<select id="managerTaskAction" name="action" required>
+                  ${managerTaskActions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+                </select></label>
+                <div id="managerTaskActionFields" class="manager-action-fields" data-action-contract="nextAction nextActionAt ownerId difficulty"
+                  data-sales-options="${esc(sales.map(user => `${user.id}\t${user.name}`).join('\n'))}"></div>
+                <p id="managerResolveStatus" class="today-task-form-error" role="alert" aria-live="polite"></p>
+                <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认并记录业务变化</button></div>
+              </form>`}
             </div>
-            <div class="manager-history-list">${history.length ? history.map(item => `<article>
-              <strong>${esc(shortDate(item.createdAt, true))} · 复查 ${esc(shortDate(item.reviewAt, true))}</strong>
-              <p>${esc(item.reason || '未填写卡点')}</p>
-              <small>记录人 ${esc(userById(item.actorId)?.name || item.actorId || '未记录')} · 当时负责人 ${esc(userById(item.ownerIdSnapshot)?.name || item.ownerIdSnapshot || '未记录')} · ${esc(item.source || 'manual')}</small>
-            </article>`).join('') : '<span class="subtle">暂无暂未确定记录</span>'}</div>
-          </section>
-          <section><h3>主管介入记录</h3><div class="manager-history-list">${interventions.length ? interventions.map(item => `<article>
-            <strong>${esc(item.action || '主管处理')} · ${esc(shortDate(item.created_at || item.createdAt, true))}</strong>
-            <p>${esc(item.note || item.difficulty || '已形成业务变化')}</p>
-            <small>${esc(userById(item.actor_id || item.actorId)?.name || item.actor_id || item.actorId || '未记录')}</small>
-          </article>`).join('') : '<span class="subtle">暂无介入记录</span>'}</div></section>
-          ${task.status === 'completed' || task.reason === 'manager_assistance'
-          ? `<div class="recommendation">${task.status === 'completed' ? '该任务已完成，仅保留历史查看。' : '请在今日待办中处理该经理协助请求。'}</div>` : `
-          <form id="managerTaskResolveForm" class="manager-task-resolve-form">
-            <input type="hidden" name="taskId" value="${esc(task.id)}">
-            <input type="hidden" name="idempotencyKey" value="${esc(proposalRequestId())}">
-            <label>处理方式<select id="managerTaskAction" name="action" required>
-              ${managerTaskActions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
-            </select></label>
-            <div id="managerTaskActionFields" class="manager-action-fields" data-action-contract="nextAction nextActionAt ownerId difficulty"
-              data-sales-options="${esc(sales.map(user => `${user.id}\t${user.name}`).join('\n'))}"></div>
-            <p id="managerResolveStatus" class="today-task-form-error" role="alert" aria-live="polite"></p>
-            <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">确认并记录业务变化</button></div>
-          </form>`}
+            <aside class="manager-task-side">
+              <section id="managerRiskDetail" class="manager-risk-detail">
+                <h3>客户计划风险历史</h3>
+                <div class="manager-risk-facts">
+                  <div><span>当前连续暂未确定</span><strong>${Number(risk.currentConsecutiveDeferredCount || 0)} 次</strong></div>
+                  <div><span>累计暂未确定</span><strong>${Number(risk.cumulativeDeferredCount || 0)} 次</strong></div>
+                  <div><span>无明确计划持续</span><strong>${Number(risk.unplannedDurationDays || 0)} 天</strong></div>
+                  <div><span>首次达到阈值</span><strong>${esc(risk.thresholdAt ? shortDate(risk.thresholdAt, true) : '尚未达到')}</strong></div>
+                </div>
+                <div class="manager-history-list">${history.length ? history.map(item => `<article>
+                  <strong>${esc(shortDate(item.createdAt, true))} · 复查 ${esc(shortDate(item.reviewAt, true))}</strong>
+                  <p>${esc(item.reason || '未填写卡点')}</p>
+                  <small>记录人 ${esc(userById(item.actorId)?.name || item.actorId || '未记录')} · 当时负责人 ${esc(userById(item.ownerIdSnapshot)?.name || item.ownerIdSnapshot || '未记录')} · ${esc(item.source || 'manual')}</small>
+                </article>`).join('') : '<span class="subtle">暂无暂未确定记录</span>'}</div>
+              </section>
+              <section class="manager-assistance-history">
+                <h3>过往主管协助记录</h3>
+                <div class="manager-history-list">${assistanceHistory.length ? assistanceHistory.map(item => `<article>
+                  <strong>${esc(shortDate(item.requestedAt, true))} · 请求协助</strong>
+                  <p>${esc(item.requestReason || '未记录具体原因')}</p>
+                  ${item.replyText ? `<p>主管回复（${esc(shortDate(item.repliedAt, true))}）：${esc(item.replyText)}</p>` : ''}
+                  ${item.confirmed ? `<p>销售已确认下一步（${esc(shortDate(item.confirmedAt, true))}）</p>` : ''}
+                  <small>${esc(managerTaskStatusLabels[item.status] || item.status)}${item.taskId === task.id ? ' · 当前' : ''}</small>
+                </article>`).join('') : '<span class="subtle">该客户暂无历史主管协助记录</span>'}</div>
+              </section>
+            </aside>
+          </div>
         </div>`, 'manager-task-modal');
       setManagerTaskAction(managerTaskActions[0][0]);
     } catch (error) {
@@ -10489,6 +10557,17 @@
           result: String(payload.result || '').trim(),
           idempotencyKey: payload.idempotencyKey,
         }, '已回复销售，等待销售确认下一步计划');
+      } else if (form.id === 'managerAssistanceReplyForm') {
+        const payload = formPayload(form);
+        form._todayTaskSubmitter = event.submitter;
+        if (!String(payload.result || '').trim()) throw new Error('请填写主管处理意见');
+        await submitTodayTaskAction(form, {
+          actionType: 'complete_manager_assistance',
+          customerId: payload.customerId,
+          result: String(payload.result || '').trim(),
+          idempotencyKey: payload.idempotencyKey,
+        }, '已回复销售，等待销售确认下一步计划');
+        closeModal();
       } else if (form.id === 'activityForm') {
         if (state.activitySubmitting) return;
         const payload = formPayload(form);
