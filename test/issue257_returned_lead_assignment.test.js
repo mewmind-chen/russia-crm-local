@@ -57,7 +57,7 @@ test('returned linked leads are assignable while active duplicates and review ro
   assert.equal(byId.get('INTAKE-ACTIVE-DUP').assignable, false);
   assert.equal(byId.get('INTAKE-ACTIVE-DUP').assignmentBlockReason, '客户已在 CRM');
   assert.equal(byId.get('INTAKE-REVIEW').assignable, false);
-  assert.equal(byId.get('INTAKE-REVIEW').assignmentBlockReason, '待管理层查重核验');
+  assert.equal(byId.get('INTAKE-REVIEW').assignmentBlockReason, '疑似重名，等待管理员确认');
 });
 
 test('current filtered intake endpoint marks legacy linked sales returns assignable', async t => {

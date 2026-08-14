@@ -190,7 +190,7 @@ test('openIntakeAssignModal refuses identity-review items without opening a moda
     data: {
       intake: {
         items: [
-          { id: 'I-1', identityWarning: { active: true, message: '名称待核验' }, assignmentBlockReason: '待管理员确认客户身份' },
+          { id: 'I-1', identityWarning: { active: true, message: '名称待核验' }, assignmentBlockReason: '疑似重名，等待管理员确认' },
           { id: 'I-2', duplicate_state: 'review', claimBlocked: true },
           { id: 'I-3', status: 'assigned' },
         ],

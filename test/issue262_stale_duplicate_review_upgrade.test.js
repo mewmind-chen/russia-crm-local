@@ -119,7 +119,7 @@ test('startup upgrades only stale duplicate reviews and preserves real duplicate
   assert.deepEqual({
     assignable: byId.get('INTAKE-262-EXACT').assignable,
     assignmentBlockReason: byId.get('INTAKE-262-EXACT').assignmentBlockReason,
-  }, { assignable: false, assignmentBlockReason: '待管理层查重核验' });
+  }, { assignable: false, assignmentBlockReason: '疑似重名，等待管理员确认' });
 
   const preview = await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.adminCookie,
