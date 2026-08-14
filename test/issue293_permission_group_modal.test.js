@@ -77,9 +77,10 @@ function renderedPermissionEditors() {
       permissionDescriptions: {},
     } };
     const PERMISSION_CATEGORIES = [
-      { key: 'module', label: '模块访问', permissions: ['view_dashboard'] },
-      { key: 'customer', label: '客户数据与操作', permissions: ['manage_intake'] },
-      { key: 'admin', label: '管理与审计', permissions: ['manage_users'] },
+      { key: 'scope', label: '客户范围', description: '决定这个角色能看到哪些客户资料。', sensitivity: 'danger', permissions: ['view_dashboard'] },
+      { key: 'action', label: '客户动作', description: '决定这个角色能对客户执行哪些业务动作。', sensitivity: '', permissions: ['manage_intake'] },
+      { key: 'admin', label: '管理与审计', description: '管理、审计、导出与权限维护能力。', sensitivity: '', permissions: ['manage_users'] },
+      { key: 'module', label: '模块入口', description: '决定这个角色可以进入哪些页面。', sensitivity: '', permissions: [] },
     ];
     const esc = value => String(value || '');
     const visiblePermissionDefinitions = () => state.data.permissionDefinitions;
@@ -155,6 +156,8 @@ function permissionGroupProductionApi(state) {
     entries() { return this.form.entries[Symbol.iterator](); }
   }
   const source = `
+    const PERMISSION_PACKS = [{ key: 'sales', role: 'sales' }, { key: 'manager', role: 'manager' }, { key: 'admin', role: 'admin' }];
+    const visiblePermissionDefinitions = () => state.data.permissionDefinitions || {};
     ${functionBlock(app, 'formPayload')}
     ${functionBlock(app, 'permissionsFromPayload')}
     ${functionBlock(app, 'permissionGroupRole')}
@@ -162,6 +165,9 @@ function permissionGroupProductionApi(state) {
     ${functionBlock(app, 'hidePermissionGroupResetConfirmation')}
     ${functionBlock(app, 'showPermissionGroupResetConfirmation')}
     ${functionBlock(app, 'cancelPermissionGroupReset')}
+    ${functionBlock(app, 'permissionConclusion')}
+    ${functionBlock(app, 'permissionPackActive')}
+    ${functionBlock(app, 'refreshPermissionGroupSummary')}
     ${functionBlock(app, 'confirmPermissionGroupReset')}
     ${functionBlock(app, 'permissionGroupPermissions')}
     ({ formPayload, permissionGroupRole, showPermissionGroupResetConfirmation,
@@ -171,11 +177,11 @@ function permissionGroupProductionApi(state) {
 }
 
 function permissionTabHarness() {
-  const tabs = ['module', 'customer', 'admin'].map((key, index) => {
+  const tabs = ['scope', 'action', 'admin', 'module'].map((key, index) => {
     const classNames = new Set(index === 0 ? ['active'] : []);
     const tab = {
       dataset: { permissionCategory: key },
-      disabled: key === 'customer',
+      disabled: key === 'action',
       tabIndex: index === 0 ? 0 : -1,
       focused: false,
       clicks: 0,
@@ -248,9 +254,9 @@ test('Issue 293 permission editor assets use the current cache token', () => {
 test('Issue 293 uses current module names once and removes stale navigation wording', () => {
   const categories = section(app, 'const PERMISSION_CATEGORIES', 'function permissionCategoryMarkup');
   const permissionPresentationSource = section(app, 'function visiblePermissionDefinitions', 'function applyBusinessAIVisibility');
-  for (const label of ['经营驾驶舱', '今日待办', '通知中心', '线索池', '客户联系人线索',
-    'Recon 情报', 'CRM客户全景', '不对口记录', '推进管道', '主管介入任务',
-    '团队状态', '经理评价', '用户与权限', '客户保护与查重', '数据维护']) {
+  for (const label of ['经营驾驶舱', '今日待办', '通知中心', '查看线索池', '查看客户联系人线索',
+    'Recon 情报', '查看本人负责客户', '查看团队与全公司客户', '查看不对口记录', '推进管道', '主管介入任务',
+    '查看团队状态', '经理评价', '用户与权限', '查看查重候选与保护名单', '数据维护']) {
     assert.match(permissionPresentationSource, new RegExp(label));
   }
   assert.doesNotMatch(permissionPresentationSource, /客户回收站|客户开发工作台/);
@@ -268,19 +274,23 @@ test('every visible permission card has category-aware explanatory copy', () => 
 test('category counts use only definitions that are actually rendered', () => {
   assert.match(app, /function visibleCategoryPermissions\(/);
   assert.match(app, /visiblePermissions\.length/);
-  assert.match(app, /本分类共 \$\{visiblePermissions\.length\} 项/);
+  assert.match(app, /本页 \$\{visiblePermissions\.length\} 项/);
 });
 
 test('group editor uses a dedicated wide modal shell and layout contracts', () => {
   const modal = section(app, 'function openPermissionGroupModal', 'function openOverridesModal');
   assert.match(modal, /permission-group-modal/);
   assert.match(modal, /permission-group-form/);
-  assert.match(modal, /permission-group-metadata/);
-  assert.match(modal, /permission-group-description/);
-  assert.match(modal, /permission-group-guidance/);
+  assert.match(modal, /permission-group-layout/);
+  assert.match(modal, /permission-group-profile/);
+  assert.match(modal, /data-permission-conclusion/);
+  assert.match(modal, /data-permission-packs/);
+  assert.match(modal, /permission-group-editor/);
   assert.match(modal, /permission-group-footer/);
+  assert.doesNotMatch(modal, /PERMISSION GROUP/);
   assert.match(css, /\.permission-group-modal\{[^}]*width:min\(1320px,calc\(100vw - 48px\)\)/);
   assert.match(css, /\.permission-group-modal\{[^}]*overflow:hidden/);
+  assert.match(css, /\.permission-group-layout\{[^}]*grid-template-columns:330px minmax\(0,1fr\)/);
   assert.match(css, /\.permission-group-modal \.permission-switch-panel\{[^}]*overflow:visible/);
   assert.match(css, /\.permission-group-footer\{[^}]*position:sticky/);
   assert.match(css, /@media\(max-width:1099px\)[\s\S]*permission-group-modal[\s\S]*overflow:auto/);
@@ -299,12 +309,10 @@ test('group footer padding outranks the later generic modal action rule', () => 
   );
 });
 
-test('reset confirmation replaces guidance in the existing five-row desktop grid', () => {
-  assert.match(css, /\.permission-group-form\{[^}]*grid-template-areas:"metadata" "description" "guidance" "permissions" "footer"/);
-  assert.match(css, /\.permission-group-guidance\{grid-area:guidance/);
-  assert.match(css, /\.permission-group-reset-confirm\{grid-area:guidance/);
-  assert.match(css, /\.permission-group-form\.permission-group-reset-visible \.permission-group-guidance\{display:none/);
-  assert.match(css, /\.permission-group-form>\.permission-editor\{grid-area:permissions;min-height:0/);
+test('reset confirmation replaces guidance in the existing three-row desktop grid', () => {
+  assert.match(css, /\.permission-group-form\{[^}]*grid-template-areas:"layout" "reset" "footer"/);
+  assert.match(css, /\.permission-group-layout\{grid-area:layout/);
+  assert.match(css, /\.permission-group-reset-confirm\{grid-area:reset/);
   assert.match(css, /#modal \.permission-group-footer\{[^}]*grid-area:footer/);
 });
 
@@ -438,14 +446,14 @@ test('rendered group and personal tabs reciprocally link panels with one tab sto
 
 test('permission tab keyboard navigation wraps enabled tabs through click delegation', () => {
   const harness = permissionTabHarness();
-  const [first, disabled, last] = harness.tabs;
+  const [first, disabled, , last] = harness.tabs;
   assert.deepEqual(press(harness, first, 'ArrowLeft'), { handled: true, prevented: true });
   assert.equal(last.focused, true);
   assert.equal(last.clicks, 1);
   assert.equal(last['aria-selected'], 'true');
   assert.equal(last.tabIndex, 0);
   assert.equal(first.tabIndex, -1);
-  assert.equal(harness.panels[2].classList.contains('hidden'), false);
+  assert.equal(harness.panels[3].classList.contains('hidden'), false);
   assert.equal(harness.panels[0].classList.contains('hidden'), true);
   assert.equal(disabled.clicks, 0, 'disabled tab is skipped');
 
@@ -457,7 +465,7 @@ test('permission tab keyboard navigation wraps enabled tabs through click delega
 
 test('Home and End select the first and last enabled permission tabs', () => {
   const harness = permissionTabHarness();
-  const [first, , last] = harness.tabs;
+  const [first, , , last] = harness.tabs;
   press(harness, first, 'End');
   assert.equal(last.clicks, 1);
   assert.equal(last['aria-selected'], 'true');

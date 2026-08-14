@@ -17,11 +17,12 @@ function section(source, start, end) {
   return source.slice(from, to);
 }
 
-test('permission editor renders three categories with switches', () => {
+test('permission editor renders four business categories with switches', () => {
   const editor = section(app, 'const PERMISSION_CATEGORIES', 'function personalPermissionFields');
-  assert.match(editor, /模块访问/);
-  assert.match(editor, /客户数据与操作/);
+  assert.match(editor, /客户范围/);
+  assert.match(editor, /客户动作/);
   assert.match(editor, /管理与审计/);
+  assert.match(editor, /模块入口/);
   const fields = section(app, 'function permissionCategoryMarkup', 'function personalPermissionFields');
   assert.match(fields, /role="switch"/);
   assert.match(fields, /data-permission-category/);
