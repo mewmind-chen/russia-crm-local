@@ -6608,6 +6608,12 @@
           : resolution === 'needs_info' ? '已要求补充资料，记录等待补充'
             : '已确认不是同一客户并放行');
       await reloadDuplicateReviewsAfterMutation(preferredIndex);
+      try {
+        await loadAuthorizedBusinessPage('intake', { reset: true });
+        await refreshTodayTasksAfterAction('查重核验结果已同步到线索池');
+      } catch (refreshError) {
+        toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+      }
       shouldFocus = true;
     } finally {
       if (model.pendingAction === reviewId) {
@@ -6643,6 +6649,12 @@
       reviewIds.forEach(reviewId => model.selectedIds.delete(reviewId));
       toast(`已新放行 ${result.resolvedCount} 条${result.deduplicatedCount ? `，${result.deduplicatedCount} 条此前已处理` : ''}`);
       await reloadDuplicateReviewsAfterMutation(preferredIndex);
+      try {
+        await loadAuthorizedBusinessPage('intake', { reset: true });
+        await refreshTodayTasksAfterAction('查重核验结果已同步到线索池');
+      } catch (refreshError) {
+        toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+      }
       shouldFocus = true;
     } finally {
       if (model.pendingAction === 'bulk-distinct') {
