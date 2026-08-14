@@ -1081,3 +1081,4 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .duplicate-review-option small{color:#5f706c;font-size:11px;line-height:1.45}
 .duplicate-review-sync-note{margin:8px 0 0;color:var(--muted);font-size:11px}
 @media(max-width:700px){.duplicate-review-steps,.duplicate-review-options{grid-template-columns:1fr}}
+.app-version-badge{margin-top:8px;padding:4px 8px;border:1px dashed var(--line);border-radius:6px;color:var(--muted);font-size:10px;text-align:center;letter-spacing:.02em}
