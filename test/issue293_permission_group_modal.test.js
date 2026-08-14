@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
@@ -15,6 +16,162 @@ function section(source, start, end) {
   const to = source.indexOf(end, from + start.length);
   assert.notEqual(to, -1, `missing ${end}`);
   return source.slice(from, to);
+}
+
+function functionBlock(source, name) {
+  const start = source.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `missing function ${name}`);
+  let parentheses = 0;
+  let bodyStart = -1;
+  let signatureQuote = '';
+  let signatureEscaped = false;
+  for (let index = source.indexOf('(', start); index < source.length; index += 1) {
+    const character = source[index];
+    if (signatureQuote) {
+      if (signatureEscaped) signatureEscaped = false;
+      else if (character === '\\') signatureEscaped = true;
+      else if (character === signatureQuote) signatureQuote = '';
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      signatureQuote = character;
+      continue;
+    }
+    if (character === '(') parentheses += 1;
+    else if (character === ')') parentheses -= 1;
+    else if (character === '{' && parentheses === 0) {
+      bodyStart = index;
+      break;
+    }
+  }
+  assert.notEqual(bodyStart, -1, `missing body for ${name}`);
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character;
+      continue;
+    }
+    if (character === '{') depth += 1;
+    if (character === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  assert.fail(`unterminated function ${name}`);
+}
+
+function renderedPermissionEditors() {
+  const source = `
+    const state = { data: {
+      permissionDefinitions: { view_dashboard: '经营驾驶舱', manage_intake: '管理线索', manage_users: '管理用户' },
+      permissionDescriptions: {},
+    } };
+    const PERMISSION_CATEGORIES = [
+      { key: 'module', label: '模块访问', permissions: ['view_dashboard'] },
+      { key: 'customer', label: '客户数据与操作', permissions: ['manage_intake'] },
+      { key: 'admin', label: '管理与审计', permissions: ['manage_users'] },
+    ];
+    const esc = value => String(value || '');
+    const visiblePermissionDefinitions = () => state.data.permissionDefinitions;
+    const visibleCategoryPermissions = (category, definitions) => category.permissions.filter(key => definitions[key]);
+    const permissionDescription = (category, key, label) => label;
+    ${functionBlock(app, 'permissionCategoryMarkup')}
+    ${functionBlock(app, 'personalPermissionFields')}
+    ${functionBlock(app, 'permissionFields')}
+    ({ personal: personalPermissionFields({}), group: permissionFields({}) });
+  `;
+  return vm.runInNewContext(source);
+}
+
+function renderedElements(markup, tagName) {
+  const elements = [];
+  const matcher = new RegExp(`<${tagName}\\b([^>]*)>`, 'g');
+  for (const match of markup.matchAll(matcher)) {
+    const attributes = Object.fromEntries(
+      [...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value]),
+    );
+    elements.push({ attributes });
+  }
+  return elements;
+}
+
+function permissionTabHarness() {
+  const tabs = ['module', 'customer', 'admin'].map((key, index) => {
+    const classNames = new Set(index === 0 ? ['active'] : []);
+    const tab = {
+      dataset: { permissionCategory: key },
+      disabled: key === 'customer',
+      tabIndex: index === 0 ? 0 : -1,
+      focused: false,
+      clicks: 0,
+      classList: {
+        toggle(name, enabled) { if (enabled) classNames.add(name); else classNames.delete(name); },
+        contains(name) { return classNames.has(name); },
+      },
+      setAttribute(name, value) { this[name] = String(value); },
+      closest(selector) { return selector.includes('[data-permission-category]') ? this : null; },
+      focus() { this.focused = true; },
+    };
+    return tab;
+  });
+  const panels = tabs.map((tab, index) => {
+    const classNames = new Set(index === 0 ? [] : ['hidden']);
+    return {
+      dataset: { permissionPanel: tab.dataset.permissionCategory },
+      classList: {
+        toggle(name, enabled) { if (enabled) classNames.add(name); else classNames.delete(name); },
+        contains(name) { return classNames.has(name); },
+      },
+    };
+  });
+  const $$ = selector => selector.includes('data-permission-category') ? tabs : panels;
+  const source = `
+    ${functionBlock(app, 'selectPermissionCategoryTab')}
+    ${functionBlock(app, 'navigatePermissionCategoryTab')}
+    ({ selectPermissionCategoryTab, navigatePermissionCategoryTab });
+  `;
+  const api = vm.runInNewContext(source, { $$ });
+  tabs.forEach(tab => {
+    tab.click = () => {
+      tab.clicks += 1;
+      api.selectPermissionCategoryTab(tab);
+    };
+  });
+  return { tabs, panels, api };
+}
+
+function press(harness, tab, key) {
+  let prevented = false;
+  const handled = harness.api.navigatePermissionCategoryTab({
+    key,
+    target: tab,
+    preventDefault() { prevented = true; },
+  });
+  return { handled, prevented };
+}
+
+function specificity(selector) {
+  return [
+    (selector.match(/#[\w-]+/g) || []).length,
+    (selector.match(/\.[\w-]+|\[[^\]]+\]|:[\w-]+/g) || []).length,
+    (selector.match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length,
+  ];
+}
+
+function outranks(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] > right[index];
+  }
+  return false;
 }
 
 test('Issue 293 uses current module names once and removes stale navigation wording', () => {
@@ -58,9 +215,61 @@ test('group editor uses a dedicated wide modal shell and layout contracts', () =
   assert.match(css, /@media\(max-width:1099px\)[\s\S]*permission-group-modal[\s\S]*overflow:auto/);
 });
 
-test('permission category tabs connect named panels and support keyboard navigation', () => {
-  assert.match(app, /aria-controls="permission-group-panel-/);
-  assert.match(app, /role="tabpanel"/);
-  assert.match(app, /ArrowLeft|ArrowRight/);
-  assert.match(app, /event\.key === 'Home'|event\.key === 'End'/);
+test('group footer padding outranks the later generic modal action rule', () => {
+  const footerSelector = '#modal .permission-group-footer';
+  const footerStart = css.indexOf(`${footerSelector}{`);
+  const genericStart = css.indexOf('.modal .form-actions{');
+  assert.ok(footerStart >= 0, 'group footer rule is present');
+  assert.ok(genericStart > footerStart, 'generic modal action rule follows the group footer rule');
+  assert.match(css.slice(footerStart, css.indexOf('}', footerStart) + 1), /padding:12px 24px/);
+  assert.ok(
+    outranks(specificity(footerSelector), specificity('.modal .form-actions')),
+    'group footer selector must outrank the later generic selector',
+  );
+});
+
+test('rendered group and personal tabs reciprocally link panels with one tab stop', () => {
+  const editors = renderedPermissionEditors();
+  for (const markup of Object.values(editors)) {
+    const tabs = renderedElements(markup, 'button');
+    const panels = renderedElements(markup, 'section');
+    assert.equal(tabs.filter(tab => tab.attributes.tabindex === '0').length, 1);
+    assert.equal(tabs.filter(tab => tab.attributes.tabindex === '-1').length, tabs.length - 1);
+    for (const tab of tabs) {
+      const panel = panels.find(item => item.attributes.id === tab.attributes['aria-controls']);
+      assert.ok(panel, `${tab.attributes.id} controls a rendered panel`);
+      assert.equal(panel.attributes.role, 'tabpanel');
+      assert.equal(panel.attributes['aria-labelledby'], tab.attributes.id);
+    }
+  }
+});
+
+test('permission tab keyboard navigation wraps enabled tabs through click delegation', () => {
+  const harness = permissionTabHarness();
+  const [first, disabled, last] = harness.tabs;
+  assert.deepEqual(press(harness, first, 'ArrowLeft'), { handled: true, prevented: true });
+  assert.equal(last.focused, true);
+  assert.equal(last.clicks, 1);
+  assert.equal(last['aria-selected'], 'true');
+  assert.equal(last.tabIndex, 0);
+  assert.equal(first.tabIndex, -1);
+  assert.equal(harness.panels[2].classList.contains('hidden'), false);
+  assert.equal(harness.panels[0].classList.contains('hidden'), true);
+  assert.equal(disabled.clicks, 0, 'disabled tab is skipped');
+
+  assert.deepEqual(press(harness, last, 'ArrowRight'), { handled: true, prevented: true });
+  assert.equal(first.focused, true);
+  assert.equal(first.clicks, 1);
+  assert.equal(first['aria-selected'], 'true');
+});
+
+test('Home and End select the first and last enabled permission tabs', () => {
+  const harness = permissionTabHarness();
+  const [first, , last] = harness.tabs;
+  press(harness, first, 'End');
+  assert.equal(last.clicks, 1);
+  assert.equal(last['aria-selected'], 'true');
+  press(harness, last, 'Home');
+  assert.equal(first.clicks, 1);
+  assert.equal(first['aria-selected'], 'true');
 });

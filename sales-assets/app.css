@@ -255,7 +255,7 @@ button.metric.alert{background:var(--danger-subtle)}
 .permission-group-modal .modal-body{min-height:0;overflow:hidden;padding:16px 24px 0}
 .permission-group-form{max-height:calc(100dvh - 112px);grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:10px;overflow:hidden}
 .permission-group-modal .permission-switch-panel{max-height:none;overflow:visible;padding-right:0}
-.permission-group-footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 -24px;padding:12px 24px;border-top:1px solid var(--line);background:#fff;z-index:1}
+#modal .permission-group-footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 -24px;padding:12px 24px;border-top:1px solid var(--line);background:#fff;z-index:1}
 .permission-category-status{margin:9px 0 0;color:var(--muted);font-size:10px}
 .permission-mobile-status{display:none}
 .permission-editor fieldset{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 10px}

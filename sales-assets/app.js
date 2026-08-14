@@ -9654,6 +9654,37 @@
     return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
   }
 
+  function selectPermissionCategoryTab(permissionCategoryButton) {
+    if (!permissionCategoryButton || permissionCategoryButton.disabled) return false;
+    $$('#modal [data-permission-category]').forEach(button => {
+      const selected = button === permissionCategoryButton;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    $$('#modal [data-permission-panel]').forEach(panel => {
+      panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
+    });
+    return true;
+  }
+
+  function navigatePermissionCategoryTab(event) {
+    const permissionCategoryTab = event.target.closest?.('#modal [data-permission-category][role="tab"]');
+    if (!permissionCategoryTab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return false;
+    const tabs = $$('#modal [data-permission-category][role="tab"]').filter(tab => !tab.disabled);
+    const currentIndex = tabs.indexOf(permissionCategoryTab);
+    if (currentIndex < 0 || !tabs.length) return false;
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[nextIndex].click();
+    tabs[nextIndex].focus();
+    return true;
+  }
+
   function openEditUserModal(userId) {
     const user = state.data.users.find(item => item.id === userId);
     if (!user) return;
@@ -11038,15 +11069,7 @@
     }
     const permissionCategoryButton = event.target.closest('[data-permission-category]');
     if (permissionCategoryButton) {
-      $$('#modal [data-permission-category]').forEach(button => {
-        const selected = button === permissionCategoryButton;
-        button.classList.toggle('active', selected);
-        button.setAttribute('aria-selected', String(selected));
-        button.tabIndex = selected ? 0 : -1;
-      });
-      $$('#modal [data-permission-panel]').forEach(panel => {
-        panel.classList.toggle('hidden', panel.dataset.permissionPanel !== permissionCategoryButton.dataset.permissionCategory);
-      });
+      selectPermissionCategoryTab(permissionCategoryButton);
       return;
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
@@ -11984,20 +12007,7 @@
         return;
       }
     }
-    const permissionCategoryTab = event.target.closest?.('#modal [data-permission-category][role="tab"]');
-    if (permissionCategoryTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-      const tabs = $$('#modal [data-permission-category][role="tab"]').filter(tab => !tab.disabled);
-      const currentIndex = tabs.indexOf(permissionCategoryTab);
-      const nextIndex = event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? tabs.length - 1
-          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-      event.preventDefault();
-      tabs[nextIndex]?.click();
-      tabs[nextIndex]?.focus();
-      return;
-    }
+    if (navigatePermissionCategoryTab(event)) return;
     const duplicateSearch = event.target.closest?.('[data-duplicate-candidate-search]');
     if (duplicateSearch) {
       const reviewId = duplicateSearch.dataset.duplicateCandidateSearch;
