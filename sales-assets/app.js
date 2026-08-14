@@ -273,7 +273,7 @@
     managerTasks: 'resolve_manager_tasks', managerMetrics: 'resolve_manager_tasks',
     notifications: 'view_notifications',
     activityCorrections: 'manage_activity_corrections',
-    team: 'view_customers',
+    team: 'view_team',
     aiTasks: 'view_customers', maintenance: 'manage_data_maintenance',
   };
   const activityMeta = {
@@ -746,12 +746,50 @@
   }
   function visiblePermissionDefinitions() {
     const definitions = state.data?.permissionDefinitions || {};
-    if (customerAIEnabled()) return definitions;
+    const aiEnabled = customerAIEnabled();
     const visible = Object.fromEntries(
-      Object.entries(definitions).filter(([key]) => !aiPermissionKeys.has(key)),
+      Object.entries(definitions)
+        .filter(([key]) => !retiredPermissionKeys.has(key) && (aiEnabled || !aiPermissionKeys.has(key)))
+        .map(([key, label]) => [key, permissionPresentation[key]?.label || label]),
     );
-    if (visible.manage_evaluations) visible.manage_evaluations = '维护经理评价';
     return visible;
+  }
+  const retiredPermissionKeys = new Set(['view_development', 'view_pool']);
+  const permissionPresentation = Object.freeze({
+    view_dashboard: Object.freeze({ label: '经营驾驶舱' }),
+    view_alerts: Object.freeze({ label: '今日待办' }),
+    view_notifications: Object.freeze({ label: '通知中心' }),
+    view_intake: Object.freeze({ label: '线索池' }),
+    view_contacts: Object.freeze({ label: '客户联系人线索' }),
+    view_recon: Object.freeze({ label: 'Recon 情报' }),
+    view_customers: Object.freeze({ label: 'CRM客户全景' }),
+    view_own_mismatch_history: Object.freeze({ label: '不对口记录' }),
+    view_pipeline: Object.freeze({ label: '推进管道' }),
+    resolve_manager_tasks: Object.freeze({
+      label: '主管介入任务',
+      description: '查看并处理主管介入任务及相关统计。',
+    }),
+    view_team: Object.freeze({ label: '团队状态' }),
+    manage_evaluations: Object.freeze({ label: '经理评价' }),
+    view_users: Object.freeze({ label: '用户与权限' }),
+    manage_protected_customers: Object.freeze({ label: '客户保护与查重' }),
+    manage_data_maintenance: Object.freeze({ label: '数据维护' }),
+    manage_customer_recycle: Object.freeze({
+      label: '管理不对口记录',
+      description: '恢复、重新分配或处理不对口记录。',
+    }),
+    manage_manual_customer_deletion: Object.freeze({
+      label: '手工移除客户',
+      description: '将确认需要移除的客户转入受控历史记录。',
+    }),
+  });
+  function visibleCategoryPermissions(category, definitions) {
+    return category.permissions.filter(key => Boolean(definitions[key]));
+  }
+  function permissionDescription(category, key, label, descriptions) {
+    return permissionPresentation[key]?.description
+      || descriptions[key]
+      || (category.key === 'module' ? `允许进入“${label}”。` : `允许执行“${label}”。`);
   }
   function applyBusinessAIVisibility() {
     const enabled = customerAIEnabled();
@@ -9503,7 +9541,8 @@
         'view_dashboard', 'view_alerts', 'view_notifications', 'view_intake',
         'view_contacts', 'view_recon', 'view_customers', 'view_own_mismatch_history',
         'view_pipeline', 'resolve_manager_tasks', 'view_team', 'view_insights',
-        'view_markets',
+        'view_markets', 'manage_activity_corrections', 'view_users',
+        'manage_protected_customers', 'manage_data_maintenance',
       ]),
     }),
     Object.freeze({
@@ -9511,16 +9550,15 @@
         'view_all_customers', 'manage_intake', 'manage_customer_recycle',
         'reject_own_customer_mismatch', 'manage_manual_customer_deletion',
         'manage_customer_contacts', 'create_customer', 'edit_customer',
-        'record_activity', 'correct_own_activity', 'manage_activity_corrections',
+        'record_activity', 'correct_own_activity',
         'record_collaboration_support', 'record_quote', 'record_order',
       ]),
     }),
     Object.freeze({
       key: 'admin', label: '管理与审计', permissions: Object.freeze([
-        'view_users', 'manage_evaluations', 'run_recon', 'use_prospect_agent',
+        'manage_evaluations', 'run_recon', 'use_prospect_agent',
         'use_ai_assistant', 'cancel_ai_tasks', 'bulk_manage_ai_tasks',
         'manage_ai_budgets', 'review_ai_tasks', 'manage_users',
-        'manage_data_maintenance', 'manage_protected_customers',
         'manage_manager_task_settings', 'export_data',
       ]),
     }),
@@ -9532,20 +9570,25 @@
     const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === active ? 'active' : ''}"
       type="button" role="tab" aria-selected="${category.key === active}"
       data-permission-category="${category.key}">${category.label}</button>`).join('');
-    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
+    const panels = PERMISSION_CATEGORIES.map(category => {
+      const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      return `<section class="permission-switch-panel ${category.key === active ? '' : 'hidden'}"
       data-permission-panel="${category.key}">
-      <div class="permission-switch-grid">${category.permissions.map(key => {
+      <div class="permission-switch-grid">${visiblePermissions.map(key => {
         const allowed = Boolean(permissions[key]);
         const followsGroup = allowed === Boolean(groupPermissions[key]);
         const label = definitions[key];
-        if (!label) return '';
-        const description = descriptions[key] || '';
+        const description = permissionDescription(category, key, label, descriptions);
         return `<label class="permission-override-row permission-switch-row">
-          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${description ? `${esc(description)} · ` : ''}${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
+          <span class="permission-switch-label"><strong>${esc(label)}</strong><small>${esc(description)} · ${followsGroup ? '跟随权限组' : '个人调整'}</small></span>
           <input type="checkbox" role="switch" name="personalPermission__${esc(key)}" ${allowed ? 'checked' : ''} aria-label="${esc(label)}">
         </label>`;
       }).join('')}</div>
-    </section>`).join('');
+      <p class="permission-category-status">
+        本分类共 ${visiblePermissions.length} 项，<span class="permission-desktop-status">已完整显示，无需滚动</span><span class="permission-mobile-status">全部权限均在当前分类中</span>
+      </p>
+    </section>`;
+    }).join('');
     return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
   }
 
@@ -9582,16 +9625,22 @@
     const tabs = PERMISSION_CATEGORIES.map(category => `<button class="${category.key === 'module' ? 'active' : ''}"
       type="button" role="tab" aria-selected="${category.key === 'module'}"
       data-permission-category="${category.key}">${category.label}</button>`).join('');
-    const panels = PERMISSION_CATEGORIES.map(category => `<section class="permission-switch-panel ${category.key === 'module' ? '' : 'hidden'}"
+    const panels = PERMISSION_CATEGORIES.map(category => {
+      const visiblePermissions = visibleCategoryPermissions(category, definitions);
+      return `<section class="permission-switch-panel ${category.key === 'module' ? '' : 'hidden'}"
       data-permission-panel="${category.key}">
-      <div class="permission-switch-grid">${category.permissions.map(key => {
+      <div class="permission-switch-grid">${visiblePermissions.map(key => {
         const label = definitions[key];
-        if (!label) return '';
+        const description = permissionDescription(category, key, label, descriptions);
         return `<label class="permission-check permission-switch-row">
-          <input type="checkbox" role="switch" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''} aria-label="${esc(label)}"><span>${esc(label)}${descriptions[key] ? `<small>${esc(descriptions[key])}</small>` : ''}</span>
+          <input type="checkbox" role="switch" name="permission__${esc(key)}" ${permissions[key] ? 'checked' : ''} aria-label="${esc(label)}"><span>${esc(label)}<small>${esc(description)}</small></span>
         </label>`;
       }).join('')}</div>
-    </section>`).join('');
+      <p class="permission-category-status">
+        本分类共 ${visiblePermissions.length} 项，<span class="permission-desktop-status">已完整显示，无需滚动</span><span class="permission-mobile-status">全部权限均在当前分类中</span>
+      </p>
+    </section>`;
+    }).join('');
     return `<div class="permission-category-tabs" role="tablist" aria-label="权限分类">${tabs}</div>${panels}`;
   }
 
