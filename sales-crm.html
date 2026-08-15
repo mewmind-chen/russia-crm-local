@@ -651,13 +651,15 @@
       <section id="protectedCustomersView" class="view protected-customers-view">
         <div class="section-intro protected-intro">
           <div><p class="eyebrow">客户保护与查重</p><h2>客户保护与查重</h2><p>在同一工作区处理客户身份保护、疑似重复核验与可审计的身份结论。</p></div>
-          <div class="protected-intro-actions">
-            <button id="protectedTemplateBtn" class="button secondary" type="button">下载导入模板</button>
-            <button id="protectedExportBtn" class="button secondary" type="button">导出身份映射</button>
-          </div>
         </div>
 
-        <article id="pendingVerificationPanel" class="panel pending-verification-panel hidden">
+        <nav id="protectionWorkspaceTabs" class="protection-workspace-tabs" role="tablist" aria-label="客户保护功能">
+          <button class="active" type="button" role="tab" aria-selected="true" data-protection-view="verification">待核验中心 <b id="protectionVerificationCount">0</b></button>
+          <button type="button" role="tab" aria-selected="false" data-protection-view="directory">保护客户</button>
+          <button type="button" role="tab" aria-selected="false" data-protection-view="import">批量导入</button>
+        </nav>
+
+        <article id="pendingVerificationPanel" class="panel pending-verification-panel hidden" data-protection-panel="verification">
           <div class="panel-head">
             <div><p class="eyebrow">待核验</p><h2>待核验中心</h2></div>
             <div id="pendingTypeTabs" class="pending-type-tabs" role="tablist">
@@ -686,10 +688,13 @@
         <div id="protectedAdminWorkspace">
         <div id="protectedWriteGate" class="protected-gate" role="status" aria-live="polite">正在读取保护客户状态…</div>
 
-        <article class="panel protected-list-panel">
+        <article class="panel protected-list-panel hidden" data-protection-panel="directory">
           <div class="panel-head">
             <div><p class="eyebrow">PROTECTED DIRECTORY</p><h2>保护客户列表</h2><p>可按 Alpha 昵称、CRM 昵称、正式公司名称或客户编号搜索。</p></div>
-            <button id="protectedRefreshBtn" class="text-button" type="button">刷新</button>
+            <div class="protected-panel-head-actions">
+              <button id="protectedExportBtn" class="button secondary" type="button">导出身份映射</button>
+              <button id="protectedRefreshBtn" class="text-button" type="button">刷新</button>
+            </div>
           </div>
           <div class="protected-toolbar">
             <label class="protected-search">搜索<input id="protectedSearch" type="search" autocomplete="off" placeholder="搜索客户昵称、公司名称或客户编号"></label>
@@ -701,10 +706,11 @@
           <div id="protectedCustomerPagination" class="shared-pagination" data-pagination="protected_customers"></div>
         </article>
 
-        <article class="panel protected-import-panel">
+        <article class="panel protected-import-panel hidden" data-protection-panel="import">
           <div class="panel-head">
             <div><p class="eyebrow">BATCH PREVIEW</p><h2>批次导入预览</h2><p>先录入并预览，服务端会逐行执行标准化、唯一身份检查和可执行性判断。</p></div>
             <div class="protected-panel-head-actions">
+              <button id="protectedTemplateBtn" class="button secondary" type="button">下载导入模板</button>
               <input id="protectedCsvInput" class="hidden" type="file" accept=".csv,text/csv">
               <button id="protectedCsvBtn" class="button secondary" type="button">选择 CSV</button>
               <button id="protectedAddRowBtn" class="button secondary" type="button">新增一行</button>

@@ -217,6 +217,7 @@
       conflictsLoaded: false,
     },
     pendingCenter: { activeTab: 'conflicts' },
+    protectionWorkspace: { activeView: 'verification' },
     pendingConflictDeepLink: '',
     duplicateReviews: {
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
@@ -1475,6 +1476,7 @@
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
       state.pendingCenter = { activeTab: 'conflicts' };
+      state.protectionWorkspace = { activeView: 'verification' };
       state.pendingConflictDeepLink = '';
       if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
         state.pendingCenter.activeTab = 'duplicates';
@@ -6421,6 +6423,20 @@
     return { conflicts: canManageProtectedCustomers(), duplicates: canReviewDuplicateCustomers() };
   }
 
+  function activateProtectionView(view) {
+    const allowed = new Set(['verification', 'directory', 'import']);
+    const activeView = allowed.has(view) ? view : 'verification';
+    state.protectionWorkspace.activeView = activeView;
+    $$('[data-protection-view]').forEach(button => {
+      const active = button.dataset.protectionView === activeView;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    $$('[data-protection-panel]').forEach(panel => {
+      panel.classList.toggle('hidden', panel.dataset.protectionPanel !== activeView);
+    });
+  }
+
   function activatePendingTab(type, options = {}) {
     const tabs = pendingTabsAvailable();
     const activeTab = tabs[type] ? type : (tabs.conflicts ? 'conflicts' : 'duplicates');
@@ -6850,11 +6866,16 @@
 
   function renderProtectedWorkspace() {
     if (!$('#protectedCustomersView') || !canAccessProtectionAndDedupe()) return;
-    $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManageProtectedCustomers());
-    $$('.protected-intro-actions').forEach(root => root.classList.toggle('hidden', !canManageProtectedCustomers()));
+    const canManage = canManageProtectedCustomers();
+    $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManage);
+    $$('[data-protection-view="directory"], [data-protection-view="import"]').forEach(button => {
+      button.classList.toggle('hidden', !canManage);
+    });
+    if (!canManage) state.protectionWorkspace.activeView = 'verification';
     renderPendingCenter();
+    activateProtectionView(state.protectionWorkspace.activeView);
     applyDuplicateReviewDeepLink();
-    if (!canManageProtectedCustomers()) return;
+    if (!canManage) return;
     renderProtectedWriteGate();
     renderProtectedCustomers();
     renderProtectedBatch();
@@ -11852,6 +11873,8 @@
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#newUserBtn')) openUserModal();
+    const protectionView = event.target.closest('[data-protection-view]');
+    if (protectionView) activateProtectionView(protectionView.dataset.protectionView);
     if (event.target.closest('#protectedTemplateBtn')) {
       try { await downloadProtectedCsv('/protected-customers/template', 'protected-customer-template.csv'); }
       catch (error) { toast(error.message); }
