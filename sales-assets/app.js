@@ -2150,6 +2150,14 @@
 
   function intakeBlockStatusLabel(item = {}) {
     const state = String(item.duplicate_state || '');
+    // Identity-conflict-linked items carry their own linked-master fields and
+    // must win over any stale supplement/needs-review marker so a resolved link
+    // never regresses to a needs-review block.
+    const linkedName = String(item.linkedMasterName || item.linked_master_name || '').trim();
+    const linkedExternalId = String(item.linkedMasterExternalId || '').trim();
+    if (linkedName || linkedExternalId) {
+      return `已关联主客户：${linkedName || linkedExternalId}`;
+    }
     // Resolved states win over any stale supplement/needs-info marker so a
     // lead that was later linked or released never regresses to 资料不足.
     if (state === 'exact') {
@@ -2704,6 +2712,11 @@
         if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
+        // Resolved link_existing identity conflicts keep assignable=false and a
+        // linked master; surface the master entry before the identity-review
+        // branch so a resolved link never shows a "needs review" action.
+        else if (item.linkedMasterExternalId) actions =
+          `<button class="text-button" data-open-customer="${item.linkedMasterExternalId}">查看已关联客户</button>`;
         // Identity-review branch: the backend marks these items with the boolean
         // assignable=false (plus identityWarning/claimBlocked), so this must run
         // after the assignable branch above and before the plain assigned row.
@@ -11897,7 +11910,7 @@
         renderPendingCenter();
         await resolveProtectedConflictAction(conflictId, {
           decision, targetExternalCustomerId,
-          details: reason, expectedVersion: item.sourceExpectedVersion || '',
+          details: reason, expectedVersion: item.expectedVersion || '',
         });
       } catch (error) {
         state.protectedCustomers.conflictPendingId = '';

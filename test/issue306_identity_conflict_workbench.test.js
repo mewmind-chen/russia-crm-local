@@ -77,10 +77,12 @@ test('supplement actions render only on the resolved link_existing card', () => 
   assert.doesNotMatch(pending, /可补充资料/);
 });
 
-test('save handler sends a business default reason for non-supplement decisions', () => {
+test('save handler sends the state version and a business default reason', () => {
   const handler = section(app, "const conflictSave = event.target.closest('[data-save-protected-conflict]')", 'const supplementApply');
   assert.match(handler, /管理员确认为同一客户/);
   assert.match(handler, /管理员确认不是同一客户/);
+  assert.match(handler, /expectedVersion: item\.expectedVersion \|\| ''/);
+  assert.doesNotMatch(handler, /sourceExpectedVersion/);
 });
 
 test('deep-link and post-adjudication refresh are wired', () => {
