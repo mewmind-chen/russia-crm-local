@@ -218,7 +218,8 @@
     },
     pendingCenter: {
       activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
-      deepLinkUnavailable: false, consumedDeepLinkHash: '',
+      deepLinkUnavailable: false, deepLinkNavigationHash: '',
+      deepLinkNavigationEpoch: 0, consumedDeepLinkEpoch: -1,
     },
     protectionWorkspace: { activeView: 'verification' },
     duplicateReviews: {
@@ -1479,7 +1480,8 @@
       });
       state.pendingCenter = {
         activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
-        deepLinkUnavailable: false, consumedDeepLinkHash: '',
+        deepLinkUnavailable: false, deepLinkNavigationHash: '',
+        deepLinkNavigationEpoch: 0, consumedDeepLinkEpoch: -1,
       };
       state.protectionWorkspace = { activeView: 'verification' };
       if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
@@ -6499,6 +6501,11 @@
     return true;
   }
 
+  function selectPendingRecordFromQueue(key) {
+    if (pendingInteractionLocked()) return false;
+    return selectPendingRecord(key, { openMobile: true });
+  }
+
   function renderPendingQueue() {
     const root = $('#pendingQueueList');
     if (!root) return;
@@ -6620,18 +6627,29 @@
       : duplicateReviewDetailMarkup(record.raw);
   }
 
-  function setPendingDetailMutationState(pending) {
-    const root = $('#pendingDetail');
-    if (!root) return;
-    root.querySelectorAll('button, input, textarea, select').forEach(control => {
-      if (pending) {
-        control.dataset.pendingWasDisabled = control.disabled ? 'true' : 'false';
-        control.disabled = true;
-      } else if ('pendingWasDisabled' in control.dataset) {
-        control.disabled = control.dataset.pendingWasDisabled === 'true';
-        delete control.dataset.pendingWasDisabled;
-      }
+  function setPendingInteractionLock(pending) {
+    ['#pendingQueueList', '#pendingDetail'].forEach(selector => {
+      const root = $(selector);
+      if (!root) return;
+      root.querySelectorAll('button, input, textarea, select').forEach(control => {
+        if (pending && !('pendingWasDisabled' in control.dataset)) {
+          control.dataset.pendingWasDisabled = control.disabled ? 'true' : 'false';
+        }
+        if (pending) control.disabled = true;
+        else if ('pendingWasDisabled' in control.dataset) {
+          control.disabled = control.dataset.pendingWasDisabled === 'true';
+          delete control.dataset.pendingWasDisabled;
+        }
+      });
     });
+  }
+
+  function syncPendingInteractionLock() {
+    setPendingInteractionLock(pendingInteractionLocked());
+  }
+
+  function setPendingDetailMutationState() {
+    syncPendingInteractionLock();
   }
 
   function showPendingDetailError(error) {
@@ -6640,6 +6658,18 @@
     root.classList.add('has-error');
     const message = root.querySelector('[data-conflict-message], [data-duplicate-message]');
     if (message) message.textContent = error?.message || '保存失败，请重试';
+  }
+
+  function viewFromLocationHash(hash = location.hash) {
+    return String(hash || '').replace(/^#/, '').split('?')[0];
+  }
+
+  function beginPendingDeepLinkNavigation(hash = location.hash) {
+    const nextHash = String(hash || '');
+    if (state.pendingCenter.deepLinkNavigationHash === nextHash) return;
+    state.pendingCenter.deepLinkNavigationHash = nextHash;
+    state.pendingCenter.deepLinkNavigationEpoch += 1;
+    state.pendingCenter.deepLinkUnavailable = false;
   }
 
   function pendingTabsAvailable() {
@@ -6766,7 +6796,8 @@
 
   function applyDuplicateReviewDeepLink() {
     const hash = String(location.hash || '');
-    if (!hash.startsWith('#protectedCustomers')) return;
+    beginPendingDeepLinkNavigation(hash);
+    if (viewFromLocationHash(hash) !== 'protectedCustomers') return;
     const params = new URLSearchParams(hash.split('?')[1] || '');
     const conflictId = String(params.get('conflict') || '');
     const reviewId = String(params.get('review') || '');
@@ -6775,11 +6806,12 @@
       state.pendingCenter.deepLinkUnavailable = false;
       return;
     }
-    if (state.pendingCenter.consumedDeepLinkHash === hash) return;
+    const navigationEpoch = state.pendingCenter.deepLinkNavigationEpoch;
+    if (state.pendingCenter.consumedDeepLinkEpoch === navigationEpoch) return;
     activateProtectionView('verification');
     if (conflictId) {
       if (!canManageProtectedCustomers()) {
-        state.pendingCenter.consumedDeepLinkHash = hash;
+        state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
         state.pendingCenter.selectedKey = '';
         state.pendingCenter.deepLinkUnavailable = true;
         renderPendingCenter();
@@ -6791,11 +6823,11 @@
       if (!conflictModel.conflictsLoaded) return;
       const matched = conflictModel.conflicts.find(item => item.conflictId === conflictId);
       if (matched) {
-        state.pendingCenter.consumedDeepLinkHash = hash;
+        state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
         selectPendingRecord(pendingRecordKey('conflicts', matched), { openMobile: true, focus: true });
         return;
       }
-      state.pendingCenter.consumedDeepLinkHash = hash;
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
       state.pendingCenter.selectedKey = '';
       state.pendingCenter.mobileDetailOpen = true;
       state.pendingCenter.deepLinkUnavailable = true;
@@ -6803,7 +6835,7 @@
       return;
     }
     if (!canReviewDuplicateCustomers()) {
-      state.pendingCenter.consumedDeepLinkHash = hash;
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
       state.pendingCenter.selectedKey = '';
       state.pendingCenter.deepLinkUnavailable = true;
       renderPendingCenter();
@@ -6818,11 +6850,11 @@
       || (customerId && String(item.input?.externalCustomerId || '') === customerId)
       || (customerId && String(item.input?.customerId || '') === customerId));
     if (matched) {
-      state.pendingCenter.consumedDeepLinkHash = hash;
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
       selectPendingRecord(pendingRecordKey('duplicates', matched), { openMobile: true, focus: true });
       return;
     }
-    state.pendingCenter.consumedDeepLinkHash = hash;
+    state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
     state.pendingCenter.selectedKey = '';
     state.pendingCenter.mobileDetailOpen = true;
     state.pendingCenter.deepLinkUnavailable = true;
@@ -7214,6 +7246,7 @@
     const retainDraft = model.conflicts.length > 0;
     model.conflictsLoading = true;
     model.conflictsError = '';
+    syncPendingInteractionLock();
     if (retainDraft) setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
     else renderProtectedConflicts();
     renderProtectedConflictPagination();
@@ -7239,6 +7272,7 @@
       model.conflictsError = error.message || '身份冲突加载失败';
     } finally {
       model.conflictsLoading = false;
+      syncPendingInteractionLock();
       if (completed || !retainDraft) renderPendingCenter();
       else setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
       renderProtectedConflictPagination();
@@ -12196,7 +12230,7 @@
     }
     const pendingRecord = event.target.closest('[data-pending-record-key]');
     if (pendingRecord) {
-      selectPendingRecord(pendingRecord.dataset.pendingRecordKey, { openMobile: true });
+      selectPendingRecordFromQueue(pendingRecord.dataset.pendingRecordKey);
     }
     if (event.target.closest('[data-pending-detail-close]')) {
       state.pendingCenter.mobileDetailOpen = false;
@@ -12207,7 +12241,7 @@
     const conflictToggle = event.target.closest('[data-toggle-protected-conflict]');
     if (conflictToggle) {
       const conflictId = conflictToggle.dataset.toggleProtectedConflict;
-      selectPendingRecord(`conflict:${conflictId}`, { openMobile: true });
+      selectPendingRecordFromQueue(`conflict:${conflictId}`);
     }
     const conflictSave = event.target.closest('[data-save-protected-conflict]');
     if (conflictSave && protectedWritesAvailable()) {
@@ -12822,6 +12856,7 @@
       if (pushHistory && !intakeAlias) history.pushState(null, '', navigationUrl);
       else history.replaceState(null, '', navigationUrl);
     }
+    beginPendingDeepLinkNavigation(location.hash);
   }
 
   document.addEventListener('input', event => {
@@ -13084,14 +13119,16 @@
     }
   });
   window.addEventListener('hashchange', () => {
-    const view = location.hash.replace(/^#/, '');
+    beginPendingDeepLinkNavigation(location.hash);
+    const view = viewFromLocationHash();
     if (viewMeta[view] && state.data) {
       restoreLeadWorkflowFromLocation(view);
       switchView(view, false);
     }
   });
   window.addEventListener('popstate', () => {
-    const view = location.hash.replace(/^#/, '');
+    beginPendingDeepLinkNavigation(location.hash);
+    const view = viewFromLocationHash();
     if (viewMeta[view] && state.data) {
       restoreLeadWorkflowFromLocation(view);
       switchView(view, false);

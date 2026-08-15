@@ -16,6 +16,16 @@ function topLevelFunction(name) {
   return app.slice(match.index, following?.index ?? app.length).trim();
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 test('pending center renders a selectable queue and persistent detail', () => {
   for (const signature of [
     'function pendingRecordKey',
@@ -73,6 +83,94 @@ test('queue selection stays disabled while a verification mutation is pending', 
   assert.match(source, /data-pending-record-key="\$\{esc\(record\.key\)\}"[^>]*\$\{interactionPending \? 'disabled' : ''\}/);
 });
 
+test('conflict loading locks mounted queue and detail controls without losing drafts', async () => {
+  const state = {
+    pendingCenter: { activeTab: 'conflicts', selectedKey: 'conflict:A', query: '' },
+    duplicateReviews: { pendingAction: '', loading: false },
+    protectedCustomers: {
+      conflicts: [{ conflictId: 'A' }, { conflictId: 'B' }],
+      conflictStatus: 'unresolved', conflictPage: 1, conflictPageSize: 50,
+      conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+    },
+  };
+  const queueButton = { disabled: false, dataset: {} };
+  const draft = { disabled: false, dataset: {}, value: 'keep this note' };
+  const originallyDisabled = { disabled: true, dataset: {} };
+  const roots = {
+    '#pendingQueueList': { querySelectorAll: () => [queueButton] },
+    '#pendingDetail': { querySelectorAll: () => [draft, originallyDisabled] },
+  };
+  const pendingInteractionLocked = Function(
+    'state', `'use strict'; return (${topLevelFunction('pendingInteractionLocked')});`,
+  )(state);
+  const setPendingInteractionLock = Function(
+    '$', `'use strict'; return (${topLevelFunction('setPendingInteractionLock')});`,
+  )(selector => roots[selector] || null);
+  const syncPendingInteractionLock = Function(
+    'pendingInteractionLocked', 'setPendingInteractionLock',
+    `'use strict'; return (${topLevelFunction('syncPendingInteractionLock')});`,
+  )(pendingInteractionLocked, setPendingInteractionLock);
+  const selections = [];
+  const selectPendingRecord = key => {
+    state.pendingCenter.selectedKey = key;
+    selections.push(key);
+    return true;
+  };
+  const selectPendingRecordFromQueue = Function(
+    'pendingInteractionLocked', 'selectPendingRecord',
+    `'use strict'; return (${topLevelFunction('selectPendingRecordFromQueue')});`,
+  )(pendingInteractionLocked, selectPendingRecord);
+  const records = () => state.protectedCustomers.conflicts.map(item => ({
+    key: `conflict:${item.conflictId}`,
+  }));
+  const pendingSelectionIndex = () => records().findIndex(
+    item => item.key === state.pendingCenter.selectedKey,
+  );
+  const movePendingSelection = Function(
+    'pendingInteractionLocked', 'pendingQueueRecords', 'pendingSelectionIndex', 'selectPendingRecord',
+    `'use strict'; return (${topLevelFunction('movePendingSelection')});`,
+  )(pendingInteractionLocked, records, pendingSelectionIndex, selectPendingRecord);
+  const request = deferred();
+  const loadProtectedConflicts = Function(
+    'canManageProtectedCustomers', 'state', 'syncPendingInteractionLock',
+    'setProtectedInlineStatus', 'renderProtectedConflicts', 'renderProtectedConflictPagination',
+    'api', 'applyProtectedConflictResult', 'applyDuplicateReviewDeepLink', 'toast',
+    'renderPendingCenter',
+    `'use strict'; return (${topLevelFunction('loadProtectedConflicts')});`,
+  )(
+    () => true,
+    state,
+    syncPendingInteractionLock,
+    () => {},
+    () => {},
+    () => {},
+    () => request.promise,
+    result => { state.protectedCustomers.conflicts = result.items; },
+    () => {},
+    () => {},
+    () => {},
+  );
+
+  const loading = loadProtectedConflicts();
+  assert.equal(state.protectedCustomers.conflictsLoading, true);
+  assert.equal(queueButton.disabled, true);
+  assert.equal(draft.disabled, true);
+  assert.equal(draft.value, 'keep this note');
+
+  selectPendingRecordFromQueue('conflict:B');
+  movePendingSelection(1);
+  assert.equal(state.pendingCenter.selectedKey, 'conflict:A');
+  assert.deepEqual(selections, []);
+
+  request.resolve({ items: state.protectedCustomers.conflicts, totalPages: 1 });
+  assert.equal(await loading, true);
+  assert.equal(state.protectedCustomers.conflictsLoading, false);
+  assert.equal(queueButton.disabled, false);
+  assert.equal(draft.disabled, false);
+  assert.equal(originallyDisabled.disabled, true);
+  assert.equal(draft.value, 'keep this note');
+});
+
 test('deep links select detail instead of expanding an inline card', () => {
   const start = app.indexOf('function applyDuplicateReviewDeepLink');
   const end = app.indexOf('async function loadDuplicateReviews', start);
@@ -96,11 +194,12 @@ test('unavailable deep links render a generic state without the requested id', (
   assert.doesNotMatch(deepLink, /innerHTML[\s\S]*reviewId/);
 });
 
-test('a consumed deep link does not overwrite post-adjudication selection during refresh render', () => {
+test('deep links apply once per navigation and reapply after leaving and revisiting', () => {
   const state = {
     pendingCenter: {
       activeTab: 'duplicates', selectedKey: '', query: '', mobileDetailOpen: false,
-      deepLinkUnavailable: false, consumedDeepLinkHash: '',
+      deepLinkUnavailable: false, deepLinkNavigationHash: '',
+      deepLinkNavigationEpoch: 0, consumedDeepLinkEpoch: -1,
     },
     duplicateReviews: {
       loaded: true,
@@ -108,14 +207,22 @@ test('a consumed deep link does not overwrite post-adjudication selection during
     },
     protectedCustomers: { conflictsLoaded: true, conflicts: [] },
   };
+  const location = { hash: '#protectedCustomers?review=A' };
   const selections = [];
+  const beginPendingDeepLinkNavigation = Function(
+    'state', `'use strict'; return (${topLevelFunction('beginPendingDeepLinkNavigation')});`,
+  )(state);
+  const viewFromLocationHash = Function(
+    `'use strict'; return (${topLevelFunction('viewFromLocationHash')});`,
+  )();
   const applyDeepLink = Function(
     'location', 'state', 'activateProtectionView', 'canManageProtectedCustomers',
     'canReviewDuplicateCustomers', 'renderPendingCenter', 'activatePendingTab',
-    'pendingRecordKey', 'selectPendingRecord',
+    'pendingRecordKey', 'selectPendingRecord', 'beginPendingDeepLinkNavigation',
+    'viewFromLocationHash',
     `'use strict'; return (${topLevelFunction('applyDuplicateReviewDeepLink')});`,
   )(
-    { hash: '#protectedCustomers?review=A' },
+    location,
     state,
     () => {},
     () => true,
@@ -128,16 +235,29 @@ test('a consumed deep link does not overwrite post-adjudication selection during
       selections.push(key);
       return true;
     },
+    beginPendingDeepLinkNavigation,
+    viewFromLocationHash,
   );
 
+  assert.equal(viewFromLocationHash(location.hash), 'protectedCustomers');
   applyDeepLink();
   assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
 
   state.pendingCenter.selectedKey = 'duplicate:B';
   applyDeepLink(); // refreshTodayTasksAfterAction -> refresh -> renderAll
-
   assert.equal(state.pendingCenter.selectedKey, 'duplicate:B');
-  assert.deepEqual(selections, ['duplicate:A']);
+
+  location.hash = '#dashboard';
+  beginPendingDeepLinkNavigation(location.hash);
+  location.hash = '#protectedCustomers?review=A';
+  beginPendingDeepLinkNavigation(location.hash);
+  applyDeepLink();
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
+
+  state.pendingCenter.selectedKey = 'duplicate:B';
+  applyDeepLink();
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:B');
+  assert.deepEqual(selections, ['duplicate:A', 'duplicate:A']);
 });
 
 test('retired inline expansion state is removed', () => {

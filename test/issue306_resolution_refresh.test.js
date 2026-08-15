@@ -124,7 +124,8 @@ test('resolution success refreshes intake pool and counts in isolation', () => {
 });
 
 test('resolution errors preserve selected detail controls and candidate search state', () => {
-  const helper = section(app, 'function setPendingDetailMutationState', 'function showPendingDetailError');
+  const helper = section(app, 'function setPendingInteractionLock', 'function syncPendingInteractionLock');
+  assert.match(helper, /'#pendingQueueList', '#pendingDetail'/);
   assert.match(helper, /querySelectorAll\('button, input, textarea, select'\)/);
   assert.match(helper, /pendingWasDisabled/);
 
