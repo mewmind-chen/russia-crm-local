@@ -127,12 +127,12 @@ test('lead warning is visible without candidate disclosure and blocks claim unti
   assert.equal(listedResponse.status, 200);
   const listed = await listedResponse.json();
   const item = listed.items.find(row => row.id === 'INTAKE-WARN-1');
-  assert.deepEqual(item.identityWarning, {
-    active: true,
-    code: 'LEAD_IDENTITY_REVIEW_REQUIRED',
-    label: '名称待核验',
-    message: '疑似同名线索，进入 CRM 前需管理员核验',
-  });
+  assert.equal(item.identityWarning.active, true);
+  assert.equal(item.identityWarning.code, 'LEAD_IDENTITY_REVIEW_REQUIRED');
+  assert.equal(item.identityWarning.label, '名称待核验');
+  assert.equal(item.identityWarning.message, '疑似同名线索，进入 CRM 前需管理员核验');
+  assert.equal(typeof item.identityWarning.conflictId, 'string');
+  assert.ok(item.identityWarning.conflictId.length > 0, 'conflictId should be non-empty');
   assert.equal(JSON.stringify(item).includes('RU-9105'), false);
 
   const adminConflicts = await fx.request('/api/sales-crm/protected-customer-conflicts', {
