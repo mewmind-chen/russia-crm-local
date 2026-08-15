@@ -6864,11 +6864,14 @@
   async function loadDuplicateReviews({ page } = {}) {
     if (!canReviewDuplicateCustomers()) return;
     const model = state.duplicateReviews;
+    const retainDraft = model.items.length > 0;
     const epoch = model.requestEpoch + 1;
     model.requestEpoch = epoch;
     model.loading = true;
     model.error = '';
-    renderDuplicateReviews();
+    syncPendingInteractionLock();
+    if (!retainDraft) renderDuplicateReviews();
+    let completed = false;
     try {
       const targetPage = Math.max(1, Number(page || model.page || 1));
       const result = await api(`/api/sales-crm/duplicate-reviews?${new URLSearchParams({
@@ -6881,6 +6884,7 @@
       model.pageSize = Number(result.pageSize || model.pageSize);
       model.totalPages = Number(result.totalPages || 0);
       model.loaded = true;
+      completed = true;
       applyDuplicateReviewDeepLink();
       return true;
     } catch (error) {
@@ -6889,7 +6893,8 @@
     } finally {
       if (model.requestEpoch === epoch) {
         model.loading = false;
-        renderPendingCenter();
+        syncPendingInteractionLock();
+        if (completed || !retainDraft) renderPendingCenter();
       }
     }
   }

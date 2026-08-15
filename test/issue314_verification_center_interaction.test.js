@@ -171,6 +171,94 @@ test('conflict loading locks mounted queue and detail controls without losing dr
   assert.equal(draft.value, 'keep this note');
 });
 
+test('duplicate loading preserves mounted drafts when the refresh fails', async () => {
+  const state = {
+    pendingCenter: { activeTab: 'duplicates', selectedKey: 'duplicate:A', query: '' },
+    duplicateReviews: {
+      items: [{ id: 'A' }, { id: 'B' }], total: 2, page: 1, pageSize: 50,
+      pendingAction: '', loading: false, error: '', loaded: true, requestEpoch: 0,
+    },
+    protectedCustomers: { conflictPendingId: '', conflictsLoading: false },
+  };
+  const queueButton = { disabled: false, dataset: {} };
+  const radio = { disabled: false, dataset: {}, checked: true, value: 'confirmed_distinct' };
+  const note = { disabled: false, dataset: {}, value: 'keep this note' };
+  const candidateSearch = { disabled: false, dataset: {}, value: 'edited candidate query' };
+  const roots = {
+    '#pendingQueueList': { querySelectorAll: () => [queueButton] },
+    '#pendingDetail': { querySelectorAll: () => [radio, note, candidateSearch] },
+  };
+  const initialQueue = roots['#pendingQueueList'];
+  const initialDetail = roots['#pendingDetail'];
+  const pendingInteractionLocked = Function(
+    'state', `'use strict'; return (${topLevelFunction('pendingInteractionLocked')});`,
+  )(state);
+  const setPendingInteractionLock = Function(
+    '$', `'use strict'; return (${topLevelFunction('setPendingInteractionLock')});`,
+  )(selector => roots[selector] || null);
+  const syncPendingInteractionLock = Function(
+    'pendingInteractionLocked', 'setPendingInteractionLock',
+    `'use strict'; return (${topLevelFunction('syncPendingInteractionLock')});`,
+  )(pendingInteractionLocked, setPendingInteractionLock);
+  const selections = [];
+  const selectPendingRecord = key => {
+    state.pendingCenter.selectedKey = key;
+    selections.push(key);
+    return true;
+  };
+  const selectPendingRecordFromQueue = Function(
+    'pendingInteractionLocked', 'selectPendingRecord',
+    `'use strict'; return (${topLevelFunction('selectPendingRecordFromQueue')});`,
+  )(pendingInteractionLocked, selectPendingRecord);
+  const request = deferred();
+  const replaceMountedDrafts = () => {
+    roots['#pendingQueueList'] = { querySelectorAll: () => [] };
+    roots['#pendingDetail'] = { querySelectorAll: () => [] };
+  };
+  const loadDuplicateReviews = Function(
+    'canReviewDuplicateCustomers', 'state', 'syncPendingInteractionLock',
+    'renderDuplicateReviews', 'api', 'applyDuplicateReviewDeepLink', 'renderPendingCenter',
+    `'use strict'; return (${topLevelFunction('loadDuplicateReviews')});`,
+  )(
+    () => true,
+    state,
+    syncPendingInteractionLock,
+    replaceMountedDrafts,
+    () => request.promise,
+    () => {},
+    replaceMountedDrafts,
+  );
+
+  const loading = loadDuplicateReviews();
+  assert.equal(state.duplicateReviews.loading, true);
+  assert.equal(roots['#pendingQueueList'], initialQueue);
+  assert.equal(roots['#pendingDetail'], initialDetail);
+  assert.equal(queueButton.disabled, true);
+  assert.equal(radio.disabled, true);
+  assert.equal(note.disabled, true);
+  assert.equal(candidateSearch.disabled, true);
+  assert.equal(radio.checked, true);
+  assert.equal(note.value, 'keep this note');
+  assert.equal(candidateSearch.value, 'edited candidate query');
+
+  selectPendingRecordFromQueue('duplicate:B');
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
+  assert.deepEqual(selections, []);
+
+  request.reject(new Error('duplicate refresh failed'));
+  assert.equal(await loading, false);
+  assert.equal(state.duplicateReviews.loading, false);
+  assert.equal(roots['#pendingQueueList'], initialQueue);
+  assert.equal(roots['#pendingDetail'], initialDetail);
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
+  assert.equal(radio.disabled, false);
+  assert.equal(note.disabled, false);
+  assert.equal(candidateSearch.disabled, false);
+  assert.equal(radio.checked, true);
+  assert.equal(note.value, 'keep this note');
+  assert.equal(candidateSearch.value, 'edited candidate query');
+});
+
 test('deep links select detail instead of expanding an inline card', () => {
   const start = app.indexOf('function applyDuplicateReviewDeepLink');
   const end = app.indexOf('async function loadDuplicateReviews', start);
