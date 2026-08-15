@@ -25,3 +25,12 @@ test('directory and import actions live in their own panels', () => {
   assert.doesNotMatch(directory, /protectedTemplateBtn/);
   assert.match(importPanel, /protectedTemplateBtn/);
 });
+
+test('workbench has stable desktop tracks and mobile two-screen mode', () => {
+  assert.match(css, /\.pending-workbench\{[^}]*grid-template-columns:minmax\(330px,380px\) minmax\(0,1fr\)/);
+  assert.match(css, /\.pending-queue-item\{[^}]*min-height:72px/);
+  assert.match(css, /\.pending-detail-actions\{[^}]*position:sticky/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*\.pending-detail\.mobile-detail-open/);
+  assert.match(css, /min-height:44px/);
+  assert.doesNotMatch(css, /font-size:clamp\([^)]*vw/);
+});
