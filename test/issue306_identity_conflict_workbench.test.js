@@ -82,3 +82,17 @@ test('save handler sends a business default reason for non-supplement decisions'
   assert.match(handler, /管理员确认为同一客户/);
   assert.match(handler, /管理员确认不是同一客户/);
 });
+
+test('deep-link and post-adjudication refresh are wired', () => {
+  const intake = section(app, 'function intakeReviewDeepLink', 'function openIntakeReview');
+  assert.match(intake, /conflict=/);
+  const deep = section(app, 'function applyDuplicateReviewDeepLink', 'async function loadDuplicateReviews');
+  assert.match(deep, /conflict/);
+  assert.match(deep, /activeTab/);
+  assert.match(deep, /activatePendingTab/);
+  assert.match(deep, /expandedConflictId/);
+  const save = section(app, 'function resolveProtectedConflictAction', 'function openDuplicateNeedsInfoModal');
+  assert.match(save, /loadAuthorizedBusinessPage\('intake', \{ reset: true \}\)/);
+  assert.match(save, /refreshTodayTasksAfterAction/);
+  assert.match(save, /catch \(refreshError\)/);
+});

@@ -217,6 +217,7 @@
       conflictsLoaded: false,
     },
     pendingCenter: { activeTab: 'conflicts' },
+    pendingConflictDeepLink: '',
     duplicateReviews: {
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
       loaded: false, loading: false, error: '', pendingAction: '',
@@ -1474,6 +1475,7 @@
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
       state.pendingCenter = { activeTab: 'conflicts' };
+      state.pendingConflictDeepLink = '';
       if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
         state.pendingCenter.activeTab = 'duplicates';
       }
@@ -2176,6 +2178,8 @@
   }
 
   function intakeReviewDeepLink(item = {}) {
+    const conflictId = String(item.identityWarning?.conflictId || '').trim();
+    if (conflictId) return `#protectedCustomers?conflict=${encodeURIComponent(conflictId)}`;
     const reviewId = String(item.duplicate_review_id || '').trim();
     if (reviewId) return `#protectedCustomers?review=${encodeURIComponent(reviewId)}`;
     const externalCustomerId = String(item.external_customer_id || '').trim();
@@ -6537,6 +6541,22 @@
     const hash = String(location.hash || '');
     if (!hash.startsWith('#protectedCustomers')) return;
     const params = new URLSearchParams(hash.split('?')[1] || '');
+    const conflictId = String(params.get('conflict') || '');
+    if (conflictId) {
+      state.pendingCenter.activeTab = 'conflicts';
+      activatePendingTab('conflicts');
+      const conflictModel = state.protectedCustomers;
+      if (conflictModel.conflicts.some(item => item.conflictId === conflictId)) {
+        conflictModel.expandedConflictId = conflictId;
+        renderProtectedConflicts();
+        requestAnimationFrame(() => document.querySelector(
+          `[data-protected-conflict="${CSS.escape(conflictId)}"]`,
+        )?.scrollIntoView({ block: 'nearest' }));
+        return;
+      }
+      state.pendingConflictDeepLink = conflictId; // 冲突列表加载完成后展开
+      return;
+    }
     const reviewId = String(params.get('review') || '');
     const customerId = String(params.get('customer') || '');
     if (!reviewId && !customerId) return;
@@ -6711,6 +6731,29 @@
     }
   }
 
+  async function resolveProtectedConflictAction(conflictId, payload = {}) {
+    const model = state.protectedCustomers;
+    const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({
+        decision: payload.decision,
+        targetExternalCustomerId: payload.targetExternalCustomerId || '',
+        details: payload.details || '',
+        expectedVersion: payload.expectedVersion || '',
+      }),
+    });
+    toast('裁决已保存');
+    model.conflictPendingId = '';
+    await reloadProtectedWorkspace();
+    try {
+      await loadAuthorizedBusinessPage('intake', { reset: true });
+      await refreshTodayTasksAfterAction('身份核验结果已同步到线索池');
+    } catch (refreshError) {
+      toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+    }
+    return result;
+  }
+
   function openDuplicateNeedsInfoModal(reviewId) {
     openModal('信息不足，要求补充', '重复客户确认', `<form id="duplicateNeedsInfoForm" class="form-grid">
       <input type="hidden" name="reviewId" value="${esc(reviewId)}">
@@ -6863,6 +6906,14 @@
       }
       applyProtectedConflictResult(result);
       completed = true;
+      const pendingConflict = state.pendingConflictDeepLink;
+      if (pendingConflict && model.conflicts.some(item => item.conflictId === pendingConflict)) {
+        model.expandedConflictId = pendingConflict;
+        state.pendingConflictDeepLink = '';
+        requestAnimationFrame(() => document.querySelector(
+          `[data-protected-conflict="${CSS.escape(pendingConflict)}"]`,
+        )?.scrollIntoView({ block: 'nearest' }));
+      }
       if (rescan) toast('身份冲突已按最新资料重新扫描');
     } catch (error) {
       model.conflictsError = error.message || '身份冲突加载失败';
@@ -6948,25 +6999,7 @@
   }
 
   async function reloadProtectedWorkspace() {
-    // Task 4 wires the intake-pool/count refresh here; Task 3 reloads conflicts only.
     await loadProtectedConflicts();
-  }
-
-  async function resolveProtectedConflictAction(conflictId, payload = {}) {
-    const model = state.protectedCustomers;
-    const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
-      method: 'POST',
-      body: JSON.stringify({
-        decision: payload.decision,
-        targetExternalCustomerId: payload.targetExternalCustomerId || '',
-        details: payload.details || '',
-        expectedVersion: payload.expectedVersion || '',
-      }),
-    });
-    toast('裁决已保存');
-    model.conflictPendingId = '';
-    await reloadProtectedWorkspace();
-    return result;
   }
 
   async function supplementProtectedConflictAction(conflictId, action) {
