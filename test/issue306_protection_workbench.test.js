@@ -77,7 +77,7 @@ test('preview-aligned guidance, options, and save button', () => {
   assert.match(renderer, /放行，主管可以继续分配。/);
   assert.match(renderer, /要求补充官网、联系人或来源说明。/);
   const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
-  assert.match(html, /这里专门处理“可能重名”的线索/);
+  assert.match(html, /待核验中心/);
   assert.match(app, /data-duplicate-resolution-save/);
   assert.doesNotMatch(app, /版本 \$\{esc\(item\.expectedVersion/);
 });

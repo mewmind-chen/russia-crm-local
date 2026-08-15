@@ -84,7 +84,7 @@ test('Issue 207 redirects security administration views and gates their row acti
   assert.match(users, /const canMutate = can\('manage_users'\) && !state\.data\.impersonation/);
   assert.match(duplicateGate, /!state\.data\?\.impersonation/);
   assert.match(duplicateReviews, /const allowed = canReviewDuplicateCustomers\(\)/);
-  assert.match(duplicateReviews, /panel\.classList\.toggle\('hidden', !allowed\)/);
+  assert.match(appJs, /#pendingVerificationPanel'\)\?\.classList\.toggle\('hidden', !canAccessProtectionAndDedupe\(\)\)/);
   assert.match(duplicateReviews, /if \(!allowed\) return/);
 });
 

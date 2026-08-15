@@ -657,22 +657,30 @@
           </div>
         </div>
 
-        <article id="duplicateReviewPanel" class="panel duplicate-review-panel hidden">
+        <article id="pendingVerificationPanel" class="panel pending-verification-panel hidden">
           <div class="panel-head">
-            <div><p class="eyebrow">可能重名的线索</p><h2>这里专门处理“可能重名”的线索</h2></div>
-            <div class="duplicate-review-head-actions">
-              <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
-              <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
+            <div><p class="eyebrow">待核验</p><h2>待核验中心</h2></div>
+            <div id="pendingTypeTabs" class="pending-type-tabs" role="tablist">
+              <button type="button" role="tab" data-pending-type="conflicts">身份冲突待处理 <b data-pending-count="conflicts">…</b></button>
+              <button type="button" role="tab" data-pending-type="duplicates">重复核验待处理 <b data-pending-count="duplicates">…</b></button>
             </div>
           </div>
-          <div id="duplicateReviewStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
-          <div id="duplicateReviewBulkBar" class="duplicate-review-bulk-bar">
+          <div id="pendingDuplicatesToolbar" class="pending-toolbar hidden">
+            <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
+            <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
+          </div>
+          <div id="pendingConflictsToolbar" class="pending-toolbar hidden">
+            <label>显示<select id="protectedConflictStatus"><option value="unresolved">待处理</option><option value="all">全部记录</option><option value="resolved">已解决</option><option value="retry">待补充</option></select></label>
+            <button id="protectedRescanBtn" class="button secondary" type="button">重新扫描</button>
+          </div>
+          <div id="pendingVerificationStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
+          <div id="duplicateReviewBulkBar" class="duplicate-review-bulk-bar hidden">
             <label><input id="duplicateReviewSelectAll" type="checkbox"> 选择当前页全部待核验</label>
             <span id="duplicateReviewSelectedCount">已选 0 条</span>
             <button id="duplicateReviewBulkDistinct" class="button primary" type="button" disabled>批量确认不是同一客户</button>
           </div>
-          <div id="duplicateReviewList" class="duplicate-review-list"><div class="empty">进入页面后加载待核验记录</div></div>
-          <div id="duplicateReviewPagination" class="shared-pagination" data-pagination="duplicate_reviews"></div>
+          <div id="pendingVerificationList" class="pending-verification-list"><div class="empty">进入页面后加载待核验记录</div></div>
+          <div id="pendingVerificationPagination" class="shared-pagination" data-pagination="protected_conflicts"></div>
         </article>
 
         <div id="protectedAdminWorkspace">
@@ -711,18 +719,6 @@
           <div id="protectedBatchPreview" class="protected-batch-preview hidden"></div>
         </article>
 
-        <article class="panel protected-conflict-panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">身份检查</p><h2>身份冲突裁决</h2><p>仅根据服务端当前证据关联已有、确认新建或登记补充资料后重试。</p></div>
-            <div class="protected-panel-head-actions">
-              <label>显示<select id="protectedConflictStatus"><option value="unresolved">待处理</option><option value="all">全部记录</option><option value="resolved">已解决</option><option value="retry">待补充</option></select></label>
-              <button id="protectedRescanBtn" class="button secondary" type="button">重新扫描</button>
-            </div>
-          </div>
-          <div id="protectedConflictStatusText" class="protected-inline-status" role="status" aria-live="polite"></div>
-          <div id="protectedConflictList" class="protected-conflict-list"><div class="empty">进入页面后加载身份冲突</div></div>
-          <div id="protectedConflictPagination" class="shared-pagination" data-pagination="protected_conflicts" aria-label="身份冲突分页"></div>
-        </article>
         </div>
       </section>
 
