@@ -681,8 +681,14 @@
             <span id="duplicateReviewSelectedCount">已选 0 条</span>
             <button id="duplicateReviewBulkDistinct" class="button primary" type="button" disabled>批量确认不是同一客户</button>
           </div>
-          <div id="pendingVerificationList" class="pending-verification-list"><div class="empty">进入页面后加载待核验记录</div></div>
-          <div id="pendingVerificationPagination" class="shared-pagination" data-pagination="protected_conflicts"></div>
+          <div id="pendingWorkbench" class="pending-workbench">
+            <aside class="pending-queue" aria-label="待核验队列">
+              <label class="pending-queue-search">搜索当前页客户名称或编号<input id="pendingQueueSearch" type="search" autocomplete="off" placeholder="输入名称或编号"></label>
+              <div id="pendingQueueList" class="pending-queue-list"></div>
+              <div id="pendingQueuePagination" class="shared-pagination" data-pagination="protected_conflicts"></div>
+            </aside>
+            <article id="pendingDetail" class="pending-detail" aria-live="polite"></article>
+          </div>
         </article>
 
         <div id="protectedAdminWorkspace">

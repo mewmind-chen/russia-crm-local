@@ -361,8 +361,8 @@ test('combined identity workspace keeps the protected lifecycle behind its named
   assert.match(app, /data-save-protected-conflict/);
   assert.match(app, /conflictPage:\s*1/);
   assert.match(app, /conflictTotalPages/);
-  assert.match(html, /id="pendingVerificationPagination"[^>]*data-pagination="protected_conflicts"/);
-  assert.match(app, /renderPagination\('#pendingVerificationPagination', 'protected_conflicts'/);
+  assert.match(html, /id="pendingQueuePagination"[^>]*data-pagination="protected_conflicts"/);
+  assert.match(app, /renderPagination\('#pendingQueuePagination', 'protected_conflicts'/);
   assert.match(app, /protectedConflictStatus[\s\S]{0,300}conflictPage\s*=\s*1/);
   assert.match(app, /targetPage\s*>\s*lastPage[\s\S]{0,180}conflictPage\s*=\s*lastPage/);
 
