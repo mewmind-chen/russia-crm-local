@@ -213,16 +213,20 @@
       conflicts: [], conflictStatus: 'unresolved', conflictTotal: 0, unresolved: 0,
       leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
       conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-      conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+      conflictsLoading: false, conflictsError: '', conflictPendingId: '',
       conflictsLoaded: false,
     },
-    pendingCenter: { activeTab: 'conflicts' },
-    pendingConflictDeepLink: '',
+    pendingCenter: {
+      activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
+      deepLinkUnavailable: false, deepLinkNavigationHash: '',
+      deepLinkNavigationEpoch: 0, consumedDeepLinkEpoch: -1,
+    },
+    protectionWorkspace: { activeView: 'verification' },
     duplicateReviews: {
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
       loaded: false, loading: false, error: '', pendingAction: '',
       requestEpoch: 0,
-      selectedIds: new Set(), searchOpenId: '', expandedId: '', searchResults: {},
+      selectedIds: new Set(), searchOpenId: '', searchResults: {},
       searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
     },
     assistantRuntime: null,
@@ -1466,16 +1470,20 @@
         batch: null, pendingAction: '', conflicts: [], conflictTotal: 0, unresolved: 0,
         leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
           conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-        conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+        conflictsLoading: false, conflictsError: '', conflictPendingId: '',
         conflictsLoaded: false,
       });
       Object.assign(state.duplicateReviews, {
         items: [], total: 0, page: 1, totalPages: 0, loaded: false, loading: false,
-        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '', expandedId: '',
+        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '',
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
-      state.pendingCenter = { activeTab: 'conflicts' };
-      state.pendingConflictDeepLink = '';
+      state.pendingCenter = {
+        activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
+        deepLinkUnavailable: false, deepLinkNavigationHash: '',
+        deepLinkNavigationEpoch: 0, consumedDeepLinkEpoch: -1,
+      };
+      state.protectionWorkspace = { activeView: 'verification' };
       if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
         state.pendingCenter.activeTab = 'duplicates';
       }
@@ -6293,7 +6301,7 @@
   function renderProtectedConflictPagination() {
     if (state.pendingCenter.activeTab !== 'conflicts') return;
     const model = state.protectedCustomers;
-    renderPagination('#pendingVerificationPagination', 'protected_conflicts', {
+    renderPagination('#pendingQueuePagination', 'protected_conflicts', {
       page: model.conflictPage, pageSize: model.conflictPageSize,
       total: model.conflictTotal, loading: model.conflictsLoading,
     }, ({ page, pageSize }) => {
@@ -6328,79 +6336,61 @@
     const locked = !protectedWritesAvailable() || model.conflictPendingId === item.conflictId;
     const option = (value, label, enabled, hint) => `<label class="duplicate-review-option${enabled ? '' : ' is-unavailable'}"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="${value}" ${!enabled || locked ? 'disabled' : ''}><strong>${label}</strong></span>${enabled ? '' : `<small>${hint}</small>`}</label>`;
     return [
-      option('link_existing', '是同一个客户', Boolean(linkTarget), '当前线索没有可关联的已有客户，暂不能合并'),
+      option('link_existing', '是同一个客户', Boolean(linkTarget), '请选择唯一可关联的已有客户'),
       option('confirm_new', '不是同一个客户', !live, '需先补充资料或等待证据变化后再确认'),
       option('supplement_and_retry', '资料还不够', true, ''),
     ].join('');
   }
 
-  function renderProtectedConflicts() {
-    if (state.pendingCenter.activeTab !== 'conflicts') return;
-    const root = $('#pendingVerificationList');
-    const navCount = $('#navProtectedConflictCount');
-    if (!root) return;
-    const model = state.protectedCustomers;
-    $('#pendingConflictsToolbar')?.classList.remove('hidden');
-    renderProtectedConflictPagination();
-    if (navCount) {
-      navCount.textContent = model.blockingUnresolved || 0;
-      navCount.classList.toggle('hidden', !model.blockingUnresolved);
-    }
-    if (model.conflictsLoading) {
-      root.innerHTML = '<div class="empty">正在扫描身份冲突…</div>';
-      setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
-      return;
-    }
-    if (model.conflictsError) {
-      root.innerHTML = '<div class="empty">身份冲突加载失败，请重试。</div>';
-      setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
-      return;
-    }
-    const summary = `待处理 ${model.unresolved} 项，其中线索提示 ${model.leadWarnings} 项、阻断冲突 ${model.blockingUnresolved} 项；${model.canEnter172B ? '当前无阻断冲突' : '需先处理阻断冲突'}`;
-    setProtectedInlineStatus('#pendingVerificationStatus', model.canEnter172B ? 'success' : 'error', summary);
-    if (!model.conflicts.length) {
-      root.innerHTML = '<div class="empty">当前筛选范围内没有身份冲突</div>';
-      return;
-    }
-    root.innerHTML = model.conflicts.map(item => protectedConflictCardMarkup(item, model)).join('');
+  function protectedConflictComparisonMarkup(item) {
+    const leadName = item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
+    const crmName = item.crmNames?.[0]?.rawName || item.crmNames?.[0]?.externalCustomerId || '';
+    return `<div class="duplicate-review-comparison">
+      <section class="duplicate-review-side submitted"><div class="duplicate-review-side-title"><span>这条新线索</span><strong>${esc(leadName)}</strong></div>${duplicateFacts([['客户编号', esc(item.leadNames?.[0]?.externalCustomerId || '—')]])}</section>
+      <section class="duplicate-review-side existing"><div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(crmName || '未识别')}</strong></div>${duplicateFacts([['客户编号', esc(item.crmNames?.[0]?.externalCustomerId || '—')]])}</section>
+    </div>`;
   }
 
-  function protectedConflictCardMarkup(item, model) {
-    const expanded = model.expandedConflictId === item.conflictId;
+  function protectedConflictDecisionMarkup(item, model) {
+    const candidates = Array.isArray(item.crmNames) ? item.crmNames : [];
+    if (!candidates.length) {
+      return `<div class="pending-evidence-empty">
+        <strong>没有可比较的已有客户</strong>
+        <p>补充官网、企业注册号、公司邮箱或所在国家后重新核验。</p>
+      </div>
+      <label class="pending-decision-option">
+        <input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="supplement_and_retry" checked>
+        <span><strong>要求补充资料</strong><small>退回补充身份信息后重新核验</small></span>
+      </label>`;
+    }
+    return `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div>
+      <div class="pending-decision-options">${protectedConflictPendingOptions(item, model)}</div>`;
+  }
+
+  function protectedConflictDetailMarkup(item) {
+    const model = state.protectedCustomers;
     const resolved = item.status === 'resolved';
     const retry = item.status === 'retry';
     const leadName = item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
-    const crmName = item.crmNames?.[0]?.rawName || item.crmNames?.[0]?.externalCustomerId || '';
     const statusLabel = resolved ? (item.decision === 'link_existing' ? '已关联主客户' : '已确认为新身份') : retry ? '待补充资料' : '等待管理员核验';
-    const supplementBlock = item.complementaryInfo ? `<div class="protected-conflict-supplement">
+    const supplementBlock = resolved && item.decision === 'link_existing' && item.complementaryInfo ? `<div class="protected-conflict-supplement">
       <span>可补充资料：${protectedConflictSupplementFlags(item.complementaryInfo)}</span>
       <button type="button" class="button secondary tiny" data-supplement-apply="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>补充到主客户</button>
       <button type="button" class="button secondary tiny" data-supplement-skip="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>暂不补充</button>
     </div>` : '';
-    const decisionBlock = (resolved || retry)
-      ? `<div class="subtle">${statusLabel}</div>${supplementBlock}`
-      : `<div class="duplicate-review-options">
-      ${protectedConflictPendingOptions(item, model)}
-    </div>
-    <label id="conflictReasonField-${esc(item.conflictId)}" class="hidden">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
-    <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存处理结果</button>
-    <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>`;
-    const detailBlock = expanded ? `<div class="protected-conflict-detail">
+    const noCandidates = !(Array.isArray(item.crmNames) && item.crmNames.length);
+    const decisionBlock = (resolved || retry) ? `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div><div class="subtle">${statusLabel}</div>${supplementBlock}` : `
+      ${protectedConflictDecisionMarkup(item, model)}
+      <label id="conflictReasonField-${esc(item.conflictId)}" class="${noCandidates ? '' : 'hidden'}">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
+      <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>
+      <footer class="pending-detail-actions protected-conflict-actions">
+        <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存并处理下一条</button>
+      </footer>`;
+    return `<section class="protected-conflict-detail" data-protected-conflict="${esc(item.conflictId)}">
+      <header class="pending-detail-head"><div><span>身份冲突核验</span><h3>${esc(leadName)}</h3></div><span class="pill amber">${esc(statusLabel)}</span>${pendingNavigationMarkup()}<button class="text-button pending-detail-close" type="button" data-pending-detail-close>返回队列</button></header>
       <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
-      <div class="duplicate-review-comparison">
-        <section class="duplicate-review-side submitted"><div class="duplicate-review-side-title"><span>这条新线索</span><strong>${esc(leadName)}</strong></div>${duplicateFacts([['客户编号', esc(item.leadNames?.[0]?.externalCustomerId || '—')]])}</section>
-        <section class="duplicate-review-side existing"><div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(crmName || '未识别')}</strong></div>${duplicateFacts([['客户编号', esc(item.crmNames?.[0]?.externalCustomerId || '—')]])}</section>
-      </div>
       ${decisionBlock}
-    </div>` : '';
-    return `<section class="protected-conflict-item${expanded ? ' expanded' : ''}" data-protected-conflict="${esc(item.conflictId)}">
-    <header class="protected-conflict-head">
-      <div class="duplicate-card-summary"><strong>${esc(leadName)}</strong>${crmName ? `<span>疑似重名 · 匹配 ${esc(crmName)}</span>` : '<span>疑似重名</span>'}</div>
-      <span class="pill amber">${esc(statusLabel)}</span>
-      <button class="button secondary tiny" type="button" data-toggle-protected-conflict="${esc(item.conflictId)}">${expanded ? '收起' : '查看并处理'}</button>
-    </header>
-    ${detailBlock}
-  </section>`;
+    </section>`;
   }
 
   function duplicateEvidenceMarkup(candidate) {
@@ -6417,13 +6407,346 @@
     return `<dl class="duplicate-review-facts">${items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${value || '<span class="tp-empty-value">—</span>'}</dd></div>`).join('')}</dl>`;
   }
 
+  function pendingRecordKey(type, item) {
+    return type === 'conflicts' ? `conflict:${item.conflictId}` : `duplicate:${item.id}`;
+  }
+
+  function pendingQueueRecords() {
+    let records;
+    if (state.pendingCenter.activeTab === 'conflicts') {
+      records = state.protectedCustomers.conflicts.map(item => ({
+        key: pendingRecordKey('conflicts', item), type: 'conflicts', raw: item,
+        name: item.leadNames?.[0]?.rawName || '待核验线索',
+        reference: item.leadNames?.[0]?.externalCustomerId || '',
+        risk: item.crmNames?.length ? '疑似已有客户' : '疑似重名',
+        status: item.status === 'retry' ? '待补充资料' : item.status === 'resolved' ? '已解决' : '待管理员确认',
+        time: item.createdAt || item.updatedAt || '',
+      }));
+    } else {
+      records = state.duplicateReviews.items.map(item => ({
+        key: pendingRecordKey('duplicates', item), type: 'duplicates', raw: item,
+        name: item.input?.companyName || '未填写公司名称',
+        reference: item.input?.externalCustomerId || item.id,
+        risk: item.selectedCandidate?.customerId ? '疑似已有客户' : '证据不足',
+        status: item.status === 'needs_info' ? '待补充资料' : item.status === 'pending' ? '待管理员确认' : '已解决',
+        time: item.createdAt || '',
+      }));
+    }
+    const query = state.pendingCenter.query.trim().toLocaleLowerCase('zh-CN');
+    return query ? records.filter(item => `${item.name} ${item.reference}`.toLocaleLowerCase('zh-CN').includes(query)) : records;
+  }
+
+  function pendingSelectionIndex() {
+    return pendingQueueRecords().findIndex(item => item.key === state.pendingCenter.selectedKey);
+  }
+
+  function pendingInteractionLocked() {
+    const relevantQueueLoading = state.pendingCenter.activeTab === 'conflicts'
+      ? state.protectedCustomers.conflictsLoading
+      : state.duplicateReviews.loading;
+    return Boolean(
+      state.protectedCustomers.conflictPendingId
+      || state.duplicateReviews.pendingAction
+      || relevantQueueLoading,
+    );
+  }
+
+  function movePendingSelection(delta) {
+    if (pendingInteractionLocked()) return;
+    const records = pendingQueueRecords();
+    const current = pendingSelectionIndex();
+    const next = Math.min(records.length - 1, Math.max(0, current + delta));
+    if (records[next]) selectPendingRecord(records[next].key, { focus: true });
+  }
+
+  function selectPendingAfterMutation(previousIndex) {
+    const records = pendingQueueRecords();
+    if (!records.length) {
+      state.pendingCenter.selectedKey = '';
+      return;
+    }
+    const next = Math.min(Math.max(0, previousIndex), records.length - 1);
+    selectPendingRecord(records[next].key, { focus: true });
+  }
+
+  function pendingNavigationMarkup() {
+    const records = pendingQueueRecords();
+    const index = pendingSelectionIndex();
+    const interactionLocked = pendingInteractionLocked();
+    return `<nav class="pending-detail-navigation" aria-label="核验记录导航">
+      <button class="button secondary tiny" type="button" data-pending-move="-1" ${interactionLocked || index <= 0 ? 'disabled' : ''}>上一条</button>
+      <span>${index >= 0 ? `${index + 1} / ${records.length}` : `0 / ${records.length}`}</span>
+      <button class="button secondary tiny" type="button" data-pending-move="1" ${interactionLocked || index >= records.length - 1 ? 'disabled' : ''}>下一条</button>
+    </nav>`;
+  }
+
+  function ensurePendingSelection() {
+    const records = pendingQueueRecords();
+    if (state.pendingCenter.deepLinkUnavailable) return records;
+    if (!records.some(item => item.key === state.pendingCenter.selectedKey)) {
+      state.pendingCenter.selectedKey = records[0]?.key || '';
+    }
+    return records;
+  }
+
+  function syncPendingPaneAccessibility({ focus = '' } = {}) {
+    const workbench = $('#pendingWorkbench');
+    const queue = workbench?.querySelector('.pending-queue');
+    const detail = $('#pendingDetail');
+    if (!workbench || !queue || !detail) return;
+    const mobile = window.matchMedia('(max-width: 760px)').matches;
+    if (!mobile) state.pendingCenter.mobileDetailOpen = false;
+    const detailActive = mobile && state.pendingCenter.mobileDetailOpen;
+    const queueInactive = detailActive;
+    const detailInactive = mobile && !detailActive;
+    const queueFocusTarget = () => queue.querySelector(
+      '[data-pending-record-key][aria-pressed="true"], [data-pending-record-key], input, button',
+    ) || queue;
+    const detailFocusTarget = () => detail.querySelector(
+      '[data-pending-detail-close], button, input, textarea, select',
+    ) || detail;
+    let focusTarget = null;
+    if (focus === 'detail') focusTarget = detailActive ? detailFocusTarget() : queueFocusTarget();
+    else if (focus === 'queue') focusTarget = queueFocusTarget();
+    else if (queueInactive && queue.contains(document.activeElement)) focusTarget = detailFocusTarget();
+    else if (detailInactive && detail.contains(document.activeElement)) focusTarget = queueFocusTarget();
+    const setPaneInactive = (pane, inactive) => {
+      pane.inert = inactive;
+      pane.toggleAttribute('inert', inactive);
+      pane.setAttribute('aria-hidden', String(inactive));
+    };
+    setPaneInactive(queue, false);
+    setPaneInactive(detail, false);
+    focusTarget?.focus({ preventScroll: true });
+    setPaneInactive(queue, queueInactive);
+    setPaneInactive(detail, detailInactive);
+    workbench.classList.toggle('mobile-detail-open', detailActive);
+    detail.classList.toggle('mobile-detail-open', detailActive);
+  }
+
+  function closePendingMobileDetail() {
+    state.pendingCenter.mobileDetailOpen = false;
+    syncPendingPaneAccessibility({ focus: 'queue' });
+  }
+
+  function selectPendingRecord(key, { openMobile = false, focus = false } = {}) {
+    const record = pendingQueueRecords().find(item => item.key === key);
+    if (!record) return false;
+    state.pendingCenter.deepLinkUnavailable = false;
+    state.pendingCenter.selectedKey = record.key;
+    state.pendingCenter.mobileDetailOpen = openMobile;
+    renderPendingQueue();
+    renderPendingDetail();
+    syncPendingPaneAccessibility({ focus: openMobile ? 'detail' : focus ? 'queue' : '' });
+    return true;
+  }
+
+  function selectPendingRecordFromQueue(key) {
+    if (pendingInteractionLocked()) return false;
+    return selectPendingRecord(key, { openMobile: true });
+  }
+
+  function renderPendingQueue() {
+    const root = $('#pendingQueueList');
+    if (!root) return;
+    const records = ensurePendingSelection();
+    const center = state.pendingCenter;
+    const model = center.activeTab === 'conflicts' ? state.protectedCustomers : state.duplicateReviews;
+    const loading = center.activeTab === 'conflicts' ? model.conflictsLoading : model.loading;
+    const error = center.activeTab === 'conflicts' ? model.conflictsError : model.error;
+    const search = $('#pendingQueueSearch');
+    if (search && search.value !== center.query) search.value = center.query;
+    if (loading && !records.length) {
+      root.innerHTML = '<div class="empty">正在加载待核验记录…</div>';
+      syncPendingPaneAccessibility();
+      return;
+    }
+    if (error && !records.length) {
+      root.innerHTML = '<div class="empty">核验记录加载失败，请刷新重试。</div>';
+      syncPendingPaneAccessibility();
+      return;
+    }
+    if (!records.length) {
+      root.innerHTML = `<div class="empty">${center.query ? '当前页没有匹配的核验记录' : '当前没有待核验客户'}</div>`;
+      syncPendingPaneAccessibility();
+      return;
+    }
+    const interactionPending = pendingInteractionLocked();
+    root.innerHTML = records.map(record => {
+      const selected = record.key === center.selectedKey;
+      const review = record.type === 'duplicates' ? record.raw : null;
+      const checkbox = review ? `<label class="pending-queue-select" aria-label="选择 ${esc(record.name)}"><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${state.duplicateReviews.selectedIds.has(review.id) ? 'checked' : ''} ${interactionPending || review.protectedExact ? 'disabled' : ''}></label>` : '';
+      return `<div class="pending-queue-row${selected ? ' selected' : ''}">${checkbox}<button type="button" class="pending-queue-record" data-pending-record-key="${esc(record.key)}" aria-pressed="${selected}" ${interactionPending ? 'disabled' : ''}>
+        <span class="pending-queue-record-main"><strong>${esc(record.name)}</strong><small>${esc(record.reference || '暂无编号')}</small></span>
+        <span class="pending-queue-record-meta"><span class="pill amber">${esc(record.risk)}</span><span>${esc(record.status)}</span><time>${esc(record.time ? shortDate(record.time, true) : '—')}</time></span>
+      </button></div>`;
+    }).join('');
+    syncPendingPaneAccessibility();
+  }
+
+  function duplicateReviewCandidateDecisionMarkup(review, interactionPending) {
+    const candidate = review.selectedCandidate || {};
+    const protectedExact = review.protectedExact === true;
+    return `<label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_same" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}><strong>是同一个客户</strong></span><small>关联已有客户，不再分配成新客户。</small></label>
+      <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_distinct" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>不是同一个客户</strong></span><small>放行，主管可以继续分配。</small></label>
+      <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="needs_info" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>资料还不够</strong></span><small>要求补充官网、联系人或来源说明。</small></label>`;
+  }
+
+  function duplicateReviewDecisionMarkup(review, interactionPending) {
+    const candidate = review.selectedCandidate || {};
+    if (!candidate.customerId) {
+      return `<label class="pending-decision-option">
+        <input type="radio" name="duplicate-resolution-${esc(review.id)}" value="needs_info" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" checked ${interactionPending ? 'disabled' : ''}>
+        <span><strong>要求补充资料</strong><small>补充官网、联系人或来源说明后重新核验</small></span>
+      </label>`;
+    }
+    return duplicateReviewCandidateDecisionMarkup(review, interactionPending);
+  }
+
+  function duplicateReviewDetailMarkup(review) {
+    const model = state.duplicateReviews;
+    const input = review.input || {};
+    const candidate = review.selectedCandidate || {};
+    const searchOpen = model.searchOpenId === review.id;
+    const searchResults = model.searchResults[review.id] || [];
+    const searchQuery = model.searchQueries[review.id] || '';
+    const activeSearchIndex = Number(model.searchActiveIndexes[review.id] ?? -1);
+    const searchListId = `duplicate-candidate-results-${review.id}`;
+    const protectedExact = review.protectedExact === true;
+    const interactionPending = Boolean(model.pendingAction || model.loading);
+    return `<section class="duplicate-review-item expanded" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
+      <header class="pending-detail-head"><div><span>重复客户核验</span><h3>${esc(input.companyName || '未填写公司名称')}</h3></div>${pendingNavigationMarkup()}<button class="text-button pending-detail-close" type="button" data-pending-detail-close>返回队列</button></header>
+      <div class="duplicate-review-comparison">
+        <section class="duplicate-review-side submitted">
+          <div class="duplicate-review-side-title"><span>员工新提交</span><strong>${esc(input.companyName || '未填写公司名称')}</strong></div>
+          ${duplicateFacts([
+            ['官网', websiteMarkup(input.website)],
+            ['国家 / 城市', esc([input.country, input.city].filter(Boolean).join(' · ') || '—')],
+            ['行业', esc(input.industry || '—')],
+            ['来源', esc(input.source || '—')],
+          ])}
+        </section>
+        <section class="duplicate-review-side existing">
+          <div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(protectedExact ? '保护客户精确命中（详情受限）' : candidate.nickname || candidate.companyName || '没有可比较的已有客户')}</strong></div>
+          ${duplicateFacts([
+            ['正式名称', esc(candidate.companyName || '—')],
+            ['官网', websiteMarkup(candidate.website)],
+            ['客户编号', esc(candidate.customerId || '—')],
+            ['国家 / 城市', esc([candidate.country, candidate.city].filter(Boolean).join(' · ') || '—')],
+            ['负责人 / 阶段', esc(`${candidate.ownerName || '未分配'} · ${stageLabel(candidate.customerStage)}`)],
+            ['行业', esc(candidate.industry || '—')],
+          ])}
+          <button class="text-button" type="button" data-toggle-duplicate-search="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>更换疑似客户</button>
+          <div class="duplicate-candidate-search ${searchOpen ? '' : 'hidden'}">
+            <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索客户昵称、公司名称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
+            <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span><span>${esc(uiFormat.website(item.website)?.label || '暂无官网')}</span></button>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
+          </div>
+        </section>
+      </div>
+      <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
+      <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
+      <div class="duplicate-review-options">${duplicateReviewDecisionMarkup(review, interactionPending)}</div>
+      <p class="protected-operation-status" data-duplicate-message role="status" aria-live="polite"></p>
+      <footer class="pending-detail-actions duplicate-review-actions">
+        <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存并处理下一条</button>
+      </footer>
+    </section>`;
+  }
+
+  function renderPendingDetail() {
+    const root = $('#pendingDetail');
+    if (!root) return;
+    if (state.pendingCenter.deepLinkUnavailable) {
+      root.innerHTML = '<div class="empty">核验记录不可用或无权查看</div>';
+      syncPendingPaneAccessibility();
+      return;
+    }
+    const record = ensurePendingSelection().find(item => item.key === state.pendingCenter.selectedKey);
+    if (!record) {
+      root.innerHTML = '<div class="empty">从左侧队列选择一条核验记录</div>';
+      syncPendingPaneAccessibility();
+      return;
+    }
+    root.innerHTML = record.type === 'conflicts'
+      ? protectedConflictDetailMarkup(record.raw)
+      : duplicateReviewDetailMarkup(record.raw);
+    syncPendingPaneAccessibility();
+  }
+
+  function setPendingInteractionLock(pending) {
+    ['#pendingQueueList', '#pendingDetail'].forEach(selector => {
+      const root = $(selector);
+      if (!root) return;
+      root.querySelectorAll('button, input, textarea, select').forEach(control => {
+        if (pending && !('pendingWasDisabled' in control.dataset)) {
+          control.dataset.pendingWasDisabled = control.disabled ? 'true' : 'false';
+        }
+        if (pending) control.disabled = true;
+        else if ('pendingWasDisabled' in control.dataset) {
+          control.disabled = control.dataset.pendingWasDisabled === 'true';
+          delete control.dataset.pendingWasDisabled;
+        }
+      });
+    });
+  }
+
+  function syncPendingInteractionLock() {
+    setPendingInteractionLock(pendingInteractionLocked());
+  }
+
+  function setPendingDetailMutationState() {
+    syncPendingInteractionLock();
+  }
+
+  function showPendingDetailError(error) {
+    const root = $('#pendingDetail');
+    if (!root) return;
+    root.classList.add('has-error');
+    const message = root.querySelector('[data-conflict-message], [data-duplicate-message]');
+    if (message) message.textContent = error?.message || '保存失败，请重试';
+  }
+
+  function viewFromLocationHash(hash = location.hash) {
+    return String(hash || '').replace(/^#/, '').split('?')[0];
+  }
+
+  function beginPendingDeepLinkNavigation(hash = location.hash) {
+    const nextHash = String(hash || '');
+    if (state.pendingCenter.deepLinkNavigationHash === nextHash) return;
+    state.pendingCenter.deepLinkNavigationHash = nextHash;
+    state.pendingCenter.deepLinkNavigationEpoch += 1;
+    state.pendingCenter.deepLinkUnavailable = false;
+  }
+
   function pendingTabsAvailable() {
     return { conflicts: canManageProtectedCustomers(), duplicates: canReviewDuplicateCustomers() };
+  }
+
+  function activateProtectionView(view) {
+    const allowed = new Set(['verification', 'directory', 'import']);
+    const activeView = allowed.has(view) ? view : 'verification';
+    state.protectionWorkspace.activeView = activeView;
+    $$('[data-protection-view]').forEach(button => {
+      const active = button.dataset.protectionView === activeView;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    $$('[data-protection-panel]').forEach(panel => {
+      panel.classList.toggle('hidden', panel.dataset.protectionPanel !== activeView);
+    });
   }
 
   function activatePendingTab(type, options = {}) {
     const tabs = pendingTabsAvailable();
     const activeTab = tabs[type] ? type : (tabs.conflicts ? 'conflicts' : 'duplicates');
+    if (activeTab !== state.pendingCenter.activeTab) {
+      state.pendingCenter.query = '';
+      state.pendingCenter.selectedKey = '';
+      state.pendingCenter.mobileDetailOpen = false;
+      state.pendingCenter.deepLinkUnavailable = false;
+      const search = $('#pendingQueueSearch');
+      if (search) search.value = '';
+    }
     state.pendingCenter.activeTab = activeTab;
     $$('#pendingTypeTabs [data-pending-type]').forEach(button => {
       const isActive = button.dataset.pendingType === activeTab;
@@ -6434,9 +6757,69 @@
     $('#pendingConflictsToolbar')?.classList.toggle('hidden', activeTab !== 'conflicts');
     $('#pendingDuplicatesToolbar')?.classList.toggle('hidden', activeTab !== 'duplicates');
     $('#duplicateReviewBulkBar')?.classList.toggle('hidden', activeTab !== 'duplicates');
-    const pagination = $('#pendingVerificationPagination');
+    const pagination = $('#pendingQueuePagination');
     if (pagination) pagination.dataset.pagination = activeTab === 'duplicates' ? 'duplicate_reviews' : 'protected_conflicts';
     if (!options.skipRender) renderPendingCenter();
+  }
+
+  function renderProtectedConflicts() {
+    if (state.pendingCenter.activeTab !== 'conflicts') return;
+    const model = state.protectedCustomers;
+    const navCount = $('#navProtectedConflictCount');
+    $('#pendingConflictsToolbar')?.classList.remove('hidden');
+    renderProtectedConflictPagination();
+    if (navCount) {
+      navCount.textContent = model.blockingUnresolved || 0;
+      navCount.classList.toggle('hidden', !model.blockingUnresolved);
+    }
+    if (model.conflictsLoading) {
+      setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
+    } else if (model.conflictsError) {
+      setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
+    } else {
+      const summary = `待处理 ${model.unresolved} 项，其中线索提示 ${model.leadWarnings} 项、阻断冲突 ${model.blockingUnresolved} 项；${model.canEnter172B ? '当前无阻断冲突' : '需先处理阻断冲突'}`;
+      setProtectedInlineStatus('#pendingVerificationStatus', model.canEnter172B ? 'success' : 'error', summary);
+    }
+    ensurePendingSelection();
+    renderPendingQueue();
+    renderPendingDetail();
+  }
+
+  function renderDuplicateReviews() {
+    const allowed = canReviewDuplicateCustomers();
+    if (!allowed) return;
+    if (state.pendingCenter.activeTab !== 'duplicates') return;
+    $('#pendingDuplicatesToolbar')?.classList.remove('hidden');
+    $('#duplicateReviewBulkBar')?.classList.remove('hidden');
+    const model = state.duplicateReviews;
+    const interactionPending = Boolean(model.pendingAction || model.loading);
+    const selected = model.selectedIds;
+    const visibleIds = new Set(model.items.map(item => item.id));
+    for (const reviewId of [...selected]) if (!visibleIds.has(reviewId)) selected.delete(reviewId);
+    const selectableItems = model.items.filter(item => !item.protectedExact);
+    for (const reviewId of [...selected]) {
+      if (!selectableItems.some(item => item.id === reviewId)) selected.delete(reviewId);
+    }
+    $('#pendingVerificationStatus').textContent = model.error
+      || (model.loading ? '正在读取待核验记录…' : model.loaded ? `待处理 ${model.total} 条` : '');
+    $('#pendingVerificationStatus').className = `protected-inline-status${model.error ? ' error' : model.loading ? ' pending' : model.loaded ? ' success' : ''}`;
+    $('#duplicateReviewSelectedCount').textContent = `已选 ${selected.size} 条`;
+    $('#duplicateReviewBulkDistinct').disabled = !selected.size || interactionPending;
+    $('#duplicateReviewSelectAll').checked = Boolean(selectableItems.length)
+      && selectableItems.every(item => selected.has(item.id));
+    $('#duplicateReviewSelectAll').indeterminate = selected.size > 0 && !$('#duplicateReviewSelectAll').checked;
+    $('#duplicateReviewSelectAll').disabled = interactionPending || !selectableItems.length;
+    $('#duplicateReviewRecalculate').disabled = interactionPending;
+    $('#duplicateReviewRefresh').disabled = interactionPending;
+    renderPagination('#pendingQueuePagination', 'duplicate_reviews', {
+      page: model.page, pageSize: model.pageSize, total: model.total, loading: model.loading,
+    }, ({ page, pageSize }) => {
+      model.pageSize = pageSize || model.pageSize;
+      void loadDuplicateReviews({ page: page || 1 });
+    });
+    ensurePendingSelection();
+    renderPendingQueue();
+    renderPendingDetail();
   }
 
   function renderPendingCenter() {
@@ -6457,180 +6840,107 @@
     else if (tabs.duplicates && state.pendingCenter.activeTab === 'duplicates') renderDuplicateReviews();
   }
 
-  function renderDuplicateReviews() {
-    if (state.pendingCenter.activeTab !== 'duplicates') return;
-    const root = $('#pendingVerificationList');
-    if (!root) return;
-    const allowed = canReviewDuplicateCustomers();
-    if (!allowed) return;
-    $('#pendingDuplicatesToolbar')?.classList.remove('hidden');
-    $('#duplicateReviewBulkBar')?.classList.remove('hidden');
-    const model = state.duplicateReviews;
-    const mutationPending = Boolean(model.pendingAction);
-    const interactionPending = mutationPending || model.loading;
-    const selected = model.selectedIds;
-    const visibleIds = new Set(model.items.map(item => item.id));
-    for (const reviewId of [...selected]) if (!visibleIds.has(reviewId)) selected.delete(reviewId);
-    const selectableItems = model.items.filter(item => !item.protectedExact);
-    for (const reviewId of [...selected]) {
-      if (!selectableItems.some(item => item.id === reviewId)) selected.delete(reviewId);
-    }
-    $('#pendingVerificationStatus').textContent = model.error
-      || (model.loading ? '正在读取待核验记录…' : model.loaded ? `待处理 ${model.total} 条` : '');
-    $('#pendingVerificationStatus').className = `protected-inline-status${model.error ? ' error' : model.loading ? ' pending' : model.loaded ? ' success' : ''}`;
-    $('#duplicateReviewSelectedCount').textContent = `已选 ${selected.size} 条`;
-    $('#duplicateReviewBulkDistinct').disabled = !selected.size || interactionPending;
-    $('#duplicateReviewSelectAll').checked = Boolean(selectableItems.length)
-      && selectableItems.every(item => selected.has(item.id));
-    $('#duplicateReviewSelectAll').indeterminate = selected.size > 0 && !$('#duplicateReviewSelectAll').checked;
-    $('#duplicateReviewSelectAll').disabled = interactionPending || !selectableItems.length;
-    $('#duplicateReviewRecalculate').disabled = Boolean(model.pendingAction || model.loading);
-    $('#duplicateReviewRefresh').disabled = interactionPending;
-    renderPagination('#pendingVerificationPagination', 'duplicate_reviews', {
-      page: model.page, pageSize: model.pageSize, total: model.total, loading: model.loading,
-    }, ({ page, pageSize }) => {
-      model.pageSize = pageSize || model.pageSize;
-      void loadDuplicateReviews({ page: page || 1 });
-    });
-    if (model.loading && !model.items.length) {
-      root.innerHTML = '<div class="empty">正在加载待核验记录…</div>';
-      return;
-    }
-    if (model.error && !model.items.length) {
-      root.innerHTML = '<div class="empty">核验记录加载失败，请刷新重试。</div>';
-      return;
-    }
-    if (!model.items.length) {
-      root.innerHTML = '<div class="empty">当前没有待核验客户</div>';
-      return;
-    }
-    root.innerHTML = model.items.map(review => {
-      const input = review.input || {};
-      const candidate = review.selectedCandidate || {};
-      const searchOpen = model.searchOpenId === review.id;
-      const searchResults = model.searchResults[review.id] || [];
-      const searchQuery = model.searchQueries[review.id] || '';
-      const activeSearchIndex = Number(model.searchActiveIndexes[review.id] ?? -1);
-      const searchListId = `duplicate-candidate-results-${review.id}`;
-      const protectedExact = review.protectedExact === true;
-      const expanded = model.expandedId === review.id;
-      const duplicateCount = candidate.customerId ? 1 : 0;
-      const summaryStatus = ({ pending: '等待管理员核验', confirmed_same: '已关联已有客户', confirmed_distinct: '已确认不是同一客户', needs_info: '待补充资料' })[review.status] || '等待管理员核验';
-      const summaryAdvice = review.status === 'pending' ? '疑似重名，需确认是否同一客户' : summaryStatus;
-      return `<section class="duplicate-review-item${expanded ? ' expanded' : ''}" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
-        <header class="duplicate-review-item-head">
-          <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
-          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span></div>
-          <span class="pill">${esc(summaryAdvice)}</span>
-          <span class="pill amber">${esc(summaryStatus)}</span>
-          <button class="button secondary tiny" type="button" data-toggle-duplicate-review="${esc(review.id)}" ${interactionPending ? 'disabled' : ''}>${expanded ? '收起' : '查看并处理'}</button>
-        </header>
-        <div class="duplicate-review-comparison${expanded ? '' : ' hidden'}">
-          <section class="duplicate-review-side submitted">
-            <div class="duplicate-review-side-title"><span>员工新提交</span><strong>${esc(input.companyName || '未填写公司名称')}</strong></div>
-            ${duplicateFacts([
-              ['官网', websiteMarkup(input.website)],
-              ['国家 / 城市', esc([input.country, input.city].filter(Boolean).join(' · ') || '—')],
-              ['行业', esc(input.industry || '—')],
-              ['来源', esc(input.source || '—')],
-            ])}
-          </section>
-          <section class="duplicate-review-side existing">
-            <div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(protectedExact ? '保护客户精确命中（详情受限）' : candidate.nickname || candidate.companyName || '候选已失效')}</strong></div>
-            ${duplicateFacts([
-              ['正式名称', esc(candidate.companyName || '—')],
-              ['官网', websiteMarkup(candidate.website)],
-              ['客户编号', esc(candidate.customerId || '—')],
-              ['国家 / 城市', esc([candidate.country, candidate.city].filter(Boolean).join(' · ') || '—')],
-              ['负责人 / 阶段', esc(`${candidate.ownerName || '未分配'} · ${stageLabel(candidate.customerStage)}`)],
-              ['行业', esc(candidate.industry || '—')],
-            ])}
-            <button class="text-button" type="button" data-toggle-duplicate-search="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>更换疑似客户</button>
-            <div class="duplicate-candidate-search ${searchOpen ? '' : 'hidden'}">
-              <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索客户昵称、公司名称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
-              <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span><span>${esc(uiFormat.website(item.website)?.label || '暂无官网')}</span></button>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
-            </div>
-          </section>
-        </div>
-        <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
-        <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
-        <div class="duplicate-review-options">
-          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_same" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}><strong>是同一个客户</strong></span><small>关联已有客户，不再分配成新客户。</small></label>
-          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_distinct" data-duplicate-resolution="confirmed_distinct" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>不是同一个客户</strong></span><small>放行，主管可以继续分配。</small></label>
-          <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="needs_info" data-duplicate-resolution="needs_info" data-review-id="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}><strong>资料还不够</strong></span><small>要求补充官网、联系人或来源说明。</small></label>
-        </div>
-        <footer class="duplicate-review-actions">
-          <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存处理结果</button>
-        </footer>
-      </section>`;
-    }).join('');
-  }
-
   function applyDuplicateReviewDeepLink() {
     const hash = String(location.hash || '');
-    if (!hash.startsWith('#protectedCustomers')) return;
+    beginPendingDeepLinkNavigation(hash);
+    if (viewFromLocationHash(hash) !== 'protectedCustomers') return;
     const params = new URLSearchParams(hash.split('?')[1] || '');
     const conflictId = String(params.get('conflict') || '');
-    if (conflictId) {
-      state.pendingCenter.activeTab = 'conflicts';
-      activatePendingTab('conflicts');
-      const conflictModel = state.protectedCustomers;
-      if (conflictModel.conflicts.some(item => item.conflictId === conflictId)) {
-        conflictModel.expandedConflictId = conflictId;
-        renderProtectedConflicts();
-        requestAnimationFrame(() => document.querySelector(
-          `[data-protected-conflict="${CSS.escape(conflictId)}"]`,
-        )?.scrollIntoView({ block: 'nearest' }));
-        return;
-      }
-      state.pendingConflictDeepLink = conflictId; // 冲突列表加载完成后展开
-      return;
-    }
     const reviewId = String(params.get('review') || '');
     const customerId = String(params.get('customer') || '');
-    if (!reviewId && !customerId) return;
+    if (!conflictId && !reviewId && !customerId) {
+      state.pendingCenter.deepLinkUnavailable = false;
+      return;
+    }
+    const navigationEpoch = state.pendingCenter.deepLinkNavigationEpoch;
+    if (state.pendingCenter.consumedDeepLinkEpoch === navigationEpoch) return;
+    activateProtectionView('verification');
+    if (conflictId) {
+      if (!canManageProtectedCustomers()) {
+        state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+        state.pendingCenter.selectedKey = '';
+        state.pendingCenter.deepLinkUnavailable = true;
+        renderPendingCenter();
+        return;
+      }
+      activatePendingTab('conflicts', { skipRender: true });
+      state.pendingCenter.query = '';
+      const conflictModel = state.protectedCustomers;
+      if (!conflictModel.conflictsLoaded) return;
+      const matched = conflictModel.conflicts.find(item => item.conflictId === conflictId);
+      if (matched) {
+        state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+        selectPendingRecord(pendingRecordKey('conflicts', matched), { openMobile: true, focus: true });
+        return;
+      }
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+      state.pendingCenter.selectedKey = '';
+      state.pendingCenter.mobileDetailOpen = true;
+      state.pendingCenter.deepLinkUnavailable = true;
+      renderPendingCenter();
+      return;
+    }
+    if (!canReviewDuplicateCustomers()) {
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+      state.pendingCenter.selectedKey = '';
+      state.pendingCenter.deepLinkUnavailable = true;
+      renderPendingCenter();
+      return;
+    }
+    activatePendingTab('duplicates', { skipRender: true });
+    state.pendingCenter.query = '';
     const model = state.duplicateReviews;
+    if (!model.loaded) return;
     const matched = model.items.find(item =>
       (reviewId && item.id === reviewId)
       || (customerId && String(item.input?.externalCustomerId || '') === customerId)
       || (customerId && String(item.input?.customerId || '') === customerId));
-    if (!matched) return;
-    model.expandedId = matched.id;
-    state.pendingCenter.activeTab = 'duplicates';
-    activatePendingTab('duplicates');
-    renderDuplicateReviews();
-    requestAnimationFrame(() => document.querySelector(
-      `[data-duplicate-review-item="${CSS.escape(matched.id)}"]`,
-    )?.scrollIntoView({ block: 'nearest' }));
+    if (matched) {
+      state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+      selectPendingRecord(pendingRecordKey('duplicates', matched), { openMobile: true, focus: true });
+      return;
+    }
+    state.pendingCenter.consumedDeepLinkEpoch = navigationEpoch;
+    state.pendingCenter.selectedKey = '';
+    state.pendingCenter.mobileDetailOpen = true;
+    state.pendingCenter.deepLinkUnavailable = true;
+    renderPendingCenter();
   }
 
   async function loadDuplicateReviews({ page } = {}) {
     if (!canReviewDuplicateCustomers()) return;
     const model = state.duplicateReviews;
+    const retainDraft = model.items.length > 0;
     const epoch = model.requestEpoch + 1;
     model.requestEpoch = epoch;
     model.loading = true;
     model.error = '';
-    renderDuplicateReviews();
+    syncPendingInteractionLock();
+    if (!retainDraft) renderDuplicateReviews();
+    let completed = false;
     try {
       const targetPage = Math.max(1, Number(page || model.page || 1));
       const result = await api(`/api/sales-crm/duplicate-reviews?${new URLSearchParams({
         status: 'pending', page: String(targetPage), pageSize: String(model.pageSize),
       })}`);
-      if (model.requestEpoch !== epoch) return;
+      if (model.requestEpoch !== epoch) return false;
       model.items = result.reviews || [];
       model.total = Number(result.total || 0);
       model.page = Number(result.page || targetPage);
       model.pageSize = Number(result.pageSize || model.pageSize);
       model.totalPages = Number(result.totalPages || 0);
       model.loaded = true;
+      completed = true;
       applyDuplicateReviewDeepLink();
+      return true;
     } catch (error) {
       if (model.requestEpoch === epoch) model.error = error.message || '核验记录加载失败';
+      return false;
     } finally {
       if (model.requestEpoch === epoch) {
         model.loading = false;
-        renderPendingCenter();
+        syncPendingInteractionLock();
+        if (completed || !retainDraft) renderPendingCenter();
       }
     }
   }
@@ -6714,10 +7024,10 @@
 
   async function reloadDuplicateReviewsAfterMutation(preferredIndex = 0) {
     const model = state.duplicateReviews;
-    await loadDuplicateReviews({ page: model.page });
+    if (!await loadDuplicateReviews({ page: model.page })) return false;
     const lastPage = Math.max(1, model.totalPages || 1);
-    if (model.page > lastPage) await loadDuplicateReviews({ page: lastPage });
-    return preferredIndex;
+    if (model.page > lastPage && !await loadDuplicateReviews({ page: lastPage })) return false;
+    return true;
   }
 
   async function resolveDuplicateReviewAction(reviewId, resolution, candidateCustomerId = '', note = '') {
@@ -6729,58 +7039,124 @@
       openDuplicateNeedsInfoModal(reviewId);
       return;
     }
-    const preferredIndex = Math.max(0, model.items.findIndex(item => item.id === reviewId));
-    let shouldFocus = false;
+    const previousIndex = pendingSelectionIndex();
+    const selectedKey = state.pendingCenter.selectedKey;
+    let committed = false;
+    let result;
     model.pendingAction = reviewId;
-    renderDuplicateReviews();
+    setPendingDetailMutationState(true);
+    renderPendingQueue();
     try {
-      const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
+      result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
         method: 'POST', body: JSON.stringify({ resolution, candidateCustomerId, note }),
       });
+      committed = true;
       model.selectedIds.delete(reviewId);
+      model.items = model.items.filter(item => item.id !== reviewId);
+      model.total = Math.max(0, model.total - 1);
+      if (state.pendingCenter.selectedKey === `duplicate:${reviewId}`) state.pendingCenter.selectedKey = '';
       toast(result.deduplicated
         ? '该记录已由其他操作处理，列表已刷新'
         : resolution === 'confirmed_same' ? '已确认同一客户'
           : resolution === 'needs_info' ? '已要求补充资料，记录等待补充'
             : '已确认不是同一客户并放行');
-      await reloadDuplicateReviewsAfterMutation(preferredIndex);
+      let reloadSucceeded = false;
       try {
-        await loadAuthorizedBusinessPage('intake', { reset: true });
-        await refreshTodayTasksAfterAction('查重核验结果已同步到线索池');
+        reloadSucceeded = await reloadDuplicateReviewsAfterMutation(previousIndex);
+      } catch (reloadError) {
+        reloadSucceeded = false;
+      }
+      selectPendingAfterMutation(previousIndex);
+      if (!reloadSucceeded) toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+      try {
+        await Promise.all([
+          loadAuthorizedBusinessPage('intake', { reset: true }),
+          refreshTodayTasksAfterAction('查重核验结果已同步到线索池'),
+        ]);
       } catch (refreshError) {
         toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
       }
-      shouldFocus = true;
+      return result;
+    } catch (error) {
+      if (committed) {
+        toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+        return result;
+      }
+      state.pendingCenter.selectedKey = selectedKey;
+      showPendingDetailError(error);
+      throw error;
     } finally {
       if (model.pendingAction === reviewId) {
         model.pendingAction = '';
-        renderDuplicateReviews();
-        if (shouldFocus) focusDuplicateReview(preferredIndex);
+        if (committed) renderDuplicateReviews();
+        else {
+          setPendingDetailMutationState(false);
+          renderPendingQueue();
+        }
       }
     }
   }
 
   async function resolveProtectedConflictAction(conflictId, payload = {}) {
     const model = state.protectedCustomers;
-    const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
-      method: 'POST',
-      body: JSON.stringify({
-        decision: payload.decision,
-        targetExternalCustomerId: payload.targetExternalCustomerId || '',
-        details: payload.details || '',
-        expectedVersion: payload.expectedVersion || '',
-      }),
-    });
-    toast('裁决已保存');
-    model.conflictPendingId = '';
-    await reloadProtectedWorkspace();
+    const previousIndex = pendingSelectionIndex();
+    const selectedKey = state.pendingCenter.selectedKey;
+    let committed = false;
+    let result;
+    model.conflictPendingId = conflictId;
+    setPendingDetailMutationState(true);
+    renderPendingQueue();
     try {
-      await loadAuthorizedBusinessPage('intake', { reset: true });
-      await refreshTodayTasksAfterAction('身份核验结果已同步到线索池');
-    } catch (refreshError) {
-      toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+      result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          decision: payload.decision,
+          targetExternalCustomerId: payload.targetExternalCustomerId || '',
+          details: payload.details || '',
+          expectedVersion: payload.expectedVersion || '',
+        }),
+      });
+      committed = true;
+      model.conflicts = model.conflicts.filter(item => item.conflictId !== conflictId);
+      model.conflictTotal = Math.max(0, model.conflictTotal - 1);
+      model.unresolved = Math.max(0, model.unresolved - 1);
+      if (state.pendingCenter.selectedKey === `conflict:${conflictId}`) state.pendingCenter.selectedKey = '';
+      toast('裁决已保存');
+      let reloadSucceeded = false;
+      try {
+        reloadSucceeded = await reloadProtectedWorkspace();
+      } catch (reloadError) {
+        reloadSucceeded = false;
+      }
+      selectPendingAfterMutation(previousIndex);
+      if (!reloadSucceeded) toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+      try {
+        await Promise.all([
+          loadAuthorizedBusinessPage('intake', { reset: true }),
+          refreshTodayTasksAfterAction('身份核验结果已同步到线索池'),
+        ]);
+      } catch (refreshError) {
+        toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+      }
+      return result;
+    } catch (error) {
+      if (committed) {
+        toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+        return result;
+      }
+      state.pendingCenter.selectedKey = selectedKey;
+      showPendingDetailError(error);
+      throw error;
+    } finally {
+      if (model.conflictPendingId === conflictId) {
+        model.conflictPendingId = '';
+        if (committed) renderPendingCenter();
+        else {
+          setPendingDetailMutationState(false);
+          renderPendingQueue();
+        }
+      }
     }
-    return result;
   }
 
   function openDuplicateNeedsInfoModal(reviewId) {
@@ -6850,11 +7226,16 @@
 
   function renderProtectedWorkspace() {
     if (!$('#protectedCustomersView') || !canAccessProtectionAndDedupe()) return;
+    const canManage = canManageProtectedCustomers();
     $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManageProtectedCustomers());
-    $$('.protected-intro-actions').forEach(root => root.classList.toggle('hidden', !canManageProtectedCustomers()));
+    $$('[data-protection-view="directory"], [data-protection-view="import"]').forEach(button => {
+      button.classList.toggle('hidden', !canManage);
+    });
+    if (!canManage) state.protectionWorkspace.activeView = 'verification';
     renderPendingCenter();
+    activateProtectionView(state.protectionWorkspace.activeView);
     applyDuplicateReviewDeepLink();
-    if (!canManageProtectedCustomers()) return;
+    if (!canManage) return;
     renderProtectedWriteGate();
     renderProtectedCustomers();
     renderProtectedBatch();
@@ -6916,6 +7297,7 @@
     const retainDraft = model.conflicts.length > 0;
     model.conflictsLoading = true;
     model.conflictsError = '';
+    syncPendingInteractionLock();
     if (retainDraft) setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
     else renderProtectedConflicts();
     renderProtectedConflictPagination();
@@ -6935,23 +7317,18 @@
       }
       applyProtectedConflictResult(result);
       completed = true;
-      const pendingConflict = state.pendingConflictDeepLink;
-      if (pendingConflict && model.conflicts.some(item => item.conflictId === pendingConflict)) {
-        model.expandedConflictId = pendingConflict;
-        state.pendingConflictDeepLink = '';
-        requestAnimationFrame(() => document.querySelector(
-          `[data-protected-conflict="${CSS.escape(pendingConflict)}"]`,
-        )?.scrollIntoView({ block: 'nearest' }));
-      }
+      applyDuplicateReviewDeepLink();
       if (rescan) toast('身份冲突已按最新资料重新扫描');
     } catch (error) {
       model.conflictsError = error.message || '身份冲突加载失败';
     } finally {
       model.conflictsLoading = false;
+      syncPendingInteractionLock();
       if (completed || !retainDraft) renderPendingCenter();
       else setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
       renderProtectedConflictPagination();
     }
+    return completed;
   }
 
   async function loadProtectedWorkspace() {
@@ -7028,7 +7405,7 @@
   }
 
   async function reloadProtectedWorkspace() {
-    await loadProtectedConflicts();
+    return loadProtectedConflicts();
   }
 
   async function supplementProtectedConflictAction(conflictId, action) {
@@ -11852,6 +12229,8 @@
       } catch (error) { toast(error.message); }
     }
     if (event.target.closest('#newUserBtn')) openUserModal();
+    const protectionView = event.target.closest('[data-protection-view]');
+    if (protectionView) activateProtectionView(protectionView.dataset.protectionView);
     if (event.target.closest('#protectedTemplateBtn')) {
       try { await downloadProtectedCsv('/protected-customers/template', 'protected-customer-template.csv'); }
       catch (error) { toast(error.message); }
@@ -11896,12 +12275,23 @@
     if (event.target.closest('#protectedRefreshBtn')) await loadProtectedCustomers();
     if (event.target.closest('#protectedRescanBtn')) await loadProtectedConflicts({ rescan: true });
     const pendingType = event.target.closest('[data-pending-type]');
-    if (pendingType) activatePendingTab(pendingType.dataset.pendingType);
+    if (pendingType) {
+      state.pendingCenter.deepLinkUnavailable = false;
+      activatePendingTab(pendingType.dataset.pendingType);
+    }
+    const pendingRecord = event.target.closest('[data-pending-record-key]');
+    if (pendingRecord) {
+      selectPendingRecordFromQueue(pendingRecord.dataset.pendingRecordKey);
+    }
+    if (event.target.closest('[data-pending-detail-close]')) {
+      closePendingMobileDetail();
+    }
+    const pendingMove = event.target.closest('[data-pending-move]');
+    if (pendingMove) movePendingSelection(Number(pendingMove.dataset.pendingMove));
     const conflictToggle = event.target.closest('[data-toggle-protected-conflict]');
     if (conflictToggle) {
       const conflictId = conflictToggle.dataset.toggleProtectedConflict;
-      state.protectedCustomers.expandedConflictId = state.protectedCustomers.expandedConflictId === conflictId ? '' : conflictId;
-      renderPendingCenter();
+      selectPendingRecordFromQueue(`conflict:${conflictId}`);
     }
     const conflictSave = event.target.closest('[data-save-protected-conflict]');
     if (conflictSave && protectedWritesAvailable()) {
@@ -11922,17 +12312,12 @@
           : decision === 'confirm_new' ? '管理员确认不是同一客户' : '');
       const targetExternalCustomerId = protectedConflictTargetExternalCustomerId(item, decision);
       try {
-        state.protectedCustomers.conflictPendingId = conflictId;
-        renderPendingCenter();
         await resolveProtectedConflictAction(conflictId, {
           decision, targetExternalCustomerId,
           details: reason, expectedVersion: item.expectedVersion || '',
         });
       } catch (error) {
-        state.protectedCustomers.conflictPendingId = '';
-        renderPendingCenter();
-        const msg = document.querySelector('[data-conflict-message]');
-        if (msg) msg.textContent = error.message;
+        toast(error.message);
       }
     }
     const supplementApply = event.target.closest('[data-supplement-apply]');
@@ -12253,8 +12638,7 @@
     const duplicateReviewToggle = event.target.closest('[data-toggle-duplicate-review]');
     if (duplicateReviewToggle && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
       const reviewId = duplicateReviewToggle.dataset.toggleDuplicateReview;
-      state.duplicateReviews.expandedId = state.duplicateReviews.expandedId === reviewId ? '' : reviewId;
-      renderDuplicateReviews();
+      selectPendingRecord(`duplicate:${reviewId}`, { openMobile: true });
     }
     const duplicateSearchToggle = event.target.closest('[data-toggle-duplicate-search]');
     if (duplicateSearchToggle && !state.duplicateReviews.pendingAction && !state.duplicateReviews.loading) {
@@ -12522,12 +12906,20 @@
       if (pushHistory && !intakeAlias) history.pushState(null, '', navigationUrl);
       else history.replaceState(null, '', navigationUrl);
     }
+    beginPendingDeepLinkNavigation(location.hash);
   }
 
   document.addEventListener('input', event => {
     if (event.target.matches('[data-protected-field]')) saveProtectedImportDraft();
     if (event.target.matches('[data-duplicate-candidate-search]')) {
       searchDuplicateCandidates(event.target.dataset.duplicateCandidateSearch, event.target.value);
+    }
+    if (event.target.id === 'pendingQueueSearch') {
+      state.pendingCenter.deepLinkUnavailable = false;
+      state.pendingCenter.query = event.target.value;
+      ensurePendingSelection();
+      renderPendingQueue();
+      renderPendingDetail();
     }
     if (event.target.id === 'protectedSearch') {
       clearTimeout(state.protectedCustomers.searchTimer);
@@ -12777,14 +13169,16 @@
     }
   });
   window.addEventListener('hashchange', () => {
-    const view = location.hash.replace(/^#/, '');
+    beginPendingDeepLinkNavigation(location.hash);
+    const view = viewFromLocationHash();
     if (viewMeta[view] && state.data) {
       restoreLeadWorkflowFromLocation(view);
       switchView(view, false);
     }
   });
   window.addEventListener('popstate', () => {
-    const view = location.hash.replace(/^#/, '');
+    beginPendingDeepLinkNavigation(location.hash);
+    const view = viewFromLocationHash();
     if (viewMeta[view] && state.data) {
       restoreLeadWorkflowFromLocation(view);
       switchView(view, false);
@@ -12802,5 +13196,8 @@
   });
 
   initializeDataTableOverflowHints();
+  const pendingPaneMedia = window.matchMedia('(max-width: 760px)');
+  pendingPaneMedia.addEventListener?.('change', syncPendingPaneAccessibility);
+  syncPendingPaneAccessibility();
   load();
 })();

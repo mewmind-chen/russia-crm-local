@@ -24,20 +24,21 @@ test('pending center merges both types with per-type tabs', () => {
   assert.doesNotMatch(html, /protectedConflictList/);
   assert.doesNotMatch(html, /duplicateReviewList/);
   assert.doesNotMatch(html, /duplicateReviewStatus/);
-  const dispatcher = section(app, 'function renderPendingCenter', 'function renderDuplicateReviews');
+  const dispatcher = section(app, 'function renderPendingCenter', 'function applyDuplicateReviewDeepLink');
   assert.match(dispatcher, /activeTab/);
   assert.match(dispatcher, /pendingTabsAvailable/);
   assert.match(dispatcher, /activatePendingTab/);
+  assert.match(dispatcher, /renderProtectedConflicts/);
+  assert.match(dispatcher, /renderDuplicateReviews/);
 });
 
-test('identity conflict cards are business workbench, not audit UI', () => {
+test('identity conflict detail is a business workbench, not audit UI', () => {
   const renderer = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
-  assert.match(renderer, /疑似重名 · 匹配 /);
   assert.match(renderer, /是不是同一个客户？/);
   assert.match(renderer, /option\('link_existing', '是同一个客户'/);
   assert.match(renderer, /option\('confirm_new', '不是同一个客户'/);
   assert.match(renderer, /option\('supplement_and_retry', '资料还不够'/);
-  assert.match(renderer, /保存处理结果/);
+  assert.match(renderer, /保存并处理下一条/);
   assert.match(renderer, /leadNames/);
   assert.doesNotMatch(renderer, /normalizedName/);
   assert.doesNotMatch(renderer, /expectedVersion/);
@@ -47,61 +48,81 @@ test('identity conflict cards are business workbench, not audit UI', () => {
 
 test('supplement actions render only on the resolved link_existing card', () => {
   const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
-  const cardMarkup = Function(
-    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable',
-    `${source}; return protectedConflictCardMarkup;`,
+  const detailMarkup = Function(
+    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state', 'pendingNavigationMarkup',
+    `${source}; return protectedConflictDetailMarkup;`,
   )(
     value => String(value),
     () => '<dl class="duplicate-review-facts"></dl>',
     () => '联系人、官网',
     () => true,
+    { protectedCustomers: { conflictPendingId: '' } },
+    () => '',
   );
-  const resolvedLink = cardMarkup({
+  const resolvedLink = detailMarkup({
     conflictId: 'C1', status: 'resolved', decision: 'link_existing',
     leadNames: [{ rawName: '新线索', externalCustomerId: 'LEAD-1' }],
     crmNames: [{ rawName: '主客户', externalCustomerId: 'MASTER-1' }],
     complementaryInfo: { contact: true, website: true },
-  }, { expandedConflictId: 'C1', conflictPendingId: '' });
+  });
   assert.match(resolvedLink, /补充到主客户/);
   assert.match(resolvedLink, /暂不补充/);
   assert.match(resolvedLink, /可补充资料：联系人、官网/);
 
-  const pending = cardMarkup({
+  const pending = detailMarkup({
     conflictId: 'C2', status: 'unresolved',
     leadNames: [{ rawName: '待核验线索', externalCustomerId: 'LEAD-2' }],
     crmNames: [{ rawName: '主客户', externalCustomerId: 'MASTER-2' }],
     complementaryInfo: null,
-  }, { expandedConflictId: 'C2', conflictPendingId: '' });
+  });
   assert.doesNotMatch(pending, /补充到主客户/);
   assert.doesNotMatch(pending, /暂不补充/);
   assert.doesNotMatch(pending, /可补充资料/);
+
+  for (const item of [
+    {
+      conflictId: 'C3', status: 'resolved', decision: 'confirm_new',
+      leadNames: [{ rawName: '独立客户', externalCustomerId: 'LEAD-3' }],
+      crmNames: [{ rawName: '已有客户', externalCustomerId: 'MASTER-3' }],
+      complementaryInfo: { contact: true, website: true },
+    },
+    {
+      conflictId: 'C4', status: 'retry', decision: 'supplement_and_retry',
+      leadNames: [{ rawName: '待补充线索', externalCustomerId: 'LEAD-4' }],
+      crmNames: [{ rawName: '已有客户', externalCustomerId: 'MASTER-4' }],
+      complementaryInfo: { contact: true, website: true },
+    },
+  ]) {
+    const markup = detailMarkup(item);
+    assert.doesNotMatch(markup, /补充到主客户/);
+    assert.doesNotMatch(markup, /暂不补充/);
+    assert.doesNotMatch(markup, /可补充资料/);
+  }
 });
 
 test('pending decision options are gated to what the backend accepts', () => {
   const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
-  const cardMarkup = Function(
-    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable',
-    `${source}; return protectedConflictCardMarkup;`,
+  const decisionMarkup = Function(
+    'esc', 'duplicateFacts', 'protectedWritesAvailable',
+    `${source}; return protectedConflictDecisionMarkup;`,
   )(
     value => String(value),
     () => '<dl class="duplicate-review-facts"></dl>',
-    () => '',
     () => true,
   );
-  const render = (item) => cardMarkup(item, { expandedConflictId: item.conflictId, conflictPendingId: '' });
+  const render = item => decisionMarkup(item, { conflictPendingId: '' });
 
-  // Live lead-only conflict (the real production shape): link + confirm disabled with hints, retry enabled.
+  // Without a comparable CRM candidate, only supplement-and-retry is offered.
   const leadOnly = render({
     conflictId: 'L1', status: 'unresolved',
     leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
     crmNames: [],
     leadExternalCustomerIds: ['LEAD-A', 'LEAD-B'], crmExternalCustomerIds: [],
   });
-  assert.match(leadOnly, /value="link_existing"[^>]*disabled/);
-  assert.match(leadOnly, /当前线索没有可关联的已有客户/);
-  assert.match(leadOnly, /value="confirm_new"[^>]*disabled/);
-  assert.match(leadOnly, /需先补充资料或等待证据变化后再确认/);
-  assert.doesNotMatch(leadOnly, /value="supplement_and_retry"[^>]*disabled/);
+  assert.doesNotMatch(leadOnly, /value="link_existing"/);
+  assert.doesNotMatch(leadOnly, /value="confirm_new"/);
+  assert.match(leadOnly, /value="supplement_and_retry" checked/);
+  assert.match(leadOnly, /要求补充资料/);
 
   // Live conflict with one CRM side: link enabled, confirm still disabled.
   const withCrm = render({
@@ -113,14 +134,15 @@ test('pending decision options are gated to what the backend accepts', () => {
   assert.doesNotMatch(withCrm, /value="link_existing"[^>]*disabled/);
   assert.match(withCrm, /value="confirm_new"[^>]*disabled/);
 
-  // Stored-only (non-live, reopened) item: confirm enabled, link disabled (no crm side).
+  // Stored-only records without a CRM side follow the same no-candidate rule.
   const storedOnly = render({
     conflictId: 'L3', status: 'unresolved',
     leadNames: [], crmNames: [],
     leadExternalCustomerIds: [], crmExternalCustomerIds: [],
   });
-  assert.match(storedOnly, /value="link_existing"[^>]*disabled/);
-  assert.doesNotMatch(storedOnly, /value="confirm_new"[^>]*disabled/);
+  assert.doesNotMatch(storedOnly, /value="link_existing"/);
+  assert.doesNotMatch(storedOnly, /value="confirm_new"/);
+  assert.match(storedOnly, /value="supplement_and_retry" checked/);
 });
 
 test('save handler sends the state version and a business default reason', () => {
@@ -136,9 +158,9 @@ test('deep-link and post-adjudication refresh are wired', () => {
   assert.match(intake, /conflict=/);
   const deep = section(app, 'function applyDuplicateReviewDeepLink', 'async function loadDuplicateReviews');
   assert.match(deep, /conflict/);
-  assert.match(deep, /activeTab/);
   assert.match(deep, /activatePendingTab/);
-  assert.match(deep, /expandedConflictId/);
+  assert.match(deep, /selectPendingRecord/);
+  assert.match(deep, /pendingRecordKey/);
   const save = section(app, 'function resolveProtectedConflictAction', 'function openDuplicateNeedsInfoModal');
   assert.match(save, /loadAuthorizedBusinessPage\('intake', \{ reset: true \}\)/);
   assert.match(save, /refreshTodayTasksAfterAction/);
