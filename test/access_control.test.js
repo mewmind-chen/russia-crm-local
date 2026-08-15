@@ -284,6 +284,7 @@ test('identity inspection blocks exactly the Recon and account-security policies
     'POST /password',
     'POST /permission-groups',
     'POST /protected-customer-conflicts/:conflictId/resolve',
+    'POST /protected-customer-conflicts/:conflictId/supplement',
     'POST /protected-customer-conflicts/rescan',
     'POST /protected-customers/:externalCustomerId/activate',
     'POST /protected-customers/batches/:batchId/commit',

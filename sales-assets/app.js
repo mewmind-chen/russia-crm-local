@@ -213,8 +213,11 @@
       conflicts: [], conflictStatus: 'unresolved', conflictTotal: 0, unresolved: 0,
       leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
       conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-      conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+      conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+      conflictsLoaded: false,
     },
+    pendingCenter: { activeTab: 'conflicts' },
+    pendingConflictDeepLink: '',
     duplicateReviews: {
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
       loaded: false, loading: false, error: '', pendingAction: '',
@@ -1463,13 +1466,19 @@
         batch: null, pendingAction: '', conflicts: [], conflictTotal: 0, unresolved: 0,
         leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
           conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-        conflictsLoading: false, conflictsError: '', conflictPendingId: '',
+        conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+        conflictsLoaded: false,
       });
       Object.assign(state.duplicateReviews, {
         items: [], total: 0, page: 1, totalPages: 0, loaded: false, loading: false,
         error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '', expandedId: '',
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
+      state.pendingCenter = { activeTab: 'conflicts' };
+      state.pendingConflictDeepLink = '';
+      if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
+        state.pendingCenter.activeTab = 'duplicates';
+      }
       clearTimeout(state.managerAnomalies.timer);
       Object.assign(state.managerAnomalies, {
         items: [], loaded: false, loading: false, pending: false, error: '', pollCount: 0, timer: null,
@@ -2141,6 +2150,14 @@
 
   function intakeBlockStatusLabel(item = {}) {
     const state = String(item.duplicate_state || '');
+    // Identity-conflict-linked items carry their own linked-master fields and
+    // must win over any stale supplement/needs-review marker so a resolved link
+    // never regresses to a needs-review block.
+    const linkedName = String(item.linkedMasterName || item.linked_master_name || '').trim();
+    const linkedExternalId = String(item.linkedMasterExternalId || '').trim();
+    if (linkedName || linkedExternalId) {
+      return `已关联主客户：${linkedName || linkedExternalId}`;
+    }
     // Resolved states win over any stale supplement/needs-info marker so a
     // lead that was later linked or released never regresses to 资料不足.
     if (state === 'exact') {
@@ -2169,6 +2186,8 @@
   }
 
   function intakeReviewDeepLink(item = {}) {
+    const conflictId = String(item.identityWarning?.conflictId || '').trim();
+    if (conflictId) return `#protectedCustomers?conflict=${encodeURIComponent(conflictId)}`;
     const reviewId = String(item.duplicate_review_id || '').trim();
     if (reviewId) return `#protectedCustomers?review=${encodeURIComponent(reviewId)}`;
     const externalCustomerId = String(item.external_customer_id || '').trim();
@@ -2693,6 +2712,11 @@
         if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
         else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
         else if (!salesView && intakeItemAssignable(item)) actions = '—';
+        // Resolved link_existing identity conflicts keep assignable=false and a
+        // linked master; surface the master entry before the identity-review
+        // branch so a resolved link never shows a "needs review" action.
+        else if (item.linkedMasterExternalId) actions =
+          `<button class="text-button" data-open-customer="${item.linkedMasterExternalId}">查看已关联客户</button>`;
         // Identity-review branch: the backend marks these items with the boolean
         // assignable=false (plus identityWarning/claimBlocked), so this must run
         // after the assignable branch above and before the plain assigned row.
@@ -6266,26 +6290,10 @@
     </tr>`).join('')}</tbody></table></div>`;
   }
 
-  function conflictDecisionOptions(item) {
-    const disabled = item.status === 'resolved' ? 'disabled' : '';
-    return `<option value="link_existing" ${disabled}>关联已有客户</option><option value="confirm_new" ${disabled}>确认为新身份</option><option value="supplement_and_retry" ${disabled}>补充资料后重试</option>`;
-  }
-
-  function protectedConflictCandidateIds(item, decision = 'link_existing') {
-    const current = Array.isArray(item?.externalCustomerIds) ? item.externalCustomerIds : [];
-    const previous = Array.isArray(item?.previousExternalCustomerIds) ? item.previousExternalCustomerIds : [];
-    const candidates = decision === 'confirm_new' && current.length === 0 ? previous : current;
-    return [...new Set(candidates)];
-  }
-
-  function protectedConflictTargetOptions(item, decision = 'link_existing') {
-    return '<option value="">请选择</option>' + protectedConflictCandidateIds(item, decision)
-      .map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join('');
-  }
-
   function renderProtectedConflictPagination() {
+    if (state.pendingCenter.activeTab !== 'conflicts') return;
     const model = state.protectedCustomers;
-    renderPagination('#protectedConflictPagination', 'protected_conflicts', {
+    renderPagination('#pendingVerificationPagination', 'protected_conflicts', {
       page: model.conflictPage, pageSize: model.conflictPageSize,
       total: model.conflictTotal, loading: model.conflictsLoading,
     }, ({ page, pageSize }) => {
@@ -6294,11 +6302,45 @@
     });
   }
 
+  function protectedConflictSupplementFlags(info) {
+    return [['contact', '联系人'], ['website', '官网'], ['industry', '行业']]
+      .filter(([key]) => info?.[key])
+      .map(([, label]) => label)
+      .join('、');
+  }
+
+  function protectedConflictTargetExternalCustomerId(item, decision = 'link_existing') {
+    if (decision !== 'link_existing') return '';
+    const crmNames = Array.isArray(item && item.crmNames) ? item.crmNames : [];
+    if (crmNames.length !== 1) return '';
+    return String(crmNames[0] && crmNames[0].externalCustomerId || '');
+  }
+
+  // Pending-card decision options, gated to what the backend adjudication accepts
+  // (Ruling 14): link_existing needs one CRM-side target; confirm_new is only
+  // accepted by the backend once the conflict is no longer live; supplement_and_retry
+  // is always available. Unavailable options stay visible but disabled with a
+  // business-language hint so the manager never clicks into a dead-end error.
+  function protectedConflictPendingOptions(item, model) {
+    const linkTarget = protectedConflictTargetExternalCustomerId(item, 'link_existing');
+    const live = (Array.isArray(item.leadExternalCustomerIds) && item.leadExternalCustomerIds.length > 0)
+      || (Array.isArray(item.crmExternalCustomerIds) && item.crmExternalCustomerIds.length > 0);
+    const locked = !protectedWritesAvailable() || model.conflictPendingId === item.conflictId;
+    const option = (value, label, enabled, hint) => `<label class="duplicate-review-option${enabled ? '' : ' is-unavailable'}"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="${value}" ${!enabled || locked ? 'disabled' : ''}><strong>${label}</strong></span>${enabled ? '' : `<small>${hint}</small>`}</label>`;
+    return [
+      option('link_existing', '是同一个客户', Boolean(linkTarget), '当前线索没有可关联的已有客户，暂不能合并'),
+      option('confirm_new', '不是同一个客户', !live, '需先补充资料或等待证据变化后再确认'),
+      option('supplement_and_retry', '资料还不够', true, ''),
+    ].join('');
+  }
+
   function renderProtectedConflicts() {
-    const root = $('#protectedConflictList');
+    if (state.pendingCenter.activeTab !== 'conflicts') return;
+    const root = $('#pendingVerificationList');
     const navCount = $('#navProtectedConflictCount');
     if (!root) return;
     const model = state.protectedCustomers;
+    $('#pendingConflictsToolbar')?.classList.remove('hidden');
     renderProtectedConflictPagination();
     if (navCount) {
       navCount.textContent = model.blockingUnresolved || 0;
@@ -6306,37 +6348,59 @@
     }
     if (model.conflictsLoading) {
       root.innerHTML = '<div class="empty">正在扫描身份冲突…</div>';
-      setProtectedInlineStatus('#protectedConflictStatusText', 'pending', '正在根据最新客户身份数据重新计算…');
+      setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
       return;
     }
     if (model.conflictsError) {
       root.innerHTML = '<div class="empty">身份冲突加载失败，请重试。</div>';
-      setProtectedInlineStatus('#protectedConflictStatusText', 'error', model.conflictsError);
+      setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
       return;
     }
     const summary = `待处理 ${model.unresolved} 项，其中线索提示 ${model.leadWarnings} 项、阻断冲突 ${model.blockingUnresolved} 项；${model.canEnter172B ? '当前无阻断冲突' : '需先处理阻断冲突'}`;
-    setProtectedInlineStatus('#protectedConflictStatusText', model.canEnter172B ? 'success' : 'error', summary);
+    setProtectedInlineStatus('#pendingVerificationStatus', model.canEnter172B ? 'success' : 'error', summary);
     if (!model.conflicts.length) {
       root.innerHTML = '<div class="empty">当前筛选范围内没有身份冲突</div>';
       return;
     }
-    root.innerHTML = model.conflicts.map(item => {
-      const candidates = Array.isArray(item.externalCustomerIds) ? item.externalCustomerIds : [];
-      const previousCandidates = Array.isArray(item.previousExternalCustomerIds) ? item.previousExternalCustomerIds : [];
-      const previousOnly = previousCandidates.filter(id => !candidates.includes(id));
-      const resolved = item.status === 'resolved';
-      const warning = item.disposition === 'lead_warning';
-      return `<section class="protected-conflict-item" data-protected-conflict="${esc(item.conflictId)}">
-        <div class="protected-conflict-head"><div><strong>${esc(item.normalizedName || '未命名身份')}</strong><small>更新 ${esc(shortDate(item.updatedAt, true))}</small></div>${protectedStatusMarkup(warning && !resolved ? 'retry' : item.status)}</div>
-        <div class="protected-conflict-evidence">${warning ? '<span class="pill amber">仅线索提示，不阻断后续</span>' : '<span class="pill red">阻断冲突</span>'}${candidates.map(id => `<span class="pill">当前 ${esc(id)}</span>`).join('')}${previousOnly.map(id => `<span class="pill amber">上一轮 ${esc(id)}</span>`).join('')}</div>
-        ${resolved ? `<div class="subtle">已执行：${esc(item.decision || '—')} · 归属 ${esc(item.targetExternalCustomerId || '—')} · ${esc(item.details?.reason || '')}</div>` : `<div class="protected-conflict-form">
-          <label>处理方式<select data-conflict-decision>${conflictDecisionOptions(item)}</select></label>
-          <label>稳定客户编号<select data-conflict-target>${protectedConflictTargetOptions(item)}</select></label>
-          <label>裁决理由<textarea data-conflict-reason placeholder="写明人工核验依据，补充资料时说明待补内容"></textarea></label>
-          <button class="button primary" type="button" data-resolve-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() ? 'disabled' : ''}>确认裁决</button>
-        </div><p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>`}
-      </section>`;
-    }).join('');
+    root.innerHTML = model.conflicts.map(item => protectedConflictCardMarkup(item, model)).join('');
+  }
+
+  function protectedConflictCardMarkup(item, model) {
+    const expanded = model.expandedConflictId === item.conflictId;
+    const resolved = item.status === 'resolved';
+    const retry = item.status === 'retry';
+    const leadName = item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
+    const crmName = item.crmNames?.[0]?.rawName || item.crmNames?.[0]?.externalCustomerId || '';
+    const statusLabel = resolved ? (item.decision === 'link_existing' ? '已关联主客户' : '已确认为新身份') : retry ? '待补充资料' : '等待管理员核验';
+    const supplementBlock = item.complementaryInfo ? `<div class="protected-conflict-supplement">
+      <span>可补充资料：${protectedConflictSupplementFlags(item.complementaryInfo)}</span>
+      <button type="button" class="button secondary tiny" data-supplement-apply="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>补充到主客户</button>
+      <button type="button" class="button secondary tiny" data-supplement-skip="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>暂不补充</button>
+    </div>` : '';
+    const decisionBlock = (resolved || retry)
+      ? `<div class="subtle">${statusLabel}</div>${supplementBlock}`
+      : `<div class="duplicate-review-options">
+      ${protectedConflictPendingOptions(item, model)}
+    </div>
+    <label id="conflictReasonField-${esc(item.conflictId)}" class="hidden">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
+    <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存处理结果</button>
+    <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>`;
+    const detailBlock = expanded ? `<div class="protected-conflict-detail">
+      <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
+      <div class="duplicate-review-comparison">
+        <section class="duplicate-review-side submitted"><div class="duplicate-review-side-title"><span>这条新线索</span><strong>${esc(leadName)}</strong></div>${duplicateFacts([['客户编号', esc(item.leadNames?.[0]?.externalCustomerId || '—')]])}</section>
+        <section class="duplicate-review-side existing"><div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(crmName || '未识别')}</strong></div>${duplicateFacts([['客户编号', esc(item.crmNames?.[0]?.externalCustomerId || '—')]])}</section>
+      </div>
+      ${decisionBlock}
+    </div>` : '';
+    return `<section class="protected-conflict-item${expanded ? ' expanded' : ''}" data-protected-conflict="${esc(item.conflictId)}">
+    <header class="protected-conflict-head">
+      <div class="duplicate-card-summary"><strong>${esc(leadName)}</strong>${crmName ? `<span>疑似重名 · 匹配 ${esc(crmName)}</span>` : '<span>疑似重名</span>'}</div>
+      <span class="pill amber">${esc(statusLabel)}</span>
+      <button class="button secondary tiny" type="button" data-toggle-protected-conflict="${esc(item.conflictId)}">${expanded ? '收起' : '查看并处理'}</button>
+    </header>
+    ${detailBlock}
+  </section>`;
   }
 
   function duplicateEvidenceMarkup(candidate) {
@@ -6353,13 +6417,54 @@
     return `<dl class="duplicate-review-facts">${items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${value || '<span class="tp-empty-value">—</span>'}</dd></div>`).join('')}</dl>`;
   }
 
+  function pendingTabsAvailable() {
+    return { conflicts: canManageProtectedCustomers(), duplicates: canReviewDuplicateCustomers() };
+  }
+
+  function activatePendingTab(type, options = {}) {
+    const tabs = pendingTabsAvailable();
+    const activeTab = tabs[type] ? type : (tabs.conflicts ? 'conflicts' : 'duplicates');
+    state.pendingCenter.activeTab = activeTab;
+    $$('#pendingTypeTabs [data-pending-type]').forEach(button => {
+      const isActive = button.dataset.pendingType === activeTab;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+    });
+    $('#pendingTypeTabs')?.classList.toggle('hidden', !(tabs.conflicts && tabs.duplicates));
+    $('#pendingConflictsToolbar')?.classList.toggle('hidden', activeTab !== 'conflicts');
+    $('#pendingDuplicatesToolbar')?.classList.toggle('hidden', activeTab !== 'duplicates');
+    $('#duplicateReviewBulkBar')?.classList.toggle('hidden', activeTab !== 'duplicates');
+    const pagination = $('#pendingVerificationPagination');
+    if (pagination) pagination.dataset.pagination = activeTab === 'duplicates' ? 'duplicate_reviews' : 'protected_conflicts';
+    if (!options.skipRender) renderPendingCenter();
+  }
+
+  function renderPendingCenter() {
+    const tabs = pendingTabsAvailable();
+    activatePendingTab(state.pendingCenter.activeTab, { skipRender: true });
+    $('#pendingVerificationPanel')?.classList.toggle('hidden', !canAccessProtectionAndDedupe());
+    const badgeConflicts = $('[data-pending-count="conflicts"]');
+    if (badgeConflicts) {
+      badgeConflicts.textContent = state.protectedCustomers.conflictsLoaded
+        ? String(state.protectedCustomers.unresolved || 0) : '…';
+    }
+    const badgeDuplicates = $('[data-pending-count="duplicates"]');
+    if (badgeDuplicates) {
+      badgeDuplicates.textContent = state.duplicateReviews.loaded
+        ? String(state.duplicateReviews.total || 0) : '…';
+    }
+    if (tabs.conflicts && state.pendingCenter.activeTab === 'conflicts') renderProtectedConflicts();
+    else if (tabs.duplicates && state.pendingCenter.activeTab === 'duplicates') renderDuplicateReviews();
+  }
+
   function renderDuplicateReviews() {
-    const panel = $('#duplicateReviewPanel');
-    const root = $('#duplicateReviewList');
-    if (!panel || !root) return;
+    if (state.pendingCenter.activeTab !== 'duplicates') return;
+    const root = $('#pendingVerificationList');
+    if (!root) return;
     const allowed = canReviewDuplicateCustomers();
-    panel.classList.toggle('hidden', !allowed);
     if (!allowed) return;
+    $('#pendingDuplicatesToolbar')?.classList.remove('hidden');
+    $('#duplicateReviewBulkBar')?.classList.remove('hidden');
     const model = state.duplicateReviews;
     const mutationPending = Boolean(model.pendingAction);
     const interactionPending = mutationPending || model.loading;
@@ -6370,9 +6475,9 @@
     for (const reviewId of [...selected]) {
       if (!selectableItems.some(item => item.id === reviewId)) selected.delete(reviewId);
     }
-    $('#duplicateReviewStatus').textContent = model.error
+    $('#pendingVerificationStatus').textContent = model.error
       || (model.loading ? '正在读取待核验记录…' : model.loaded ? `待处理 ${model.total} 条` : '');
-    $('#duplicateReviewStatus').className = `protected-inline-status${model.error ? ' error' : model.loading ? ' pending' : model.loaded ? ' success' : ''}`;
+    $('#pendingVerificationStatus').className = `protected-inline-status${model.error ? ' error' : model.loading ? ' pending' : model.loaded ? ' success' : ''}`;
     $('#duplicateReviewSelectedCount').textContent = `已选 ${selected.size} 条`;
     $('#duplicateReviewBulkDistinct').disabled = !selected.size || interactionPending;
     $('#duplicateReviewSelectAll').checked = Boolean(selectableItems.length)
@@ -6381,7 +6486,7 @@
     $('#duplicateReviewSelectAll').disabled = interactionPending || !selectableItems.length;
     $('#duplicateReviewRecalculate').disabled = Boolean(model.pendingAction || model.loading);
     $('#duplicateReviewRefresh').disabled = interactionPending;
-    renderPagination('#duplicateReviewPagination', 'duplicate_reviews', {
+    renderPagination('#pendingVerificationPagination', 'duplicate_reviews', {
       page: model.page, pageSize: model.pageSize, total: model.total, loading: model.loading,
     }, ({ page, pageSize }) => {
       model.pageSize = pageSize || model.pageSize;
@@ -6415,7 +6520,7 @@
       return `<section class="duplicate-review-item${expanded ? ' expanded' : ''}" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
         <header class="duplicate-review-item-head">
           <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
-          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span><span class="subtle">不是直接拦死，只是先保护客户不被误分配。</span></div>
+          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span></div>
           <span class="pill">${esc(summaryAdvice)}</span>
           <span class="pill amber">${esc(summaryStatus)}</span>
           <button class="button secondary tiny" type="button" data-toggle-duplicate-review="${esc(review.id)}" ${interactionPending ? 'disabled' : ''}>${expanded ? '收起' : '查看并处理'}</button>
@@ -6447,7 +6552,7 @@
             </div>
           </section>
         </div>
-        <div class="duplicate-review-question"><strong>管理员只需要确认：它是不是已有客户？</strong><span>线索池会同步更新。</span></div>
+        <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
         <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
         <div class="duplicate-review-options">
           <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_same" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}><strong>是同一个客户</strong></span><small>关联已有客户，不再分配成新客户。</small></label>
@@ -6457,7 +6562,6 @@
         <footer class="duplicate-review-actions">
           <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存处理结果</button>
         </footer>
-        <p class="duplicate-review-sync-note">保存后，主管在线索池看到明确结果，不再卡在转圈。</p>
       </section>`;
     }).join('');
   }
@@ -6466,6 +6570,22 @@
     const hash = String(location.hash || '');
     if (!hash.startsWith('#protectedCustomers')) return;
     const params = new URLSearchParams(hash.split('?')[1] || '');
+    const conflictId = String(params.get('conflict') || '');
+    if (conflictId) {
+      state.pendingCenter.activeTab = 'conflicts';
+      activatePendingTab('conflicts');
+      const conflictModel = state.protectedCustomers;
+      if (conflictModel.conflicts.some(item => item.conflictId === conflictId)) {
+        conflictModel.expandedConflictId = conflictId;
+        renderProtectedConflicts();
+        requestAnimationFrame(() => document.querySelector(
+          `[data-protected-conflict="${CSS.escape(conflictId)}"]`,
+        )?.scrollIntoView({ block: 'nearest' }));
+        return;
+      }
+      state.pendingConflictDeepLink = conflictId; // 冲突列表加载完成后展开
+      return;
+    }
     const reviewId = String(params.get('review') || '');
     const customerId = String(params.get('customer') || '');
     if (!reviewId && !customerId) return;
@@ -6476,6 +6596,8 @@
       || (customerId && String(item.input?.customerId || '') === customerId));
     if (!matched) return;
     model.expandedId = matched.id;
+    state.pendingCenter.activeTab = 'duplicates';
+    activatePendingTab('duplicates');
     renderDuplicateReviews();
     requestAnimationFrame(() => document.querySelector(
       `[data-duplicate-review-item="${CSS.escape(matched.id)}"]`,
@@ -6508,7 +6630,7 @@
     } finally {
       if (model.requestEpoch === epoch) {
         model.loading = false;
-        renderDuplicateReviews();
+        renderPendingCenter();
       }
     }
   }
@@ -6638,6 +6760,29 @@
     }
   }
 
+  async function resolveProtectedConflictAction(conflictId, payload = {}) {
+    const model = state.protectedCustomers;
+    const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({
+        decision: payload.decision,
+        targetExternalCustomerId: payload.targetExternalCustomerId || '',
+        details: payload.details || '',
+        expectedVersion: payload.expectedVersion || '',
+      }),
+    });
+    toast('裁决已保存');
+    model.conflictPendingId = '';
+    await reloadProtectedWorkspace();
+    try {
+      await loadAuthorizedBusinessPage('intake', { reset: true });
+      await refreshTodayTasksAfterAction('身份核验结果已同步到线索池');
+    } catch (refreshError) {
+      toast(refreshError?.message || '线索池刷新失败，请稍后手动刷新');
+    }
+    return result;
+  }
+
   function openDuplicateNeedsInfoModal(reviewId) {
     openModal('信息不足，要求补充', '重复客户确认', `<form id="duplicateNeedsInfoForm" class="form-grid">
       <input type="hidden" name="reviewId" value="${esc(reviewId)}">
@@ -6707,13 +6852,12 @@
     if (!$('#protectedCustomersView') || !canAccessProtectionAndDedupe()) return;
     $('#protectedAdminWorkspace')?.classList.toggle('hidden', !canManageProtectedCustomers());
     $$('.protected-intro-actions').forEach(root => root.classList.toggle('hidden', !canManageProtectedCustomers()));
-    renderDuplicateReviews();
+    renderPendingCenter();
     applyDuplicateReviewDeepLink();
     if (!canManageProtectedCustomers()) return;
     renderProtectedWriteGate();
     renderProtectedCustomers();
     renderProtectedBatch();
-    renderProtectedConflicts();
     if (!$('#protectedImportRows').children.length && protectedWritesAvailable()) {
       const draft = loadProtectedImportDraft();
       if (draft.length) draft.forEach(addProtectedImportRow);
@@ -6763,6 +6907,7 @@
     model.leadWarnings = Number(result.leadWarnings || 0);
     model.blockingUnresolved = Number(result.blockingUnresolved || 0);
     model.canEnter172B = result.canEnter172B === true;
+    model.conflictsLoaded = true;
   }
 
   async function loadProtectedConflicts({ rescan = false, page } = {}) {
@@ -6771,7 +6916,7 @@
     const retainDraft = model.conflicts.length > 0;
     model.conflictsLoading = true;
     model.conflictsError = '';
-    if (retainDraft) setProtectedInlineStatus('#protectedConflictStatusText', 'pending', '正在根据最新客户身份数据重新计算…');
+    if (retainDraft) setProtectedInlineStatus('#pendingVerificationStatus', 'pending', '正在根据最新客户身份数据重新计算…');
     else renderProtectedConflicts();
     renderProtectedConflictPagination();
     let completed = false;
@@ -6790,13 +6935,21 @@
       }
       applyProtectedConflictResult(result);
       completed = true;
+      const pendingConflict = state.pendingConflictDeepLink;
+      if (pendingConflict && model.conflicts.some(item => item.conflictId === pendingConflict)) {
+        model.expandedConflictId = pendingConflict;
+        state.pendingConflictDeepLink = '';
+        requestAnimationFrame(() => document.querySelector(
+          `[data-protected-conflict="${CSS.escape(pendingConflict)}"]`,
+        )?.scrollIntoView({ block: 'nearest' }));
+      }
       if (rescan) toast('身份冲突已按最新资料重新扫描');
     } catch (error) {
       model.conflictsError = error.message || '身份冲突加载失败';
     } finally {
       model.conflictsLoading = false;
-      if (completed || !retainDraft) renderProtectedConflicts();
-      else setProtectedInlineStatus('#protectedConflictStatusText', 'error', model.conflictsError);
+      if (completed || !retainDraft) renderPendingCenter();
+      else setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
       renderProtectedConflictPagination();
     }
   }
@@ -6874,27 +7027,26 @@
     }
   }
 
-  async function resolveProtectedConflict(button) {
-    const item = state.protectedCustomers.conflicts.find(row => row.conflictId === button.dataset.resolveProtectedConflict);
-    const root = button.closest('[data-protected-conflict]');
-    if (!item || !root) return;
-    const decision = root.querySelector('[data-conflict-decision]')?.value || '';
-    const targetExternalCustomerId = decision === 'supplement_and_retry' ? '' : root.querySelector('[data-conflict-target]')?.value || '';
-    const reason = root.querySelector('[data-conflict-reason]')?.value.trim() || '';
-    const message = root.querySelector('[data-conflict-message]');
-    button.disabled = true;
-    button.textContent = '正在裁决…';
-    if (message) { message.className = 'protected-operation-status pending'; message.textContent = '正在按最新证据提交裁决…'; }
+  async function reloadProtectedWorkspace() {
+    await loadProtectedConflicts();
+  }
+
+  async function supplementProtectedConflictAction(conflictId, action) {
+    const model = state.protectedCustomers;
+    model.conflictPendingId = conflictId;
+    renderPendingCenter();
     try {
-      await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(item.conflictId)}/resolve`, {
-        method: 'POST', body: JSON.stringify({ decision, targetExternalCustomerId, details: { reason }, expectedVersion: item.expectedVersion }),
+      const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/supplement`, {
+        method: 'POST', body: JSON.stringify({ action }),
       });
-      if (message) { message.className = 'protected-operation-status success'; message.textContent = '裁决已保存'; }
-      await loadProtectedConflicts();
+      toast(action === 'apply' ? '已补充到主客户' : '已记录暂不补充');
+      model.conflictPendingId = '';
+      await reloadProtectedWorkspace();
+      return result;
     } catch (error) {
-      if (message) { message.className = 'protected-operation-status error'; message.textContent = error.message; }
-      button.disabled = !protectedWritesAvailable();
-      button.textContent = '确认裁决';
+      if (model.conflictPendingId === conflictId) model.conflictPendingId = '';
+      renderPendingCenter();
+      throw error;
     }
   }
 
@@ -11743,8 +11895,56 @@
     if (protectedActivate) openProtectedActivationModal(protectedActivate.dataset.protectedActivate);
     if (event.target.closest('#protectedRefreshBtn')) await loadProtectedCustomers();
     if (event.target.closest('#protectedRescanBtn')) await loadProtectedConflicts({ rescan: true });
-    const resolveProtected = event.target.closest('[data-resolve-protected-conflict]');
-    if (resolveProtected) await resolveProtectedConflict(resolveProtected);
+    const pendingType = event.target.closest('[data-pending-type]');
+    if (pendingType) activatePendingTab(pendingType.dataset.pendingType);
+    const conflictToggle = event.target.closest('[data-toggle-protected-conflict]');
+    if (conflictToggle) {
+      const conflictId = conflictToggle.dataset.toggleProtectedConflict;
+      state.protectedCustomers.expandedConflictId = state.protectedCustomers.expandedConflictId === conflictId ? '' : conflictId;
+      renderPendingCenter();
+    }
+    const conflictSave = event.target.closest('[data-save-protected-conflict]');
+    if (conflictSave && protectedWritesAvailable()) {
+      const conflictId = conflictSave.dataset.saveProtectedConflict;
+      const item = state.protectedCustomers.conflicts.find(row => row.conflictId === conflictId);
+      if (!item) return;
+      const radio = document.querySelector(`input[name="conflict-decision-${CSS.escape(conflictId)}"]:checked`);
+      if (!radio) { toast('请先选择处理方式'); return; }
+      const decision = radio.value;
+      const rawReason = document.querySelector(`#conflictReasonField-${CSS.escape(conflictId)} textarea`)?.value || '';
+      if (decision === 'supplement_and_retry' && !String(rawReason).trim()) {
+        document.querySelector(`#conflictReasonField-${CSS.escape(conflictId)}`)?.classList.remove('hidden');
+        toast('资料不够时必须填写需要补充的内容');
+        return;
+      }
+      const reason = String(rawReason).trim()
+        || (decision === 'link_existing' ? '管理员确认为同一客户'
+          : decision === 'confirm_new' ? '管理员确认不是同一客户' : '');
+      const targetExternalCustomerId = protectedConflictTargetExternalCustomerId(item, decision);
+      try {
+        state.protectedCustomers.conflictPendingId = conflictId;
+        renderPendingCenter();
+        await resolveProtectedConflictAction(conflictId, {
+          decision, targetExternalCustomerId,
+          details: reason, expectedVersion: item.expectedVersion || '',
+        });
+      } catch (error) {
+        state.protectedCustomers.conflictPendingId = '';
+        renderPendingCenter();
+        const msg = document.querySelector('[data-conflict-message]');
+        if (msg) msg.textContent = error.message;
+      }
+    }
+    const supplementApply = event.target.closest('[data-supplement-apply]');
+    if (supplementApply && protectedWritesAvailable()) {
+      try { await supplementProtectedConflictAction(supplementApply.dataset.supplementApply, 'apply'); }
+      catch (error) { toast(error.message); }
+    }
+    const supplementSkip = event.target.closest('[data-supplement-skip]');
+    if (supplementSkip && protectedWritesAvailable()) {
+      try { await supplementProtectedConflictAction(supplementSkip.dataset.supplementSkip, 'skip'); }
+      catch (error) { toast(error.message); }
+    }
     if (event.target.closest('#customerExportBtn')) {
       const link = document.createElement('a');
       const payload = state.customerFilterController?.serialize('applied') || { filters: [] };
@@ -12379,14 +12579,10 @@
       state.protectedCustomers.conflictPage = 1;
       void loadProtectedConflicts();
     }
-    if (event.target.matches('[data-conflict-decision]')) {
+    if (event.target.matches('input[name^="conflict-decision-"]')) {
       const root = event.target.closest('[data-protected-conflict]');
-      const target = root?.querySelector('[data-conflict-target]');
-      if (target) {
-        const item = state.protectedCustomers.conflicts.find(row => row.conflictId === root.dataset.protectedConflict);
-        target.innerHTML = protectedConflictTargetOptions(item, event.target.value);
-        target.disabled = event.target.value === 'supplement_and_retry';
-      }
+      const reasonField = document.querySelector(`#conflictReasonField-${CSS.escape(root?.dataset.protectedConflict || '')}`);
+      reasonField?.classList.toggle('hidden', event.target.value !== 'supplement_and_retry');
     }
     if (event.target.id === 'customerSort') {
       void loadCustomerPage({ reset: true });

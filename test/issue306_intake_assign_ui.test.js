@@ -140,6 +140,22 @@ test('resolved states win over a stale supplement marker', () => {
   );
 });
 
+test('intakeBlockStatusLabel surfaces identity-conflict-linked masters before review blocks', () => {
+  const { label } = blockStatusApi();
+  assert.equal(
+    label({ linkedMasterName: 'ACME 主客户', claimBlocked: true }),
+    '已关联主客户：ACME 主客户',
+  );
+  assert.equal(
+    label({ linkedMasterExternalId: 'RU-9402' }),
+    '已关联主客户：RU-9402',
+  );
+  assert.equal(
+    label({ linkedMasterName: 'ACME', claimBlocked: true, supplementRequirement: '营业执照' }),
+    '已关联主客户：ACME',
+  );
+});
+
 test('intakeNeedsIdentityReview identifies blocked identity-review items only', () => {
   const { needsReview } = blockStatusApi();
   assert.equal(needsReview({ identityWarning: { active: true } }), true);
@@ -256,4 +272,12 @@ test('renderIntake drives block copy and row actions through the new helpers', (
   assert.match(renderer, /intakeBlockStatusLabel\(item\)/);
   assert.match(renderer, /intakeNeedsIdentityReview\(item\)/);
   assert.match(renderer, /intakeReviewActionMarkup\(item\)/);
+});
+
+test('identity-conflict-linked items expose a view entry to the linked master', () => {
+  const renderer = functionBlock(app, 'renderIntake');
+  const actions = section(renderer, "let actions = '';", 'const signals = intakeSignals(item);');
+  assert.match(actions, /item\.linkedMasterExternalId/);
+  assert.match(actions, /data-open-customer="\$\{item\.linkedMasterExternalId\}"/);
+  assert.match(actions, /查看已关联客户/);
 });

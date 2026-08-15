@@ -357,12 +357,12 @@ test('combined identity workspace keeps the protected lifecycle behind its named
   assert.match(html, /id="protectedCsvInput"[^>]*type="file"[^>]*accept="[^"]*\.csv/);
   assert.match(app, /function parseProtectedCustomerCsv\(/);
   assert.match(app, /function loadProtectedCustomerCsv\(/);
-  assert.match(app, /previousExternalCustomerIds/);
-  assert.match(app, /protectedConflictCandidateIds/);
+  assert.match(app, /item\.leadNames/);
+  assert.match(app, /data-save-protected-conflict/);
   assert.match(app, /conflictPage:\s*1/);
   assert.match(app, /conflictTotalPages/);
-  assert.match(html, /id="protectedConflictPagination"[^>]*data-pagination="protected_conflicts"/);
-  assert.match(app, /renderPagination\('#protectedConflictPagination', 'protected_conflicts'/);
+  assert.match(html, /id="pendingVerificationPagination"[^>]*data-pagination="protected_conflicts"/);
+  assert.match(app, /renderPagination\('#pendingVerificationPagination', 'protected_conflicts'/);
   assert.match(app, /protectedConflictStatus[\s\S]{0,300}conflictPage\s*=\s*1/);
   assert.match(app, /targetPage\s*>\s*lastPage[\s\S]{0,180}conflictPage\s*=\s*lastPage/);
 
@@ -377,7 +377,7 @@ test('combined identity workspace keeps the protected lifecycle behind its named
     assert.ok(app.includes(endpoint), endpoint);
   }
   for (const operation of [
-    '客户保护与查重', '下载导入模板', '预览', '冲突', '关联已有', '确认新建',
+    '客户保护与查重', '下载导入模板', '预览', '冲突', '关联已有', '确认为新身份',
     '补充资料', '重新扫描', '提交', '激活', '回滚', '导出身份映射',
   ]) {
     assert.ok(frontend.includes(operation), operation);
@@ -388,18 +388,17 @@ test('combined identity workspace keeps the protected lifecycle behind its named
   assert.match(app, /catch\s*\([^)]*\)\s*\{[\s\S]{0,500}(?:protectedCustomers|protected).*error/);
 });
 
-test('confirm_new uses current candidates and falls back only when the current source is empty', () => {
-  const start = app.indexOf('function protectedConflictCandidateIds');
-  const end = app.indexOf('\n  function protectedConflictTargetOptions', start);
+test('link_existing targets the single CRM name only, otherwise empty', () => {
+  const start = app.indexOf('function protectedConflictTargetExternalCustomerId');
+  const end = app.indexOf('\n  function renderProtectedConflicts', start);
   assert.ok(start >= 0 && end > start);
-  const candidateIds = Function(`${app.slice(start, end)}; return protectedConflictCandidateIds;`)();
-  const item = {
-    externalCustomerIds: ['A'],
-    previousExternalCustomerIds: ['A', 'B'],
-  };
-  assert.deepEqual(candidateIds(item, 'confirm_new'), ['A']);
-  assert.deepEqual(candidateIds({ ...item, externalCustomerIds: [] }, 'confirm_new'), ['A', 'B']);
-  assert.deepEqual(candidateIds(item, 'link_existing'), ['A']);
+  const targetFor = Function(`${app.slice(start, end)}; return protectedConflictTargetExternalCustomerId;`)();
+  const item = { crmNames: [{ externalCustomerId: 'A' }] };
+  assert.equal(targetFor(item, 'link_existing'), 'A');
+  assert.equal(targetFor({ crmNames: [{ externalCustomerId: 'A' }, { externalCustomerId: 'B' }] }, 'link_existing'), '');
+  assert.equal(targetFor(item, 'confirm_new'), '');
+  assert.equal(targetFor(item, 'supplement_and_retry'), '');
+  assert.equal(targetFor({ crmNames: [] }, 'link_existing'), '');
 });
 
 test('protected workspace CSS keeps wide data inside the workspace at desktop and mobile widths', () => {

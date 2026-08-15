@@ -12,10 +12,10 @@ const css = fs.readFileSync(path.join(root, 'sales-assets/app.css'), 'utf8');
 
 test('duplicate review lives only in customer protection and dedupe workspace', () => {
   assert.match(html, /data-view="protectedCustomers"[^>]*>[\s\S]*?客户保护与查重/);
-  assert.equal((html.match(/id="duplicateReviewPanel"/g) || []).length, 1);
+  assert.equal((html.match(/id="pendingVerificationPanel"/g) || []).length, 1);
   const usersEnd = html.indexOf('<section id="protectedCustomersView"');
-  assert.equal(html.slice(0, usersEnd).includes('id="duplicateReviewPanel"'), false);
-  assert.match(html, /id="protectedCustomersView"[\s\S]*id="duplicateReviewPanel"/);
+  assert.equal(html.slice(0, usersEnd).includes('id="pendingVerificationPanel"'), false);
+  assert.match(html, /id="protectedCustomersView"[\s\S]*id="pendingVerificationPanel"/);
   assert.doesNotMatch(html, /data-duplicate-review-candidate/);
 });
 
@@ -59,5 +59,5 @@ test('review access is a union while protection administration keeps its origina
   assert.match(app, /function canReviewDuplicateCustomers\(\)[\s\S]*view_all_customers[\s\S]*manage_intake/);
   assert.match(app, /function canAccessProtectionAndDedupe\(\)[\s\S]*canManageProtectedCustomers\(\) \|\| canReviewDuplicateCustomers\(\)/);
   assert.match(app, /protectedAdminWorkspace[^\n]*classList\.toggle\('hidden', !canManageProtectedCustomers\(\)\)/);
-  assert.match(app, /const panel = \$\('#duplicateReviewPanel'\);[\s\S]*panel\.classList\.toggle\('hidden', !allowed\)/);
+  assert.match(app, /#pendingVerificationPanel'\)\?\.classList\.toggle\('hidden', !canAccessProtectionAndDedupe\(\)\)/);
 });

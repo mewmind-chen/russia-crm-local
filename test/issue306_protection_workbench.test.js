@@ -37,7 +37,7 @@ test('duplicate review cards collapse by default with business summary and 查�
 
 test('duplicate review expanded view asks the one question and keeps three business actions', () => {
   const renderer = section(app, "root.innerHTML = model.items.map(review => {", '}).join(\'\');');
-  assert.match(renderer, /管理员只需要确认：它是不是已有客户？/);
+  assert.match(renderer, /是不是同一个客户？/);
   assert.match(renderer, />是同一个客户</);
   assert.match(renderer, />不是同一个客户</);
   assert.match(renderer, />资料还不够</);
@@ -68,22 +68,28 @@ test('collapsed card and mobile fallback CSS exist', () => {
   assert.match(css, /@media\(max-width:700px\)[\s\S]*duplicate-review-item-head/);
 });
 
-test('preview-aligned guidance, options, save button and warm notes', () => {
+test('preview-aligned guidance, options, and save button', () => {
   const renderer = section(app, "root.innerHTML = model.items.map(review => {", '}).join(\'\');');
-  assert.match(renderer, /不是直接拦死，只是先保护客户不被误分配。/);
   assert.match(renderer, /duplicate-review-options/);
   assert.match(renderer, /data-duplicate-resolution-save/);
   assert.match(renderer, /保存处理结果/);
   assert.match(renderer, /关联已有客户，不再分配成新客户。/);
   assert.match(renderer, /放行，主管可以继续分配。/);
   assert.match(renderer, /要求补充官网、联系人或来源说明。/);
-  assert.match(renderer, /保存后，主管在线索池看到明确结果，不再卡在转圈。/);
   const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
-  assert.match(html, /这里专门处理“可能重名”的线索/);
-  assert.match(html, /duplicate-review-steps/);
-  assert.match(html, /主管不用猜能不能分配/);
+  assert.match(html, /待核验中心/);
   assert.match(app, /data-duplicate-resolution-save/);
   assert.doesNotMatch(app, /版本 \$\{esc\(item\.expectedVersion/);
+});
+
+test('no explainer copy in the workbench UI', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
+  const renderer = section(app, "root.innerHTML = model.items.map(review => {", '}).join(\'\');');
+  assert.doesNotMatch(html, /duplicate-review-steps/);
+  assert.doesNotMatch(html, /主管不用猜能不能分配/);
+  assert.doesNotMatch(renderer, /不是直接拦死/);
+  assert.doesNotMatch(renderer, /保存后，主管在线索池看到明确结果/);
+  assert.match(renderer, /是不是同一个客户？/);
 });
 
 test('save handler reads the checked radio and routes needs_info to the modal', () => {
@@ -97,7 +103,7 @@ test('save handler reads the checked radio and routes needs_info to the modal', 
 
 test('visible app version badge renders the cache-bust version', () => {
   const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
-  assert.match(html, /data-app-version="20260814-issue306-dedupe-rework"/);
+  assert.match(html, /data-app-version="20260815-issue306-identity-workbench"/);
   assert.match(html, /id="appVersionBadge"/);
   assert.match(app, /function renderAppVersionBadge/);
   assert.match(app, /界面版本 /);
