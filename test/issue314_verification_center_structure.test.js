@@ -56,6 +56,12 @@ test('live conflict and duplicate details use the safe-area action footer', () =
   assert.match(cssRule('.pending-detail-actions .button'), /min-height:44px/);
 });
 
+test('live verification detail tracks and footers stay content-sized', () => {
+  assert.match(cssRule('.protected-conflict-detail'), /align-content:start/);
+  assert.match(cssRule('.protected-conflict-detail'), /grid-auto-rows:max-content/);
+  assert.match(cssRule('.pending-detail-actions'), /align-self:start/);
+});
+
 test('mobile workbench rules target live panes and controls', () => {
   const mobile = mediaBlock('max-width:760px');
   const narrow = mediaBlock('max-width:320px');
@@ -77,4 +83,12 @@ test('login heading keeps fixed responsive breakpoint sizes', () => {
   assert.match(cssRule('.login-brand h1', mediaBlock('max-width:1100px')), /font-size:52px/);
   assert.match(cssRule('.login-brand h1', mediaBlock('max-width:900px')), /font-size:42px/);
   assert.doesNotMatch(cssRule('.login-brand h1'), /font-size:clamp\([^)]*vw/);
+});
+
+test('all CRM frontend assets and visible badge share issue 314 version', () => {
+  const version = '20260816-issue314-verification-workbench';
+  assert.match(html, new RegExp(`data-app-version="${version}"`));
+  const versions = [...html.matchAll(/sales-assets\/[^"]+\?v=([^"&]+)/g)].map(match => match[1]);
+  assert.ok(versions.length >= 4);
+  assert.deepEqual([...new Set(versions)], [version]);
 });
