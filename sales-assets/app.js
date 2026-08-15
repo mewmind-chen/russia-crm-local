@@ -213,19 +213,19 @@
       conflicts: [], conflictStatus: 'unresolved', conflictTotal: 0, unresolved: 0,
       leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
       conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-      conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+      conflictsLoading: false, conflictsError: '', conflictPendingId: '',
       conflictsLoaded: false,
     },
     pendingCenter: {
       activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
-      deepLinkUnavailable: false,
+      deepLinkUnavailable: false, consumedDeepLinkHash: '',
     },
     protectionWorkspace: { activeView: 'verification' },
     duplicateReviews: {
       items: [], total: 0, page: 1, pageSize: 50, totalPages: 0,
       loaded: false, loading: false, error: '', pendingAction: '',
       requestEpoch: 0,
-      selectedIds: new Set(), searchOpenId: '', expandedId: '', searchResults: {},
+      selectedIds: new Set(), searchOpenId: '', searchResults: {},
       searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
     },
     assistantRuntime: null,
@@ -1469,17 +1469,17 @@
         batch: null, pendingAction: '', conflicts: [], conflictTotal: 0, unresolved: 0,
         leadWarnings: 0, blockingUnresolved: 0, canEnter172B: false,
           conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
-        conflictsLoading: false, conflictsError: '', conflictPendingId: '', expandedConflictId: '',
+        conflictsLoading: false, conflictsError: '', conflictPendingId: '',
         conflictsLoaded: false,
       });
       Object.assign(state.duplicateReviews, {
         items: [], total: 0, page: 1, totalPages: 0, loaded: false, loading: false,
-        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '', expandedId: '',
+        error: '', pendingAction: '', requestEpoch: 0, selectedIds: new Set(), searchOpenId: '',
         searchResults: {}, searchQueries: {}, searchActiveIndexes: {}, searchTimers: {}, requestEpochs: {},
       });
       state.pendingCenter = {
         activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
-        deepLinkUnavailable: false,
+        deepLinkUnavailable: false, consumedDeepLinkHash: '',
       };
       state.protectionWorkspace = { activeView: 'verification' };
       if (!canManageProtectedCustomers() && canReviewDuplicateCustomers()) {
@@ -6436,7 +6436,19 @@
     return pendingQueueRecords().findIndex(item => item.key === state.pendingCenter.selectedKey);
   }
 
+  function pendingInteractionLocked() {
+    const relevantQueueLoading = state.pendingCenter.activeTab === 'conflicts'
+      ? state.protectedCustomers.conflictsLoading
+      : state.duplicateReviews.loading;
+    return Boolean(
+      state.protectedCustomers.conflictPendingId
+      || state.duplicateReviews.pendingAction
+      || relevantQueueLoading,
+    );
+  }
+
   function movePendingSelection(delta) {
+    if (pendingInteractionLocked()) return;
     const records = pendingQueueRecords();
     const current = pendingSelectionIndex();
     const next = Math.min(records.length - 1, Math.max(0, current + delta));
@@ -6456,10 +6468,11 @@
   function pendingNavigationMarkup() {
     const records = pendingQueueRecords();
     const index = pendingSelectionIndex();
+    const interactionLocked = pendingInteractionLocked();
     return `<nav class="pending-detail-navigation" aria-label="核验记录导航">
-      <button class="button secondary tiny" type="button" data-pending-move="-1" ${index <= 0 ? 'disabled' : ''}>上一条</button>
+      <button class="button secondary tiny" type="button" data-pending-move="-1" ${interactionLocked || index <= 0 ? 'disabled' : ''}>上一条</button>
       <span>${index >= 0 ? `${index + 1} / ${records.length}` : `0 / ${records.length}`}</span>
-      <button class="button secondary tiny" type="button" data-pending-move="1" ${index >= records.length - 1 ? 'disabled' : ''}>下一条</button>
+      <button class="button secondary tiny" type="button" data-pending-move="1" ${interactionLocked || index >= records.length - 1 ? 'disabled' : ''}>下一条</button>
     </nav>`;
   }
 
@@ -6478,8 +6491,6 @@
     state.pendingCenter.deepLinkUnavailable = false;
     state.pendingCenter.selectedKey = record.key;
     state.pendingCenter.mobileDetailOpen = openMobile;
-    if (record.type === 'conflicts') state.protectedCustomers.expandedConflictId = record.raw.conflictId;
-    else state.duplicateReviews.expandedId = record.raw.id;
     renderPendingQueue();
     renderPendingDetail();
     if (focus) requestAnimationFrame(() => document.querySelector(
@@ -6511,11 +6522,7 @@
       root.innerHTML = `<div class="empty">${center.query ? '当前页没有匹配的核验记录' : '当前没有待核验客户'}</div>`;
       return;
     }
-    const interactionPending = Boolean(
-      state.protectedCustomers.conflictPendingId
-      || state.duplicateReviews.pendingAction
-      || state.duplicateReviews.loading,
-    );
+    const interactionPending = pendingInteractionLocked();
     root.innerHTML = records.map(record => {
       const selected = record.key === center.selectedKey;
       const review = record.type === 'duplicates' ? record.raw : null;
@@ -6768,9 +6775,11 @@
       state.pendingCenter.deepLinkUnavailable = false;
       return;
     }
+    if (state.pendingCenter.consumedDeepLinkHash === hash) return;
     activateProtectionView('verification');
     if (conflictId) {
       if (!canManageProtectedCustomers()) {
+        state.pendingCenter.consumedDeepLinkHash = hash;
         state.pendingCenter.selectedKey = '';
         state.pendingCenter.deepLinkUnavailable = true;
         renderPendingCenter();
@@ -6782,9 +6791,11 @@
       if (!conflictModel.conflictsLoaded) return;
       const matched = conflictModel.conflicts.find(item => item.conflictId === conflictId);
       if (matched) {
+        state.pendingCenter.consumedDeepLinkHash = hash;
         selectPendingRecord(pendingRecordKey('conflicts', matched), { openMobile: true, focus: true });
         return;
       }
+      state.pendingCenter.consumedDeepLinkHash = hash;
       state.pendingCenter.selectedKey = '';
       state.pendingCenter.mobileDetailOpen = true;
       state.pendingCenter.deepLinkUnavailable = true;
@@ -6792,6 +6803,7 @@
       return;
     }
     if (!canReviewDuplicateCustomers()) {
+      state.pendingCenter.consumedDeepLinkHash = hash;
       state.pendingCenter.selectedKey = '';
       state.pendingCenter.deepLinkUnavailable = true;
       renderPendingCenter();
@@ -6806,9 +6818,11 @@
       || (customerId && String(item.input?.externalCustomerId || '') === customerId)
       || (customerId && String(item.input?.customerId || '') === customerId));
     if (matched) {
+      state.pendingCenter.consumedDeepLinkHash = hash;
       selectPendingRecord(pendingRecordKey('duplicates', matched), { openMobile: true, focus: true });
       return;
     }
+    state.pendingCenter.consumedDeepLinkHash = hash;
     state.pendingCenter.selectedKey = '';
     state.pendingCenter.mobileDetailOpen = true;
     state.pendingCenter.deepLinkUnavailable = true;
@@ -6828,7 +6842,7 @@
       const result = await api(`/api/sales-crm/duplicate-reviews?${new URLSearchParams({
         status: 'pending', page: String(targetPage), pageSize: String(model.pageSize),
       })}`);
-      if (model.requestEpoch !== epoch) return;
+      if (model.requestEpoch !== epoch) return false;
       model.items = result.reviews || [];
       model.total = Number(result.total || 0);
       model.page = Number(result.page || targetPage);
@@ -6836,8 +6850,10 @@
       model.totalPages = Number(result.totalPages || 0);
       model.loaded = true;
       applyDuplicateReviewDeepLink();
+      return true;
     } catch (error) {
       if (model.requestEpoch === epoch) model.error = error.message || '核验记录加载失败';
+      return false;
     } finally {
       if (model.requestEpoch === epoch) {
         model.loading = false;
@@ -6925,10 +6941,10 @@
 
   async function reloadDuplicateReviewsAfterMutation(preferredIndex = 0) {
     const model = state.duplicateReviews;
-    await loadDuplicateReviews({ page: model.page });
+    if (!await loadDuplicateReviews({ page: model.page })) return false;
     const lastPage = Math.max(1, model.totalPages || 1);
-    if (model.page > lastPage) await loadDuplicateReviews({ page: lastPage });
-    return preferredIndex;
+    if (model.page > lastPage && !await loadDuplicateReviews({ page: lastPage })) return false;
+    return true;
   }
 
   async function resolveDuplicateReviewAction(reviewId, resolution, candidateCustomerId = '', note = '') {
@@ -6943,22 +6959,32 @@
     const previousIndex = pendingSelectionIndex();
     const selectedKey = state.pendingCenter.selectedKey;
     let committed = false;
+    let result;
     model.pendingAction = reviewId;
     setPendingDetailMutationState(true);
     renderPendingQueue();
     try {
-      const result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
+      result = await api(`/api/sales-crm/duplicate-reviews/${encodeURIComponent(reviewId)}/resolve`, {
         method: 'POST', body: JSON.stringify({ resolution, candidateCustomerId, note }),
       });
       committed = true;
       model.selectedIds.delete(reviewId);
+      model.items = model.items.filter(item => item.id !== reviewId);
+      model.total = Math.max(0, model.total - 1);
+      if (state.pendingCenter.selectedKey === `duplicate:${reviewId}`) state.pendingCenter.selectedKey = '';
       toast(result.deduplicated
         ? '该记录已由其他操作处理，列表已刷新'
         : resolution === 'confirmed_same' ? '已确认同一客户'
           : resolution === 'needs_info' ? '已要求补充资料，记录等待补充'
             : '已确认不是同一客户并放行');
-      await reloadDuplicateReviewsAfterMutation(previousIndex);
+      let reloadSucceeded = false;
+      try {
+        reloadSucceeded = await reloadDuplicateReviewsAfterMutation(previousIndex);
+      } catch (reloadError) {
+        reloadSucceeded = false;
+      }
       selectPendingAfterMutation(previousIndex);
+      if (!reloadSucceeded) toast('裁决已保存，但核验队列刷新失败，请手动刷新');
       try {
         await Promise.all([
           loadAuthorizedBusinessPage('intake', { reset: true }),
@@ -6969,6 +6995,10 @@
       }
       return result;
     } catch (error) {
+      if (committed) {
+        toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+        return result;
+      }
       state.pendingCenter.selectedKey = selectedKey;
       showPendingDetailError(error);
       throw error;
@@ -6989,11 +7019,12 @@
     const previousIndex = pendingSelectionIndex();
     const selectedKey = state.pendingCenter.selectedKey;
     let committed = false;
+    let result;
     model.conflictPendingId = conflictId;
     setPendingDetailMutationState(true);
     renderPendingQueue();
     try {
-      const result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+      result = await api(`/api/sales-crm/protected-customer-conflicts/${encodeURIComponent(conflictId)}/resolve`, {
         method: 'POST',
         body: JSON.stringify({
           decision: payload.decision,
@@ -7003,9 +7034,19 @@
         }),
       });
       committed = true;
+      model.conflicts = model.conflicts.filter(item => item.conflictId !== conflictId);
+      model.conflictTotal = Math.max(0, model.conflictTotal - 1);
+      model.unresolved = Math.max(0, model.unresolved - 1);
+      if (state.pendingCenter.selectedKey === `conflict:${conflictId}`) state.pendingCenter.selectedKey = '';
       toast('裁决已保存');
-      await reloadProtectedWorkspace();
+      let reloadSucceeded = false;
+      try {
+        reloadSucceeded = await reloadProtectedWorkspace();
+      } catch (reloadError) {
+        reloadSucceeded = false;
+      }
       selectPendingAfterMutation(previousIndex);
+      if (!reloadSucceeded) toast('裁决已保存，但核验队列刷新失败，请手动刷新');
       try {
         await Promise.all([
           loadAuthorizedBusinessPage('intake', { reset: true }),
@@ -7016,6 +7057,10 @@
       }
       return result;
     } catch (error) {
+      if (committed) {
+        toast('裁决已保存，但核验队列刷新失败，请手动刷新');
+        return result;
+      }
       state.pendingCenter.selectedKey = selectedKey;
       showPendingDetailError(error);
       throw error;
@@ -7198,6 +7243,7 @@
       else setProtectedInlineStatus('#pendingVerificationStatus', 'error', model.conflictsError);
       renderProtectedConflictPagination();
     }
+    return completed;
   }
 
   async function loadProtectedWorkspace() {
@@ -7274,7 +7320,7 @@
   }
 
   async function reloadProtectedWorkspace() {
-    await loadProtectedConflicts();
+    return loadProtectedConflicts();
   }
 
   async function supplementProtectedConflictAction(conflictId, action) {

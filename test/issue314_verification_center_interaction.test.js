@@ -6,6 +6,16 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
 
+function topLevelFunction(name) {
+  const pattern = new RegExp(`\\n  (?:async )?function ${name}\\(`);
+  const match = pattern.exec(app);
+  assert.ok(match, `sales-assets/app.js must define ${name}()`);
+  const next = /\n  (?:async )?function [A-Za-z0-9_$]+\(/g;
+  next.lastIndex = match.index + match[0].length;
+  const following = next.exec(app);
+  return app.slice(match.index, following?.index ?? app.length).trim();
+}
+
 test('pending center renders a selectable queue and persistent detail', () => {
   for (const signature of [
     'function pendingRecordKey',
@@ -38,20 +48,28 @@ test('sequential review keeps position and advances only after success', () => {
 });
 
 test('sequential navigation exposes keyboard-focusable bounded controls', () => {
-  assert.match(app, /data-pending-move="-1"[^>]*\$\{index <= 0 \? 'disabled' : ''\}/);
-  assert.match(app, /data-pending-move="1"[^>]*\$\{index >= records\.length - 1 \? 'disabled' : ''\}/);
+  assert.match(app, /data-pending-move="-1"[^>]*\$\{interactionLocked \|\| index <= 0 \? 'disabled' : ''\}/);
+  assert.match(app, /data-pending-move="1"[^>]*\$\{interactionLocked \|\| index >= records\.length - 1 \? 'disabled' : ''\}/);
   const start = app.indexOf("const pendingMove = event.target.closest('[data-pending-move]')");
   const end = app.indexOf("const conflictToggle", start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   assert.match(app.slice(start, end), /movePendingSelection\(Number\(pendingMove\.dataset\.pendingMove\)\)/);
+  assert.match(topLevelFunction('movePendingSelection'), /if \(pendingInteractionLocked\(\)\) return/);
+  const lock = topLevelFunction('pendingInteractionLocked');
+  assert.match(lock, /conflictPendingId/);
+  assert.match(lock, /duplicateReviews\.pendingAction/);
+  assert.match(lock, /activeTab === 'conflicts'[\s\S]*conflictsLoading[\s\S]*duplicateReviews\.loading/);
+  assert.match(topLevelFunction('pendingNavigationMarkup'), /pendingInteractionLocked\(\)/);
 });
 
 test('queue selection stays disabled while a verification mutation is pending', () => {
   const start = app.indexOf('function renderPendingQueue');
   const end = app.indexOf('function duplicateReviewCandidateDecisionMarkup', start);
   const source = app.slice(start, end);
-  assert.match(source, /state\.protectedCustomers\.conflictPendingId/);
+  assert.match(source, /pendingInteractionLocked\(\)/);
+  assert.match(topLevelFunction('pendingInteractionLocked'), /state\.protectedCustomers\.conflictPendingId/);
+  assert.match(topLevelFunction('pendingInteractionLocked'), /state\.protectedCustomers\.conflictsLoading/);
   assert.match(source, /data-pending-record-key="\$\{esc\(record\.key\)\}"[^>]*\$\{interactionPending \? 'disabled' : ''\}/);
 });
 
@@ -76,4 +94,53 @@ test('unavailable deep links render a generic state without the requested id', (
   assert.match(app, /核验记录不可用或无权查看/);
   assert.doesNotMatch(deepLink, /innerHTML[\s\S]*conflictId/);
   assert.doesNotMatch(deepLink, /innerHTML[\s\S]*reviewId/);
+});
+
+test('a consumed deep link does not overwrite post-adjudication selection during refresh render', () => {
+  const state = {
+    pendingCenter: {
+      activeTab: 'duplicates', selectedKey: '', query: '', mobileDetailOpen: false,
+      deepLinkUnavailable: false, consumedDeepLinkHash: '',
+    },
+    duplicateReviews: {
+      loaded: true,
+      items: [{ id: 'A', input: {} }, { id: 'B', input: {} }],
+    },
+    protectedCustomers: { conflictsLoaded: true, conflicts: [] },
+  };
+  const selections = [];
+  const applyDeepLink = Function(
+    'location', 'state', 'activateProtectionView', 'canManageProtectedCustomers',
+    'canReviewDuplicateCustomers', 'renderPendingCenter', 'activatePendingTab',
+    'pendingRecordKey', 'selectPendingRecord',
+    `'use strict'; return (${topLevelFunction('applyDuplicateReviewDeepLink')});`,
+  )(
+    { hash: '#protectedCustomers?review=A' },
+    state,
+    () => {},
+    () => true,
+    () => true,
+    () => {},
+    type => { state.pendingCenter.activeTab = type; },
+    (type, item) => `${type === 'duplicates' ? 'duplicate' : 'conflict'}:${item.id || item.conflictId}`,
+    key => {
+      state.pendingCenter.selectedKey = key;
+      selections.push(key);
+      return true;
+    },
+  );
+
+  applyDeepLink();
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
+
+  state.pendingCenter.selectedKey = 'duplicate:B';
+  applyDeepLink(); // refreshTodayTasksAfterAction -> refresh -> renderAll
+
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:B');
+  assert.deepEqual(selections, ['duplicate:A']);
+});
+
+test('retired inline expansion state is removed', () => {
+  assert.doesNotMatch(app, /expandedConflictId/);
+  assert.doesNotMatch(app, /expandedId/);
 });
