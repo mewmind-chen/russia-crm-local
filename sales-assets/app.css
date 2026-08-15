@@ -1069,16 +1069,11 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .returned-history-head h3{margin:8px 0 4px}
 
 @media(max-width:700px){.duplicate-review-item-head{grid-template-columns:auto 1fr;grid-template-areas:'checkbox toggle' 'summary summary' 'advice status'}.duplicate-review-item-head>label{grid-area:checkbox}.duplicate-review-item-head .duplicate-card-summary{grid-area:summary}.duplicate-review-item-head .pill{justify-self:start}.duplicate-review-item-head .button{grid-area:toggle;justify-self:end}.duplicate-review-item-head span.pill:nth-of-type(1){grid-area:advice}.duplicate-review-item-head span.pill:nth-of-type(2){grid-area:status}}
-.duplicate-review-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 10px}
-.duplicate-review-steps>div{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfcfb;display:grid;gap:3px}
-.duplicate-review-steps strong{font-size:12px}
-.duplicate-review-steps span{color:#5f706c;font-size:11px;line-height:1.45}
 .duplicate-review-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
 .duplicate-review-option{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;display:grid;gap:5px;cursor:pointer}
 .duplicate-review-option:hover{border-color:#8fbdb2}
 .duplicate-review-option:has(input:checked){border-color:var(--brand);background:#eef8f5}
 .duplicate-review-option-main{display:flex;align-items:center;gap:8px;font-size:13px}
 .duplicate-review-option small{color:#5f706c;font-size:11px;line-height:1.45}
-.duplicate-review-sync-note{margin:8px 0 0;color:var(--muted);font-size:11px}
-@media(max-width:700px){.duplicate-review-steps,.duplicate-review-options{grid-template-columns:1fr}}
+@media(max-width:700px){.duplicate-review-options{grid-template-columns:1fr}}
 .app-version-badge{margin-top:8px;padding:4px 8px;border:1px dashed var(--line);border-radius:6px;color:var(--muted);font-size:10px;text-align:center;letter-spacing:.02em}

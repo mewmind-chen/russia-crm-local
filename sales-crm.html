@@ -659,16 +659,11 @@
 
         <article id="duplicateReviewPanel" class="panel duplicate-review-panel hidden">
           <div class="panel-head">
-            <div><p class="eyebrow">可能重名的线索</p><h2>这里专门处理“可能重名”的线索</h2><p>主管不用猜能不能分配；管理员处理完，线索池会自动告诉下一步。</p></div>
+            <div><p class="eyebrow">可能重名的线索</p><h2>这里专门处理“可能重名”的线索</h2></div>
             <div class="duplicate-review-head-actions">
               <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
               <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
             </div>
-          </div>
-          <div class="duplicate-review-steps">
-            <div><strong>1 主管看到卡住原因</strong><span>线索池显示“等待核验”，不再一直转圈。</span></div>
-            <div><strong>2 管理员回答一个问题</strong><span>是不是同一个客户？不用看技术字段。</span></div>
-            <div><strong>3 系统回写结果</strong><span>允许分配、要求补资料，或关联已有客户。</span></div>
           </div>
           <div id="duplicateReviewStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
           <div id="duplicateReviewBulkBar" class="duplicate-review-bulk-bar">

@@ -6415,7 +6415,7 @@
       return `<section class="duplicate-review-item${expanded ? ' expanded' : ''}" data-duplicate-review-item="${esc(review.id)}" tabindex="-1">
         <header class="duplicate-review-item-head">
           <label><input type="checkbox" data-duplicate-review-select="${esc(review.id)}" ${selected.has(review.id) ? 'checked' : ''} ${interactionPending || protectedExact ? 'disabled' : ''}> 选择</label>
-          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span><span class="subtle">不是直接拦死，只是先保护客户不被误分配。</span></div>
+          <div class="duplicate-card-summary"><strong>${esc(input.companyName || '未填写公司名称')}</strong><span>疑似重复 ${duplicateCount} 个 · 匹配 ${esc(candidate.nickname || candidate.companyName || '已有客户')} · ${esc(shortDate(review.createdAt, true))}</span></div>
           <span class="pill">${esc(summaryAdvice)}</span>
           <span class="pill amber">${esc(summaryStatus)}</span>
           <button class="button secondary tiny" type="button" data-toggle-duplicate-review="${esc(review.id)}" ${interactionPending ? 'disabled' : ''}>${expanded ? '收起' : '查看并处理'}</button>
@@ -6447,7 +6447,7 @@
             </div>
           </section>
         </div>
-        <div class="duplicate-review-question"><strong>管理员只需要确认：它是不是已有客户？</strong><span>线索池会同步更新。</span></div>
+        <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
         <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
         <div class="duplicate-review-options">
           <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="duplicate-resolution-${esc(review.id)}" value="confirmed_same" data-duplicate-resolution="confirmed_same" data-review-id="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${candidate.customerId && !interactionPending && !protectedExact ? '' : 'disabled'}><strong>是同一个客户</strong></span><small>关联已有客户，不再分配成新客户。</small></label>
@@ -6457,7 +6457,6 @@
         <footer class="duplicate-review-actions">
           <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存处理结果</button>
         </footer>
-        <p class="duplicate-review-sync-note">保存后，主管在线索池看到明确结果，不再卡在转圈。</p>
       </section>`;
     }).join('');
   }
