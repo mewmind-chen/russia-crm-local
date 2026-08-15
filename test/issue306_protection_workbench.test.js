@@ -68,7 +68,7 @@ test('selection handler and deep links select the persistent detail', () => {
   assert.match(toggle, /selectPendingRecord\(`duplicate:\$\{reviewId\}`/);
   const deepLink = section(app, 'function applyDuplicateReviewDeepLink', 'async function loadDuplicateReviews');
   assert.match(deepLink, /selectPendingRecord\(pendingRecordKey\('duplicates', matched\)/);
-  assert.match(deepLink, /data-pending-record-key/);
+  assert.doesNotMatch(deepLink, /scrollIntoView/);
 });
 
 test('collapsed card and mobile fallback CSS exist', () => {
@@ -81,7 +81,7 @@ test('preview-aligned guidance, options, and save button', () => {
   const renderer = section(app, 'function duplicateReviewCandidateDecisionMarkup', 'function renderPendingDetail');
   assert.match(renderer, /duplicate-review-options/);
   assert.match(renderer, /data-duplicate-resolution-save/);
-  assert.match(renderer, /保存处理结果/);
+  assert.match(renderer, /保存并处理下一条/);
   assert.match(renderer, /关联已有客户，不再分配成新客户。/);
   assert.match(renderer, /放行，主管可以继续分配。/);
   assert.match(renderer, /要求补充官网、联系人或来源说明。/);

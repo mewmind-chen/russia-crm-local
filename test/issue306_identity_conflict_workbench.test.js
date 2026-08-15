@@ -38,7 +38,7 @@ test('identity conflict detail is a business workbench, not audit UI', () => {
   assert.match(renderer, /option\('link_existing', '是同一个客户'/);
   assert.match(renderer, /option\('confirm_new', '不是同一个客户'/);
   assert.match(renderer, /option\('supplement_and_retry', '资料还不够'/);
-  assert.match(renderer, /保存处理结果/);
+  assert.match(renderer, /保存并处理下一条/);
   assert.match(renderer, /leadNames/);
   assert.doesNotMatch(renderer, /normalizedName/);
   assert.doesNotMatch(renderer, /expectedVersion/);
@@ -49,7 +49,7 @@ test('identity conflict detail is a business workbench, not audit UI', () => {
 test('supplement actions render only on the resolved link_existing card', () => {
   const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
   const detailMarkup = Function(
-    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state',
+    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state', 'pendingNavigationMarkup',
     `${source}; return protectedConflictDetailMarkup;`,
   )(
     value => String(value),
@@ -57,6 +57,7 @@ test('supplement actions render only on the resolved link_existing card', () => 
     () => '联系人、官网',
     () => true,
     { protectedCustomers: { conflictPendingId: '' } },
+    () => '',
   );
   const resolvedLink = detailMarkup({
     conflictId: 'C1', status: 'resolved', decision: 'link_existing',
