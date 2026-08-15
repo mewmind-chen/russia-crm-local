@@ -6382,8 +6382,10 @@
     const decisionBlock = (resolved || retry) ? `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div><div class="subtle">${statusLabel}</div>${supplementBlock}` : `
       ${protectedConflictDecisionMarkup(item, model)}
       <label id="conflictReasonField-${esc(item.conflictId)}" class="${noCandidates ? '' : 'hidden'}">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
-      <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存并处理下一条</button>
-      <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>`;
+      <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>
+      <footer class="pending-detail-actions protected-conflict-actions">
+        <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存并处理下一条</button>
+      </footer>`;
     return `<section class="protected-conflict-detail" data-protected-conflict="${esc(item.conflictId)}">
       <header class="pending-detail-head"><div><span>身份冲突核验</span><h3>${esc(leadName)}</h3></div><span class="pill amber">${esc(statusLabel)}</span>${pendingNavigationMarkup()}<button class="text-button pending-detail-close" type="button" data-pending-detail-close>返回队列</button></header>
       <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
@@ -6487,6 +6489,46 @@
     return records;
   }
 
+  function syncPendingPaneAccessibility({ focus = '' } = {}) {
+    const workbench = $('#pendingWorkbench');
+    const queue = workbench?.querySelector('.pending-queue');
+    const detail = $('#pendingDetail');
+    if (!workbench || !queue || !detail) return;
+    const mobile = window.matchMedia('(max-width: 760px)').matches;
+    if (!mobile) state.pendingCenter.mobileDetailOpen = false;
+    const detailActive = mobile && state.pendingCenter.mobileDetailOpen;
+    const queueInactive = detailActive;
+    const detailInactive = mobile && !detailActive;
+    const queueFocusTarget = () => queue.querySelector(
+      '[data-pending-record-key][aria-pressed="true"], [data-pending-record-key], input, button',
+    ) || queue;
+    const detailFocusTarget = () => detail.querySelector(
+      '[data-pending-detail-close], button, input, textarea, select',
+    ) || detail;
+    let focusTarget = null;
+    if (focus === 'detail') focusTarget = detailActive ? detailFocusTarget() : queueFocusTarget();
+    else if (focus === 'queue') focusTarget = queueFocusTarget();
+    else if (queueInactive && queue.contains(document.activeElement)) focusTarget = detailFocusTarget();
+    else if (detailInactive && detail.contains(document.activeElement)) focusTarget = queueFocusTarget();
+    const setPaneInactive = (pane, inactive) => {
+      pane.inert = inactive;
+      pane.toggleAttribute('inert', inactive);
+      pane.setAttribute('aria-hidden', String(inactive));
+    };
+    setPaneInactive(queue, false);
+    setPaneInactive(detail, false);
+    focusTarget?.focus({ preventScroll: true });
+    setPaneInactive(queue, queueInactive);
+    setPaneInactive(detail, detailInactive);
+    workbench.classList.toggle('mobile-detail-open', detailActive);
+    detail.classList.toggle('mobile-detail-open', detailActive);
+  }
+
+  function closePendingMobileDetail() {
+    state.pendingCenter.mobileDetailOpen = false;
+    syncPendingPaneAccessibility({ focus: 'queue' });
+  }
+
   function selectPendingRecord(key, { openMobile = false, focus = false } = {}) {
     const record = pendingQueueRecords().find(item => item.key === key);
     if (!record) return false;
@@ -6495,9 +6537,7 @@
     state.pendingCenter.mobileDetailOpen = openMobile;
     renderPendingQueue();
     renderPendingDetail();
-    if (focus) requestAnimationFrame(() => document.querySelector(
-      `[data-pending-record-key="${CSS.escape(record.key)}"]`,
-    )?.focus());
+    syncPendingPaneAccessibility({ focus: openMobile ? 'detail' : focus ? 'queue' : '' });
     return true;
   }
 
@@ -6516,17 +6556,19 @@
     const error = center.activeTab === 'conflicts' ? model.conflictsError : model.error;
     const search = $('#pendingQueueSearch');
     if (search && search.value !== center.query) search.value = center.query;
-    $('#pendingWorkbench')?.classList.toggle('mobile-detail-open', center.mobileDetailOpen);
     if (loading && !records.length) {
       root.innerHTML = '<div class="empty">正在加载待核验记录…</div>';
+      syncPendingPaneAccessibility();
       return;
     }
     if (error && !records.length) {
       root.innerHTML = '<div class="empty">核验记录加载失败，请刷新重试。</div>';
+      syncPendingPaneAccessibility();
       return;
     }
     if (!records.length) {
       root.innerHTML = `<div class="empty">${center.query ? '当前页没有匹配的核验记录' : '当前没有待核验客户'}</div>`;
+      syncPendingPaneAccessibility();
       return;
     }
     const interactionPending = pendingInteractionLocked();
@@ -6539,6 +6581,7 @@
         <span class="pending-queue-record-meta"><span class="pill amber">${esc(record.risk)}</span><span>${esc(record.status)}</span><time>${esc(record.time ? shortDate(record.time, true) : '—')}</time></span>
       </button></div>`;
     }).join('');
+    syncPendingPaneAccessibility();
   }
 
   function duplicateReviewCandidateDecisionMarkup(review, interactionPending) {
@@ -6603,10 +6646,10 @@
       <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
       <div class="duplicate-review-evidence"><strong>匹配依据</strong><div>${protectedExact ? '<span class="pill red">官网主域名或规范名称精确命中保护客户，禁止人工放行</span>' : duplicateEvidenceMarkup(candidate)}</div></div>
       <div class="duplicate-review-options">${duplicateReviewDecisionMarkup(review, interactionPending)}</div>
-      <footer class="duplicate-review-actions">
+      <p class="protected-operation-status" data-duplicate-message role="status" aria-live="polite"></p>
+      <footer class="pending-detail-actions duplicate-review-actions">
         <button class="button primary" type="button" data-duplicate-resolution-save="${esc(review.id)}" data-candidate-id="${esc(candidate.customerId || '')}" ${interactionPending || protectedExact ? 'disabled' : ''}>保存并处理下一条</button>
       </footer>
-      <p class="protected-operation-status" data-duplicate-message role="status" aria-live="polite"></p>
     </section>`;
   }
 
@@ -6615,16 +6658,19 @@
     if (!root) return;
     if (state.pendingCenter.deepLinkUnavailable) {
       root.innerHTML = '<div class="empty">核验记录不可用或无权查看</div>';
+      syncPendingPaneAccessibility();
       return;
     }
     const record = ensurePendingSelection().find(item => item.key === state.pendingCenter.selectedKey);
     if (!record) {
       root.innerHTML = '<div class="empty">从左侧队列选择一条核验记录</div>';
+      syncPendingPaneAccessibility();
       return;
     }
     root.innerHTML = record.type === 'conflicts'
       ? protectedConflictDetailMarkup(record.raw)
       : duplicateReviewDetailMarkup(record.raw);
+    syncPendingPaneAccessibility();
   }
 
   function setPendingInteractionLock(pending) {
@@ -12238,8 +12284,7 @@
       selectPendingRecordFromQueue(pendingRecord.dataset.pendingRecordKey);
     }
     if (event.target.closest('[data-pending-detail-close]')) {
-      state.pendingCenter.mobileDetailOpen = false;
-      renderPendingQueue();
+      closePendingMobileDetail();
     }
     const pendingMove = event.target.closest('[data-pending-move]');
     if (pendingMove) movePendingSelection(Number(pendingMove.dataset.pendingMove));
@@ -13151,5 +13196,8 @@
   });
 
   initializeDataTableOverflowHints();
+  const pendingPaneMedia = window.matchMedia('(max-width: 760px)');
+  pendingPaneMedia.addEventListener?.('change', syncPendingPaneAccessibility);
+  syncPendingPaneAccessibility();
   load();
 })();

@@ -38,6 +38,106 @@ test('pending center renders a selectable queue and persistent detail', () => {
   assert.match(app, /selectedKey/);
 });
 
+test('mobile pane accessibility exposes only the active pane and clears on desktop', () => {
+  const attributes = () => ({
+    values: new Map(),
+    setAttribute(name, value) { this.values.set(name, value); },
+    toggleAttribute(name, enabled) {
+      if (enabled) this.values.set(name, '');
+      else this.values.delete(name);
+    },
+    get(name) { return this.values.get(name); },
+  });
+  const document = { activeElement: null };
+  const focusTarget = pane => ({
+    pane,
+    focus() {
+      const owner = pane === 'queue' ? queue : detail;
+      if (!owner.inert) document.activeElement = this;
+    },
+  });
+  const queueTarget = focusTarget('queue');
+  const detailTarget = focusTarget('detail');
+  const queue = {
+    inert: false,
+    ...attributes(),
+    contains: node => node?.pane === 'queue',
+    querySelector: () => queueTarget,
+  };
+  const detailClasses = new Set();
+  const detail = {
+    inert: false,
+    ...attributes(),
+    contains: node => node?.pane === 'detail',
+    querySelector: () => detailTarget,
+    classList: { toggle: (name, enabled) => enabled ? detailClasses.add(name) : detailClasses.delete(name) },
+  };
+  const workbenchClasses = new Set();
+  const workbench = {
+    querySelector: selector => selector === '.pending-queue' ? queue : null,
+    classList: { toggle: (name, enabled) => enabled ? workbenchClasses.add(name) : workbenchClasses.delete(name) },
+  };
+  const state = { pendingCenter: { selectedKey: 'conflict:A', mobileDetailOpen: false } };
+  const media = { matches: true };
+  const window = { matchMedia: () => media };
+  const syncPendingPaneAccessibility = Function(
+    '$', 'state', 'window', 'document',
+    `'use strict'; return (${topLevelFunction('syncPendingPaneAccessibility')});`,
+  )(selector => ({ '#pendingWorkbench': workbench, '#pendingDetail': detail }[selector]), state, window, document);
+
+  syncPendingPaneAccessibility({ focus: 'queue' });
+  assert.equal(queue.inert, false);
+  assert.equal(queue.get('aria-hidden'), 'false');
+  assert.equal(detail.inert, true);
+  assert.equal(detail.get('aria-hidden'), 'true');
+  assert.equal(document.activeElement, queueTarget);
+
+  state.pendingCenter.mobileDetailOpen = true;
+  syncPendingPaneAccessibility({ focus: 'detail' });
+  assert.equal(queue.inert, true);
+  assert.equal(queue.get('aria-hidden'), 'true');
+  assert.equal(detail.inert, false);
+  assert.equal(detail.get('aria-hidden'), 'false');
+  assert.equal(document.activeElement, detailTarget);
+  assert.equal(workbenchClasses.has('mobile-detail-open'), true);
+  assert.equal(detailClasses.has('mobile-detail-open'), true);
+
+  state.pendingCenter.mobileDetailOpen = false;
+  syncPendingPaneAccessibility({ focus: 'queue' });
+  assert.equal(document.activeElement, queueTarget);
+
+  media.matches = false;
+  syncPendingPaneAccessibility();
+  assert.equal(state.pendingCenter.mobileDetailOpen, false);
+  assert.equal(queue.inert, false);
+  assert.equal(detail.inert, false);
+  assert.equal(queue.get('aria-hidden'), 'false');
+  assert.equal(detail.get('aria-hidden'), 'false');
+});
+
+test('mobile back preserves selection and returns focus to the queue', () => {
+  const state = { pendingCenter: { selectedKey: 'duplicate:A', mobileDetailOpen: true } };
+  const syncCalls = [];
+  const closePendingMobileDetail = Function(
+    'state', 'syncPendingPaneAccessibility',
+    `'use strict'; return (${topLevelFunction('closePendingMobileDetail')});`,
+  )(state, options => syncCalls.push(options));
+
+  closePendingMobileDetail();
+  assert.equal(state.pendingCenter.mobileDetailOpen, false);
+  assert.equal(state.pendingCenter.selectedKey, 'duplicate:A');
+  assert.deepEqual(syncCalls, [{ focus: 'queue' }]);
+  assert.match(app, /if \(event\.target\.closest\('\[data-pending-detail-close\]'\)\) \{\s*closePendingMobileDetail\(\);/);
+});
+
+test('selection and render lifecycle synchronize mobile pane accessibility', () => {
+  assert.match(topLevelFunction('selectPendingRecord'), /syncPendingPaneAccessibility\(\{ focus:/);
+  assert.match(topLevelFunction('renderPendingQueue'), /syncPendingPaneAccessibility\(\)/);
+  assert.match(topLevelFunction('renderPendingDetail'), /syncPendingPaneAccessibility\(\)/);
+  assert.match(app, /matchMedia\('\(max-width: 760px\)'\)/);
+  assert.match(app, /addEventListener\?\.\('change', syncPendingPaneAccessibility\)/);
+});
+
 test('identity decision UI adapts to candidate availability', () => {
   assert.match(app, /function protectedConflictDecisionMarkup/);
   assert.match(app, /function duplicateReviewDecisionMarkup/);
