@@ -6316,6 +6316,24 @@
     return String(crmNames[0] && crmNames[0].externalCustomerId || '');
   }
 
+  // Pending-card decision options, gated to what the backend adjudication accepts
+  // (Ruling 14): link_existing needs one CRM-side target; confirm_new is only
+  // accepted by the backend once the conflict is no longer live; supplement_and_retry
+  // is always available. Unavailable options stay visible but disabled with a
+  // business-language hint so the manager never clicks into a dead-end error.
+  function protectedConflictPendingOptions(item, model) {
+    const linkTarget = protectedConflictTargetExternalCustomerId(item, 'link_existing');
+    const live = (Array.isArray(item.leadExternalCustomerIds) && item.leadExternalCustomerIds.length > 0)
+      || (Array.isArray(item.crmExternalCustomerIds) && item.crmExternalCustomerIds.length > 0);
+    const locked = !protectedWritesAvailable() || model.conflictPendingId === item.conflictId;
+    const option = (value, label, enabled, hint) => `<label class="duplicate-review-option${enabled ? '' : ' is-unavailable'}"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="${value}" ${!enabled || locked ? 'disabled' : ''}><strong>${label}</strong></span>${enabled ? '' : `<small>${hint}</small>`}</label>`;
+    return [
+      option('link_existing', '是同一个客户', Boolean(linkTarget), '当前线索没有可关联的已有客户，暂不能合并'),
+      option('confirm_new', '不是同一个客户', !live, '需先补充资料或等待证据变化后再确认'),
+      option('supplement_and_retry', '资料还不够', true, ''),
+    ].join('');
+  }
+
   function renderProtectedConflicts() {
     if (state.pendingCenter.activeTab !== 'conflicts') return;
     const root = $('#pendingVerificationList');
@@ -6362,9 +6380,7 @@
     const decisionBlock = (resolved || retry)
       ? `<div class="subtle">${statusLabel}</div>${supplementBlock}`
       : `<div class="duplicate-review-options">
-      <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="link_existing"><strong>是同一个客户</strong></span></label>
-      <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="confirm_new"><strong>不是同一个客户</strong></span></label>
-      <label class="duplicate-review-option"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="supplement_and_retry"><strong>资料还不够</strong></span></label>
+      ${protectedConflictPendingOptions(item, model)}
     </div>
     <label id="conflictReasonField-${esc(item.conflictId)}" class="hidden">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
     <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存处理结果</button>

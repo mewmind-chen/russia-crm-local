@@ -1075,5 +1075,7 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 .duplicate-review-option:has(input:checked){border-color:var(--brand);background:#eef8f5}
 .duplicate-review-option-main{display:flex;align-items:center;gap:8px;font-size:13px}
 .duplicate-review-option small{color:#5f706c;font-size:11px;line-height:1.45}
+.duplicate-review-option.is-unavailable{cursor:not-allowed;opacity:.72}
+.duplicate-review-option.is-unavailable .duplicate-review-option-main{color:#5f706c}
 @media(max-width:700px){.duplicate-review-options{grid-template-columns:1fr}}
 .app-version-badge{margin-top:8px;padding:4px 8px;border:1px dashed var(--line);border-radius:6px;color:var(--muted);font-size:10px;text-align:center;letter-spacing:.02em}

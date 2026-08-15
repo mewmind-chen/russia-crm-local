@@ -31,12 +31,12 @@ test('pending center merges both types with per-type tabs', () => {
 });
 
 test('identity conflict cards are business workbench, not audit UI', () => {
-  const renderer = section(app, 'function renderProtectedConflicts', 'function duplicateEvidenceMarkup');
+  const renderer = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
   assert.match(renderer, /疑似重名 · 匹配 /);
   assert.match(renderer, /是不是同一个客户？/);
-  assert.match(renderer, /value="link_existing"/);
-  assert.match(renderer, /value="confirm_new"/);
-  assert.match(renderer, /value="supplement_and_retry"/);
+  assert.match(renderer, /option\('link_existing', '是同一个客户'/);
+  assert.match(renderer, /option\('confirm_new', '不是同一个客户'/);
+  assert.match(renderer, /option\('supplement_and_retry', '资料还不够'/);
   assert.match(renderer, /保存处理结果/);
   assert.match(renderer, /leadNames/);
   assert.doesNotMatch(renderer, /normalizedName/);
@@ -46,7 +46,7 @@ test('identity conflict cards are business workbench, not audit UI', () => {
 });
 
 test('supplement actions render only on the resolved link_existing card', () => {
-  const source = section(app, 'function protectedConflictCardMarkup', 'function duplicateEvidenceMarkup');
+  const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
   const cardMarkup = Function(
     'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable',
     `${source}; return protectedConflictCardMarkup;`,
@@ -75,6 +75,52 @@ test('supplement actions render only on the resolved link_existing card', () => 
   assert.doesNotMatch(pending, /补充到主客户/);
   assert.doesNotMatch(pending, /暂不补充/);
   assert.doesNotMatch(pending, /可补充资料/);
+});
+
+test('pending decision options are gated to what the backend accepts', () => {
+  const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
+  const cardMarkup = Function(
+    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable',
+    `${source}; return protectedConflictCardMarkup;`,
+  )(
+    value => String(value),
+    () => '<dl class="duplicate-review-facts"></dl>',
+    () => '',
+    () => true,
+  );
+  const render = (item) => cardMarkup(item, { expandedConflictId: item.conflictId, conflictPendingId: '' });
+
+  // Live lead-only conflict (the real production shape): link + confirm disabled with hints, retry enabled.
+  const leadOnly = render({
+    conflictId: 'L1', status: 'unresolved',
+    leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
+    crmNames: [],
+    leadExternalCustomerIds: ['LEAD-A', 'LEAD-B'], crmExternalCustomerIds: [],
+  });
+  assert.match(leadOnly, /value="link_existing"[^>]*disabled/);
+  assert.match(leadOnly, /当前线索没有可关联的已有客户/);
+  assert.match(leadOnly, /value="confirm_new"[^>]*disabled/);
+  assert.match(leadOnly, /需先补充资料或等待证据变化后再确认/);
+  assert.doesNotMatch(leadOnly, /value="supplement_and_retry"[^>]*disabled/);
+
+  // Live conflict with one CRM side: link enabled, confirm still disabled.
+  const withCrm = render({
+    conflictId: 'L2', status: 'unresolved',
+    leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
+    crmNames: [{ rawName: '主客户', externalCustomerId: 'MASTER-1' }],
+    leadExternalCustomerIds: ['LEAD-A'], crmExternalCustomerIds: ['MASTER-1'],
+  });
+  assert.doesNotMatch(withCrm, /value="link_existing"[^>]*disabled/);
+  assert.match(withCrm, /value="confirm_new"[^>]*disabled/);
+
+  // Stored-only (non-live, reopened) item: confirm enabled, link disabled (no crm side).
+  const storedOnly = render({
+    conflictId: 'L3', status: 'unresolved',
+    leadNames: [], crmNames: [],
+    leadExternalCustomerIds: [], crmExternalCustomerIds: [],
+  });
+  assert.match(storedOnly, /value="link_existing"[^>]*disabled/);
+  assert.doesNotMatch(storedOnly, /value="confirm_new"[^>]*disabled/);
 });
 
 test('save handler sends the state version and a business default reason', () => {
