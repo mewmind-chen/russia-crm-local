@@ -649,31 +649,34 @@
       </section>
 
       <section id="protectedCustomersView" class="view protected-customers-view">
-        <div class="section-intro protected-intro">
-          <div><p class="eyebrow">客户保护与查重</p><h2>客户保护与查重</h2><p>在同一工作区处理客户身份保护、疑似重复核验与可审计的身份结论。</p></div>
+        <div class="section-intro protected-intro verification-page-header">
+          <div><p class="eyebrow">客户保护与查重</p><h2>客户保护与查重</h2><p class="verification-page-description">处理客户身份冲突，确保客户归属清晰且数据不重复。</p></div>
+          <button id="verificationHelpBtn" class="button secondary verification-help" type="button"><span data-tp-icon="help" aria-hidden="true"></span>处理说明</button>
         </div>
 
-        <nav id="protectionWorkspaceTabs" class="protection-workspace-tabs" role="tablist" aria-label="客户保护功能">
+        <nav id="protectionWorkspaceTabs" class="protection-workspace-tabs verification-status-tabs" role="tablist" aria-label="客户保护功能">
           <button class="active" type="button" role="tab" aria-selected="true" data-protection-view="verification">待核验中心 <b id="protectionVerificationCount">0</b></button>
           <button type="button" role="tab" aria-selected="false" data-protection-view="directory">保护客户</button>
           <button type="button" role="tab" aria-selected="false" data-protection-view="import">批量导入</button>
         </nav>
 
-        <article id="pendingVerificationPanel" class="panel pending-verification-panel hidden" data-protection-panel="verification">
-          <div class="panel-head">
-            <div><p class="eyebrow">待核验</p><h2>待核验中心</h2></div>
+        <article id="pendingVerificationPanel" class="pending-verification-panel hidden" data-protection-panel="verification">
+          <div class="verification-toolbar">
             <div id="pendingTypeTabs" class="pending-type-tabs" role="tablist">
               <button type="button" role="tab" data-pending-type="conflicts">身份冲突待处理 <b data-pending-count="conflicts">…</b></button>
               <button type="button" role="tab" data-pending-type="duplicates">重复核验待处理 <b data-pending-count="duplicates">…</b></button>
             </div>
-          </div>
-          <div id="pendingDuplicatesToolbar" class="pending-toolbar hidden">
-            <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
-            <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
-          </div>
-          <div id="pendingConflictsToolbar" class="pending-toolbar hidden">
-            <label>显示<select id="protectedConflictStatus"><option value="unresolved">待处理</option><option value="all">全部记录</option><option value="resolved">已解决</option><option value="retry">待补充</option></select></label>
-            <button id="protectedRescanBtn" class="button secondary" type="button">重新扫描</button>
+            <div class="verification-tools">
+              <label class="verification-search"><span data-tp-icon="search" aria-hidden="true"></span><span class="sr-only">搜索当前页客户名称或编号</span><input id="pendingQueueSearch" type="search" autocomplete="off" placeholder="搜索当前页客户名称或编号"></label>
+              <div id="pendingDuplicatesToolbar" class="pending-toolbar hidden">
+                <button id="duplicateReviewRefresh" class="button secondary" type="button">刷新</button>
+                <button id="duplicateReviewRecalculate" class="button secondary" type="button">按新规则重算</button>
+              </div>
+              <div id="pendingConflictsToolbar" class="pending-toolbar hidden">
+                <label><span class="sr-only">显示状态</span><select id="protectedConflictStatus" aria-label="显示状态"><option value="unresolved">待处理</option><option value="all">全部记录</option><option value="resolved">已解决</option><option value="retry">待补充</option></select></label>
+                <button id="protectedRescanBtn" class="button secondary" type="button">重新扫描</button>
+              </div>
+            </div>
           </div>
           <div id="pendingVerificationStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
           <div id="duplicateReviewBulkBar" class="duplicate-review-bulk-bar hidden">
@@ -683,7 +686,7 @@
           </div>
           <div id="pendingWorkbench" class="pending-workbench">
             <aside class="pending-queue" aria-label="待核验队列">
-              <label class="pending-queue-search">搜索当前页客户名称或编号<input id="pendingQueueSearch" type="search" autocomplete="off" placeholder="输入名称或编号"></label>
+              <div class="pending-queue-heading"><strong>待核验队列</strong><span>按进入时间排序</span></div>
               <div id="pendingQueueList" class="pending-queue-list"></div>
               <div id="pendingQueuePagination" class="shared-pagination" data-pagination="protected_conflicts"></div>
             </aside>

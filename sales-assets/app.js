@@ -6317,15 +6317,38 @@
       .join('、');
   }
 
-  function protectedConflictTargetExternalCustomerId(item, decision = 'link_existing') {
-    if (decision !== 'link_existing') return '';
-    const crmNames = Array.isArray(item && item.crmNames) ? item.crmNames : [];
-    if (crmNames.length !== 1) return '';
-    return String(crmNames[0] && crmNames[0].externalCustomerId || '');
+  function protectedConflictIdentityRecords(item) {
+    const records = Array.isArray(item?.identityRecords) ? item.identityRecords : [];
+    if (records.length) return records.filter(record => record?.externalCustomerId);
+    return [
+      ...(Array.isArray(item?.leadNames) ? item.leadNames : [])
+        .map(record => ({ ...record, recordType: 'lead', companyName: record.rawName || '' })),
+      ...(Array.isArray(item?.crmNames) ? item.crmNames : [])
+        .map(record => ({ ...record, recordType: 'crm', companyName: record.rawName || '' })),
+    ].filter(record => record.externalCustomerId);
   }
 
-  // Pending-card decision options, gated to what the backend adjudication accepts
-  // (Ruling 14): link_existing needs one CRM-side target; confirm_new is only
+  function protectedConflictComparisonState(item) {
+    const records = protectedConflictIdentityRecords(item);
+    const subject = records.find(record => record.recordType === 'lead') || records[0] || null;
+    const candidates = records.filter(record => record.externalCustomerId !== subject?.externalCustomerId);
+    const requested = String(item?.selectedTargetExternalCustomerId || '');
+    const selected = candidates.find(record => record.externalCustomerId === requested)
+      || candidates.find(record => record.recordType === 'crm') || candidates[0] || null;
+    return { subject, candidates, selected };
+  }
+
+  function protectedConflictTargetExternalCustomerId(item, decision = 'link_existing', selectedId = '') {
+    if (decision !== 'link_existing') return '';
+    const comparison = protectedConflictComparisonState({
+      ...item,
+      selectedTargetExternalCustomerId: selectedId || item?.selectedTargetExternalCustomerId || '',
+    });
+    return String(comparison.selected?.externalCustomerId || '');
+  }
+
+  // Pending-card decision options, gated to what the backend adjudication accepts.
+  // link_existing needs one comparable identity target; confirm_new is only
   // accepted by the backend once the conflict is no longer live; supplement_and_retry
   // is always available. Unavailable options stay visible but disabled with a
   // business-language hint so the manager never clicks into a dead-end error.
@@ -6336,34 +6359,54 @@
     const locked = !protectedWritesAvailable() || model.conflictPendingId === item.conflictId;
     const option = (value, label, enabled, hint) => `<label class="duplicate-review-option${enabled ? '' : ' is-unavailable'}"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="${value}" ${!enabled || locked ? 'disabled' : ''}><strong>${label}</strong></span>${enabled ? '' : `<small>${hint}</small>`}</label>`;
     return [
-      option('link_existing', '是同一个客户', Boolean(linkTarget), '请选择唯一可关联的已有客户'),
+      option('link_existing', '是同一个客户', Boolean(linkTarget), '请选择一条记录作为主记录'),
       option('confirm_new', '不是同一个客户', !live, '需先补充资料或等待证据变化后再确认'),
       option('supplement_and_retry', '资料还不够', true, ''),
     ].join('');
   }
 
   function protectedConflictComparisonMarkup(item) {
-    const leadName = item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
-    const crmName = item.crmNames?.[0]?.rawName || item.crmNames?.[0]?.externalCustomerId || '';
-    return `<div class="duplicate-review-comparison">
-      <section class="duplicate-review-side submitted"><div class="duplicate-review-side-title"><span>这条新线索</span><strong>${esc(leadName)}</strong></div>${duplicateFacts([['客户编号', esc(item.leadNames?.[0]?.externalCustomerId || '—')]])}</section>
-      <section class="duplicate-review-side existing"><div class="duplicate-review-side-title"><span>疑似已有客户</span><strong>${esc(crmName || '未识别')}</strong></div>${duplicateFacts([['客户编号', esc(item.crmNames?.[0]?.externalCustomerId || '—')]])}</section>
-    </div>`;
+    const { subject, candidates, selected } = protectedConflictComparisonState(item);
+    if (!subject || !selected) return '';
+    const targetLabel = selected.recordType === 'crm' ? '疑似已有客户' : '疑似同名线索';
+    const displayName = record => record?.companyName || record?.nickname || record?.rawName || record?.externalCustomerId || '—';
+    const region = record => [record?.country, record?.city].filter(Boolean).join(' · ') || '—';
+    const fields = [
+      ['国家/地区', region(subject), region(selected)],
+      ['官方网站', subject.website || '—', selected.website || '—'],
+      ['联系邮箱', subject.email || '—', selected.email || '—'],
+      ['所属行业', subject.industry || '—', selected.industry || '—'],
+    ];
+    const rowMarkup = fields.map(([label, submitted, existing]) => {
+      const differs = String(submitted).trim().toLocaleLowerCase('und') !== String(existing).trim().toLocaleLowerCase('und');
+      const className = differs ? ' class="different"' : '';
+      return `<div class="identity-comparison-row"><div>${esc(label)}</div><div${className}>${esc(submitted)}</div><div${className}>${esc(existing)}</div></div>`;
+    }).join('');
+    const picker = candidates.length > 1 ? `<label class="pending-candidate-picker">选择比较记录<select data-conflict-target="${esc(item.conflictId)}">${candidates.map(candidate => `<option value="${esc(candidate.externalCustomerId)}" ${candidate.externalCustomerId === selected.externalCustomerId ? 'selected' : ''}>${esc(candidate.companyName || candidate.nickname || candidate.rawName || candidate.externalCustomerId)} · ${esc(candidate.externalCustomerId)}</option>`).join('')}</select></label>`
+      : `<input type="hidden" data-conflict-target="${esc(item.conflictId)}" value="${esc(selected.externalCustomerId)}">`;
+    return `<div class="identity-comparison">
+      <div class="identity-comparison-head"><div>对比字段</div><div><span>这条新线索</span><strong>${esc(displayName(subject))}</strong><small>${esc(subject.externalCustomerId || '—')}</small></div><div><span>${targetLabel}</span><strong>${esc(displayName(selected))}</strong><small>${esc(selected.externalCustomerId || '—')}</small></div></div>
+      ${rowMarkup}
+    </div>${picker}`;
   }
 
   function protectedConflictDecisionMarkup(item, model) {
-    const candidates = Array.isArray(item.crmNames) ? item.crmNames : [];
-    if (!candidates.length) {
-      return `<div class="pending-evidence-empty">
-        <strong>没有可比较的已有客户</strong>
+    const comparison = protectedConflictComparisonState(item);
+    if (!comparison.subject || !comparison.candidates.length) {
+      return `<div class="pending-section-title"><div><h3>身份核验</h3><p>当前只有一条身份记录，需要补充资料后重新匹配。</p></div></div>
+      <div class="pending-evidence-empty">
+        <strong>没有第二条身份记录可供比较</strong>
         <p>补充官网、企业注册号、公司邮箱或所在国家后重新核验。</p>
       </div>
+      <div class="pending-section-title pending-decision-title"><div><h3>处理决定</h3><p>当前只能要求提交人补充身份资料。</p></div></div>
       <label class="pending-decision-option">
         <input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="supplement_and_retry" checked>
         <span><strong>要求补充资料</strong><small>退回补充身份信息后重新核验</small></span>
       </label>`;
     }
-    return `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div>
+    return `<div class="pending-section-title"><div><h3>是不是同一个客户？</h3><p>先查看系统找到的记录，再做处理决定。</p></div></div>
+      <div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div>
+      <div class="pending-section-title pending-decision-title"><div><h3>处理决定</h3><p>选择最符合现有证据的处理结果。</p></div></div>
       <div class="pending-decision-options">${protectedConflictPendingOptions(item, model)}</div>`;
   }
 
@@ -6371,24 +6414,33 @@
     const model = state.protectedCustomers;
     const resolved = item.status === 'resolved';
     const retry = item.status === 'retry';
-    const leadName = item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
+    const comparison = protectedConflictComparisonState(item);
+    const subject = comparison.subject || {};
+    const leadName = subject.companyName
+      || item.leadNames?.[0]?.rawName || item.leadNames?.[0]?.externalCustomerId || '待核验线索';
     const statusLabel = resolved ? (item.decision === 'link_existing' ? '已关联主客户' : '已确认为新身份') : retry ? '待补充资料' : '等待管理员核验';
     const supplementBlock = resolved && item.decision === 'link_existing' && item.complementaryInfo ? `<div class="protected-conflict-supplement">
       <span>可补充资料：${protectedConflictSupplementFlags(item.complementaryInfo)}</span>
       <button type="button" class="button secondary tiny" data-supplement-apply="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>补充到主客户</button>
       <button type="button" class="button secondary tiny" data-supplement-skip="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>暂不补充</button>
     </div>` : '';
-    const noCandidates = !(Array.isArray(item.crmNames) && item.crmNames.length);
+    const noCandidates = !protectedConflictComparisonState(item).candidates.length;
     const decisionBlock = (resolved || retry) ? `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div><div class="subtle">${statusLabel}</div>${supplementBlock}` : `
       ${protectedConflictDecisionMarkup(item, model)}
       <label id="conflictReasonField-${esc(item.conflictId)}" class="${noCandidates ? '' : 'hidden'}">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
       <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>
       <footer class="pending-detail-actions protected-conflict-actions">
+        <button class="button secondary" type="button" data-pending-detail-close>暂不处理</button>
         <button class="button primary" type="button" data-save-protected-conflict="${esc(item.conflictId)}" ${!protectedWritesAvailable() || model.conflictPendingId === item.conflictId ? 'disabled' : ''}>保存并处理下一条</button>
       </footer>`;
     return `<section class="protected-conflict-detail" data-protected-conflict="${esc(item.conflictId)}">
       <header class="pending-detail-head"><div><span>身份冲突核验</span><h3>${esc(leadName)}</h3></div><span class="pill amber">${esc(statusLabel)}</span>${pendingNavigationMarkup()}<button class="text-button pending-detail-close" type="button" data-pending-detail-close>返回队列</button></header>
-      <div class="duplicate-review-question"><strong>是不是同一个客户？</strong></div>
+      <div class="pending-detail-summary">
+        <div><span>记录类型</span><strong>${subject.recordType === 'crm' ? 'CRM 客户' : '线索池'}</strong></div>
+        <div><span>客户编号</span><strong>${esc(subject.externalCustomerId || '—')}</strong></div>
+        <div><span>更新时间</span><strong>${esc(subject.updatedAt || subject.createdAt || '—')}</strong></div>
+        <div><span>风险类型</span><strong>${comparison.selected?.recordType === 'crm' ? '疑似已有客户' : '疑似重名'}</strong></div>
+      </div>
       ${decisionBlock}
     </section>`;
   }
@@ -6416,9 +6468,9 @@
     if (state.pendingCenter.activeTab === 'conflicts') {
       records = state.protectedCustomers.conflicts.map(item => ({
         key: pendingRecordKey('conflicts', item), type: 'conflicts', raw: item,
-        name: item.leadNames?.[0]?.rawName || '待核验线索',
-        reference: item.leadNames?.[0]?.externalCustomerId || '',
-        risk: item.crmNames?.length ? '疑似已有客户' : '疑似重名',
+        name: protectedConflictComparisonState(item).subject?.companyName || item.leadNames?.[0]?.rawName || '待核验线索',
+        reference: protectedConflictComparisonState(item).subject?.externalCustomerId || item.leadNames?.[0]?.externalCustomerId || '',
+        risk: protectedConflictComparisonState(item).selected?.recordType === 'crm' ? '疑似已有客户' : '疑似重名',
         status: item.status === 'retry' ? '待补充资料' : item.status === 'resolved' ? '已解决' : '待管理员确认',
         time: item.createdAt || item.updatedAt || '',
       }));
@@ -9287,6 +9339,15 @@
       focusTarget?.focus?.();
     });
   }
+
+  function openVerificationHelp() {
+    openModal('待核验中心处理说明', '客户身份核验', `<div class="verification-help-content">
+      <section><h3>身份冲突</h3><p>对比新线索与系统找到的同名记录。确认相同时，选择应保留的主记录；证据不足时，退回补充官网、邮箱或注册信息。</p></section>
+      <section><h3>重复核验</h3><p>核对可靠证据和参考信号，确认两条记录应合并、保持独立，或需要继续补充信息。</p></section>
+      <section><h3>处理顺序</h3><p>队列按进入时间排列。保存后系统自动打开下一条，已处理记录可通过状态筛选再次查看。</p></section>
+    </div>`, 'verification-help-modal');
+  }
+
   function closeModal() {
     clearTimeout(state.activityCustomerSearchTimer);
     state.activityCustomerRequestEpoch += 1;
@@ -12310,7 +12371,14 @@
       const reason = String(rawReason).trim()
         || (decision === 'link_existing' ? '管理员确认为同一客户'
           : decision === 'confirm_new' ? '管理员确认不是同一客户' : '');
-      const targetExternalCustomerId = protectedConflictTargetExternalCustomerId(item, decision);
+      const selectedTargetExternalCustomerId = document.querySelector(
+        `[data-conflict-target="${CSS.escape(conflictId)}"]`,
+      )?.value || item.selectedTargetExternalCustomerId || '';
+      const targetExternalCustomerId = protectedConflictTargetExternalCustomerId(
+        item,
+        decision,
+        selectedTargetExternalCustomerId,
+      );
       try {
         await resolveProtectedConflictAction(conflictId, {
           decision, targetExternalCustomerId,
@@ -13008,8 +13076,16 @@
       loadAiTasks.timer = setTimeout(() => void loadAiTasks({ reset: true }), 250);
     }
   });
-  document.addEventListener('change', event => {
-    if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
+    document.addEventListener('change', event => {
+      if (event.target.matches('[data-conflict-target]')) {
+        const conflictId = event.target.dataset.conflictTarget;
+        const item = state.protectedCustomers.conflicts.find(row => row.conflictId === conflictId);
+        if (item) {
+          item.selectedTargetExternalCustomerId = event.target.value;
+          renderPendingDetail();
+        }
+      }
+      if (event.target.id === 'insightCoverageFilter') renderInsightsHub();
     if (event.target.matches('select[data-role-source]')) {
       const form = event.target.closest('form');
       const groupSelect = form?.querySelector('select[data-role-group]');
@@ -13047,6 +13123,7 @@
     await api('/api/sales-auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
     location.reload();
   });
+  $('#verificationHelpBtn')?.addEventListener('click', openVerificationHelp);
   document.addEventListener('keydown', event => {
     if (event.key === 'Tab' && $('#modal').classList.contains('open')) {
       const focusable = Array.from($('#modal .modal')?.querySelectorAll(

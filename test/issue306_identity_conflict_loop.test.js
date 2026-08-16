@@ -88,6 +88,63 @@ test('identity warning carries conflictId and conflict list exposes leadNames/cr
   assert.equal(row.complementaryInfo, null);
 });
 
+test('lead-only name conflicts expose every real record as comparable evidence', async t => {
+  const fx = await fixtures.adminFixture({ permissions: PERMS });
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO customer_pool
+    (customer_id,company_name,nickname,country,website,email,industry,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(
+    'RU-9501', 'Earlier Lead Co', 'Shared Lead Only', '俄罗斯',
+    'https://earlier.example', 'earlier@example.com', '工业电子',
+    '2026-08-01 08:00:00', '2026-08-01 08:00:00',
+  );
+  fx.db.prepare(`INSERT INTO customer_pool
+    (customer_id,company_name,nickname,country,website,email,industry,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(
+    'RU-9502', 'Newer Lead Co', 'Shared Lead Only', '俄罗斯',
+    'https://newer.example', 'newer@example.com', '电子制造',
+    '2026-08-02 08:00:00', '2026-08-02 08:00:00',
+  );
+
+  const response = await fx.request('/api/sales-crm/protected-customer-conflicts', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const row = body.items.find(item => item.normalizedName === 'shared lead only');
+  assert.ok(row);
+  assert.deepEqual(row.crmExternalCustomerIds, []);
+  assert.deepEqual(row.leadExternalCustomerIds, ['RU-9501', 'RU-9502']);
+  assert.equal(row.identityRecords.length, 2);
+  assert.deepEqual(row.identityRecords.map(item => item.externalCustomerId), ['RU-9502', 'RU-9501']);
+  assert.deepEqual(row.identityRecords.map(item => item.recordType), ['lead', 'lead']);
+  assert.equal(row.identityRecords[0].companyName, 'Newer Lead Co');
+  assert.equal(row.identityRecords[0].website, 'https://newer.example');
+  assert.equal(row.identityRecords[1].email, 'earlier@example.com');
+
+  const resolution = await resolve(fx, row.conflictId, {
+    decision: 'link_existing',
+    targetExternalCustomerId: 'RU-9501',
+    expectedVersion: row.expectedVersion,
+    details: '确认较早录入的线索为主记录',
+  });
+  assert.equal(resolution.resolution.status, 'resolved');
+  assert.equal(resolution.resolution.targetExternalCustomerId, 'RU-9501');
+
+  const afterResponse = await fx.request('/api/sales-crm/protected-customer-conflicts?status=all', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(afterResponse.status, 200);
+  const after = await afterResponse.json();
+  const resolved = after.items.find(item => item.conflictId === row.conflictId);
+  assert.equal(resolved.status, 'resolved');
+  assert.equal(resolved.targetExternalCustomerId, 'RU-9501');
+  assert.ok(!after.items.some(item => item.conflictId === row.conflictId && item.status !== 'resolved'));
+  const registry = fx.db.prepare(`SELECT external_customer_id FROM crm_customer_identity_registry
+    WHERE normalized_name='shared lead only'`).get();
+  assert.equal(registry.external_customer_id, 'RU-9501');
+});
+
 test('hydration exposes link_existing resolution fields and complementaryInfo', async t => {
   const fx = await fixtures.adminFixture({ permissions: PERMS });
   t.after(() => fx.close());
