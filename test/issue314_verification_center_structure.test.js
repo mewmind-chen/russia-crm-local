@@ -43,12 +43,23 @@ test('directory and import actions live in their own panels', () => {
 
 test('live workbench rows have stable desktop tracks', () => {
   assert.match(cssRule('.pending-workbench'), /grid-template-columns:minmax\(330px,380px\) minmax\(0,1fr\)/);
-  assert.match(cssRule('.pending-queue-row'), /min-height:72px/);
-  assert.match(cssRule('.pending-queue-record'), /min-height:72px/);
+  assert.match(cssRule('.pending-queue-row'), /min-height:82px/);
+  assert.match(cssRule('.pending-queue-record'), /min-height:82px/);
+});
+
+test('production verification page keeps the approved preview hierarchy', () => {
+  for (const marker of [
+    'verification-page-header', 'verification-page-description',
+    'verification-status-tabs', 'verification-tools',
+    'pending-queue-heading', 'pending-detail-head', 'pending-detail-summary',
+  ]) assert.match(`${html}\n${app}`, new RegExp(marker));
+  assert.match(cssRule('.pending-workbench'), /min-height:0/);
+  assert.match(cssRule('.pending-queue-row'), /min-height:82px/);
+  assert.match(cssRule('.pending-detail-actions'), /min-height:68px/);
 });
 
 test('live conflict and duplicate details use the safe-area action footer', () => {
-  assert.match(app, /<footer class="pending-detail-actions protected-conflict-actions">\s*<button[^>]*data-save-protected-conflict[^>]*>[^<]*<\/button>\s*<\/footer>/);
+  assert.match(app, /<footer class="pending-detail-actions protected-conflict-actions">\s*<button[^>]*data-pending-detail-close[^>]*>暂不处理<\/button>\s*<button[^>]*data-save-protected-conflict[^>]*>[^<]*<\/button>\s*<\/footer>/);
   assert.match(app, /<footer class="pending-detail-actions duplicate-review-actions">\s*<button[^>]*data-duplicate-resolution-save[^>]*>[^<]*<\/button>\s*<\/footer>/);
   assert.match(cssRule('.pending-detail-actions'), /position:sticky/);
   assert.match(cssRule('.pending-detail-actions'), /border-top:1px solid var\(--line\)/);
@@ -59,7 +70,7 @@ test('live conflict and duplicate details use the safe-area action footer', () =
 test('live verification detail tracks and footers stay content-sized', () => {
   assert.match(cssRule('.protected-conflict-detail'), /align-content:start/);
   assert.match(cssRule('.protected-conflict-detail'), /grid-auto-rows:max-content/);
-  assert.match(cssRule('.pending-detail-actions'), /align-self:start/);
+  assert.match(cssRule('.pending-detail-actions'), /align-self:stretch/);
 });
 
 test('mobile workbench rules target live panes and controls', () => {

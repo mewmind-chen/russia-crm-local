@@ -388,17 +388,29 @@ test('combined identity workspace keeps the protected lifecycle behind its named
   assert.match(app, /catch\s*\([^)]*\)\s*\{[\s\S]{0,500}(?:protectedCustomers|protected).*error/);
 });
 
-test('link_existing targets the single CRM name only, otherwise empty', () => {
-  const start = app.indexOf('function protectedConflictTargetExternalCustomerId');
-  const end = app.indexOf('\n  function renderProtectedConflicts', start);
+test('link_existing targets the selected comparable identity record', () => {
+  const start = app.indexOf('function protectedConflictIdentityRecords');
+  const end = app.indexOf('\n  function protectedConflictPendingOptions', start);
   assert.ok(start >= 0 && end > start);
-  const targetFor = Function(`${app.slice(start, end)}; return protectedConflictTargetExternalCustomerId;`)();
-  const item = { crmNames: [{ externalCustomerId: 'A' }] };
-  assert.equal(targetFor(item, 'link_existing'), 'A');
-  assert.equal(targetFor({ crmNames: [{ externalCustomerId: 'A' }, { externalCustomerId: 'B' }] }, 'link_existing'), '');
-  assert.equal(targetFor(item, 'confirm_new'), '');
-  assert.equal(targetFor(item, 'supplement_and_retry'), '');
-  assert.equal(targetFor({ crmNames: [] }, 'link_existing'), '');
+  const targetFor = Function(`${app.slice(start, end)}\nreturn protectedConflictTargetExternalCustomerId;`)();
+  const leadOnly = {
+    identityRecords: [
+      { externalCustomerId: 'LEAD-NEW', recordType: 'lead' },
+      { externalCustomerId: 'LEAD-OLD', recordType: 'lead' },
+    ],
+  };
+  assert.equal(targetFor(leadOnly, 'link_existing'), 'LEAD-OLD');
+  assert.equal(targetFor(leadOnly, 'link_existing', 'LEAD-OLD'), 'LEAD-OLD');
+  assert.equal(targetFor({
+    identityRecords: [
+      { externalCustomerId: 'LEAD-NEW', recordType: 'lead' },
+      { externalCustomerId: 'CRM-1', recordType: 'crm' },
+      { externalCustomerId: 'LEAD-OLD', recordType: 'lead' },
+    ],
+  }, 'link_existing'), 'CRM-1');
+  assert.equal(targetFor(leadOnly, 'confirm_new'), '');
+  assert.equal(targetFor(leadOnly, 'supplement_and_retry'), '');
+  assert.equal(targetFor({ identityRecords: [] }, 'link_existing'), '');
 });
 
 test('protected workspace CSS keeps wide data inside the workspace at desktop and mobile widths', () => {

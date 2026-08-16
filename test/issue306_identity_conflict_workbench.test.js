@@ -33,7 +33,7 @@ test('pending center merges both types with per-type tabs', () => {
 });
 
 test('identity conflict detail is a business workbench, not audit UI', () => {
-  const renderer = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
+  const renderer = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   assert.match(renderer, /是不是同一个客户？/);
   assert.match(renderer, /option\('link_existing', '是同一个客户'/);
   assert.match(renderer, /option\('confirm_new', '不是同一个客户'/);
@@ -47,7 +47,7 @@ test('identity conflict detail is a business workbench, not audit UI', () => {
 });
 
 test('supplement actions render only on the resolved link_existing card', () => {
-  const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
+  const source = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   const detailMarkup = Function(
     'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state', 'pendingNavigationMarkup',
     `${source}; return protectedConflictDetailMarkup;`,
@@ -101,28 +101,35 @@ test('supplement actions render only on the resolved link_existing card', () => 
 });
 
 test('pending decision options are gated to what the backend accepts', () => {
-  const source = section(app, 'function protectedConflictTargetExternalCustomerId', 'function duplicateEvidenceMarkup');
+  const source = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   const decisionMarkup = Function(
     'esc', 'duplicateFacts', 'protectedWritesAvailable',
     `${source}; return protectedConflictDecisionMarkup;`,
   )(
     value => String(value),
-    () => '<dl class="duplicate-review-facts"></dl>',
+    items => `<dl class="duplicate-review-facts">${items.map(([label, value]) => `${label}:${value}`).join('|')}</dl>`,
     () => true,
   );
   const render = item => decisionMarkup(item, { conflictPendingId: '' });
 
-  // Without a comparable CRM candidate, only supplement-and-retry is offered.
+  // Lead-to-lead conflicts still have a real comparison target and can choose a master.
   const leadOnly = render({
     conflictId: 'L1', status: 'unresolved',
     leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
     crmNames: [],
     leadExternalCustomerIds: ['LEAD-A', 'LEAD-B'], crmExternalCustomerIds: [],
+    identityRecords: [
+      { externalCustomerId: 'LEAD-B', recordType: 'lead', companyName: '线索B' },
+      { externalCustomerId: 'LEAD-A', recordType: 'lead', companyName: '线索A' },
+    ],
   });
-  assert.doesNotMatch(leadOnly, /value="link_existing"/);
-  assert.doesNotMatch(leadOnly, /value="confirm_new"/);
-  assert.match(leadOnly, /value="supplement_and_retry" checked/);
-  assert.match(leadOnly, /要求补充资料/);
+  assert.match(leadOnly, /这条新线索/);
+  assert.match(leadOnly, /疑似同名线索/);
+  assert.match(leadOnly, /LEAD-A/);
+  assert.match(leadOnly, /LEAD-B/);
+  assert.match(leadOnly, /data-conflict-target/);
+  assert.doesNotMatch(leadOnly, /value="link_existing"[^>]*disabled/);
+  assert.match(leadOnly, /value="confirm_new"[^>]*disabled/);
 
   // Live conflict with one CRM side: link enabled, confirm still disabled.
   const withCrm = render({
@@ -130,6 +137,10 @@ test('pending decision options are gated to what the backend accepts', () => {
     leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
     crmNames: [{ rawName: '主客户', externalCustomerId: 'MASTER-1' }],
     leadExternalCustomerIds: ['LEAD-A'], crmExternalCustomerIds: ['MASTER-1'],
+    identityRecords: [
+      { externalCustomerId: 'LEAD-A', recordType: 'lead', companyName: '线索A' },
+      { externalCustomerId: 'MASTER-1', recordType: 'crm', companyName: '主客户' },
+    ],
   });
   assert.doesNotMatch(withCrm, /value="link_existing"[^>]*disabled/);
   assert.match(withCrm, /value="confirm_new"[^>]*disabled/);
