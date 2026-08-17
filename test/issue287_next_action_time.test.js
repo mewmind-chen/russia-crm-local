@@ -49,7 +49,7 @@ test('does not infer relative time for legacy, empty, or invalid plan timestamps
 });
 
 test('loads the browser countdown module before the CRM app', () => {
-  const cacheToken = '20260816-issue314-preview-fidelity';
+  const cacheToken = '20260817-issue318-distinct-identity';
   const moduleIndex = htmlSource.indexOf('/sales-assets/next-action-time.js?v=');
   const appIndex = htmlSource.indexOf('/sales-assets/app.js?v=');
   assert.ok(moduleIndex >= 0, 'next-action-time browser module must be loaded');

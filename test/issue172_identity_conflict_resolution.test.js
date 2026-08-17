@@ -41,13 +41,26 @@ function installSources(db) {
     CREATE TABLE customer_pool (
       customer_id TEXT PRIMARY KEY,
       company_name TEXT NOT NULL DEFAULT '',
-      nickname TEXT NOT NULL DEFAULT ''
+      nickname TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      website TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      industry TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE crm_accounts (
       id TEXT PRIMARY KEY,
       external_customer_id TEXT NOT NULL DEFAULT '',
       company_name TEXT NOT NULL DEFAULT '',
-      nickname TEXT NOT NULL DEFAULT ''
+      nickname TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      website TEXT NOT NULL DEFAULT '',
+      industry TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE customer_nickname_audit (
       id TEXT PRIMARY KEY,
@@ -361,7 +374,7 @@ test('list and idempotent resolution require the current registry owner and dedi
   }
 });
 
-test('confirm_new succeeds only after the normalized source identity no longer conflicts', t => {
+test('confirm_new resolves a live same-name conflict as distinct without creating a registry owner', t => {
   const db = memoryFixture();
   t.after(() => db.close());
   const item = conflict(db, 'shared beta');
@@ -369,41 +382,53 @@ test('confirm_new succeeds only after the normalized source identity no longer c
     conflictId: item.conflictId,
     decision: 'confirm_new',
     targetExternalCustomerId: 'EXT-B1',
-    details: '已补齐法定名称，确认这是独立的新客户',
+    details: {
+      reason: '官网和邮箱不同，确认这是独立的新客户',
+      resolutionKind: 'forged',
+      comparisonEvidenceVersion: `sha256:${'0'.repeat(64)}`,
+    },
     expectedVersion: item.expectedVersion,
   };
 
-  assert.throws(
-    () => resolveProtectedIdentityConflict(db, ADMIN, payload),
-    error => assertPrivateError(error, 'PROTECTED_IDENTITY_CONFLICT_STILL_PRESENT', 409),
-  );
-
-  const retry = resolveProtectedIdentityConflict(db, ADMIN, {
-    conflictId: item.conflictId,
-    decision: 'supplement_and_retry',
-    details: '需要先补齐法定名称',
-    expectedVersion: item.expectedVersion,
-  });
-
-  db.prepare(`UPDATE crm_accounts SET nickname=? WHERE external_customer_id=?`)
-    .run('Distinct Beta Company', 'EXT-B2');
-  const resolved = resolveProtectedIdentityConflict(db, ADMIN, {
-    ...payload,
-    expectedVersion: retry.expectedVersion,
-  });
+  const resolved = resolveProtectedIdentityConflict(db, ADMIN, payload);
   assert.equal(resolved.status, 'resolved');
   assert.equal(resolved.decision, 'confirm_new');
   assert.equal(resolved.targetExternalCustomerId, 'EXT-B1');
-  assert.equal(
-    db.prepare(`SELECT external_customer_id FROM crm_customer_identity_registry
-      WHERE normalized_name=?`).get('shared beta').external_customer_id,
-    'EXT-B1',
-  );
-  const audit = db.prepare(`SELECT source_version,evidence_json
+  assert.equal(db.prepare(`SELECT COUNT(*) count FROM crm_customer_identity_registry
+    WHERE normalized_name=?`).get('shared beta').count, 0);
+  assert.equal(auditProtectedCustomerIdentities(db, { apply: false }).unresolved, 1);
+  assert.equal(conflict(db, 'shared beta').status, 'resolved');
+  const audit = db.prepare(`SELECT source_version,evidence_json,details_json
     FROM crm_customer_identity_conflict_audit WHERE conflict_id=?
     ORDER BY rowid DESC LIMIT 1`).get(item.conflictId);
-  assert.deepEqual(JSON.parse(audit.evidence_json).externalCustomerIds, ['EXT-B1']);
+  assert.deepEqual(JSON.parse(audit.evidence_json).externalCustomerIds, ['EXT-B1', 'EXT-B2']);
   assert.equal(JSON.parse(audit.evidence_json).expectedVersion, audit.source_version);
+  assert.equal(JSON.parse(audit.details_json).resolutionKind, 'distinct_sources');
+  assert.match(JSON.parse(audit.details_json).comparisonEvidenceVersion, /^sha256:[a-f0-9]{64}$/);
+});
+
+test('live distinct confirmation reopens when comparison evidence changes', t => {
+  const db = memoryFixture();
+  t.after(() => db.close());
+  db.prepare(`UPDATE customer_pool SET website='https://left.example'
+    WHERE customer_id='EXT-B1'`).run();
+  db.prepare(`UPDATE crm_accounts SET website='https://right.example'
+    WHERE external_customer_id='EXT-B2'`).run();
+  const item = conflict(db, 'shared beta');
+  resolveProtectedIdentityConflict(db, ADMIN, {
+    conflictId: item.conflictId,
+    decision: 'confirm_new',
+    targetExternalCustomerId: 'EXT-B1',
+    details: '官网不同，确认是两个独立主体',
+    expectedVersion: item.expectedVersion,
+  });
+  assert.equal(auditProtectedCustomerIdentities(db, { apply: false }).unresolved, 1);
+
+  db.prepare(`UPDATE customer_pool SET website='https://changed.example'
+    WHERE customer_id='EXT-B1'`).run();
+  const report = auditProtectedCustomerIdentities(db, { apply: false });
+  assert.equal(report.unresolved, 2);
+  assert.equal(conflict(db, 'shared beta').status, 'pending');
 });
 
 test('confirm_new accepts a new stable ID from the current unique source snapshot', t => {
@@ -623,7 +648,7 @@ test('one source reappearing under a tombstoned name reopens the gate until admi
   assert.equal(listAll(db, { status: 'unresolved' }).unresolved, 1);
 });
 
-test('multiple sources reappearing under a tombstoned name remain unresolved', t => {
+test('multiple sources reappearing under a tombstoned name can be confirmed as distinct', t => {
   const db = memoryFixture();
   t.after(() => db.close());
   const { item } = resolveZeroSourceConflict(db);
@@ -636,19 +661,17 @@ test('multiple sources reappearing under a tombstoned name remain unresolved', t
   assert.equal(reopened.status, 'pending');
   assert.deepEqual(reopened.externalCustomerIds, ['EXT-B1', 'EXT-B2']);
   assert.equal(auditProtectedCustomerIdentities(db).unresolved, 2);
-  assert.throws(() => resolveProtectedIdentityConflict(db, ADMIN, {
+  const resolved = resolveProtectedIdentityConflict(db, ADMIN, {
     conflictId: item.conflictId,
     decision: 'confirm_new',
     targetExternalCustomerId: 'EXT-B1',
-    details: '仍有两个同名来源，不能激活',
+    details: '两个同名来源属于不同主体',
     expectedVersion: reopened.expectedVersion,
-  }), error => assertPrivateError(
-    error,
-    'PROTECTED_IDENTITY_CONFLICT_STILL_PRESENT',
-    409,
-  ));
-  assert.equal(db.prepare(`SELECT released_at FROM crm_customer_identity_name_tombstones
-    WHERE normalized_name='shared beta'`).get().released_at, '');
+  });
+  assert.equal(resolved.status, 'resolved');
+  assert.equal(auditProtectedCustomerIdentities(db).unresolved, 1);
+  assert.ok(db.prepare(`SELECT released_at FROM crm_customer_identity_name_tombstones
+    WHERE normalized_name='shared beta'`).get().released_at);
 });
 
 test('link_existing after a multi-source tombstone reopen releases it and aligns gates', t => {

@@ -80,8 +80,8 @@ test('server refreshes preserve read-only AI tags and new manual tags do not sub
 });
 
 test('CRM assets use the current tag cache version and profile header has a synchronized tag target', () => {
-  assert.match(crmHtml, /app\.css\?v=20260816-issue314-preview-fidelity/);
-  assert.match(crmHtml, /app\.js\?v=20260816-issue314-preview-fidelity/);
+  assert.match(crmHtml, /app\.css\?v=20260817-issue318-distinct-identity/);
+  assert.match(crmHtml, /app\.js\?v=20260817-issue318-distinct-identity/);
   assert.match(crmHtml, /id="customerProfileTags"/);
   assert.match(crmJs, /\$\('#customerProfileTags'\)\.innerHTML = sourceTagMarkup\(account \|\|/);
 });

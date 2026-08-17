@@ -100,7 +100,7 @@ test('supplement actions render only on the resolved link_existing card', () => 
   }
 });
 
-test('pending decision options are gated to what the backend accepts', () => {
+test('pending decision options allow managers to confirm compared records are distinct', () => {
   const source = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   const decisionMarkup = Function(
     'esc', 'duplicateFacts', 'protectedWritesAvailable',
@@ -129,9 +129,9 @@ test('pending decision options are gated to what the backend accepts', () => {
   assert.match(leadOnly, /LEAD-B/);
   assert.match(leadOnly, /data-conflict-target/);
   assert.doesNotMatch(leadOnly, /value="link_existing"[^>]*disabled/);
-  assert.match(leadOnly, /value="confirm_new"[^>]*disabled/);
+  assert.doesNotMatch(leadOnly, /value="confirm_new"[^>]*disabled/);
 
-  // Live conflict with one CRM side: link enabled, confirm still disabled.
+  // Live conflict with one CRM side supports either human outcome.
   const withCrm = render({
     conflictId: 'L2', status: 'unresolved',
     leadNames: [{ rawName: '线索A', externalCustomerId: 'LEAD-A' }],
@@ -143,7 +143,7 @@ test('pending decision options are gated to what the backend accepts', () => {
     ],
   });
   assert.doesNotMatch(withCrm, /value="link_existing"[^>]*disabled/);
-  assert.match(withCrm, /value="confirm_new"[^>]*disabled/);
+  assert.doesNotMatch(withCrm, /value="confirm_new"[^>]*disabled/);
 
   // Stored-only records without a CRM side follow the same no-candidate rule.
   const storedOnly = render({
@@ -158,6 +158,8 @@ test('pending decision options are gated to what the backend accepts', () => {
 
 test('save handler sends the state version and a business default reason', () => {
   const handler = section(app, "const conflictSave = event.target.closest('[data-save-protected-conflict]')", 'const supplementApply');
+  assert.match(app, /判断说明（选填）/);
+  assert.match(app, /官网和企业邮箱域名不同，确认是两个独立主体/);
   assert.match(handler, /管理员确认为同一客户/);
   assert.match(handler, /管理员确认不是同一客户/);
   assert.match(handler, /expectedVersion: item\.expectedVersion \|\| ''/);

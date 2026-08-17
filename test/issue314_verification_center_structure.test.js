@@ -96,8 +96,8 @@ test('login heading keeps fixed responsive breakpoint sizes', () => {
   assert.doesNotMatch(cssRule('.login-brand h1'), /font-size:clamp\([^)]*vw/);
 });
 
-test('all CRM frontend assets and visible badge share issue 314 version', () => {
-  const version = '20260816-issue314-preview-fidelity';
+test('all CRM frontend assets and visible badge share the current release version', () => {
+  const version = '20260817-issue318-distinct-identity';
   assert.match(html, new RegExp(`data-app-version="${version}"`));
   const versions = [...html.matchAll(/sales-assets\/[^"]+\?v=([^"&]+)/g)].map(match => match[1]);
   assert.ok(versions.length >= 4);

@@ -408,7 +408,7 @@ test('link_existing targets the selected comparable identity record', () => {
       { externalCustomerId: 'LEAD-OLD', recordType: 'lead' },
     ],
   }, 'link_existing'), 'CRM-1');
-  assert.equal(targetFor(leadOnly, 'confirm_new'), '');
+  assert.equal(targetFor(leadOnly, 'confirm_new'), 'LEAD-NEW');
   assert.equal(targetFor(leadOnly, 'supplement_and_retry'), '');
   assert.equal(targetFor({ identityRecords: [] }, 'link_existing'), '');
 });
