@@ -81,6 +81,6 @@ test('plan UI uses basis-aware conversion, AI normalization, and the current JS 
   const nextActionModule = html.indexOf('/sales-assets/next-action-time.js?v=');
   const appModule = html.indexOf('/sales-assets/app.js?v=');
   assert.ok(nextActionModule >= 0 && nextActionModule < appModule);
-  assert.match(html, /sales-assets\/app\.js\?v=20260816-issue314-preview-fidelity/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260816-issue314-preview-fidelity/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260817-issue318-distinct-identity/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260817-issue318-distinct-identity/);
 });

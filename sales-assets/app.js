@@ -6339,28 +6339,23 @@
   }
 
   function protectedConflictTargetExternalCustomerId(item, decision = 'link_existing', selectedId = '') {
-    if (decision !== 'link_existing') return '';
     const comparison = protectedConflictComparisonState({
       ...item,
       selectedTargetExternalCustomerId: selectedId || item?.selectedTargetExternalCustomerId || '',
     });
+    if (decision === 'confirm_new') return String(comparison.subject?.externalCustomerId || '');
+    if (decision !== 'link_existing') return '';
     return String(comparison.selected?.externalCustomerId || '');
   }
 
-  // Pending-card decision options, gated to what the backend adjudication accepts.
-  // link_existing needs one comparable identity target; confirm_new is only
-  // accepted by the backend once the conflict is no longer live; supplement_and_retry
-  // is always available. Unavailable options stay visible but disabled with a
-  // business-language hint so the manager never clicks into a dead-end error.
   function protectedConflictPendingOptions(item, model) {
     const linkTarget = protectedConflictTargetExternalCustomerId(item, 'link_existing');
-    const live = (Array.isArray(item.leadExternalCustomerIds) && item.leadExternalCustomerIds.length > 0)
-      || (Array.isArray(item.crmExternalCustomerIds) && item.crmExternalCustomerIds.length > 0);
+    const distinctTarget = protectedConflictTargetExternalCustomerId(item, 'confirm_new');
     const locked = !protectedWritesAvailable() || model.conflictPendingId === item.conflictId;
     const option = (value, label, enabled, hint) => `<label class="duplicate-review-option${enabled ? '' : ' is-unavailable'}"><span class="duplicate-review-option-main"><input type="radio" name="conflict-decision-${esc(item.conflictId)}" value="${value}" ${!enabled || locked ? 'disabled' : ''}><strong>${label}</strong></span>${enabled ? '' : `<small>${hint}</small>`}</label>`;
     return [
       option('link_existing', '是同一个客户', Boolean(linkTarget), '请选择一条记录作为主记录'),
-      option('confirm_new', '不是同一个客户', !live, '需先补充资料或等待证据变化后再确认'),
+      option('confirm_new', '不是同一个客户', Boolean(distinctTarget), '缺少当前线索编号'),
       option('supplement_and_retry', '资料还不够', true, ''),
     ].join('');
   }
@@ -6427,7 +6422,7 @@
     const noCandidates = !protectedConflictComparisonState(item).candidates.length;
     const decisionBlock = (resolved || retry) ? `<div class="pending-comparison">${protectedConflictComparisonMarkup(item)}</div><div class="subtle">${statusLabel}</div>${supplementBlock}` : `
       ${protectedConflictDecisionMarkup(item, model)}
-      <label id="conflictReasonField-${esc(item.conflictId)}" class="${noCandidates ? '' : 'hidden'}">需要补充的内容<textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
+      <label id="conflictReasonField-${esc(item.conflictId)}" class="${noCandidates ? '' : 'hidden'}"><span data-conflict-reason-label>需要补充的内容</span><textarea data-conflict-reason rows="2" maxlength="500" placeholder="例如：请补充官网与采购联系人"></textarea></label>
       <p class="protected-operation-status" data-conflict-message role="status" aria-live="polite"></p>
       <footer class="pending-detail-actions protected-conflict-actions">
         <button class="button secondary" type="button" data-pending-detail-close>暂不处理</button>
@@ -13042,7 +13037,14 @@
     if (event.target.matches('input[name^="conflict-decision-"]')) {
       const root = event.target.closest('[data-protected-conflict]');
       const reasonField = document.querySelector(`#conflictReasonField-${CSS.escape(root?.dataset.protectedConflict || '')}`);
-      reasonField?.classList.toggle('hidden', event.target.value !== 'supplement_and_retry');
+      const showReason = ['confirm_new', 'supplement_and_retry'].includes(event.target.value);
+      reasonField?.classList.toggle('hidden', !showReason);
+      const label = reasonField?.querySelector('[data-conflict-reason-label]');
+      const textarea = reasonField?.querySelector('textarea');
+      if (label) label.textContent = event.target.value === 'confirm_new' ? '判断说明（选填）' : '需要补充的内容';
+      if (textarea) textarea.placeholder = event.target.value === 'confirm_new'
+        ? '例如：官网和企业邮箱域名不同，确认是两个独立主体'
+        : '例如：请补充官网与采购联系人';
     }
     if (event.target.id === 'customerSort') {
       void loadCustomerPage({ reset: true });
