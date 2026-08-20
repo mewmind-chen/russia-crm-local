@@ -1366,6 +1366,17 @@ CREATE TABLE crm_next_plan_events (
       created_at TEXT NOT NULL CHECK(length(trim(created_at)) > 0)
     );
 
+CREATE TABLE crm_plan_only_action_requests (
+  idempotency_key TEXT PRIMARY KEY CHECK (length(trim(idempotency_key)) > 0),
+  actor_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','completed')),
+  response_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE crm_notification_deliveries (
       id TEXT PRIMARY KEY,
       notification_id TEXT NOT NULL,
