@@ -4,6 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fixtures = require('./helpers/permission_fixture');
 
+function futureSql(days = 7) {
+  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 test('plan-only save updates the plan without creating an activity or fake progress', async t => {
   const fx = await fixtures.adminFixture({ permissions: { record_activity: true } });
   t.after(() => fx.close());
@@ -14,7 +18,7 @@ test('plan-only save updates the plan without creating an activity or fake progr
     body: {
       customerId: 'CRM-OTHER',
       nextAction: '联系客户采购负责人，确认是否有新项目',
-      nextActionAt: '2026-08-18 10:00:00',
+      nextActionAt: futureSql(),
       note: '目前没有发生新的客户动作，只补充下一步安排',
       idempotencyKey: 'plan-only-1',
     },
@@ -37,7 +41,7 @@ test('plan-only is idempotent on the same key and requires a real plan pair', as
   const fx = await fixtures.adminFixture({ permissions: { record_activity: true } });
   t.after(() => fx.close());
   const payload = {
-    customerId: 'CRM-OTHER', nextAction: '两天后电话联系', nextActionAt: '2026-08-20 09:00:00',
+    customerId: 'CRM-OTHER', nextAction: '两天后电话联系', nextActionAt: futureSql(),
     idempotencyKey: 'plan-only-2',
   };
   const first = await fx.request('/api/sales-crm/activities/plan-only', {
@@ -64,7 +68,7 @@ test('sales cannot plan-only for a customer outside their scope', async t => {
     cookie: fx.otherCookie,
     method: 'POST',
     body: {
-      customerId: 'CRM-WU', nextAction: '越权写计划', nextActionAt: '2026-08-20 09:00:00',
+      customerId: 'CRM-WU', nextAction: '越权写计划', nextActionAt: futureSql(),
       idempotencyKey: 'plan-only-3',
     },
   });

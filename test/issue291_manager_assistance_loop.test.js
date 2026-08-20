@@ -4,6 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fixtures = require('./helpers/permission_fixture');
 
+function futureSql(days = 7) {
+  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function progressPayload(overrides = {}) {
   return {
     customerId: 'CRM-OTHER',
@@ -13,7 +17,7 @@ function progressPayload(overrides = {}) {
     occurredAt: '2026-08-13 13:50:00',
     managerRequired: true,
     nextAction: '希望主管协助查询联系人',
-    nextActionAt: '2026-08-20 09:00:00',
+    nextActionAt: futureSql(),
     ...overrides,
   };
 }
