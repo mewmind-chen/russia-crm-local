@@ -6,6 +6,10 @@ const Database = require('better-sqlite3');
 const fixtures = require('./helpers/permission_fixture');
 const { installManagerTaskSchema } = require('../lib/manager_tasks');
 
+function futureSql(days = 7) {
+  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function legacyManagerTaskDb() {
   const db = new Database(':memory:');
   db.exec(`
@@ -147,7 +151,7 @@ test('manager reply keeps the task open until the sales confirms a new plan', as
       actionType: 'confirm_manager_assistance',
       customerId: 'CRM-OTHER',
       nextAction: '两天后电话联系采购负责人',
-      nextActionAt: '2026-08-20 09:00:00',
+      nextActionAt: futureSql(),
       idempotencyKey: 'issue257-manager-assistance-confirm',
     },
   });
