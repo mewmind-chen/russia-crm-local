@@ -118,6 +118,11 @@ async function runCrmBulkScenario(impersonated) {
       JSON.parse(row.detail_json),
     ]));
     assert.equal(auditDetails['CRM-207-OWNERLESS'].previousOwnerId, '');
+    for (const detail of Object.values(auditDetails)) {
+      assert.ok(detail.intakeItemId);
+      assert.equal(detail.intakeStatus, 'returned');
+      detail.intakeItemId = '<generated>';
+    }
 
     return {
       responses: {

@@ -11,6 +11,8 @@ test('sales can return an owned CRM customer and manager can reassign the same a
     cookie: fx.otherCookie, method: 'POST', body: { reason: '当前区域暂不匹配，需要重新评估' },
   });
   assert.equal(returned.status, 200);
+  const returnedPayload = await returned.json();
+  assert.ok(returnedPayload.intakeItemId);
   assert.deepEqual(
     fx.db.prepare("SELECT owner_id,lifecycle_status,recycle_kind,assignment_status FROM crm_accounts WHERE id='CRM-OTHER'").get(),
     { owner_id: null, lifecycle_status: 'active', recycle_kind: '', assignment_status: 'returned' },
@@ -27,18 +29,14 @@ test('sales can return an owned CRM customer and manager can reassign the same a
     body: { ownerId: 'U-OTHER', reason: '按区域和语言能力重新分配' },
   });
   assert.equal(recycledReassign.status, 404);
-  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',crm_customer_id='CRM-OTHER',
-    status='returned',assigned_owner_id='' WHERE id='INTAKE-OTHER'`).run();
-  fx.db.prepare(`UPDATE crm_accounts SET external_customer_id='RU-9003',intake_item_id='INTAKE-OTHER'
-    WHERE id='CRM-OTHER'`).run();
   const assigned = await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.adminCookie, method: 'POST',
-    body: { action: 'assign', itemId: 'INTAKE-OTHER', ownerId: 'U-OTHER' },
+    body: { action: 'assign', itemId: returnedPayload.intakeItemId, ownerId: 'U-OTHER' },
   });
   assert.equal(assigned.status, 200);
   const claimed = await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.otherCookie, method: 'POST',
-    body: { action: 'claim', itemId: 'INTAKE-OTHER', idempotencyKey: 'recycle-bin-reclaim' },
+    body: { action: 'claim', itemId: returnedPayload.intakeItemId, idempotencyKey: 'recycle-bin-reclaim' },
   });
   assert.equal(claimed.status, 200);
   assert.deepEqual(
