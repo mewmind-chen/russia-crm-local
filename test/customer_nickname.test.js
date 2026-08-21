@@ -108,9 +108,12 @@ test('nickname survives return, reassignment, trash and restore workflows', asyn
   fx.setUserPermissions('U-OTHER', { manage_customer_recycle: true });
   fx.db.prepare("UPDATE crm_accounts SET nickname='长期合作方' WHERE id='CRM-OTHER'").run();
 
-  assert.equal((await fx.request('/api/sales-crm/accounts/CRM-OTHER/return', {
+  const returnedResponse = await fx.request('/api/sales-crm/accounts/CRM-OTHER/return', {
     cookie: fx.otherCookie, method: 'POST', body: { reason: '区域策略调整' },
-  })).status, 200);
+  });
+  assert.equal(returnedResponse.status, 200);
+  const returned = await returnedResponse.json();
+  assert.ok(returned.intakeItemId);
   assert.equal(
     fx.db.prepare("SELECT nickname FROM crm_accounts WHERE id='CRM-OTHER'").get().nickname,
     '长期合作方',
@@ -122,13 +125,9 @@ test('nickname survives return, reassignment, trash and restore workflows', asyn
   );
   assert.equal(recycleBin.rows.length, 0);
 
-  fx.db.prepare(`UPDATE crm_intake_items SET external_customer_id='RU-9003',crm_customer_id='CRM-OTHER',
-    status='returned',assigned_owner_id='' WHERE id='INTAKE-OTHER'`).run();
-  fx.db.prepare(`UPDATE crm_accounts SET external_customer_id='RU-9003',intake_item_id='INTAKE-OTHER'
-    WHERE id='CRM-OTHER'`).run();
   assert.equal((await fx.request('/api/sales-crm/intake/action', {
     cookie: fx.adminCookie, method: 'POST',
-    body: { action: 'assign', itemId: 'INTAKE-OTHER', ownerId: 'U-OTHER' },
+    body: { action: 'assign', itemId: returned.intakeItemId, ownerId: 'U-OTHER' },
   })).status, 200);
   assert.equal(
     fx.db.prepare("SELECT nickname FROM crm_accounts WHERE id='CRM-OTHER'").get().nickname,
