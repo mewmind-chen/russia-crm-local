@@ -359,7 +359,7 @@ test('Issue 207 makes intake assignment, unassignment, and reassignment equivale
     'U-207-NEW',
   );
   assert.deepEqual(direct.reassignDecision, {
-    action: 'assign',
+    action: 'reassign',
     status: 'assigned',
     ownerId: 'U-207-NEW',
     previousOwnerId: 'U-OTHER',

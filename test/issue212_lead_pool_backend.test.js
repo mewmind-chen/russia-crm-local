@@ -249,7 +249,7 @@ test('Issue 212 assign and reassign generate system audit labels without handwri
   const returnedDecision = fx.db.prepare(`SELECT manual_decision_json FROM crm_intake_decisions
     WHERE intake_item_id='I212-RETURNED' ORDER BY created_at DESC,id DESC LIMIT 1`).get();
   assert.deepEqual(JSON.parse(returnedDecision.manual_decision_json), {
-    action: 'assign', status: 'assigned', ownerId: 'U-SALES2', previousOwnerId: 'U-OTHER',
+    action: 'reassign', status: 'assigned', ownerId: 'U-SALES2', previousOwnerId: 'U-OTHER',
     reason: '管理员重新分配',
   });
 });
