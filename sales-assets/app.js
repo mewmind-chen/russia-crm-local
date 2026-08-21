@@ -2771,14 +2771,7 @@
         else actions = '—';
         const signals = intakeSignals(item);
         const layers = showAssignmentAI ? intakeDecisionLayers(item) : null;
-        const evidence = jsonList(item.evidence_urls).filter(url => /^https?:\/\//i.test(url));
-        const sources = [
-          item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
-          ...evidence.map((url, index) => `<a class="text-button" href="${esc(url)}" target="_blank" rel="noopener">证据${index + 1}</a>`),
-        ].filter(Boolean).join(' · ');
-        const sourceMeta = salesView
-          ? `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`
-          : `<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span>`;
+        const sourceMeta = `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`;
         const customerTags = (Array.isArray(item.customerTags) ? item.customerTags : [])
           .concat((Array.isArray(item.customer_tags) ? item.customer_tags
             : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'))
