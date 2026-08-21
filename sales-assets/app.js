@@ -1456,6 +1456,12 @@
         : canAccessProtectionAndDedupe())) || 'dashboard';
   }
 
+  function unauthorizedViewMessage(view) {
+    return view === 'team'
+      ? '当前账号暂未开通团队状态权限'
+      : '当前账号没有该模块权限';
+  }
+
   async function load({ fromLogin = false } = {}) {
     resetActivityCorrectionState();
     try {
@@ -1525,7 +1531,7 @@
           && (can('correct_own_activity') || can('manage_activity_corrections'))) {
         void loadActivityCorrectionWriteStatus();
       }
-      const requestedView = location.hash.replace(/^#/, '').split('?')[0];
+      const requestedView = viewFromLocationHash();
       const requestedParams = new URLSearchParams(location.search);
       const requestedCustomerId = requestedParams.get('customer') || '';
       const requestedIntakeItemId = requestedParams.get('intake') || '';
@@ -1555,6 +1561,9 @@
           ? can(requestedPermission)
           : canAccessProtectionAndDedupe());
       switchView(requestedAllowed ? requestedView : firstAllowedView, false);
+      if (viewMeta[requestedView] && !requestedAllowed) {
+        toast(unauthorizedViewMessage(requestedView));
+      }
       if (requestedView === 'customerProfile') {
         if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId);
         else if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
@@ -6779,7 +6788,8 @@
   }
 
   function viewFromLocationHash(hash = location.hash) {
-    return String(hash || '').replace(/^#/, '').split('?')[0];
+    const view = String(hash || '').replace(/^#/, '').split('?')[0];
+    return view === 'teamStatus' ? 'team' : view;
   }
 
   function beginPendingDeepLinkNavigation(hash = location.hash) {
@@ -12911,7 +12921,11 @@
       : viewPermissions[view] || `view_${canonicalView}`;
     if (canonicalView === 'protectedCustomers') {
       if (!canAccessProtectionAndDedupe()) return toast('当前账号没有客户保护或查重权限');
-    } else if (!can(permission)) return toast('当前账号没有该模块权限');
+    } else if (!can(permission)) {
+      const fallback = firstAllowedBusinessView();
+      if (fallback !== canonicalView) switchView(fallback, false);
+      return toast(unauthorizedViewMessage(canonicalView));
+    }
       const viewChanged = state.view !== canonicalView;
       state.view = canonicalView;
       if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();

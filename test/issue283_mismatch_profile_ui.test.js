@@ -181,8 +181,8 @@ function mismatchRendererHarness(payload, expanded = false) {
 }
 
 test('mismatch profile assets use the current production cache token', () => {
-  assert.match(shell, /sales-assets\/app\.css\?v=20260821-issue325-sales-copy/);
-  assert.match(shell, /sales-assets\/app\.js\?v=20260821-issue325-sales-copy/);
+  assert.match(shell, /sales-assets\/app\.css\?v=20260821-issue323-team-permission/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260821-issue323-team-permission/);
 });
 
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
