@@ -15,7 +15,7 @@ function sidebarMarkup() {
 
 test('primary navigation has one intake entry in the customer lifecycle', () => {
   const sidebar = sidebarMarkup();
-  for (const label of ['经营驾驶舱', '今日待办', 'CRM客户全景', '推进管道', '线索池', '客户经营复盘', '团队状态', '市场策略', '用户与权限']) {
+  for (const label of ['经营驾驶舱', '今日待办', 'CRM客户全景', '推进动作台', '线索池', '客户经营复盘', '团队状态', '市场策略', '用户与权限']) {
     assert.match(sidebar, new RegExp(`>${label}<`), `missing navigation entry: ${label}`);
   }
   for (const label of ['待领取', '已领取', '线索分配', '未开发线索池', '客户开发工作台', '联系人速览', 'Recon 结果速览']) {

@@ -309,6 +309,7 @@ CREATE TABLE crm_activity_reaction_options (
       name TEXT NOT NULL,
       name_key TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      action_queue_key TEXT NOT NULL DEFAULT '',
       active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
       created_by TEXT NOT NULL DEFAULT '',
       updated_by TEXT NOT NULL DEFAULT '',

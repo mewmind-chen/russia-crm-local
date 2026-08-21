@@ -184,6 +184,7 @@
     managerTaskPageSize: 50,
     managerMetricRange: 30,
     managerMetricDrilldown: null,
+    pipelineActionQueue: '',
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -261,7 +262,7 @@
     pool: ['线索池', '线索池'],
     contacts: ['联系人凭证', '客户联系人线索'],
     recon: ['Recon 情报', 'Recon 情报'],
-    pipeline: ['推进管道', '推进管道'],
+    pipeline: ['客户推进', '推进动作台'],
     alerts: ['今日待办', '今日待办'],
     managerTasks: ['主管协助事项', '主管协助事项'],
     managerMetrics: ['计划跟进与协助统计', '计划跟进与协助统计'],
@@ -410,6 +411,7 @@
     return (Array.isArray(rows) ? rows : []).map((item, index) => ({
       id: String(item.id || ''),
       name: String(item.name || '').trim(),
+      actionQueueKey: String(item.actionQueueKey || item.action_queue_key || ''),
       sortOrder: Number(item.sortOrder ?? item.sort_order ?? index),
       active: item.active !== false && Number(item.active ?? 1) !== 0,
     })).filter(item => item.id && item.name)
@@ -1332,6 +1334,9 @@
       });
       if (pageKey === 'alerts' && state.alertSeverity) {
         params.set('urgency', state.alertSeverity);
+      }
+      if (pageKey === 'pipeline' && state.pipelineActionQueue) {
+        params.set('actionQueue', state.pipelineActionQueue);
       }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
@@ -4507,22 +4512,72 @@
 
   function renderPipeline() {
     const meta = state.authorizedBusinessLists.pipeline;
-    const accounts = meta.loaded ? meta.rows : [];
-    const stages = state.data.stages.filter(item => !['new'].includes(item.key));
-    $('#pipelineBoard').innerHTML = stages.map(stage => {
-      const rows = accounts.filter(account => account.stage === stage.key);
-      return `<div class="lane"><div class="lane-head"><h3>${esc(stage.label)} <small class="subtle">（当前）</small></h3><span>${rows.length}</span></div><div class="lane-body">${rows.map(account => {
-        const alert = alertFor(account.id);
-        const cls = alert?.severity === 'critical' ? 'alert' : account.manager_required ? 'warning' : '';
-        return `<article class="pipeline-card ${cls}" data-open-customer="${account.id}">
-          <div><span class="priority ${account.priority}">${account.priority}</span><h4>${esc(accountDisplayName(account))}</h4></div>
-          <p>${esc(accountIdentity(account))}</p>
-          <p>${esc(account.country)} · ${esc(account.industry || account.product_focus || '未标注')}</p>
-          <p>${esc(account.next_action || '未填写下一步')}</p>
-          <div class="pipeline-card-foot"><span>${esc(account.owner_name)}</span><span>${relative(account.last_activity_at)}</span></div>
-        </article>`;
-      }).join('') || '<div class="empty">暂无</div>'}</div></div>`;
+    const rows = meta.loaded ? meta.rows : [];
+    const summary = meta.summary || {};
+    const queues = summary.queues || {};
+    const selected = state.pipelineActionQueue;
+    const queueItems = [
+      ['due_followup', '到期跟进', 'amber'],
+      ['price_objection', '嫌贵未转', 'red'],
+      ['inquiry_no_order', '问多买少', 'red'],
+      ['relationship_upgrade', '关系升级', 'green'],
+      ['order_growth', '订单增长', 'green'],
+      ['pause_quote', '暂停报价', 'red'],
+      ['manager_assistance', '待主管协助', 'amber'],
+    ];
+    const topItems = [
+      ['due_followup', '今日动作', Number(summary.todayActions || 0), '今天需要安排'],
+      ['need_decision', '需要判断', Number(summary.needDecision || 0), '是否继续投入'],
+      ['worth_deepening', '值得深挖', Number(summary.worthDeepening || 0), '关系或订单升级'],
+      ['manager_assistance', '待主管协助', Number(summary.managerAssistance || 0), '等待主管处理'],
+    ];
+    const topMarkup = topItems.map(([key, label, count, note]) => {
+      return `<button class="pipeline-overview-card" type="button" data-pipeline-queue="${key}">
+        <span>${label}</span><strong>${count}</strong><small>${note}</small>
+      </button>`;
     }).join('');
+    const stageMarkup = state.data.stages.filter(stage => stage.key !== 'new').map(stage =>
+      `<div><span>${esc(stage.label)}</span><strong>${Number(summary.stages?.[stage.key] || 0)}</strong></div>`).join('');
+    const queueMarkup = queueItems.map(([key, label, tone]) =>
+      `<button type="button" class="pipeline-queue-card ${tone}${selected === key ? ' selected' : ''}"
+        data-pipeline-queue="${key}" aria-pressed="${selected === key}">
+        <span>${label}</span><strong>${Number(queues[key] || 0)}</strong>
+      </button>`).join('');
+    const activeLabel = selected === 'need_decision' ? '需要判断'
+      : selected === 'worth_deepening' ? '值得深挖'
+        : queueItems.find(item => item[0] === selected)?.[1] || '全部当前行动';
+    const detailMarkup = rows.length ? rows.map(account => {
+      const latestReaction = account.latestReaction || '暂无明确反应';
+      const next = account.next_action || '暂未确定下一步';
+      const queueLabels = (account.actionQueueLabels || []).map(label =>
+        `<span class="pill gray">${esc(label)}</span>`).join('');
+      return `<article class="pipeline-action-row">
+        <div class="pipeline-action-customer">
+          <strong>${esc(accountDisplayName(account))}</strong>
+          <span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.owner_name || '未分配')}</span>
+          <small>${esc(account.stageLabel || stageLabel(account.stage))}</small>
+        </div>
+        <div><span class="pipeline-fact-label">最近客户反应</span><strong>${esc(latestReaction)}</strong>${queueLabels}</div>
+        <div><span class="pipeline-fact-label">下一步计划</span><strong>${esc(next)}</strong><small>${account.next_action_at ? shortDate(account.next_action_at, true) : '未设置时间'}</small></div>
+        <div><span class="pipeline-fact-label">业务里程碑</span><strong>询价 ${Number(account.rfqCount || 0)} · 订单 ${Number(account.orderCount || 0)}</strong><small>报价 ${Number(account.quoteCount || 0)}</small></div>
+        <div class="pipeline-action-buttons">
+          <button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>
+          ${can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录新进展</button>` : ''}
+          ${can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : ''}
+          ${can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : ''}
+        </div>
+      </article>`;
+    }).join('') : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
+    $('#pipelineBoard').innerHTML = `
+      <section class="pipeline-overview-grid">${topMarkup}</section>
+      <section class="pipeline-stage-strip" aria-label="客户阶段概览">${stageMarkup}</section>
+      <section class="pipeline-queue-grid">${queueMarkup}</section>
+      <section class="pipeline-action-detail">
+        <div class="pipeline-action-heading"><div><h3>${esc(activeLabel)}</h3><span>${Number(meta.total || 0)} 个客户</span></div>
+          ${selected ? '<button class="text-button" type="button" data-pipeline-queue="">返回全部行动</button>' : ''}
+        </div>
+        ${detailMarkup}
+      </section>`;
   }
 
   function normalizeTodayTaskAction(value) {
@@ -10041,8 +10096,13 @@
     const form = $('#activityForm');
     if (!form) return;
     const reaction = state.activityReactions.find(item => item.id === reactionOptionId);
-    if (form.elements.reactionOptionId) form.elements.reactionOptionId.value = reaction?.id || '';
+    if (form.elements.reactionOptionId) form.elements.reactionOptionId.value = reactionOptionId || '';
     if (form.elements.outcome) form.elements.outcome.value = reaction?.name || '';
+    const custom = $('#activityReactionCustomField');
+    custom?.classList.toggle('hidden', reactionOptionId !== '__custom__');
+    if (reactionOptionId !== '__custom__' && form.elements.reactionCustom) {
+      form.elements.reactionCustom.value = '';
+    }
   }
 
   function resizeActivitySummary(textarea) {
@@ -10179,7 +10239,11 @@
       <select id="activityReaction" name="reactionOptionId">
         <option value="">请选择</option>
         ${state.activityReactions.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}
+        <option value="__custom__">其他（手动填写）</option>
       </select>
+      <label id="activityReactionCustomField" class="hidden">自定义客户反应
+        <input name="reactionCustom" maxlength="100" placeholder="简短记录客户当前反应">
+      </label>
     </div>`;
   }
 
@@ -10218,7 +10282,9 @@
       setProgressType(draft.payload.progressType);
     }
     setActivityReaction(
-      state.activityReactions.some(item => item.id === draft.payload?.reactionOptionId)
+      draft.payload?.reactionOptionId === '__custom__'
+        ? '__custom__'
+        : state.activityReactions.some(item => item.id === draft.payload?.reactionOptionId)
         ? draft.payload.reactionOptionId
         : '',
     );
@@ -10382,16 +10448,26 @@
 
   function renderActivityReactionAdminModal() {
     const rows = state.activityReactionAdminRows;
+    const actionQueueOptions = [
+      ['', '不进入行动队列'], ['due_followup', '到期跟进'], ['price_objection', '嫌贵未转'],
+      ['inquiry_no_order', '问多买少'], ['relationship_upgrade', '关系升级'],
+      ['order_growth', '订单增长'], ['pause_quote', '暂停报价'],
+      ['manager_assistance', '待主管协助'],
+    ];
+    const queueSelect = selected => actionQueueOptions.map(([value, label]) =>
+      `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
     openModal('管理客户反应', '全公司统一选项 · 仅管理员可修改', `
       <div class="activity-reaction-admin">
-        <p class="subtle">改名或移除只影响今后的选择，已经记录的历史文字保持不变。</p>
+        <p class="subtle">历史记录保持不变；行动归类决定该客户当前进入哪个推进队列。</p>
         <form id="activityReactionCreateForm" class="activity-reaction-create">
           <label>新增客户反应<input name="name" maxlength="40" required placeholder="例如：等待样品"></label>
+          <label>行动归类<select name="actionQueueKey">${queueSelect('')}</select></label>
           <button class="button primary" type="submit">新增</button>
         </form>
         <div class="activity-reaction-admin-list">
           ${rows.length ? rows.map((item, index) => `<div class="activity-reaction-admin-row" data-reaction-row="${esc(item.id)}">
             <input value="${esc(item.name)}" maxlength="40" aria-label="客户反应名称">
+            <select aria-label="行动归类">${queueSelect(item.actionQueueKey)}</select>
             <div class="activity-reaction-order">
               <button class="icon-button" type="button" data-reaction-move="${esc(item.id)}" data-direction="-1" ${index === 0 ? 'disabled' : ''} aria-label="上移">↑</button>
               <button class="icon-button" type="button" data-reaction-move="${esc(item.id)}" data-direction="1" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="下移">↓</button>
@@ -10426,11 +10502,12 @@
     if (!isRealAdmin()) return toast('身份检查状态下不能修改客户反应');
     const row = document.querySelector(`[data-reaction-row="${CSS.escape(reactionId)}"]`);
     const name = row?.querySelector('input')?.value.trim() || '';
+    const actionQueueKey = row?.querySelector('select')?.value || '';
     if (!name) return toast('客户反应名称不能为空');
     await api(`/activity-reactions/${encodeURIComponent(reactionId)}`, {
-      method: 'PATCH', body: JSON.stringify({ name }),
+      method: 'PATCH', body: JSON.stringify({ name, actionQueueKey }),
     });
-    await reloadActivityReactionAdmin('客户反应名称已更新');
+    await reloadActivityReactionAdmin('客户反应与行动归类已更新');
   }
 
   async function removeActivityReaction(reactionId) {
@@ -11118,6 +11195,9 @@
     if (aiGateChanged && state.authorizedBusinessLists.notifications.filterMount) {
       await initializeAuthorizedBusinessFilters('notifications', { force: true });
     }
+    if (state.authorizedBusinessLists.pipeline.filterController) {
+      await loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
+    }
     renderImpersonationBanner();
     closeModal();
     if (message) toast(message);
@@ -11313,10 +11393,13 @@
         toast('影子评估已保存');
       } else if (form.id === 'activityReactionCreateForm') {
         if (!isRealAdmin()) throw new Error('身份检查状态下不能修改客户反应');
-        const name = String(formPayload(form).name || '').trim();
+        const reactionPayload = formPayload(form);
+        const name = String(reactionPayload.name || '').trim();
         if (!name) throw new Error('客户反应名称不能为空');
         await api('/activity-reactions', {
-          method: 'POST', body: JSON.stringify({ name }),
+          method: 'POST', body: JSON.stringify({
+            name, actionQueueKey: String(reactionPayload.actionQueueKey || ''),
+          }),
         });
         await reloadActivityReactionAdmin('客户反应已新增');
       } else if (form.id === 'todayTaskOverdueForm') {
@@ -11512,6 +11595,13 @@
         state.activitySubmitting = true;
         submitButtons.forEach(button => { button.disabled = true; });
         try {
+          if (payload.reactionOptionId === '__custom__') {
+            if (!String(payload.reactionCustom || '').trim()) throw new Error('请填写自定义客户反应');
+            payload.reactionOptionId = '';
+            payload.reactionCustom = String(payload.reactionCustom || '').trim();
+          } else {
+            delete payload.reactionCustom;
+          }
           if (payload.noPlan) {
             payload.nextAction = '';
             payload.nextActionAt = '';
@@ -12096,6 +12186,17 @@
     if (todayTaskAction) {
       await openTodayTaskAction(todayTaskById(todayTaskAction.dataset.todayTaskId));
     }
+    const pipelineQueue = event.target.closest('[data-pipeline-queue]');
+    if (pipelineQueue) {
+      state.pipelineActionQueue = pipelineQueue.dataset.pipelineQueue || '';
+      await loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
+      $('#pipelineBoard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    const pipelineProgress = event.target.closest('[data-pipeline-progress]');
+    if (pipelineProgress) await openActivityModal(pipelineProgress.dataset.pipelineProgress);
+    const pipelineAssistance = event.target.closest('[data-pipeline-assistance]');
+    if (pipelineAssistance) await openActivityModal(pipelineAssistance.dataset.pipelineAssistance, 'manager');
+    if (event.target.closest('[data-pipeline-manager-tasks]')) switchView('managerTasks');
     const mismatchRecord = event.target.closest('[data-open-mismatch-record]');
     if (mismatchRecord) openMismatchRecord(mismatchRecord.dataset.openMismatchRecord);
     const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
