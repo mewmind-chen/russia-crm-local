@@ -9,7 +9,7 @@ const COPY_TABLES = Object.freeze([
   'customer_pool', 'customers', 'company_screening', 'company_entry_points', 'company_identifiers',
   'website_checks', 'sanction_checks', 'contacts', 'recon_jobs', 'recon_results', 'recon_evidence',
   'contact_recon_jobs', 'contact_recon_audit', 'person_candidates', 'contact_methods', 'person_evidence',
-  'crm_intake_batches', 'crm_intake_items', 'crm_accounts', 'crm_account_contacts',
+  'crm_intake_batches', 'crm_intake_items', 'crm_accounts', 'crm_customer_stars', 'crm_account_contacts',
   'crm_activity_reaction_options', 'crm_activities',
   'crm_rfqs', 'crm_quotes', 'crm_orders', 'crm_manager_evaluations', 'tags', 'customer_tags',
 ]);

@@ -49,7 +49,7 @@ test('does not infer relative time for legacy, empty, or invalid plan timestamps
 });
 
 test('loads the browser countdown module before the CRM app', () => {
-  const cacheToken = '20260821-issue335-action-command-v1';
+  const cacheToken = '20260821-issue336-customer-stars-v1';
   const moduleIndex = htmlSource.indexOf('/sales-assets/next-action-time.js?v=');
   const appIndex = htmlSource.indexOf('/sales-assets/app.js?v=');
   assert.ok(moduleIndex >= 0, 'next-action-time browser module must be loaded');
@@ -175,7 +175,7 @@ function executableDrawerLifecycle() {
   ].join('\n');
   const dependencyNames = [
     'renderMismatchRecordDrawer', 'renderRecycleDrawer', 'resetDrawerActions',
-    'configureDrawerActions', 'stageLabel', 'accountDisplayName', 'accountIdentity',
+    'configureDrawerActions', 'syncStarButton', 'stageLabel', 'accountDisplayName', 'accountIdentity',
     'alertFor', 'creatorDisplayName', 'customerAIEnabled', 'technicalAIPresentationAllowed',
     'isSalesRepresentative', 'labelsForAccount', 'relative',
     'hasMeaningfulAlertCopy', 'alertReasons', 'esc', 'shortDate', 'sourceTagMarkup',
@@ -184,7 +184,7 @@ function executableDrawerLifecycle() {
   ];
   const identity = value => String(value || '');
   const dependencyValues = [
-    () => {}, () => {}, () => {}, () => {}, identity, () => 'Example', identity,
+    () => {}, () => {}, () => {}, () => {}, () => {}, identity, () => 'Example', identity,
     () => null, () => 'System', () => false, () => false, () => false, () => [], () => 'never',
     () => false, () => [], identity, identity, () => '', () => '',
     () => '', () => '', () => false, () => false, () => false, () => '',

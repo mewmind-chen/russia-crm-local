@@ -354,7 +354,8 @@ test('plan is read-only and classification is complete on real schema', () => {
   assert.ok(plan.replacedTables.includes('customer_pool'));
   assert.ok(plan.preservedTables.includes('sales_users'));
   assert.equal(plan.preservedTables.length, 40);
-  assert.equal(plan.clearedTables.length, 86);
+  assert.ok(plan.clearedTables.includes('crm_customer_stars'));
+  assert.equal(plan.clearedTables.length, 87);
   assert.equal(plan.replacedTables.length, 10);
   assert.equal(plan.beforeCounts.customer_pool, 1);
   assert.equal(plan.beforeCounts.crm_plan_only_action_requests, 1);
@@ -765,10 +766,11 @@ test('apply rebuilds master and intake in one transaction with reconciliation', 
   assert.equal(report.checks.integrityCheck, 'ok');
   assert.equal(report.checks.passed, true);
   assert.deepEqual(report.checks.tableCountMismatches, {});
-  assert.equal(Object.keys(report.checks.tableCounts).length, 96);
+  assert.equal(Object.keys(report.checks.tableCounts).length, 97);
   assert.equal(report.checks.tableCounts.crm_intake_batches, 1);
   assert.equal(report.checks.tableCounts.crm_intake_items, 2);
   assert.equal(report.checks.tableCounts.crm_accounts, 0);
+  assert.equal(report.checks.tableCounts.crm_customer_stars, 0);
   assert.equal(report.checks.tableCounts.company_identifiers, 1);
   assert.equal(report.checks.tableCounts.company_screening, 2);
   assert.equal(report.checks.tableCounts.contacts, 1);

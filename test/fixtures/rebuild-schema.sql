@@ -914,6 +914,13 @@ CREATE TABLE crm_ai_usage_ledger (
       UNIQUE (reservation_id,sequence)
     );
 
+CREATE TABLE crm_customer_stars (
+    id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,user_id TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+    starred_at TEXT NOT NULL,unstarred_at TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL,
+    UNIQUE(customer_id,user_id)
+  );
+
 CREATE TABLE crm_audit_log (
     id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT '',action TEXT NOT NULL,
     entity_type TEXT NOT NULL,entity_id TEXT NOT NULL DEFAULT '',detail_json TEXT NOT NULL DEFAULT '{}',
