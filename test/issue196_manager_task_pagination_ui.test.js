@@ -122,15 +122,14 @@ test('manager task and 30/90 metric summaries come from authorized server aggreg
   assert.match(metrics, /serverSummary\?\.ratios\?\.onTimeActionRate/);
   assert.match(metrics, /meta\.loaded[\s\S]{0,260}serverSummary/);
   assert.match(metrics, /row\.actorName \|\| row\.actorId/);
-  assert.match(metrics, /<button[^>]*data-manager-metric-owner=/);
+  assert.match(functionBlock(app, 'managerMetricValueButton'), /<button[^>]*data-manager-metric-kind=[^>]*data-manager-metric-owner=/);
   assert.doesNotMatch(metrics, /<article[^>]*data-manager-metric-owner=/);
 
   const drilldown = functionBlock(app, 'drillDownManagerMetric');
-  assert.match(drilldown, /metricController\.serialize\('applied'\)/);
-  assert.match(drilldown, /riskController\.getSchema\(\)/);
-  assert.match(drilldown, /filter\.field === 'metric_window'/);
-  assert.match(drilldown, /riskController\.setDraft\(filter\.field, filter\.value\)/);
-  assert.match(drilldown, /riskController\.setDraft\('owner', \[String\(ownerId\)\]\)/);
-  assert.match(drilldown, /riskController\.apply\(\)/);
-  assert.match(app, /drillDownManagerMetric\(managerMetric\.dataset\.managerMetricOwner\)/);
+  assert.match(drilldown, /kind/);
+  assert.match(drilldown, /rangeDays: String\(state\.managerMetricRange\)/);
+  assert.match(drilldown, /params\.set\('actorId', String\(ownerId\)\)/);
+  assert.match(drilldown, /api\(`\/manager-metrics\/drilldown\?\$\{params\}`\)/);
+  assert.match(app, /managerMetric\.dataset\.managerMetricOwner \|\| ''/);
+  assert.match(app, /managerMetric\.dataset\.managerMetricKind/);
 });

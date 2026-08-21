@@ -88,6 +88,9 @@ test('Issue #116 management updates are versioned and immediately change user sc
     cookie: fx.otherCookie,
   })).json();
   assert.deepEqual(schema.schema.fields.map(item => item.key), ['country', 'stage']);
+  const stage = schema.schema.fields.find(item => item.key === 'stage');
+  assert.equal(stage.options.find(option => option.value === 'repeat')?.label, '复购客户');
+  assert.equal(typeof stage.options.find(option => option.value === 'repeat')?.count, 'number');
 
   const conflict = await fx.request(
     `/api/sales-crm/filter-permissions/groups/${fx.salesGroupId}`,

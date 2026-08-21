@@ -6,6 +6,7 @@ const Database = require('better-sqlite3');
 const { installDeferredPlanSchema } = require('../lib/deferred_plan');
 const {
   buildCustomerPlanRisk,
+  buildManagerMetricDrilldown,
   buildManagerMetrics,
   isEffectiveCustomerAction,
 } = require('../lib/manager_metrics');
@@ -430,5 +431,31 @@ test('sales metrics are scoped before aggregation and expose no other salesperso
     assert.equal(metricFor(adminResult, 'SALES-B').counts.deferredRecords, 2);
     assert.equal(metricFor(adminResult, 'SALES-ZERO').sampleSize, 0);
     assert.ok(metricFor(adminResult, 'SALES-ZERO').unavailable);
+  } finally { db.close(); }
+});
+
+test('manager metric drill-down returns the exact permission-scoped customer cohort', () => {
+  const db = memoryDb();
+  try {
+    addSales(db, 'SALES-A');
+    addSales(db, 'SALES-B');
+    const own = addAccount(db, 'OWN-A', 'SALES-A');
+    const other = addAccount(db, 'OTHER-B', 'SALES-B');
+    addDeferred(db, 'D-OWN', own, 'SALES-A', ago({ days: 5 }));
+    addDeferred(db, 'D-OTHER', other, 'SALES-B', ago({ days: 5 }));
+
+    const adminRows = buildManagerMetricDrilldown(db, {
+      user: admin(), kind: 'deferredCustomers', actorId: 'SALES-A', rangeDays: 30, now: NOW,
+    });
+    assert.equal(adminRows.label, '延期客户');
+    assert.equal(adminRows.total, 1);
+    assert.deepEqual(adminRows.rows.map(row => row.customerId), [own]);
+    assert.equal(adminRows.rows[0].ownerId, 'SALES-A');
+
+    const salesRows = buildManagerMetricDrilldown(db, {
+      user: user('SALES-A', 'sales', {}), kind: 'deferredCustomers', rangeDays: 30, now: NOW,
+    });
+    assert.deepEqual(salesRows.rows.map(row => row.customerId), [own]);
+    assert.equal(JSON.stringify(salesRows).includes(other), false);
   } finally { db.close(); }
 });

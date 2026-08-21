@@ -183,6 +183,7 @@
     managerTaskPage: 1,
     managerTaskPageSize: 50,
     managerMetricRange: 30,
+    managerMetricDrilldown: null,
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -1118,6 +1119,8 @@
     if (state.customerFilterMount && !force) return;
     const initializeEpoch = ++state.customerInitializeEpoch;
     state.customerFilterMount?.destroy();
+    state.customerFilterMount = null;
+    state.customerFilterController = null;
     root.innerHTML = window.TradePulseFilterComponent.renderFilterComponent({ status: 'loading' });
     try {
       const pageKey = 'customers';
@@ -1779,11 +1782,65 @@
     const alerts = state.data.alerts.filter(item => item.intakeItemId || ids.has(item.customerId));
     return {
       accounts: accounts.length, contacted: atLeast('contacted'), replies: atLeast('replied'), meetings: atLeast('meeting'),
-      rfqs: rfqs.length, quotes: quotes.length, orders: orders.length,
+      rfqs: atLeast('rfq'), quotes: quotes.length, orders: atLeast('won'),
       overdue: alerts.filter(item => alertHasCode(item, 'OVERDUE')).length,
       managerNeeded: alerts.filter(item => alertHasCode(item, 'MANAGER_NEEDED')).length,
       revenue: orders.reduce((sum, item) => sum + Number(item.amount), 0),
     };
+  }
+
+  function applyCustomerDrilldownFilters(stageKeys = []) {
+    const controller = state.customerFilterController;
+    if (!controller) return false;
+    state.leadWorkflowApplying = true;
+    controller.clearAll({ apply: false });
+    if (stageKeys.length) controller.setDraft('stage', stageKeys);
+    controller.apply();
+    state.leadWorkflowApplying = false;
+    return true;
+  }
+
+  async function waitForDrilldownFilterController(pageKey) {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (pageKey === 'customers') {
+        if (state.customerFilterMount && state.customerFilterController) return true;
+      } else {
+        const meta = state.authorizedBusinessLists[pageKey];
+        if (meta?.filterMount && meta?.filterController) return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return false;
+  }
+
+  async function openCustomerStageDrilldown(stageKey) {
+    const stageOrder = Object.fromEntries(state.data.stages.map((item, index) => [item.key, index]));
+    const stageKeys = state.data.stages
+      .filter(item => !['lost', 'disqualified'].includes(item.key)
+        && stageOrder[item.key] >= stageOrder[stageKey])
+      .map(item => item.key);
+    state.stageReached = stageKey;
+    switchView('customers');
+    if (!await waitForDrilldownFilterController('customers')
+        || !applyCustomerDrilldownFilters(stageKeys)) return toast('客户筛选暂不可用');
+    $('#customerAuthorizedFilters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function openDashboardDrilldown(key) {
+    if (key === 'assigned') {
+      switchView('pool');
+      if (!await waitForDrilldownFilterController('intake')) return toast('线索筛选暂不可用');
+      applyIntakeStatCard('assigned');
+      return;
+    }
+    if (key === 'customers') {
+      state.stageReached = '';
+      switchView('customers');
+      if (!await waitForDrilldownFilterController('customers')
+          || !applyCustomerDrilldownFilters()) return toast('客户筛选暂不可用');
+      return;
+    }
+    await openCustomerStageDrilldown(key);
   }
 
   function renderDashboard() {
@@ -1791,15 +1848,15 @@
     const summary = computeSummary(accounts);
     const intakeStats = state.data.intake?.stats || {};
     const cards = [
-      ['未开发线索', intakeStats.assigned || 0, '等待领取', ''],
-      ['CRM客户', summary.accounts, '已领取并开始开发', ''],
-      ['获得回复', summary.replies, `触达后 ${percent(summary.replies, summary.contacted)}`, ''],
-      ['深度会议', summary.meetings, `回复后 ${percent(summary.meetings, summary.replies)}`, ''],
-      ['正式询价', summary.rfqs, `会议后 ${percent(summary.rfqs, summary.meetings)}`, ''],
-      ['成交订单', summary.orders, money(summary.revenue), ''],
+      ['assigned', '未开发线索', intakeStats.assigned || 0, '等待领取', ''],
+      ['customers', 'CRM客户', summary.accounts, '已领取并开始开发', ''],
+      ['replied', '获得回复', summary.replies, `触达后 ${percent(summary.replies, summary.contacted)}`, ''],
+      ['meeting', '深度会议', summary.meetings, `回复后 ${percent(summary.meetings, summary.replies)}`, ''],
+      ['rfq', '正式询价', summary.rfqs, `会议后 ${percent(summary.rfqs, summary.meetings)}`, ''],
+      ['won', '成交订单', summary.orders, money(summary.revenue), ''],
     ];
-    $('#summaryCards').innerHTML = cards.map(([label, value, note, cls]) => (
-      `<article class="metric ${cls}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`
+    $('#summaryCards').innerHTML = cards.map(([key, label, value, note, cls]) => (
+      `<button type="button" class="metric ${cls}" data-dashboard-drilldown="${esc(key)}"><span>${label}</span><strong>${value}</strong><small>${note}</small></button>`
     )).join('');
     const attentionSummary = $('#attentionSummary');
     if (attentionSummary) {
@@ -1816,10 +1873,10 @@
     const max = Math.max(1, funnel[0]?.count || 1);
     $('#funnelChart').innerHTML = funnel.map((item, index) => {
       const previous = index ? funnel[index - 1].count : accounts.length;
-      return `<div class="funnel-row" data-stage-jump="${item.key}" title="到达过该阶段的客户数，点击查看累计口径列表">
+      return `<button type="button" class="funnel-row" data-stage-jump="${item.key}" title="到达过该阶段的客户数，点击查看累计口径列表">
         <span class="funnel-label">${esc(item.label)}</span><div class="funnel-track"><div class="funnel-bar" style="width:${item.count / max * 100}%"></div></div>
         <span class="funnel-count">${item.count}</span><span class="funnel-rate">${percent(item.count, previous)}</span>
-      </div>`;
+      </button>`;
     }).join('');
     const attention = scopedAlerts().slice(0, 5);
     $('#attentionList').innerHTML = attention.length ? attention.map(item => {
@@ -4643,11 +4700,11 @@
     };
     const objectCount = Number(summary.objects ?? summary.objectCount ?? summary.total ?? meta.total ?? all.length);
     $('#alertSummary').innerHTML = [
-      ['待处理对象', objectCount, reasonText],
-      ['立即处理', counts.immediate, '询价、主管协助或领取时限事项'],
-      ['今天完成', counts.today, '超期、缺少下一步或未首次触达'],
-      ['需要关注', counts.attention, '存在阶段停滞风险'],
-    ].map(([label, value, text]) => `<article class="alert-kpi"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></article>`).join('');
+      ['', '待处理对象', objectCount, reasonText],
+      ['immediate', '立即处理', counts.immediate, '询价、主管协助或领取时限事项'],
+      ['today', '今天完成', counts.today, '超期、缺少下一步或未首次触达'],
+      ['attention', '需要关注', counts.attention, '存在阶段停滞风险'],
+    ].map(([key, label, value, text]) => `<button type="button" class="alert-kpi ${state.alertSeverity === key ? 'is-active' : ''}" data-alert-drilldown="${esc(key)}" aria-pressed="${state.alertSeverity === key}"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></button>`).join('');
     const rows = all.filter(item => !state.alertSeverity || item.urgency === state.alertSeverity);
     const desktopTable = table(
       ['等级', '客户', '主要原因 / 其他原因', '计划时间', '负责人', '唯一建议动作'],
@@ -4758,6 +4815,32 @@
       root.innerHTML = '';
       return;
     }
+    const drilldown = state.managerMetricDrilldown;
+    const filters = $('#managerRiskFilters');
+    const pagination = $('#managerRiskPagination');
+    if (drilldown) {
+      filters?.classList.add('hidden');
+      pagination?.classList.add('hidden');
+      if ($('#managerRiskResultCount')) {
+        $('#managerRiskResultCount').textContent = drilldown.loading
+          ? '正在读取对应客户…'
+          : `${drilldown.label || '统计明细'} · ${Number(drilldown.total || 0)} 个客户`;
+      }
+      root.innerHTML = drilldown.loading
+        ? '<div class="empty">正在读取对应客户…</div>'
+        : drilldown.error
+          ? `<div class="empty">${esc(drilldown.error)}</div>`
+          : `<div class="manager-risk-drilldown-head"><strong>${esc(drilldown.label || '统计明细')}</strong><button type="button" class="text-button" data-clear-manager-metric-drilldown>返回全部待复盘客户</button></div>${drilldown.rows?.length
+            ? drilldown.rows.map(row => `<article class="manager-risk-card">
+              <div><strong>${esc(row.nickname || row.companyName || row.customerId)}</strong><span>${esc(row.customerId)} · ${esc(stageLabel(row.stage))}</span></div>
+              <div><span>负责人 ${esc(row.ownerName || row.ownerId || '未记录')}</span><span>最近动作 ${esc(row.lastActivityAt ? shortDate(row.lastActivityAt, true) : '暂无')}</span><span>下一步 ${esc(row.nextAction || '暂未设置')}${row.nextActionAt ? ` · ${esc(shortDate(row.nextActionAt, true))}` : ''}</span></div>
+              <button class="text-button" type="button" data-open-customer="${esc(row.accountId)}">查看客户 →</button>
+            </article>`).join('')
+            : '<div class="empty">当前口径下没有客户</div>'}${Number(drilldown.total || 0) > Number(drilldown.pageSize || 50) ? `<nav class="manager-drilldown-pagination" aria-label="统计明细分页"><button type="button" class="button secondary" data-manager-drilldown-page="${Math.max(1, Number(drilldown.page || 1) - 1)}" ${Number(drilldown.page || 1) <= 1 ? 'disabled' : ''}>上一页</button><span>第 ${Number(drilldown.page || 1)} / ${Math.max(1, Math.ceil(Number(drilldown.total || 0) / Number(drilldown.pageSize || 50)))} 页</span><button type="button" class="button secondary" data-manager-drilldown-page="${Number(drilldown.page || 1) + 1}" ${drilldown.hasMore ? '' : 'disabled'}>下一页</button></nav>` : ''}`;
+      return;
+    }
+    filters?.classList.remove('hidden');
+    pagination?.classList.remove('hidden');
     const meta = state.authorizedBusinessLists.manager_risks;
     const rows = managerTaskRows('manager_risks');
     root.innerHTML = meta.loading && !meta.loaded
@@ -4790,24 +4873,37 @@
     };
   }
 
-  async function drillDownManagerMetric(ownerId) {
-    const metricController = state.authorizedBusinessLists.manager_metrics.filterController;
-    if (!metricController || !ownerId) return;
-    await initializeAuthorizedBusinessFilters('manager_risks');
-    const riskController = state.authorizedBusinessLists.manager_risks.filterController;
-    if (!riskController) return toast('客户风险筛选暂不可用');
-    const riskFields = new Set(riskController.getSchema().fields.map(field => field.key));
-    if (!riskFields.has('owner')) return toast('当前账号未获授权使用负责人下钻');
-    const applied = metricController.serialize('applied');
-    riskController.clearAll({ apply: false });
-    for (const filter of applied.filters || []) {
-      if (filter.field === 'metric_window' || filter.field === 'owner'
-          || !riskFields.has(filter.field)) continue;
-      riskController.setDraft(filter.field, filter.value);
+  async function drillDownManagerMetric(ownerId, kind, page = 1) {
+    if (!kind) return;
+    state.managerMetricDrilldown = { loading: true, label: '统计明细', rows: [], total: 0 };
+    renderManagerRisks();
+    $('#managerRiskList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+      const params = new URLSearchParams({
+        kind,
+        rangeDays: String(state.managerMetricRange),
+        page: String(Math.max(1, Number(page) || 1)),
+        pageSize: '50',
+      });
+      if (ownerId) params.set('actorId', String(ownerId));
+      state.managerMetricDrilldown = await api(`/manager-metrics/drilldown?${params}`);
+    } catch (error) {
+      state.managerMetricDrilldown = { loading: false, error: error.message, rows: [], total: 0 };
     }
-    riskController.setDraft('owner', [String(ownerId)]);
-    riskController.apply();
-    $('#managerRiskFilters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderManagerRisks();
+  }
+
+  function managerMetricAvailabilityCopy(row) {
+    if (row.needsManagerReview) return '已达到主管复盘条件';
+    const reasons = new Set(row.unavailable?.reasons || []);
+    if (reasons.has('active_sample_below_minimum')) return '当前开发客户较少，暂不判断整体风险';
+    if (reasons.has('anomaly_customers_below_minimum')) return '需要关注的客户较少，暂不判断整体风险';
+    if (reasons.has('anomaly_ratio_below_threshold')) return '需要关注的客户占比较低';
+    return '当前没有明显异常';
+  }
+
+  function managerMetricValueButton(row, kind, label, value, note = '') {
+    return `<button type="button" class="manager-metric-value" data-manager-metric-kind="${esc(kind)}" data-manager-metric-owner="${esc(row.actorId)}"><span>${esc(label)}</span><strong>${esc(value)}</strong>${note ? `<small>${esc(note)}</small>` : ''}</button>`;
   }
 
   function renderManagerMetrics() {
@@ -4837,22 +4933,30 @@
       : metricSummary(rows);
     if ($('#managerMetricSummary')) {
       $('#managerMetricSummary').innerHTML = [
-        ['活跃客户样本', summary.sampleSize],
-        ['延期记录', summary.counts.deferredRecords],
-        ['达到客户阈值', summary.counts.thresholdCustomers],
-        ['延期后形成计划率', `${summary.planRate}%`],
-        ['计划后按时动作率', `${summary.onTimeRate}%`],
-        ['首次触达后沉默', summary.counts.firstTouchSilentCustomers],
-        ['介入后仍未改善', summary.counts.unimprovedAfterInterventionCustomers],
-      ].map(([label, value]) => `<article><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`).join('');
+        ['activeCustomers', '当前开发客户', summary.sampleSize, '点击查看客户'],
+        ['deferredCustomers', '延期客户', summary.counts.deferredCustomers, '点击查看客户'],
+        ['thresholdCustomers', '需要主管关注', summary.counts.thresholdCustomers, '点击查看客户'],
+        ['plannedAfterDeferredCustomers', '延期后已形成计划', summary.counts.plannedAfterDeferredCustomers, `形成率 ${summary.planRate}%`],
+        ['onTimeActionCustomers', '计划后按时行动', summary.counts.onTimeActionCustomers, `按时率 ${summary.onTimeRate}%`],
+        ['firstTouchSilentCustomers', '首次触达后未继续推进', summary.counts.firstTouchSilentCustomers, '点击查看客户'],
+        ['unimprovedAfterInterventionCustomers', '协助后仍未改善', summary.counts.unimprovedAfterInterventionCustomers, '点击查看客户'],
+      ].map(([kind, label, value, note]) => `<button type="button" class="metric" data-manager-metric-kind="${esc(kind)}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
     }
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取延期统计…</div>'
       : rows.length
         ? rows.map(row => `<article class="manager-metric-card">
-          <header><div><strong>${esc(row.actorName || row.actorId)}</strong><span>近 ${Number(row.rangeDays)} 天 · 样本 ${Number(row.sampleSize || 0)}</span></div>${row.needsManagerReview ? '<span class="pill amber">需要主管复盘</span>' : '<span class="pill gray">样本未达阈值</span>'}</header>
-          <dl><div><dt>延期客户</dt><dd>${Number(row.counts?.deferredCustomers || 0)} · ${Number(row.ratios?.deferredCustomerRate || 0)}%</dd></div><div><dt>延期后形成计划</dt><dd>${Number(row.counts?.plannedAfterDeferredCustomers || 0)} · ${Number(row.ratios?.planFormationRate || 0)}%</dd></div><div><dt>计划后按时动作</dt><dd>${Number(row.counts?.onTimeActionCustomers || 0)} · ${Number(row.ratios?.onTimeActionRate || 0)}%</dd></div><div><dt>沉默 / 未改善</dt><dd>${Number(row.counts?.firstTouchSilentCustomers || 0)} / ${Number(row.counts?.unimprovedAfterInterventionCustomers || 0)}</dd></div></dl>
-          <p>${row.unavailable?.reasons?.length ? `<span class="subtle">${esc(row.unavailable.reasons.join('、'))}</span>` : ''}<button class="text-button" type="button" data-manager-metric-owner="${esc(row.actorId)}">查看该销售客户风险</button></p>
+          <header><div><strong>${esc(row.actorName || row.actorId)}</strong><span>近 ${Number(row.rangeDays)} 天 · 当前开发客户 ${Number(row.sampleSize || 0)}</span></div>${row.needsManagerReview ? '<span class="pill amber">需要主管复盘</span>' : '<span class="pill gray">暂不判断整体风险</span>'}</header>
+          <div class="manager-metric-values">${[
+            managerMetricValueButton(row, 'activeCustomers', '当前开发客户', Number(row.counts?.activeCustomers || 0)),
+            managerMetricValueButton(row, 'deferredCustomers', '延期客户', Number(row.counts?.deferredCustomers || 0), `${Number(row.ratios?.deferredCustomerRate || 0)}%`),
+            managerMetricValueButton(row, 'thresholdCustomers', '需要主管关注', Number(row.counts?.thresholdCustomers || 0), `${Number(row.ratios?.anomalyCustomerRate || 0)}%`),
+            managerMetricValueButton(row, 'plannedAfterDeferredCustomers', '延期后已形成计划', Number(row.counts?.plannedAfterDeferredCustomers || 0), `${Number(row.ratios?.planFormationRate || 0)}%`),
+            managerMetricValueButton(row, 'onTimeActionCustomers', '计划后按时行动', Number(row.counts?.onTimeActionCustomers || 0), `${Number(row.ratios?.onTimeActionRate || 0)}%`),
+            managerMetricValueButton(row, 'firstTouchSilentCustomers', '首次触达后未继续推进', Number(row.counts?.firstTouchSilentCustomers || 0)),
+            managerMetricValueButton(row, 'unimprovedAfterInterventionCustomers', '协助后仍未改善', Number(row.counts?.unimprovedAfterInterventionCustomers || 0)),
+          ].join('')}</div>
+          <p><span class="subtle">${esc(managerMetricAvailabilityCopy(row))}</span></p>
         </article>`).join('')
         : `<div class="empty">${esc(meta.error || `近 ${state.managerMetricRange} 天暂无统计数据`)}</div>`;
     renderManagerRisks();
@@ -11905,8 +12009,23 @@
     if (accessSection) switchAccessSection(accessSection.dataset.accessSection);
     const planMode = event.target.closest('#planModeTabs [data-plan-mode]');
     if (planMode) setNextPlanMode(planMode.dataset.planMode);
-    const managerMetric = event.target.closest('[data-manager-metric-owner]');
-    if (managerMetric) await drillDownManagerMetric(managerMetric.dataset.managerMetricOwner);
+    const managerMetric = event.target.closest('[data-manager-metric-kind]');
+    if (managerMetric) await drillDownManagerMetric(
+      managerMetric.dataset.managerMetricOwner || '',
+      managerMetric.dataset.managerMetricKind,
+    );
+    if (event.target.closest('[data-clear-manager-metric-drilldown]')) {
+      state.managerMetricDrilldown = null;
+      renderManagerRisks();
+    }
+    const managerDrilldownPage = event.target.closest('[data-manager-drilldown-page]');
+    if (managerDrilldownPage && state.managerMetricDrilldown) {
+      await drillDownManagerMetric(
+        state.managerMetricDrilldown.actorId || '',
+        state.managerMetricDrilldown.kind,
+        Number(managerDrilldownPage.dataset.managerDrilldownPage || 1),
+      );
+    }
     const managerTask = event.target.closest('[data-manager-task-id]');
     if (managerTask) await openManagerTaskDetail(managerTask.dataset.managerTaskId);
     if (event.target.closest('#managerTaskRefresh')) {
@@ -11914,6 +12033,7 @@
       await loadAuthorizedBusinessPage('manager_tasks', { reset: true });
     }
     if (event.target.closest('#managerMetricRefresh')) {
+      state.managerMetricDrilldown = null;
       await Promise.all([
         loadAuthorizedBusinessPage('manager_metrics', { reset: true }),
         loadAuthorizedBusinessPage('manager_risks', { reset: true }),
@@ -11922,6 +12042,7 @@
     const managerRange = event.target.closest('[data-manager-range]');
     if (managerRange) {
       state.managerMetricRange = Number(managerRange.dataset.managerRange) === 90 ? 90 : 30;
+      state.managerMetricDrilldown = null;
       state.authorizedBusinessLists.manager_metrics.page = 1;
       state.authorizedBusinessLists.manager_risks.page = 1;
       const metricController = state.authorizedBusinessLists.manager_metrics.filterController;
@@ -11994,11 +12115,14 @@
       openCustomerProfile(master.dataset.openMaster);
     }
     const stageJump = event.target.closest('[data-stage-jump]');
-    if (stageJump) {
-      switchView('customers');
-      state.stageReached = '';
-      state.customerFilterController?.setDraft('stage', [stageJump.dataset.stageJump]);
-      state.customerFilterController?.apply();
+    if (stageJump) await openCustomerStageDrilldown(stageJump.dataset.stageJump);
+    const dashboardDrilldown = event.target.closest('[data-dashboard-drilldown]');
+    if (dashboardDrilldown) await openDashboardDrilldown(dashboardDrilldown.dataset.dashboardDrilldown);
+    const alertDrilldown = event.target.closest('[data-alert-drilldown]');
+    if (alertDrilldown) {
+      state.alertSeverity = alertDrilldown.dataset.alertDrilldown || '';
+      renderAlerts();
+      $('#alertTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     const quickView = event.target.closest('[data-customer-quick]');
     if (quickView) {
@@ -12932,7 +13056,10 @@
       const viewChanged = state.view !== canonicalView;
       state.view = canonicalView;
       if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();
-      if (viewChanged && canonicalView === 'managerMetrics') state.managerMetricRange = 30;
+      if (viewChanged && canonicalView === 'managerMetrics') {
+        state.managerMetricRange = 30;
+        state.managerMetricDrilldown = null;
+      }
     state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
     $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
