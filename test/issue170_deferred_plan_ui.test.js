@@ -208,7 +208,7 @@ test('30 and 90 day metrics support authorized filtering and customer history dr
 
 test('AI-off mode hides AI-only material while manual plan workflow remains available', () => {
   const visibility = functionBlock(app, 'applyBusinessAIVisibility');
-  assert.match(visibility, /customerAIEnabled\(\)/);
+  assert.match(visibility, /technicalAIPresentationAllowed\(\)/);
   assert.match(visibility, /\[data-ai-business\]/);
 
   const plan = functionBlock(app, 'openNextPlanTaskModal');

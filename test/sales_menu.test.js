@@ -80,7 +80,7 @@ test('customer filters are server-authorized and do not expose a static evaluati
 
 test('customer profiles contain contextual AI Q&A', () => {
   assert.match(appJs, /function customerAiSection\(context\)/);
-  assert.match(appJs, /if \(!customerAIEnabled\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
+  assert.match(appJs, /if \(!technicalAIPresentationAllowed\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
   assert.match(appJs, /id="drawerAiForm"/);
   assert.match(appJs, /\/api\/assistant\/chat/);
 });

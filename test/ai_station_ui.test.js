@@ -69,7 +69,7 @@ test('customer fit UI exposes result metadata, evidence and every job state', ()
 
 test('customer fit actions respect AI permission and identity inspection', () => {
   assert.match(app, /state\.data\?\.features\?\.aiStations/);
-  assert.match(app, /station\?\.classList\.toggle\('hidden', !customerAIEnabled\(\)\)/);
+  assert.match(app, /station\?\.classList\.toggle\('hidden', !technicalAIPresentationAllowed\(\)\)/);
   assert.match(app, /const canRun = can\('use_ai_assistant'\) && !state\.data\?\.impersonation/);
   assert.match(app, /data-run-customer-fit/);
   assert.match(app, /data-retry-ai-job/);
@@ -115,7 +115,7 @@ test('AI task detail exposes decision versions and evidence trace without prompt
 });
 
 test('notification center exposes unread counts, scoped read actions and customer navigation', () => {
-  assert.match(html, /data-view="notifications" data-permission="view_customers"/);
+  assert.match(html, /data-view="notifications" data-permission="view_notifications"/);
   for (const id of [
     'notificationsView', 'notificationButton', 'navNotificationCount', 'topNotificationCount',
     'notificationSummary', 'notificationTabs', 'notificationList', 'notificationRefresh',
