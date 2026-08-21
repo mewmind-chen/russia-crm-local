@@ -4,7 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fixtures = require('./helpers/permission_fixture');
 
-const DEFAULT_REACTIONS = ['已完成', '有兴趣', '需要跟进', '未接通', '暂无回复', '明确拒绝'];
+const DEFAULT_REACTIONS = [
+  '已完成', '有兴趣', '需要跟进', '未接通', '暂无回复', '明确拒绝',
+  '价格贵', '暂无询价', '等项目', '持续询价未成交', '只问不买',
+  '态度消极', '配合度低', '停止报价', '有新对接人', '对接到决策人',
+  '对接到老板/管理层', '价格接受', '等待订单', '已下单', '订单增加',
+  '复购机会', '需要资料', '需要样品', '需要认证', '需要技术确认', '需要报价策略',
+];
 
 async function responseJson(response) {
   return { response, body: await response.json() };
@@ -28,7 +34,16 @@ async function createReaction(fx, cookie, name) {
   return { response, body, reaction: body.reaction };
 }
 
-test('reaction migration installs the six ordered defaults once', async t => {
+async function createMappedReaction(fx, cookie, name, actionQueueKey) {
+  const { response, body } = await responseJson(await fx.request('/api/sales-crm/activity-reactions', {
+    cookie,
+    method: 'POST',
+    body: { name, actionQueueKey },
+  }));
+  return { response, body, reaction: body.reaction };
+}
+
+test('reaction migration installs the ordered business defaults once', async t => {
   const fx = await fixtures.adminFixture();
   t.after(() => fx.close());
   const first = await reactions(fx, fx.adminCookie);
@@ -115,6 +130,30 @@ test('only a real administrator can create, rename, reorder or remove reactions'
       { cookie, method: 'DELETE' },
     )).status, 403);
   }
+});
+
+test('administrator maintains the action queue mapping while invalid mappings are rejected', async t => {
+  const fx = await fixtures.adminFixture();
+  t.after(() => fx.close());
+  const created = await createMappedReaction(
+    fx, fx.adminCookie, '报价仍需判断', 'price_objection',
+  );
+  assert.equal(created.response.status, 200);
+  assert.equal(created.reaction.actionQueueKey, 'price_objection');
+
+  const renamed = await responseJson(await fx.request(
+    `/api/sales-crm/activity-reactions/${encodeURIComponent(created.reaction.id)}`,
+    {
+      cookie: fx.adminCookie,
+      method: 'PATCH',
+      body: { name: '报价已接受', actionQueueKey: 'relationship_upgrade' },
+    },
+  ));
+  assert.equal(renamed.response.status, 200);
+  assert.equal(renamed.body.reaction.actionQueueKey, 'relationship_upgrade');
+
+  const invalid = await createMappedReaction(fx, fx.adminCookie, '非法归类', 'internal_unknown');
+  assert.equal(invalid.response.status, 400);
 });
 
 test('reaction management is blocked during identity inspection', async t => {
