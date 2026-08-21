@@ -186,7 +186,7 @@ test('30 and 90 day metrics support authorized filtering and customer history dr
   assert.match(html, /data-manager-range="90"/);
   const render = functionBlock(app, 'renderManagerMetrics');
   for (const property of [
-    'sampleSize', 'deferredRecords', 'deferredCustomers', 'plannedAfterDeferredCustomers',
+    'sampleSize', 'activeCustomers', 'deferredCustomers', 'thresholdCustomers', 'plannedAfterDeferredCustomers',
     'onTimeActionCustomers', 'firstTouchSilentCustomers',
     'unimprovedAfterInterventionCustomers', 'needsManagerReview',
   ]) assert.match(render, new RegExp(property), property);

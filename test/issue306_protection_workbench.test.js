@@ -112,7 +112,7 @@ test('save handler reads the checked radio and routes needs_info to the modal', 
 
 test('visible app version badge renders the cache-bust version', () => {
   const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
-  assert.match(html, /data-app-version="20260821-issue325-production-regression"/);
+  assert.match(html, /data-app-version="20260821-issue333-stat-drilldown-v3"/);
   assert.match(html, /id="appVersionBadge"/);
   assert.match(app, /function renderAppVersionBadge/);
   assert.match(app, /界面版本 /);

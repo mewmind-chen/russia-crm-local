@@ -205,6 +205,20 @@ test('manager settings API is admin-only and validates concrete privileged recip
   assert.equal(other30.sampleSize, 1);
   assert.equal(other30.counts.thresholdCustomers, 1);
   assert.equal(other30.needsManagerReview, true);
+
+  const detail = await fx.request('/api/sales-crm/manager-metrics/drilldown?kind=thresholdCustomers&actorId=U-OTHER&rangeDays=30', {
+    cookie: fx.adminCookie,
+  });
+  const detailBody = await detail.json();
+  assert.equal(detail.status, 200, detailBody.error);
+  assert.equal(detailBody.label, '需要主管关注');
+  assert.equal(detailBody.total, 1);
+  assert.deepEqual(detailBody.rows.map(row => row.accountId), ['CRM-OTHER']);
+
+  const salesDenied = await fx.request('/api/sales-crm/manager-metrics/drilldown?kind=thresholdCustomers&rangeDays=30', {
+    cookie: fx.otherCookie,
+  });
+  assert.equal(salesDenied.status, 403, await salesDenied.text());
 });
 
 test('manager task scan skips stale recipients while settings updates remain strict', async t => {

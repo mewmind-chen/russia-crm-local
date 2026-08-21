@@ -13,7 +13,7 @@ test('sales dashboard, intake cards, and navigation use the same pending assignm
   const dashboardEnd = app.indexOf('function percent(', dashboardStart);
   const dashboard = app.slice(dashboardStart, dashboardEnd);
   assert.match(dashboard, /const intakeStats = state\.data\.intake\?\.stats \|\| \{\}/);
-  assert.match(dashboard, /\['未开发线索', intakeStats\.assigned \|\| 0, '等待领取'/);
+  assert.match(dashboard, /\['assigned', '未开发线索', intakeStats\.assigned \|\| 0, '等待领取'/);
   assert.doesNotMatch(dashboard, /researchTotals\?\.poolAvailable/);
   assert.match(app, /intakeSalesView\s*\? Number\(intakeStats\?\.assigned \|\| 0\)/);
 });
@@ -24,6 +24,6 @@ test('sales today card uses assignment time while manager import card remains un
 });
 
 test('statistics release uses a fresh production cache token', () => {
-  assert.match(html, /sales-assets\/app\.js\?v=20260821-issue325-production-regression/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260821-issue325-production-regression/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260821-issue333-stat-drilldown-v3/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260821-issue333-stat-drilldown-v3/);
 });
