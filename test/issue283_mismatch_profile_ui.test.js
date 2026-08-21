@@ -181,8 +181,8 @@ function mismatchRendererHarness(payload, expanded = false) {
 }
 
 test('mismatch profile assets use the current production cache token', () => {
-  assert.match(shell, /sales-assets\/app\.css\?v=20260821-issue323-team-permission/);
-  assert.match(shell, /sales-assets\/app\.js\?v=20260821-issue323-team-permission/);
+  assert.match(shell, /sales-assets\/app\.css\?v=20260821-issue322-recycle-nickname/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260821-issue322-recycle-nickname/);
 });
 
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
@@ -340,7 +340,7 @@ test('compact mismatch drawer renders fixed read-only summary with a safe websit
   const harness = mismatchRendererHarness(mismatchPayload());
 
   assert.equal(harness.elements['#drawerCompany'].textContent, 'Acme');
-  assert.equal(harness.elements['#drawerMeta'].textContent, 'CRM客户 · RU-1 · 俄罗斯 · 莫斯科');
+  assert.equal(harness.elements['#drawerMeta'].textContent, 'RU-1 · 俄罗斯 · 莫斯科 · CRM客户');
   assert.doesNotMatch(harness.elements['#drawerMeta'].textContent, /account:|intake:/);
   for (const copy of [
     'CRM客户', '原销售', '采购方向不符', '经理', '2026-08-13T02:00:00Z',
@@ -350,6 +350,37 @@ test('compact mismatch drawer renders fixed read-only summary with a safe websit
   assert.match(harness.html, /查看完整客户资料 →/);
   assert.match(harness.html, /href="https:\/\/acme\.example\/" target="_blank" rel="noopener"/);
   assert.doesNotMatch(harness.html, /完整资料明细/);
+});
+
+test('mismatch list and drawer prioritize nickname while keeping official identity business-readable', () => {
+  const renderList = topLevelFunction('renderRecycleBin');
+  assert.match(renderList, /accountDisplayName\(row\)/);
+  assert.match(renderList, /accountIdentity\(row\)/);
+
+  const harness = mismatchRendererHarness(mismatchPayload({
+    recordKey: 'intake:IN-RB-1787248838309-0751ebcafe86-1352',
+    sourceType: 'intake',
+    customer: {
+      ...mismatchPayload().customer,
+      accountId: '',
+      intakeItemId: 'IN-RB-1787248838309-0751ebcafe86-1352',
+      externalCustomerId: 'RU-1433',
+      nickname: '普罗顿电力',
+      companyName: 'Proton-Electrotex',
+    },
+  }));
+
+  assert.equal(harness.elements['#drawerCompany'].textContent, '普罗顿电力');
+  assert.equal(
+    harness.elements['#drawerMeta'].textContent,
+    'Proton-Electrotex · RU-1433 · 俄罗斯 · 莫斯科 · 领取前线索',
+  );
+  assert.match(harness.html, /客户昵称<\/span><strong>普罗顿电力<\/strong>/);
+  assert.match(harness.html, /正式名称<\/span><p>Proton-Electrotex<\/p>/);
+  assert.doesNotMatch(
+    `${harness.elements['#drawerCompany'].textContent} ${harness.elements['#drawerMeta'].textContent} ${harness.html}`,
+    /intake:|IN-RB-1787248838309-0751ebcafe86-1352/,
+  );
 });
 
 test('unsafe mismatch websites and every field are escaped instead of becoming executable markup', () => {

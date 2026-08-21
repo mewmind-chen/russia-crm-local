@@ -4295,6 +4295,15 @@
     const defaultHistory = rows(history.timeline).length
       ? rows(history.timeline)
       : rows(history.activities);
+    const displayName = firstText(customer.nickname, customer.companyName, customer.externalCustomerId)
+      || '未命名客户';
+    const identityMeta = mismatchSafeJoin([
+      customer.nickname ? customer.companyName : '',
+      customer.externalCustomerId,
+      customer.country,
+      customer.city,
+      sourceLabel,
+    ]);
     const expandedMarkup = state.mismatchRecordExpanded ? `
       <section class="mismatch-detail-complete" aria-label="完整资料明细">
         <div class="mismatch-detail-section-head"><div><p class="eyebrow">AUTHORIZED READ-ONLY DATA</p><h3>完整资料明细</h3></div><span class="pill gray">本次授权数据</span></div>
@@ -4317,17 +4326,17 @@
     $('#drawerStage').textContent = '不对口记录';
     $('#drawerCompany').textContent = detail.loading
       ? '正在读取客户资料…'
-      : mismatchSafeText(customer.companyName) || '未命名客户';
+      : displayName;
     $('#drawerMeta').textContent = detail.loading
       ? '正在读取业务资料'
-      : mismatchSafeJoin([sourceLabel, customer.externalCustomerId, customer.country, customer.city]);
+      : identityMeta;
     $('#drawerContent').innerHTML = detail.loading
       ? '<div class="empty">正在读取不对口客户资料…</div>'
       : `<div class="mismatch-detail-drawer">
         <section class="mismatch-detail-summary">
           <div class="mismatch-detail-section-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><div class="mismatch-detail-tags"><span class="pill amber">只读</span><span class="pill gray">${sourceLabel}</span></div></div>
           <div class="mismatch-detail-facts">
-            <div><span>客户</span><strong>${valueOrEmpty(customer.companyName, '未命名客户')}</strong></div>
+            <div><span>${customer.nickname ? '客户昵称' : '客户'}</span><strong>${valueOrEmpty(displayName, '未命名客户')}</strong></div>
             <div><span>原负责人</span><strong>${valueOrEmpty(recycle.previousOwnerName, '未分配')}</strong></div>
             <div><span>不对口原因</span><strong>${valueOrEmpty(recycle.reason, '未填写原因')}</strong></div>
             <div><span>处理人</span><strong>${valueOrEmpty(firstText(recycle.recycledByName, recycle.recycledBy), '未记录')}</strong></div>
@@ -4337,6 +4346,7 @@
         <section class="mismatch-detail-master">
           <div class="mismatch-detail-section-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>主档摘要</h3></div></div>
           <div class="mismatch-detail-master-grid">
+            <div class="wide"><span>正式名称</span><p>${valueOrEmpty(customer.companyName, '未填写正式名称')}</p></div>
             <div><span>地区</span><p>${valueOrEmpty(mismatchSafeJoin([customer.country, customer.city]), '未标注地区')}</p></div>
             <div><span>官网</span><p>${mismatchWebsiteMarkup(customer.website)}</p></div>
             <div><span>行业</span><p>${valueOrEmpty(customer.industry, '未标注行业')}</p></div>
