@@ -48,12 +48,11 @@ test('sales role has a dedicated business-copy boundary independent of permissio
   assert.match(route, /view === 'aiTasks' && !technicalAIPresentationAllowed\(\)/);
 });
 
-test('sales intake list keeps business fields and update time without sources, evidence or batches', () => {
+test('intake list keeps business copy for sales, manager and admin roles', () => {
   const render = functionBlock(app, 'renderIntake');
   assert.match(render, /const showAI = technicalAIPresentationAllowed\(\)/);
-  assert.match(render, /salesView\s*\? `<span>更新 \$\{esc\(shortDate\(item\.updated_at, true\)\)\}<\/span>`/);
-  assert.match(render, /sources \|\| '暂无来源证据'/);
-  assert.match(render, /批次 \$\{esc\(item\.batch_id \|\| '—'\)\}/);
+  assert.match(render, /const sourceMeta = `<span>更新 \$\{esc\(shortDate\(item\.updated_at, true\)\)\}<\/span>`/);
+  assert.doesNotMatch(render, /暂无来源证据|批次 \$\{|背调报告|证据\$\{/);
 });
 
 test('sales intake and customer drawers suppress technical AI and source sections', () => {

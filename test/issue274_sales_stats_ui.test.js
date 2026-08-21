@@ -24,6 +24,6 @@ test('sales today card uses assignment time while manager import card remains un
 });
 
 test('statistics release uses a fresh production cache token', () => {
-  assert.match(html, /sales-assets\/app\.js\?v=20260821-issue322-recycle-nickname/);
-  assert.match(html, /sales-assets\/app\.css\?v=20260821-issue322-recycle-nickname/);
+  assert.match(html, /sales-assets\/app\.js\?v=20260821-issue325-production-regression/);
+  assert.match(html, /sales-assets\/app\.css\?v=20260821-issue325-production-regression/);
 });
