@@ -247,8 +247,8 @@ function outranks(left, right) {
 }
 
 test('Issue 293 permission editor assets use the current cache token', () => {
-  assert.match(html, /app\.css\?v=20260821-issue335-action-command-v1/);
-  assert.match(html, /app\.js\?v=20260821-issue335-action-command-v1/);
+  assert.match(html, /app\.css\?v=20260821-issue336-customer-stars-v1/);
+  assert.match(html, /app\.js\?v=20260821-issue336-customer-stars-v1/);
 });
 
 test('Issue 293 uses current module names once and removes stale navigation wording', () => {

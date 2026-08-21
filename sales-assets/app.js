@@ -97,6 +97,7 @@
       rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, authorizedTotal: 0,
       hasMore: false, loading: false, loaded: false,
     },
+    customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
     filterPermissionAdmin: null,
@@ -185,6 +186,7 @@
     managerMetricRange: 30,
     managerMetricDrilldown: null,
     pipelineActionQueue: '',
+    pipelineStarView: 'all',
     customerEnrichment: null,
     customerEnrichmentLastSuccess: null,
     customerEnrichmentError: '',
@@ -599,6 +601,35 @@
   }
   function can(permission) {
     return Boolean(state.data?.user?.permissions?.[permission]);
+  }
+  function canViewTeamStars() {
+    return ['admin', 'manager'].includes(String(state.data?.user?.role || ''))
+      && can('view_all_customers');
+  }
+  function starButtonMarkup(account, compact = false) {
+    if (!account?.id) return '';
+    const active = Boolean(account.isStarred);
+    return `<button class="star-button${active ? ' starred' : ''}${compact ? ' compact' : ''}" type="button"
+      data-toggle-customer-star="${esc(account.id)}" aria-pressed="${active}"
+      aria-label="${active ? '取消自己的星标' : '给客户加星标'}" title="${active ? '取消自己的星标' : '给客户加星标'}">${active ? '★' : '☆'}</button>`;
+  }
+  function starPeopleMarkup(account) {
+    const stars = Array.isArray(account?.starUsers) ? account.starUsers : [];
+    if (!stars.length) return '';
+    const people = stars.map(item => `${item.userName}${item.starredAt ? `（${shortDate(item.starredAt, true)}）` : ''}`)
+      .filter(Boolean).join('、');
+    const reasons = [...new Set(stars.map(item => item.reason).filter(Boolean))].join('、');
+    return `<span class="customer-star-meta">星标人：${esc(people)}${reasons ? ` · ${esc(reasons)}` : ''}</span>`;
+  }
+  function syncStarButton(button, account) {
+    if (!button) return;
+    const active = Boolean(account?.isStarred);
+    button.textContent = active ? '★' : '☆';
+    button.classList.toggle('starred', active);
+    button.classList.toggle('hidden', !account);
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? '取消自己的星标' : '给客户加星标');
+    button.dataset.toggleCustomerStar = account?.id || '';
   }
   function defaultCustomerFilters() {
     return {
@@ -1072,6 +1103,7 @@
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
         sort: $('#customerSort')?.value || 'pending_priority',
+        starView: state.customerStarView,
       });
       const result = await api(`/accounts?${params}`);
       if (requestEpoch !== state.customerRequestEpoch) return;
@@ -1338,6 +1370,7 @@
       if (pageKey === 'pipeline' && state.pipelineActionQueue) {
         params.set('actionQueue', state.pipelineActionQueue);
       }
+      if (pageKey === 'pipeline') params.set('starView', state.pipelineStarView);
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -3065,6 +3098,7 @@
       );
     }
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
+    syncStarButton($('#customerProfileStar'), readOnly ? null : account);
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
     $('#customerAiStation')?.classList.toggle('hidden',
       readOnly || !account || !technicalAIPresentationAllowed());
@@ -3986,6 +4020,10 @@
 
   function renderCustomers() {
     const accounts = state.customerList.loaded ? state.customerList.rows : [];
+    $$('[data-customer-star-view]').forEach(button => {
+      button.classList.toggle('active', button.dataset.customerStarView === state.customerStarView);
+      if (button.dataset.customerStarView === 'team') button.classList.toggle('hidden', !canViewTeamStars());
+    });
     renderPagination('#customerPagination', 'customers', state.customerList, change => {
       if (change.pageSize) state.customerList.pageSize = change.pageSize;
       void loadCustomerPage({ reset: false, page: change.page || 1 });
@@ -4009,6 +4047,7 @@
     const scopePrompt = $('#customerSelectionScopePrompt');
     if (scopePrompt) {
       const canOfferFiltered = state.customerSelectionMode === 'explicit'
+        && state.customerStarView === 'all'
         && selectableIds.length > 0
         && selectedVisibleCount === selectableIds.length
         && state.customerList.total > selectableIds.length;
@@ -4048,6 +4087,8 @@
         const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
           && !account.intake_item_id && account.source_file === 'CRM手工新增';
         const lifecycleActions = [
+          state.customerStarView !== 'all' ? `<button class="text-button" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
+          state.customerStarView !== 'all' && can('record_activity') ? `<button class="text-button" type="button" data-pipeline-progress="${esc(account.id)}">记录新进展</button>` : '',
           canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
           canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
@@ -4055,7 +4096,7 @@
         const primaryStatus = customerPrimaryStatus(alert);
         return [
           canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(creatorDisplayName(account))}</span>${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
+          `<div class="company-cell"><div class="company-star-line">${starButtonMarkup(account, true)}<strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong></div><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(creatorDisplayName(account))}</span>${starPeopleMarkup(account)}${account.isStarred ? `<button class="text-button customer-star-reason" type="button" data-edit-star-reason="${esc(account.id)}">${account.myStar?.reason ? '修改关注原因' : '添加关注原因'}</button>` : ''}${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
           `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           esc(account.owner_name || '未分配'),
@@ -4515,6 +4556,7 @@
     const rows = meta.loaded ? meta.rows : [];
     const summary = meta.summary || {};
     const queues = summary.queues || {};
+    const starSummary = summary.stars || {};
     const selected = state.pipelineActionQueue;
     const queueItems = [
       ['due_followup', '到期跟进', 'amber'],
@@ -4543,6 +4585,15 @@
         data-pipeline-queue="${key}" aria-pressed="${selected === key}">
         <span>${label}</span><strong>${Number(queues[key] || 0)}</strong>
       </button>`).join('');
+    const starViewMarkup = `<div class="pipeline-star-view" role="group" aria-label="星标客户范围">
+      <button class="text-button ${state.pipelineStarView === 'all' ? 'active' : ''}" type="button" data-pipeline-star-view="all">全部客户</button>
+      <button class="text-button ${state.pipelineStarView === 'mine' ? 'active' : ''}" type="button" data-pipeline-star-view="mine">我的星标 ${Number(starSummary.mine || 0)}</button>
+      ${starSummary.canViewTeam ? `<button class="text-button ${state.pipelineStarView === 'team' ? 'active' : ''}" type="button" data-pipeline-star-view="team">团队星标 ${Number(starSummary.team || 0)}</button>` : ''}
+    </div>`;
+    const teamDistribution = starSummary.canViewTeam
+      ? `<div class="pipeline-star-distribution"><strong>团队星标分布</strong>${queueItems.map(([key, label]) =>
+        `<span>${label} ${Number(starSummary.teamQueueDistribution?.[key] || 0)}</span>`).join('')}</div>`
+      : '';
     const activeLabel = selected === 'need_decision' ? '需要判断'
       : selected === 'worth_deepening' ? '值得深挖'
         : queueItems.find(item => item[0] === selected)?.[1] || '全部当前行动';
@@ -4553,9 +4604,11 @@
         `<span class="pill gray">${esc(label)}</span>`).join('');
       return `<article class="pipeline-action-row">
         <div class="pipeline-action-customer">
-          <strong>${esc(accountDisplayName(account))}</strong>
+          <div class="company-star-line">${starButtonMarkup(account, true)}<strong>${esc(accountDisplayName(account))}</strong></div>
           <span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.owner_name || '未分配')}</span>
           <small>${esc(account.stageLabel || stageLabel(account.stage))}</small>
+          ${starPeopleMarkup(account)}
+          ${account.isStarred ? `<button class="text-button customer-star-reason" type="button" data-edit-star-reason="${esc(account.id)}">${account.myStar?.reason ? '修改关注原因' : '添加关注原因'}</button>` : ''}
         </div>
         <div><span class="pipeline-fact-label">最近客户反应</span><strong>${esc(latestReaction)}</strong>${queueLabels}</div>
         <div><span class="pipeline-fact-label">下一步计划</span><strong>${esc(next)}</strong><small>${account.next_action_at ? shortDate(account.next_action_at, true) : '未设置时间'}</small></div>
@@ -4571,6 +4624,8 @@
     $('#pipelineBoard').innerHTML = `
       <section class="pipeline-overview-grid">${topMarkup}</section>
       <section class="pipeline-stage-strip" aria-label="客户阶段概览">${stageMarkup}</section>
+      ${starViewMarkup}
+      ${teamDistribution}
       <section class="pipeline-queue-grid">${queueMarkup}</section>
       <section class="pipeline-action-detail">
         <div class="pipeline-action-heading"><div><h3>${esc(activeLabel)}</h3><span>${Number(meta.total || 0)} 个客户</span></div>
@@ -8202,6 +8257,7 @@
     const updateButton = $('#drawerUpdateBtn');
     nicknameButton?.classList.add('hidden');
     updateButton?.classList.add('hidden');
+    $('#drawerStarBtn')?.classList.add('hidden');
     if (nicknameButton) nicknameButton.disabled = true;
     if (updateButton) updateButton.disabled = true;
   }
@@ -8272,6 +8328,47 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
+  }
+
+  function replaceCustomerStarState(customerId, starState) {
+    const apply = account => account?.id === customerId ? { ...account, ...starState } : account;
+    state.data.accounts = (state.data.accounts || []).map(apply);
+    state.customerList.rows = (state.customerList.rows || []).map(apply);
+    const pipeline = state.authorizedBusinessLists.pipeline;
+    pipeline.rows = (pipeline.rows || []).map(apply);
+  }
+
+  async function saveCustomerStar(customerId, active, reason = '') {
+    const result = await api(`/customer-stars/${encodeURIComponent(customerId)}`, {
+      method: 'PUT', body: JSON.stringify({ active, reason }),
+    });
+    replaceCustomerStarState(customerId, result.starState || {});
+    const reloads = [];
+    if (state.customerFilterController) reloads.push(loadCustomerPage({ reset: true, force: true }));
+    if (state.authorizedBusinessLists.pipeline.filterController) {
+      reloads.push(loadAuthorizedBusinessPage('pipeline', { reset: true, force: true }));
+    }
+    await Promise.all(reloads);
+    if ($('#customerDrawer')?.classList.contains('open') && state.selectedCustomerId === customerId) renderDrawer();
+    if (state.view === 'customerProfile' && state.selectedCustomerId === customerId) renderCustomerProfileHeader();
+    toast(active ? '已加入我的星标' : '已取消我的星标');
+  }
+
+  function openCustomerStarReason(customerId) {
+    const account = state.data.accounts.find(item => item.id === customerId)
+      || state.customerList.rows.find(item => item.id === customerId)
+      || state.authorizedBusinessLists.pipeline.rows.find(item => item.id === customerId);
+    if (!account?.isStarred) return;
+    openModal('关注原因', '仅修改自己的星标，不影响其他人的关注', `
+      <form id="customerStarReasonForm" class="form-grid">
+        <input type="hidden" name="customerId" value="${esc(customerId)}">
+        <label>关注原因（可选）<input name="reason" maxlength="100" value="${esc(account.myStar?.reason || '')}" placeholder="例如：决策人已对接、订单增长、重点客户"></label>
+        <div class="star-reason-suggestions">
+          ${['决策人已对接', '订单增长', '重点客户', '老板关注', '需要持续盯'].map(reason =>
+            `<button class="button secondary tiny" type="button" data-star-reason-suggestion="${reason}">${reason}</button>`).join('')}
+        </div>
+        <div class="form-actions"><button class="button secondary" type="button" data-close-modal>取消</button><button class="button primary" type="submit">保存原因</button></div>
+      </form>`);
   }
 
   function customerAiSection(context) {
@@ -9441,6 +9538,7 @@
       allowActivity: true,
       allowNickname: false,
     });
+    syncStarButton($('#drawerStarBtn'), account);
     $('#drawerStage').textContent = stageLabel(account.stage);
     $('#drawerCompany').textContent = accountDisplayName(account);
     $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
@@ -11391,6 +11489,10 @@
         closeModal();
         await loadAiGovernance();
         toast('影子评估已保存');
+      } else if (form.id === 'customerStarReasonForm') {
+        const payload = formPayload(form);
+        await saveCustomerStar(String(payload.customerId || ''), true, String(payload.reason || ''));
+        closeModal();
       } else if (form.id === 'activityReactionCreateForm') {
         if (!isRealAdmin()) throw new Error('身份检查状态下不能修改客户反应');
         const reactionPayload = formPayload(form);
@@ -12192,11 +12294,37 @@
       await loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
       $('#pipelineBoard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    const pipelineStarView = event.target.closest('[data-pipeline-star-view]');
+    if (pipelineStarView) {
+      state.pipelineStarView = pipelineStarView.dataset.pipelineStarView || 'all';
+      await loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
+    }
     const pipelineProgress = event.target.closest('[data-pipeline-progress]');
     if (pipelineProgress) await openActivityModal(pipelineProgress.dataset.pipelineProgress);
     const pipelineAssistance = event.target.closest('[data-pipeline-assistance]');
     if (pipelineAssistance) await openActivityModal(pipelineAssistance.dataset.pipelineAssistance, 'manager');
     if (event.target.closest('[data-pipeline-manager-tasks]')) switchView('managerTasks');
+    const customerStarView = event.target.closest('[data-customer-star-view]');
+    if (customerStarView) {
+      resetCustomerSelection();
+      state.customerStarView = customerStarView.dataset.customerStarView || 'all';
+      await loadCustomerPage({ reset: true, force: true });
+    }
+    const customerStar = event.target.closest('[data-toggle-customer-star]');
+    if (customerStar) {
+      const customerId = customerStar.dataset.toggleCustomerStar;
+      const account = state.data.accounts.find(item => item.id === customerId)
+        || state.customerList.rows.find(item => item.id === customerId)
+        || state.authorizedBusinessLists.pipeline.rows.find(item => item.id === customerId);
+      await saveCustomerStar(customerId, !account?.isStarred, account?.myStar?.reason || '');
+    }
+    const editStarReason = event.target.closest('[data-edit-star-reason]');
+    if (editStarReason) openCustomerStarReason(editStarReason.dataset.editStarReason);
+    const starReasonSuggestion = event.target.closest('[data-star-reason-suggestion]');
+    if (starReasonSuggestion) {
+      const reasonInput = $('#customerStarReasonForm')?.elements?.reason;
+      if (reasonInput) reasonInput.value = starReasonSuggestion.dataset.starReasonSuggestion || '';
+    }
     const mismatchRecord = event.target.closest('[data-open-mismatch-record]');
     if (mismatchRecord) openMismatchRecord(mismatchRecord.dataset.openMismatchRecord);
     const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
@@ -12668,6 +12796,7 @@
         sort: $('#customerSort')?.value || 'pending_priority',
         permissionVersion: payload.permissionVersion || '',
         filters: JSON.stringify(componentPayloadToRaw(payload)),
+        starView: state.customerStarView,
       });
       link.href = `/api/sales-crm/export?${params}`;
       link.download = '';
