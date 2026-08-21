@@ -41,6 +41,13 @@ test('multiple users can independently star the same scoped customer with reason
   assert.deepEqual(salesMine.body.rows.map(row => row.id), ['CRM-OTHER']);
   assert.equal(salesMine.body.rows[0].starCount, 1);
   assert.deepEqual(salesMine.body.rows[0].starUsers.map(item => item.userName), ['Other']);
+  assert.equal(salesMine.body.rows[0].myStar.reason, '大客户潜力');
+  assert.deepEqual(salesMine.body.rows[0].starUsers.map(item => item.reason), ['大客户潜力']);
+
+  const salesBootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.otherCookie });
+  const salesBootstrapAccount = salesBootstrap.accounts.find(row => row.id === 'CRM-OTHER');
+  assert.equal(salesBootstrapAccount.myStar.reason, '大客户潜力');
+  assert.deepEqual(salesBootstrapAccount.starUsers.map(item => item.reason), ['大客户潜力']);
 
   const managerTeam = await accounts(fx, fx.cookie, 'team');
   assert.equal(managerTeam.response.status, 200);
@@ -81,6 +88,7 @@ test('pipeline supports mine and team star views without replacing automatic que
   assert.equal(mine.status, 200, JSON.stringify(mineBody));
   assert.deepEqual(mineBody.rows.map(row => row.id), ['CRM-OTHER']);
   assert.equal(Array.isArray(mineBody.rows[0].actionQueueKeys), true);
+  assert.equal(mineBody.rows[0].myStar.reason, '需要持续盯');
 
   const team = await fx.request('/api/sales-crm/lists/pipeline?page=1&pageSize=50&starView=team', { cookie: fx.cookie });
   const teamBody = await team.json();
