@@ -692,6 +692,12 @@
   function customerAIEnabled() {
     return Boolean(state.data?.features?.aiStations);
   }
+  function isSalesRepresentative() {
+    return state.data?.user?.role === 'sales';
+  }
+  function technicalAIPresentationAllowed() {
+    return customerAIEnabled() && !isSalesRepresentative();
+  }
   function customerEnrichmentEnabled() {
     return customerAIEnabled() && Boolean(state.data?.features?.customerEnrichment);
   }
@@ -714,16 +720,30 @@
     'SALES_COACHING_READY', 'AI_TASK_READY', 'AI_TASK_FAILED',
   ]);
   const salesPackNotificationCodes = new Set(['SALES_PACK_READY', 'SALES_PACK_FAILED']);
+  const salesTechnicalNotificationCodes = new Set([
+    'MANAGER_ANOMALY_READY', 'SALES_COACHING_READY', 'AI_TASK_READY', 'AI_TASK_FAILED',
+  ]);
   function notificationRowsAllowedByAIGate(rows) {
     const values = Array.isArray(rows) ? rows : [];
     const aiEnabled = customerAIEnabled();
     const packEnabled = salesPackEnabled();
-    if (aiEnabled && packEnabled) return values;
     return values.filter(item => {
       const code = String(item.code || '').toUpperCase();
+      if (isSalesRepresentative() && salesTechnicalNotificationCodes.has(code)) return false;
       if (!aiEnabled) return !aiNotificationCodes.has(code);
-      return !salesPackNotificationCodes.has(code);
+      return packEnabled || !salesPackNotificationCodes.has(code);
     });
+  }
+  function notificationBusinessCopy(item) {
+    if (!isSalesRepresentative()) return item;
+    const code = String(item?.code || '').toUpperCase();
+    if (code === 'SALES_PACK_READY') {
+      return { ...item, title: '销售资料包已生成', detail: '请在客户详情中核对后使用。' };
+    }
+    if (code === 'SALES_PACK_FAILED') {
+      return { ...item, title: '销售资料包暂未生成', detail: '请稍后重试或联系主管。' };
+    }
+    return item;
   }
   function stripDisabledAINotificationState() {
     if (customerAIEnabled() && salesPackEnabled()) return;
@@ -821,7 +841,7 @@
       || (category.key === 'module' ? `允许进入“${label}”。` : `允许执行“${label}”。`);
   }
   function applyBusinessAIVisibility() {
-    const enabled = customerAIEnabled();
+    const enabled = technicalAIPresentationAllowed();
     $$('[data-ai-business]').forEach(element => {
       element.classList.toggle('hidden', !enabled || (element.dataset.permission && !can(element.dataset.permission)));
     });
@@ -1458,7 +1478,7 @@
         hasMore: false, loading: false, loaded: false,
       };
       restoreCustomerFilters();
-      if (!customerAIEnabled()) state.customerFilters.evaluationTags = [];
+      if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
       state.assistantRuntimePending = false;
@@ -1523,7 +1543,7 @@
         ? 'view_intake'
         : viewPermissions[requestedView] || `view_${requestedView}`;
       state.customerProfileReadOnly = requestedView === 'customerProfile' && Boolean(requestedIntakeItemId);
-      const firstAllowedView = customerAIEnabled() && can('view_customers')
+      const firstAllowedView = technicalAIPresentationAllowed() && can('view_customers')
         ? Object.keys(viewMeta).find(view => identityInspectionAllowsView(view)
           && (view !== 'protectedCustomers'
             ? can(viewPermissions[view] || `view_${view}`)
@@ -1607,7 +1627,7 @@
     const creatorLabels = Object.fromEntries(state.data.users.map(user => [user.id, user.name]));
     const creators = customerFilterValues(state.data.accounts, 'created_by');
     if ($('#customerCreatorFilter')) $('#customerCreatorFilter').innerHTML = multiOptions(creators, creatorLabels);
-    const tags = customerAIEnabled()
+    const tags = technicalAIPresentationAllowed()
       ? [...new Set((state.data.customerEvaluationTags || []).flatMap(item => item.labels || []))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'))
       : [];
     const tagFilter = $('#evaluationTagFilter');
@@ -2100,7 +2120,7 @@
     if (loading) { root.innerHTML = loading; $('#peopleResultCount').textContent = ''; return; }
     const rows = state.data.people || [];
     $('#peopleResultCount').textContent = `已显示 ${rows.length} / ${state.research.contacts.total} 条线索`;
-    root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','证据状态'], rows.map(item => [
+    root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','资料状态'], rows.map(item => [
       `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
       `<strong>${esc(item.name || item.full_name || item.full_name_local || '未识别')}</strong>`,
       `${esc(item.title || '未标注')}<br><span class="subtle">${esc(item.department || '')}</span>`,
@@ -2682,6 +2702,7 @@
       : `当前筛选共 ${intake.total ?? intake.items.length} 条线索，可在同一页面查看资料并完成分配、领取、退回和重新分配。`;
     $('#intakeManagerActions').classList.toggle('hidden', salesView || !can('manage_intake'));
     $('#intakeBatchPanel').classList.toggle('hidden', salesView);
+    $('#intakeSourceBatchFilter')?.closest('label')?.classList.toggle('hidden', salesView);
     const filterCount = activeIntakeFilterCount();
     $('#intakeFilterToggle').textContent = filterCount ? `详细筛选 ${filterCount}` : '详细筛选';
     $('#intakeModeLabel').classList.toggle('hidden', salesView);
@@ -2699,7 +2720,7 @@
       ? assignableItems.length
       : assignableItems.filter(item => state.selectedIntakeIds.has(item.id)).length;
     renderIntakeAssignmentBar();
-    const showAI = customerAIEnabled();
+    const showAI = technicalAIPresentationAllowed();
     const showAssignmentAI = showAI && !salesView;
     const intakeHeaders = [
       '线索资料 / 客户标签',
@@ -2746,6 +2767,9 @@
           item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">背调报告</a>` : '',
           ...evidence.map((url, index) => `<a class="text-button" href="${esc(url)}" target="_blank" rel="noopener">证据${index + 1}</a>`),
         ].filter(Boolean).join(' · ');
+        const sourceMeta = salesView
+          ? `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`
+          : `<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span>`;
         const customerTags = (Array.isArray(item.customerTags) ? item.customerTags : [])
           .concat((Array.isArray(item.customer_tags) ? item.customer_tags
             : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'))
@@ -2761,7 +2785,7 @@
             ? (item.assignmentBlockReason || item.decision_reason || (showAI ? signals.riskStatus : '') || '')
             : '');
         const businessColumns = [
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}<span>${sources || '暂无来源证据'} · 批次 ${esc(item.batch_id || '—')} · 更新 ${esc(shortDate(item.updated_at, true))}</span></div>`,
+          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}${sourceMeta}</div>`,
           `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
           `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong>${salesView || !assignmentBlock ? '' : `<span class="decision-block">${esc(assignmentBlock)}</span>`}</div>`,
           `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}${item.reviewVagueHint ? `<span class="pill amber">${esc(item.reviewVagueHint)}</span>` : ''}${item.developmentHistory ? `<span class="pill amber">曾开发</span>` : ''}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
@@ -2849,8 +2873,8 @@
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     const station = $('#customerAiStation');
-    station?.classList.toggle('hidden', !customerAIEnabled());
-    if (customerAIEnabled()) void loadCustomerAI(externalCustomerId);
+    station?.classList.toggle('hidden', !technicalAIPresentationAllowed());
+    if (technicalAIPresentationAllowed()) void loadCustomerAI(externalCustomerId);
   }
 
   async function openIntakeMasterProfile(itemId, fallbackExternalId = '') {
@@ -2978,7 +3002,8 @@
     }
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerAiStation')?.classList.toggle('hidden', readOnly || !account || !customerAIEnabled());
+    $('#customerAiStation')?.classList.toggle('hidden',
+      readOnly || !account || !technicalAIPresentationAllowed());
   }
 
   function returnFromCustomerProfile() {
@@ -3195,7 +3220,7 @@
   }
 
   function renderCustomerAI() {
-    if (!customerAIEnabled()) return;
+    if (!technicalAIPresentationAllowed()) return;
     const body = $('#customerAiStationBody');
     const actions = $('#customerAiStationActions');
     if (!body || !actions) return;
@@ -3757,7 +3782,7 @@
     });
   }
   function customerSearchText(account) {
-    const labels = customerAIEnabled() ? labelsForAccount(account.id) : [];
+    const labels = technicalAIPresentationAllowed() ? labelsForAccount(account.id) : [];
     const contactText = can('view_contacts')
       ? (state.data.insights?.contacts || [])
         .filter(contact => (contact.customerId || contact.customer_id) === account.id)
@@ -3779,7 +3804,7 @@
     start.setHours(0, 0, 0, 0);
     const tomorrow = start.getTime() + 86400000;
     const accounts = scopedAccounts().filter(account => {
-      const labels = customerAIEnabled() ? labelsForAccount(account.id) : [];
+      const labels = technicalAIPresentationAllowed() ? labelsForAccount(account.id) : [];
       const text = customerSearchText(account);
       const reached = !state.stageReached
         || (!['lost', 'disqualified'].includes(account.stage) && stageOrder[account.stage] >= stageOrder[state.stageReached]);
@@ -3801,7 +3826,7 @@
         && (!filters.industries.length || filters.industries.includes(account.industry))
         && (!filters.sources.length || filters.sources.includes(account.source))
         && (!filters.creators.length || filters.creators.includes(account.created_by))
-        && (!customerAIEnabled() || !filters.evaluationTags.length || filters.evaluationTags.some(tag => labels.includes(tag)))
+        && (!technicalAIPresentationAllowed() || !filters.evaluationTags.length || filters.evaluationTags.some(tag => labels.includes(tag)))
         && matchesTimeBuckets(account.last_activity_at, filters.lastActionBuckets, 'last')
         && matchesTimeBuckets(account.next_action_at, filters.nextStepBuckets, 'next')
         && (!filters.createdFrom || created >= filters.createdFrom)
@@ -3833,7 +3858,7 @@
       countries: ['国家', {}], owners: ['负责人', { __unassigned__: '未分配', ...userLabels }],
       stages: ['阶段', stageLabels], priorities: ['优先级', {}], customerTypes: ['客户类型', {}],
       industries: ['行业', {}], sources: ['来源', {}], creators: ['创建人', userLabels],
-      ...(customerAIEnabled() ? { evaluationTags: ['评价标签', {}] } : {}),
+      ...(technicalAIPresentationAllowed() ? { evaluationTags: ['评价标签', {}] } : {}),
       lastActionBuckets: ['最近动作', { today: '今天', '7d': '近7天', '30d': '近30天', older: '30天前', none: '无' }],
       nextStepBuckets: ['下一步', { overdue: '已超期', today: '今天', '7d': '未来7天', later: '7天以后', none: '未填写' }],
     };
@@ -3851,7 +3876,7 @@
     const filters = state.customerFilters;
     return [
       'countries', 'owners', 'stages', 'priorities', 'customerTypes', 'industries', 'sources',
-      'creators', ...(customerAIEnabled() ? ['evaluationTags'] : []), 'lastActionBuckets', 'nextStepBuckets',
+      'creators', ...(technicalAIPresentationAllowed() ? ['evaluationTags'] : []), 'lastActionBuckets', 'nextStepBuckets',
     ].reduce((count, key) => count + filters[key].length, 0)
       + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
@@ -4285,8 +4310,8 @@
       ? '正在读取客户资料…'
       : mismatchSafeText(customer.companyName) || '未命名客户';
     $('#drawerMeta').textContent = detail.loading
-      ? detail.recordKey
-      : mismatchSafeJoin([detail.recordKey, sourceLabel, customer.externalCustomerId, customer.country, customer.city]);
+      ? '正在读取业务资料'
+      : mismatchSafeJoin([sourceLabel, customer.externalCustomerId, customer.country, customer.city]);
     $('#drawerContent').innerHTML = detail.loading
       ? '<div class="empty">正在读取不对口客户资料…</div>'
       : `<div class="mismatch-detail-drawer">
@@ -4294,7 +4319,6 @@
           <div class="mismatch-detail-section-head"><div><p class="eyebrow">MISMATCH RECORD</p><h3>不对口客户资料</h3></div><div class="mismatch-detail-tags"><span class="pill amber">只读</span><span class="pill gray">${sourceLabel}</span></div></div>
           <div class="mismatch-detail-facts">
             <div><span>客户</span><strong>${valueOrEmpty(customer.companyName, '未命名客户')}</strong></div>
-            <div><span>记录编号</span><strong>${valueOrEmpty(detail.recordKey, '暂无记录编号')}</strong></div>
             <div><span>原负责人</span><strong>${valueOrEmpty(recycle.previousOwnerName, '未分配')}</strong></div>
             <div><span>不对口原因</span><strong>${valueOrEmpty(recycle.reason, '未填写原因')}</strong></div>
             <div><span>处理人</span><strong>${valueOrEmpty(firstText(recycle.recycledByName, recycle.recycledBy), '未记录')}</strong></div>
@@ -4859,7 +4883,8 @@
     });
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取通知…</div>'
-      : all.length ? all.map(item => {
+      : all.length ? all.map(rawItem => {
+      const item = notificationBusinessCopy(rawItem);
       const account = notificationAccount(item.customerId);
       const isOwn = !item.recipientId || item.recipientId === state.data.user.id;
       const isUnread = item.status === 'unread';
@@ -5966,7 +5991,7 @@
     state.aiTasks.items = (state.aiTasks.items || []).filter(task =>
       (task.taskType !== 'sales_pack' || salesPackEnabled())
       && (!task.enrichmentTask || customerEnrichmentEnabled()));
-    if (!customerAIEnabled()) state.customerFilters.evaluationTags = [];
+    if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
     stripDisabledAINotificationState();
     applyUser();
     populateFilters();
@@ -5975,7 +6000,7 @@
       if (state.selectedCustomerId) renderDrawer();
       else closeDrawer();
     }
-    if (state.view === 'aiTasks' && !customerAIEnabled()) switchView(firstAllowedBusinessView(), false);
+    if (state.view === 'aiTasks' && !technicalAIPresentationAllowed()) switchView(firstAllowedBusinessView(), false);
   }
 
   function renderAIFeatures() {
@@ -8078,7 +8103,7 @@
   }
 
   function customerAiSection(context) {
-    if (!customerAIEnabled() || !can('use_ai_assistant')) return '';
+    if (!technicalAIPresentationAllowed() || !can('use_ai_assistant')) return '';
     return `<section class="customer-ai">
       <div class="insight-head"><div><p class="eyebrow">CUSTOMER AI</p><h3>AI 问答</h3></div><span class="ai-badge">当前客户 · ${esc(context.companyName || '未命名客户')}</span></div>
       <div class="customer-ai-body">
@@ -8100,7 +8125,8 @@
     claimCustomerDrawer(`intake:${itemId}`);
     const signals = intakeSignals(item);
     const showAssignmentDecisions = canViewAssignmentDecisions();
-    const showAI = customerAIEnabled();
+    const showAI = technicalAIPresentationAllowed();
+    const showTechnicalSources = !isSalesRepresentative();
     const showAssignmentAI = showAI && showAssignmentDecisions;
     const layers = showAssignmentDecisions ? intakeDecisionLayers(item) : null;
     state.selectedCustomerId = '';
@@ -8144,27 +8170,28 @@
       || item.decision_reason
       || (showAI ? `${signals.fitGrade} · ${signals.priority}` : '')
       || '待人工判断';
+    const intakeFacts = [
+      ['官网', item.website],
+      ['联系人等级', item.contact_level],
+      ['成立年份', item.established_year],
+      ...(showTechnicalSources ? [['来源', item.batch_source || item.source_file || '线索池']] : []),
+      ['更新时间', shortDate(item.master_updated_at || item.updated_at, true)],
+      ...(showTechnicalSources ? [['推荐结论', recommendation]] : []),
+    ];
     $('#drawerContent').innerHTML = `
       <div class="next-step"><div><span class="eyebrow">LEAD PROFILE</span><p>${esc(item.reviewVagueHint || '查看企业背景、需求依据和完整开发历史。')}</p></div><div class="assignment-actions"><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span>${assignmentAction}</div></div>
       ${customerTags.length ? `<div class="customer-tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag.name || tag)}</span>`).join('')}</div>` : ''}
       <div class="account-facts">
-        ${[
-          ['官网', item.website],
-          ['联系人等级', item.contact_level],
-          ['成立年份', item.established_year],
-          ['来源', item.batch_source || item.source_file || '线索池'],
-          ['更新时间', shortDate(item.master_updated_at || item.updated_at, true)],
-          ['推荐结论', recommendation],
-        ].map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${intakeFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
       <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
+        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${showTechnicalSources && item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
         <div class="master-profile-grid">
           <div class="wide"><span>企业背景</span><p>${esc(item.master_description || '暂无企业简介')}</p></div>
           <div><span>主营产品</span><p>${esc(item.master_products || item.product_focus || '暂无产品信息')}</p></div>
           <div><span>潜在需求</span><p>${esc(item.product_focus || item.master_products || '待进一步确认')}</p></div>
           ${item.status === 'returned' ? `<div class="wide"><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
-          <div class="wide"><span>研究与来源证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : esc(item.source_file || item.batch_source || '暂无关联证据')}</p></div>
+          ${showTechnicalSources ? `<div class="wide"><span>研究与来源证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : esc(item.source_file || item.batch_source || '暂无关联证据')}</p></div>` : ''}
         </div>
       </section>
       <section class="development-history">
@@ -8198,7 +8225,7 @@
   }
 
   function evaluationCard(item) {
-    const ai = !customerAIEnabled() ? '' : item.aiStatus === 'completed' ? `
+    const ai = !technicalAIPresentationAllowed() ? '' : item.aiStatus === 'completed' ? `
       <div class="ai-analysis">
         <div class="ai-analysis-head"><span class="ai-badge">AI 标注</span><span>${esc(item.aiModel || 'AI')} · 基于客户经营复盘自动提取 · 非人工结论</span></div>
         ${item.aiSummary ? `<div class="evaluation-text">${esc(item.aiSummary)}</div>` : ''}
@@ -9251,11 +9278,13 @@
     const orders = state.data.orders.filter(item => item.customer_id === account.id);
     const timeline = (state.data.timeline || []).filter(item => item.customer_id === account.id);
     const alert = alertFor(account.id);
+    const showTechnicalSources = !isSalesRepresentative();
     const accountFacts = [
       ['负责人', account.owner_name || '未分配'], ['创建人', creatorDisplayName(account)],
-      ['优先级', account.priority], ['客户来源', account.source],
+      ['优先级', account.priority],
+      ...(showTechnicalSources ? [['客户来源', account.source]] : []),
       ['成立年份', account.established_year || '未填写'],
-      ...(customerAIEnabled() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
+      ...(technicalAIPresentationAllowed() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
       ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
       ['官网', account.website, 'website'],
@@ -9275,7 +9304,7 @@
         <div class="master-profile-grid drawer-master-grid">
           <div class="drawer-master-card-wide"><span>企业简介</span><p>${esc(account.master_description || '暂无企业简介')}</p></div>
           <div><span>产品与潜在需求</span><p>${esc(account.product_focus || '未标注')}</p></div>
-          <div><span>背调与来源</span><p>${esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')}</p></div>
+          ${showTechnicalSources ? `<div><span>背调与来源</span><p>${esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')}</p></div>` : ''}
         </div>
       </section>
       ${customerAiSection(state.drawerAiContext)}
@@ -9990,7 +10019,7 @@
   }
 
   async function generateActionProposal() {
-    if (!customerAIEnabled() || !can('use_ai_assistant')) return;
+    if (!technicalAIPresentationAllowed() || !can('use_ai_assistant')) return;
     const form = $('#activityForm');
     const button = $('#actionProposalGenerate');
     const status = $('#actionProposalStatus');
@@ -10187,7 +10216,7 @@
               <label>下一步计划<input name="nextAction" placeholder="例如：追踪客户 BOM"></label>
               <label>下次跟进时间<input name="nextActionAt" type="datetime-local" data-future-datetime value="${dateInput(2)}"></label>
             </div>
-            ${customerAIEnabled() && can('use_ai_assistant') ? `<details class="action-proposal-details">
+            ${technicalAIPresentationAllowed() && can('use_ai_assistant') ? `<details class="action-proposal-details">
               <summary>使用 AI 整理本次进展</summary>
               <section class="action-proposal-compose">
                 <div><strong>AI 整理进展</strong><span>输入事实描述，AI 只填写草稿，不会直接写入 CRM。</span></div>
@@ -10931,7 +10960,7 @@
     const contact = contactId ? state.data.insights.contacts.find(item => item.id === contactId) : null;
     const subjectName = subjectType === 'contact' ? contact?.name : accountDisplayName(account);
     const subjectTitle = subjectType === 'contact' ? contact?.title : '';
-    const showAI = customerAIEnabled();
+    const showAI = technicalAIPresentationAllowed();
     openModal(subjectType === 'contact' ? `评价对接人：${subjectName}` : `评价企业：${accountDisplayName(account)}`, showAI ? 'MANAGER EVALUATION + AI LABELS' : 'MANAGER EVALUATION', `<form id="evaluationForm" class="form-grid">
       <input type="hidden" name="customerId" value="${esc(account.id)}"><input type="hidden" name="subjectType" value="${esc(subjectType)}">
       <input type="hidden" name="subjectId" value="${esc(contactId)}"><input type="hidden" name="subjectName" value="${esc(subjectName || '')}">
@@ -12863,9 +12892,11 @@
 
   function switchView(view, pushHistory = true) {
     if (!viewMeta[view]) return;
-    if (view === 'aiTasks' && !customerAIEnabled()) {
+    if (view === 'aiTasks' && !technicalAIPresentationAllowed()) {
       view = firstAllowedBusinessView();
-      toast('AI 功能已关闭，已返回业务首页');
+      toast(isSalesRepresentative()
+        ? '当前账号未开放该功能，已返回业务首页'
+        : 'AI 功能已关闭，已返回业务首页');
     }
     const legacyIntakeStatus = view === 'pending' ? 'assigned' : view === 'claimed' ? 'claimed' : '';
     const intakeAlias = ['intake', 'pending', 'claimed'].includes(view);

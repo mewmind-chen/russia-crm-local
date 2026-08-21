@@ -12,7 +12,7 @@ const legacy = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8')
 
 test('one effective AI station gate controls every business AI surface', () => {
   assert.match(app, /function customerAIEnabled\(\) \{\s*return Boolean\(state\.data\?\.features\?\.aiStations\)/);
-  assert.match(app, /function customerAiSection\(context\) \{\s*if \(!customerAIEnabled\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
+  assert.match(app, /function customerAiSection\(context\) \{\s*if \(!technicalAIPresentationAllowed\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
   assert.match(app, /function canViewManagerAnomalies\(\) \{\s*return customerAIEnabled\(\)/);
   assert.match(app, /function canViewSalesCoaching\(\) \{\s*return customerAIEnabled\(\)/);
   assert.match(app, /function canGovernAI\(\) \{\s*return customerAIEnabled\(\)/);
@@ -34,9 +34,9 @@ test('disabled intake rendering removes AI headers, cells and the third decision
 });
 
 test('disabled customer, evaluation and notification views omit historical AI presentation', () => {
-  assert.match(app, /const ai = !customerAIEnabled\(\) \? '' : item\.aiStatus/);
+  assert.match(app, /const ai = !technicalAIPresentationAllowed\(\) \? '' : item\.aiStatus/);
   assert.match(app, /showAI \? '保存并生成AI标注' : '保存评价'/);
-  assert.match(app, /\.\.\.\(customerAIEnabled\(\) \? \[\['评价标签'/);
+  assert.match(app, /\.\.\.\(technicalAIPresentationAllowed\(\) \? \[\['评价标签'/);
   assert.match(app, /const customerTags = Array\.isArray\(account\?\.customerTags\) \? account\.customerTags : \[\]/);
   assert.doesNotMatch(app, /const ai = customerAIEnabled\(\) && account\?\.id\s*\? labelsForAccount\(account\.id\)/);
   assert.match(app, /function notificationRowsAllowedByAIGate\(rows\) \{[\s\S]*?const aiEnabled = customerAIEnabled\(\);[\s\S]*?const packEnabled = salesPackEnabled\(\);[\s\S]*?!aiNotificationCodes\.has[\s\S]*?!salesPackNotificationCodes\.has/);
@@ -47,7 +47,7 @@ test('disabled customer, evaluation and notification views omit historical AI pr
 });
 
 test('legacy workbench removes assistant, customer AI route and AI-only tags from the DOM', () => {
-  assert.match(legacy, /function legacyAIEnabled\(\)\{return Boolean\(state\.capabilities\.features&&state\.capabilities\.features\.aiStations\)\}/);
+  assert.match(legacy, /function legacyAIEnabled\(\)\{return Boolean\(state\.capabilities\.features&&state\.capabilities\.features\.aiStations\)&&state\.capabilities\.user\?\.role!==\'sales\'\}/);
   assert.match(legacy, /function removeLegacyAIBusinessUI\(\)\{document\.body\.classList\.toggle\('ai-business-disabled',!legacyAIEnabled\(\)\);if\(legacyAIEnabled\(\)\)return;revokeModule\('assistant'\)/);
   assert.match(legacy, /document\.querySelector\('\[data-detail-tab="ai"\]'\)\?\.remove\(\)/);
   assert.match(legacy, /\$\('#detailPaneAi'\)\?\.remove\(\)/);
@@ -57,7 +57,7 @@ test('legacy workbench removes assistant, customer AI route and AI-only tags fro
 
 test('hidden AI views fall back to an allowed business route and can be restored', () => {
   assert.match(app, /function firstAllowedBusinessView\(\)/);
-  assert.match(app, /if \(view === 'aiTasks' && !customerAIEnabled\(\)\) \{\s*view = firstAllowedBusinessView\(\)/);
+  assert.match(app, /if \(view === 'aiTasks' && !technicalAIPresentationAllowed\(\)\) \{\s*view = firstAllowedBusinessView\(\)/);
   assert.match(app, /state\.data\.features\.aiStations = Boolean\(features\.ai_stations\?\.effectiveEnabled\)/);
   assert.match(app, /applyUser\(\);\s*populateFilters\(\);\s*renderAll\(\);/);
 });

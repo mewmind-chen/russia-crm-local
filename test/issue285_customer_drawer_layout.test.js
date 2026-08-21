@@ -67,7 +67,7 @@ function cssBlock(prefix) {
   assert.fail(`${prefix} must have a closing brace`);
 }
 
-test('CRM drawer master profile has three cards in the intended reading order', () => {
+test('CRM drawer keeps business cards for sales and adds the technical source card for managers', () => {
   const drawer = functionSource('renderDrawer', 'openModal');
   const section = drawer.match(/<section class="master-profile">[\s\S]*?<\/section>/)?.[0] || '';
   const tree = parseMarkup(section.replace(/\$\{[\s\S]*?\}/g, '__VALUE__'));
@@ -75,13 +75,14 @@ test('CRM drawer master profile has three cards in the intended reading order', 
 
   assert.ok(grid, 'CRM drawer must use its drawer-specific grid class');
   assert.ok(grid.classes.includes('master-profile-grid'), 'existing master-profile styling must remain');
-  assert.equal(grid.children.length, 3);
+  assert.equal(grid.children.length, 2);
   assert.deepEqual(
     grid.children.map(card => card.children.find(child => child.tag === 'span')?.text),
-    ['企业简介', '产品与潜在需求', '背调与来源'],
+    ['企业简介', '产品与潜在需求'],
   );
   assert.ok(grid.children[0].classes.includes('drawer-master-card-wide'));
   assert.ok(grid.children.slice(1).every(card => !card.classes.includes('drawer-master-card-wide')));
+  assert.match(drawer, /\$\{showTechnicalSources \? `<div><span>背调与来源<\/span>/);
 
   assert.match(drawer, /\['官网', account\.website, 'website'\]/, '#286 website rendering must remain');
   assert.doesNotMatch(section, /行业与客户类型/, '#286 duplicate card must remain removed');

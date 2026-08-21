@@ -181,8 +181,8 @@ function mismatchRendererHarness(payload, expanded = false) {
 }
 
 test('mismatch profile assets use the current production cache token', () => {
-  assert.match(shell, /sales-assets\/app\.css\?v=20260817-issue318-distinct-identity/);
-  assert.match(shell, /sales-assets\/app\.js\?v=20260817-issue318-distinct-identity/);
+  assert.match(shell, /sales-assets\/app\.css\?v=20260821-issue325-sales-copy/);
+  assert.match(shell, /sales-assets\/app\.js\?v=20260821-issue325-sales-copy/);
 });
 
 test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
@@ -340,7 +340,8 @@ test('compact mismatch drawer renders fixed read-only summary with a safe websit
   const harness = mismatchRendererHarness(mismatchPayload());
 
   assert.equal(harness.elements['#drawerCompany'].textContent, 'Acme');
-  assert.match(harness.elements['#drawerMeta'].textContent, /account:CRM-A/);
+  assert.equal(harness.elements['#drawerMeta'].textContent, 'CRM客户 · RU-1 · 俄罗斯 · 莫斯科');
+  assert.doesNotMatch(harness.elements['#drawerMeta'].textContent, /account:|intake:/);
   for (const copy of [
     'CRM客户', '原销售', '采购方向不符', '经理', '2026-08-13T02:00:00Z',
     '俄罗斯 · 莫斯科', '工业自动化', '终端制造商', '传感器', '自动化设备制造商',
