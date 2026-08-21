@@ -59,11 +59,11 @@ async function setupMismatchProfileFixture(t) {
     'U-OTHER', 'U-OTHER', now, 'Foreign intake mismatch', now, now,
   );
   fx.db.prepare(`INSERT INTO customer_pool
-    (customer_id,company_name,country,city,website,industry,customer_type,products,description)
+    (customer_id,company_name,nickname,country,city,website,industry,customer_type,products,description)
     VALUES
-      ('RU-9010','Wu Intake Master','俄罗斯','Moscow','https://intake-wu.example',
+      ('RU-9010','Wu Intake Master','普罗顿电力','俄罗斯','Moscow','https://intake-wu.example',
        '工业自动化','终端制造商',?,?),
-      ('RU-9011','Foreign Intake Master','俄罗斯','Kazan','https://intake-foreign.example',
+      ('RU-9011','Foreign Intake Master','越权隐藏昵称','俄罗斯','Kazan','https://intake-foreign.example',
        '半导体','原厂','Foreign secret products','Foreign secret description')`)
     .run(SENSITIVE_PRODUCTS, SENSITIVE_DESCRIPTION);
   fx.db.prepare(`INSERT INTO person_candidates
@@ -203,6 +203,25 @@ test('intake mismatch profile enforces sales ownership and view-all access', asy
   }
 });
 
+test('intake mismatch list carries the shared nickname through scoped search and display data', async t => {
+  const fx = await setupMismatchProfileFixture(t);
+  const filters = encodeURIComponent(JSON.stringify({
+    search: { operator: 'contains', value: '普罗顿电力' },
+  }));
+  const response = await fx.request(
+    `/api/sales-crm/lists/recycle_bin?page=1&pageSize=50&filters=${filters}`,
+    { cookie: fx.salesCookie },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200, body.error);
+  assert.equal(body.rows.length, 1);
+  assert.equal(body.rows[0].recordKey, 'intake:INTAKE-WU');
+  assert.equal(body.rows[0].nickname, '普罗顿电力');
+  assert.equal(body.rows[0].companyName, 'Wu Intake Master');
+  assert.equal(body.rows.some(row => row.nickname === '越权隐藏昵称'), false);
+});
+
 test('intake mismatch profile returns the unified read-only DTO without writes', async t => {
   const fx = await setupMismatchProfileFixture(t);
   const before = readOnlySnapshot(fx, 'INTAKE-WU');
@@ -224,6 +243,7 @@ test('intake mismatch profile returns the unified read-only DTO without writes',
   assert.equal(body.customer.accountId, '');
   assert.equal(body.customer.intakeItemId, 'INTAKE-WU');
   assert.equal(body.customer.externalCustomerId, 'RU-9010');
+  assert.equal(body.customer.nickname, '普罗顿电力');
   assert.equal(body.customer.companyName, 'Wu Intake Master');
   assert.equal(body.customer.products, '');
   assert.equal(body.customer.description, '');

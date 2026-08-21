@@ -97,7 +97,7 @@ test('login heading keeps fixed responsive breakpoint sizes', () => {
 });
 
 test('all CRM frontend assets and visible badge share the current release version', () => {
-  const version = '20260821-issue323-team-permission';
+  const version = '20260821-issue322-recycle-nickname';
   assert.match(html, new RegExp(`data-app-version="${version}"`));
   const versions = [...html.matchAll(/sales-assets\/[^"]+\?v=([^"&]+)/g)].map(match => match[1]);
   assert.ok(versions.length >= 4);
