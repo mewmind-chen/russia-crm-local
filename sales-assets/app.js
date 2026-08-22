@@ -8328,6 +8328,7 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    focusDrawer();
   }
 
   function replaceCustomerStarState(customerId, starState) {
@@ -8477,6 +8478,13 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    focusDrawer();
+  }
+
+  function focusDrawer() {
+    state.drawerFocusReturn = (typeof document !== 'undefined' && document.activeElement) || null;
+    const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
+    if (closeBtn) closeBtn.focus();
   }
 
   function closeDrawer() {
@@ -8491,6 +8499,11 @@
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
     state.recycleCustomerDetail = null;
     resetDrawerActions();
+    const returnEl = state.drawerFocusReturn;
+    state.drawerFocusReturn = null;
+    if (returnEl && typeof returnEl.focus === 'function' && document.contains(returnEl)) {
+      try { returnEl.focus(); } catch (_) {}
+    }
   }
 
   function evaluationCard(item) {

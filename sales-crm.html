@@ -98,8 +98,8 @@
           <button id="notificationButton" data-view="notifications" data-permission="view_notifications" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
             <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
           </button>
-          <button id="newCustomerBtn" data-permission="create_customer" class="button secondary">＋ 新增CRM客户</button>
-          <button id="quickUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录新进展</button>
+          <button id="newCustomerBtn" data-permission="create_customer" class="button secondary" type="button">＋ 新增CRM客户</button>
+          <button id="quickUpdateBtn" data-permission="record_activity" class="button primary" type="button">＋ 记录新进展</button>
         </div>
       </header>
 
@@ -767,13 +767,13 @@
     </main>
   </div>
 
-  <aside id="customerDrawer" class="drawer" aria-hidden="true">
+  <aside id="customerDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerCompany" tabindex="-1" aria-hidden="true">
     <div class="drawer-head">
       <button class="icon-button" type="button" data-close-drawer title="关闭客户详情" aria-label="关闭客户详情"><span data-tp-icon="close" aria-hidden="true"></span></button>
       <div class="drawer-title"><span id="drawerStage" class="status-pill"></span><h2 id="drawerCompany">—</h2><p id="drawerMeta">—</p></div>
       <button id="drawerStarBtn" class="star-button hidden" type="button" aria-label="加星标">☆</button>
       <button id="drawerNicknameBtn" class="button secondary hidden" type="button">创建昵称</button>
-      <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary">＋ 记录新进展</button>
+      <button id="drawerUpdateBtn" data-permission="record_activity" class="button primary" type="button">＋ 记录新进展</button>
     </div>
     <div id="drawerContent" class="drawer-content"></div>
   </aside>
