@@ -8328,6 +8328,11 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    if (typeof document !== 'undefined' && document.activeElement) {
+      state.drawerFocusReturn = document.activeElement;
+      const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
+      if (closeBtn) closeBtn.focus();
+    }
   }
 
   function replaceCustomerStarState(customerId, starState) {
@@ -8477,6 +8482,11 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
+    if (typeof document !== 'undefined' && document.activeElement) {
+      state.drawerFocusReturn = document.activeElement;
+      const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
+      if (closeBtn) closeBtn.focus();
+    }
   }
 
   function closeDrawer() {
@@ -8491,6 +8501,11 @@
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
     state.recycleCustomerDetail = null;
     resetDrawerActions();
+    const returnEl = state.drawerFocusReturn;
+    state.drawerFocusReturn = null;
+    if (returnEl && typeof returnEl.focus === 'function' && typeof document !== 'undefined' && document.contains(returnEl)) {
+      try { returnEl.focus(); } catch (_) {}
+    }
   }
 
   function evaluationCard(item) {
@@ -13534,6 +13549,17 @@
   document.addEventListener('keydown', event => {
     if (event.key === 'Tab' && $('#modal').classList.contains('open')) {
       const focusable = Array.from($('#modal .modal')?.querySelectorAll(
+        'button:not([disabled]),input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])',
+      ) || []).filter(element => !element.closest('.hidden'));
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
+    if (event.key === 'Tab' && $('#customerDrawer').classList.contains('open')) {
+      const focusable = Array.from($('#customerDrawer')?.querySelectorAll(
         'button:not([disabled]),input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])',
       ) || []).filter(element => !element.closest('.hidden'));
       if (focusable.length) {

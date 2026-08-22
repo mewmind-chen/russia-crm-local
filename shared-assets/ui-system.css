@@ -255,7 +255,7 @@ body[data-app="sales"] .cohort-panel {
 body[data-app="sales"] .development-view.active {
   display: grid;
   position: relative;
-  min-height: calc(100vh - 112px);
+  min-height: calc(100dvh - 112px);
 }
 
 body[data-app="sales"] .development-action-grid {
@@ -310,7 +310,7 @@ body[data-app="sales"] .workbench-note span {
 
 body[data-app="sales"] .development-frame {
   width: 100%;
-  height: calc(100vh - 112px);
+  height: calc(100dvh - 112px);
   min-height: 680px;
   border: 0;
   border-radius: 0;
@@ -397,7 +397,7 @@ body[data-app="intelligence"].embedded-mode {
 body[data-app="intelligence"].embedded-mode .app {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 body[data-app="intelligence"].embedded-mode .sidebar {
@@ -481,7 +481,7 @@ body[data-app="intelligence"].embedded-mode.no-prospect [data-view="prospect"] {
 
   body[data-app="sales"].development-active .main { padding-right: 0; }
   body[data-app="sales"].development-active .topbar { padding-right: 12px; }
-  body[data-app="sales"] .development-frame { height: calc(100vh - 142px); min-height: 620px; }
+  body[data-app="sales"] .development-frame { height: calc(100dvh - 142px); min-height: 620px; }
 }
 
 @media (max-width: 980px) {
