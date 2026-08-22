@@ -8328,7 +8328,11 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
-    focusDrawer();
+    if (typeof document !== 'undefined' && document.activeElement) {
+      state.drawerFocusReturn = document.activeElement;
+      const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
+      if (closeBtn) closeBtn.focus();
+    }
   }
 
   function replaceCustomerStarState(customerId, starState) {
@@ -8478,13 +8482,11 @@
     $('#customerDrawer').classList.add('open');
     $('#drawerBackdrop').classList.add('open');
     $('#customerDrawer').setAttribute('aria-hidden', 'false');
-    focusDrawer();
-  }
-
-  function focusDrawer() {
-    state.drawerFocusReturn = (typeof document !== 'undefined' && document.activeElement) || null;
-    const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
-    if (closeBtn) closeBtn.focus();
+    if (typeof document !== 'undefined' && document.activeElement) {
+      state.drawerFocusReturn = document.activeElement;
+      const closeBtn = document.querySelector('#customerDrawer [data-close-drawer]');
+      if (closeBtn) closeBtn.focus();
+    }
   }
 
   function closeDrawer() {
@@ -8501,7 +8503,7 @@
     resetDrawerActions();
     const returnEl = state.drawerFocusReturn;
     state.drawerFocusReturn = null;
-    if (returnEl && typeof returnEl.focus === 'function' && document.contains(returnEl)) {
+    if (returnEl && typeof returnEl.focus === 'function' && typeof document !== 'undefined' && document.contains(returnEl)) {
       try { returnEl.focus(); } catch (_) {}
     }
   }

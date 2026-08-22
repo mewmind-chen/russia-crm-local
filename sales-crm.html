@@ -193,7 +193,7 @@
               <button data-intake-status="assigned">待领取</button>
               <button data-intake-status="returned">已退回</button>
             </div>
-            <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人"></div>
+            <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人" aria-label="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>
             <span id="intakeModeLabel" class="toolbar-count"></span>
           </div>
@@ -270,7 +270,7 @@
         <div id="recycleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="toolbar hidden">
-            <input id="recycleSearch" placeholder="搜索客户昵称、公司名称或客户编号">
+            <input id="recycleSearch" placeholder="搜索客户昵称、公司名称或客户编号" aria-label="搜索客户昵称、公司名称或客户编号">
             <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
           </div>
           <div class="toolbar"><span id="recycleAuthorizedResultCount" class="toolbar-count"></span></div>
@@ -451,7 +451,7 @@
         <div id="insightsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
           <div class="toolbar hidden">
-            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索客户昵称、企业、国家或负责人"></div>
+            <div class="search-box">⌕ <input id="insightSearch" placeholder="搜索客户昵称、企业、国家或负责人" aria-label="搜索客户昵称、企业、国家或负责人"></div>
             <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
             <span id="insightResultCount" class="toolbar-count"></span>
           </div>
