@@ -1230,3 +1230,12 @@ body[data-app="sales"] .data-table.show-horizontal-scroll-hint:after{font-size:1
 h1{font-weight:720}
 h2{font-weight:700}
 .attention-summary{font-weight:700}
+
+/* Impeccable polish — theme browser surfaces from the palette (built, not assembled) */
+::selection{background:rgba(15,118,110,.18);color:var(--text-primary)}
+input,textarea{caret-color:var(--brand)}
+:root{scrollbar-color:rgba(15,118,110,.35) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(15,118,110,.32);border-radius:5px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(15,118,110,.5);background-clip:content-box}
