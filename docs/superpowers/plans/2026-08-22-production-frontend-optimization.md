@@ -6,30 +6,32 @@
 
 ## 目标
 
-在不改变业务行为的前提下，优化生产 CRM 的可访问性、响应式工作流、信息层级、表格扫描效率和异步反馈。
+在不改变业务行为、API、权限和数据模型的前提下，优化生产 CRM 的可访问性、响应式工作流、信息层级、表格扫描效率和异步反馈。
+
+本轮仅处理生产中实际存在的销售、客户、线索、推进、管理和权限页面。
 
 ## 范围边界
 
-包含：`sales-crm.html`、`sales-assets/*.css`、`sales-assets/*.js`、`shared-assets/ui-system.css` 和前端契约测试。
+**包含：** `sales-crm.html`、`sales-assets/*.css`、`sales-assets/*.js`、`shared-assets/ui-system.css` 和前端契约测试。
 
-排除：服务端代码、API 路由和契约、数据库/schema、权限、客户生命周期、Recon Worker、AI Worker 以及 AI 任务中心 UI。由于生产环境不提供 AI 任务中心，AI 任务中心、AI 治理面板、模型/成本/Worker 筛选和 AI 任务分页明确不在本次范围内。
+**排除：** 服务端代码、API 路由和契约、数据库/schema、权限、客户生命周期、Recon Worker、AI Worker、前端框架迁移（React/Tailwind/shadcn），以及 AI 任务中心 UI。由于生产环境不提供 AI 任务中心，AI 任务中心、AI 治理面板、模型/成本/Worker 筛选和 AI 任务分页明确不在本次范围内。
 
 ## 任务拆分
 
 | 顺序 | 任务 | 预计耗时 |
 | --- | --- | ---: |
-| 0 | 基线、版本和测试记录 | 0.5-1 day |
-| 1 | 无障碍与基础交互修复 | 1-1.5 days |
-| 2 | CRM 响应式工作流优化 | 2-3 days |
-| 3 | 视觉 Token、字体和形状系统 | 1.5-2 days |
-| 4 | Dashboard 信息层级优化 | 1.5-2 days |
-| 5 | 客户/线索表格与筛选器优化 | 2-3 days |
-| 6 | 客户 Drawer 与 Profile 层级优化 | 1.5-2.5 days |
-| 7 | Loading、Empty、Error、Saving 状态 | 1-1.5 days |
-| 8 | 文案、图标和模板痕迹清理 | 1-1.5 days |
-| 9 | 多角色浏览器回归和生产验证 | 1.5-2 days |
+| 0 | 基线、版本和测试记录 | 0.5-1 天 |
+| 1 | 无障碍与基础交互修复 | 1-1.5 天 |
+| 2 | CRM 响应式工作流优化 | 2-3 天 |
+| 3 | 视觉 Token、字体和形状系统 | 1.5-2 天 |
+| 4 | Dashboard 信息层级优化 | 1.5-2 天 |
+| 5 | 客户/线索表格与筛选器优化 | 2-3 天 |
+| 6 | 客户 Drawer 与 Profile 层级优化 | 1.5-2.5 天 |
+| 7 | Loading、Empty、Error、Saving 状态 | 1-1.5 天 |
+| 8 | 文案、图标和模板痕迹清理 | 1-1.5 天 |
+| 9 | 多角色浏览器回归和生产验证 | 1.5-2 天 |
 
-总计：12-17 个开发工作日；包含浏览器和生产验证：14-19 个工作日；约 40 个可跟踪执行步骤。
+总计：约 40 个可跟踪执行步骤；12-17 个开发工作日；包含浏览器和生产验证：14-19 个工作日。
 
 ## 执行顺序
 
@@ -37,53 +39,323 @@
 
 ## 验收标准
 
-- Preserve API request paths, parameters, response contracts, permissions, and data scope.
-- Verify Admin, Manager, and Sales roles.
-- Verify 375x812, 768x1024, 1024x768, 1440x900, and 1920px+.
-- No page-level horizontal scrolling.
-- Keyboard navigation, focus return, reduced-motion, labels, and live regions pass review.
-- `npm test`, frontend contract tests, Node syntax checks, and copy scan pass.
-- Production `/healthz` release SHA matches the deployed commit.
-- AI Task Center is absent from the implementation and acceptance matrix.
+- 保持 API 请求路径、参数、响应契约、权限和数据范围不变。
+- 验证 Admin、Manager 和 Sales 三个角色。
+- 验证 375x812、768x1024、1024x768、1440x900 和 1920px+ 五组尺寸。
+- 无页面级横向滚动。
+- 键盘导航、焦点回收、reduced-motion、控件标签和 live regions 通过审查。
+- `npm test`、前端契约测试、Node 语法检查和 copy scan 全部通过。
+- 生产 `/healthz` 的 release SHA 与部署提交一致。
+- AI 任务中心未出现在实现和验收清单中。
 
 ## 工作拆分
 
+### Issue 0 - 基线、版本与测试记录
+
+**目标**
+
+确认远端最新版本、生产版本、当前测试状态和实际生产页面范围。
+
+**步骤**
+
+1. 拉取 `origin/main`。
+2. 确认 GitHub 最新提交和生产 `/healthz` 的 release SHA。
+3. 创建独立分支，例如 `codex/frontend-ui-optimization`。
+4. 记录当前 `npm test` 结果。
+5. 确认生产页面不包含 AI 任务中心。
+6. 记录当前浏览器截图和主要页面尺寸。
+
+**验收**
+
+- 本地、远端、生产版本关系明确。
+- 基线测试结果已记录。
+- 未将 AI 任务中心纳入截图和验收清单。
+
 ### Issue 1 - 无障碍与基础交互修复
 
-为客户 Drawer 增加 Dialog 语义和焦点隔离；补全表单标签和可访问名称；明确按钮类型；改善 Escape/Tab 行为；补充加载、错误和成功状态；保留 icon-only 控件的可访问名称。
+**文件范围**
+
+- `sales-crm.html`
+- `sales-assets/app.js`
+- `sales-assets/app.css`
+- `shared-assets/ui-system.css`
+
+**实施内容**
+
+1. 为客户 Drawer 添加 `role="dialog"`、`aria-modal` 和 `aria-labelledby`。
+2. Drawer 打开时隔离背景内容，关闭时恢复焦点。
+3. 完善 Modal、Drawer、Backdrop 的 Escape、Tab 和焦点行为。
+4. 为筛选器和动态输入补充 label 或 `aria-label`。
+5. 为非提交按钮明确添加 `type="button"`。
+6. 为异步操作增加进行中、失败和完成状态。
+7. 统一 icon-only 按钮的 accessible name 和 tooltip。
+8. 检查 `aria-live`、`role="status"`、`role="alert"` 的使用范围。
+
+**验收**
+
+- 键盘可以完成客户打开、筛选、Drawer、Modal 和保存流程。
+- 焦点不会进入已关闭或被遮挡的内容。
+- 所有表单控件都有可访问名称。
+- 不出现意外表单提交。
 
 ### Issue 2 - CRM 响应式工作流优化
 
-使用稳定视口单位和安全区；让移动端 Drawer 接近全屏；拆分常用和高级筛选；小屏只保留优先表格列；保留有意的表格滚动；移动端控件至少 44px。
+**目标尺寸**
 
-### Issue 3 - Visual system
+- 375x812
+- 768x1024
+- 1024x768
+- 1440x900
+- 1920px 以上
 
-统一语义颜色、系统优先中文字体、等宽数字、11px 最小操作文字、6-8px 面板/控件圆角、克制阴影、明确过渡属性和减少动效行为。
+**实施内容**
+
+1. 将关键全屏容器从 `100vh` 调整为 `100dvh`。
+2. 为安全区域补充 `env(safe-area-inset-*)`。
+3. 移动端 Drawer 改为接近全屏的详情工作流。
+4. 筛选器拆分为常用筛选和高级筛选。
+5. 移动端工具栏按操作优先级换行。
+6. 表格保留必要横向滚动，但减少核心字段数量。
+7. 将低优先级列移动到详情或折叠区域。
+8. 确保页面本身不产生无意的横向滚动。
+9. 检查触控尺寸，移动端控件至少 44px。
+
+**验收**
+
+- 页面无 page-level 横向滚动。
+- 375px 宽度下核心操作仍可完成。
+- 客户列表、线索池、推进动作台和客户详情可用。
+- Sticky header 不遮挡焦点元素。
+
+### Issue 3 - 统一视觉 Token、字体和形状系统
+
+**目标**
+
+让所有生产页面使用同一套冷中性色、深青色品牌色和数据型排版。
+
+**实施内容**
+
+1. 统一页面、面板、弱背景、边框、正文和辅助文字 Token。
+2. 保留系统优先字体，不引入营销型显示字体。
+3. 建立统一字号层级：
+   - 页面标题 24px
+   - Section 标题 18px
+   - Panel 标题 16px
+   - 正文 14px
+   - 表格 13px
+   - 元数据 12px
+   - 最小操作文字 11px
+4. 所有 KPI、金额、比例和对比数字使用 tabular numerals。
+5. 清理 9px、10px 的经营数据文字。
+6. 统一圆角规则：
+   - 面板和控件 6-8px
+   - 状态标签使用 pill
+   - Drawer/Modal 使用较大圆角
+7. 限制阴影只用于浮层、Drawer、Modal 和 Toast。
+8. 将动画限制为颜色、透明度、边框、阴影和必要的 transform。
+9. 统一 `prefers-reduced-motion` 处理。
+
+**验收**
+
+- 页面不存在不一致的圆角和阴影组合。
+- 重要数据在低分辨率下仍可读。
+- 没有紫色渐变、发光、装饰性玻璃效果。
+- 所有状态颜色具备明确语义。
 
 ### Issue 4 - Dashboard 信息层级优化
 
-Prioritize "需要我处理", make the funnel readable at wide widths, reduce equal-weight KPI treatment, and remove decorative section labels without changing metrics or APIs.
+**实施内容**
 
-### Issue 5 - Tables and filters
+1. 重新安排 KPI 与待办区域的视觉优先级。
+2. 确保「需要我处理」比普通统计更突出。
+3. 限制漏斗图的最大可读宽度。
+4. 将市场信号和活动流作为次级信息。
+5. 删除无业务意义的装饰性 eyebrow。
+6. 统一 Dashboard 面板头部结构。
+7. 将异常和待介入信息与具体动作关联。
+8. 保证首屏能看到关键工作入口。
 
-Improve row rhythm, company-name anchoring, status semantics, secondary-field hierarchy, action-column stability, advanced-filter disclosure, applied-filter chips, reset behavior, and mobile detail routing. Keep authorization and serialization unchanged.
+**验收**
 
-### Issue 6 - Customer Drawer and profile
+- 首屏明确回答「今天要处理什么」。
+- KPI 不挤压主要行动区域。
+- 1440x900 下主要操作和关键数据可见。
+- 不增加新的业务指标或 API。
 
-Use grouped definition rows for identity, business, contacts, compliance, and lifecycle; promote next action; separate human evaluation, history, and audit; handle empty values and long content; preserve existing customer APIs.
+### Issue 5 - 客户和线索表格、筛选器优化
 
-### Issue 7 - Async states
+**实施内容**
 
-Add shape-matched skeletons, actionable empty/error states, saving/submitting/claiming feedback, batch selection scope, and accessible live updates.
+1. 统一表头、行高、列间距和 hover 状态。
+2. 公司名作为行主锚点。
+3. 次要编号、来源、日期降低视觉权重。
+4. 状态使用图标或语义标记加文字，不只依赖颜色。
+5. 产品、联系人和来源信息做摘要显示。
+6. 操作列固定在右侧并保持宽度稳定。
+7. 高级筛选折叠展示。
+8. 显示已应用筛选条件，并支持单项移除。
+9. 提供一键清空筛选。
+10. 保持现有筛选权限和序列化逻辑不变。
+11. 处理重复筛选值。
+12. 检查客户、线索、回收站、联系人和 Recon 列表的一致性。
 
-### Issue 8 - Copy and visual cleanup
+**验收**
 
-Remove unnecessary English eyebrow labels, Unicode remnants, repeated pills, decorative dots, version strips, excess separators, and non-semantic motion. Do not remove valid product terminology.
+- 表格在桌面端易扫描。
+- 移动端可通过详情完成次要操作。
+- 筛选条件刷新后仍保持正确。
+- 权限范围和 API 请求参数完全不变。
 
-### Issue 9 - Verification
+### Issue 6 - 客户 Drawer 与 Profile 层级优化
 
-Run focused and full tests; test all three roles and all production views; capture the viewport matrix; verify keyboard and reduced-motion behavior; check production health and record screenshots.
+**实施内容**
+
+1. 将客户资料从独立卡片墙改为定义列表分组。
+2. 分为身份、业务、联系人、合规和生命周期信息。
+3. 强化客户名、阶段、评级和下一步动作。
+4. 将普通资料、人工评价、审计和历史时间线分开。
+5. 统一空值显示为「暂无」或明确空状态。
+6. 删除重复客户名称和重复元数据。
+7. 调整 Drawer 顶部操作优先级。
+8. 保证 375px 下资料单列展示。
+9. 维持现有客户详情加载和 API 行为。
+
+**验收**
+
+- Drawer 首屏先显示身份和下一步动作。
+- 资料区不再出现多层嵌套卡片。
+- 长文本可换行，不破坏布局。
+- 移动端无需横向滚动。
+
+### Issue 7 - 全局 Loading、Empty、Error、Saving 状态
+
+**实施内容**
+
+1. 为表格、列表和面板添加结构化 skeleton。
+2. 空状态包含原因、说明和下一步动作。
+3. 错误状态显示失败原因和重试按钮。
+4. 保存、提交、分配、领取操作显示进行中状态。
+5. 禁用状态显示明确原因。
+6. 批量操作显示选中数量和作用范围。
+7. Toast 仅用于瞬时反馈，错误优先就地显示。
+8. 统一 loading 文案使用「正在加载…」「正在保存…」等格式。
+9. 确保所有异步状态具备屏幕阅读器反馈。
+
+**验收**
+
+- 页面不出现空白等待区域。
+- 异步操作不会重复提交。
+- 失败后用户知道如何恢复。
+- Toast 不抢焦点。
+
+### Issue 8 - 生产界面文案、图标和视觉模板清理
+
+**实施内容**
+
+1. 清理无业务意义的英文大写 eyebrow。
+2. 统一中文标题、按钮和提示语气。
+3. 删除不必要的 Unicode 符号和装饰性图标。
+4. 保持一个统一的线性图标体系。
+5. 减少所有页面重复使用 pill。
+6. 删除装饰性圆点、版本标签和无意义状态条。
+7. 清理重复分隔符、过多中点和视觉噪声。
+8. 检查不可见 AI 任务中心相关文案不出现在生产 UI。
+9. 不改变真正的产品名、状态值和业务术语。
+
+**验收**
+
+- UI copy scan 通过。
+- 生产页面不显示 AI 任务中心入口或说明。
+- 没有营销型 Hero、Bento、渐变发光和装饰性状态条。
+- 文案能直接表达动作和结果。
+
+### Issue 9 - 前端多角色回归与生产验证
+
+**角色**
+
+- Admin
+- Manager
+- Sales
+
+**页面**
+
+- Dashboard
+- 今日待办
+- 通知中心
+- 线索池
+- CRM 客户全景
+- 联系人线索
+- Recon 情报
+- 推进动作台
+- 客户详情
+- 回收站
+- 团队、市场、权限和维护页面
+
+**步骤**
+
+1. 运行前端契约测试。
+2. 运行 `npm test`。
+3. 运行 Node 语法检查。
+4. 运行 copy scan。
+5. 检查权限过滤和隐藏状态。
+6. 验证 5 组浏览器尺寸。
+7. 验证键盘导航和焦点回收。
+8. 检查 reduced-motion 模式。
+9. 检查页面横向滚动和 Sticky 遮挡。
+10. 记录生产 SHA、浏览器截图和测试时间。
+11. 部署后重新检查 `/healthz`。
+12. 发现问题时只回滚对应前端提交。
+
+**验收**
+
+- 三种角色权限行为不变。
+- 生产 `/healthz` SHA 与部署提交一致。
+- 浏览器截图和验收记录已归档。
+
+## 文件边界
+
+允许修改：
+
+```text
+sales-crm.html
+sales-assets/app.css
+sales-assets/filter-component.css
+sales-assets/app.js
+sales-assets/filter-component.js
+sales-assets/ui-format.js
+shared-assets/ui-system.css
+test/*ui*.test.js
+test/*frontend*.test.js
+```
+
+禁止修改：
+
+```text
+server.js
+src/**
+scripts/**
+database/schema/**
+AI Worker
+API routes
+permission services
+customer repositories
+```
 
 ## 回滚规则
 
 每个任务都应可独立回滚，不需要数据库或后端回滚。只有在记录生产 SHA 和浏览器验证证据后，才算该版本通过验收。
+
+## 完成标准
+
+全部满足后才算完成：
+
+- 所有前端契约测试通过。
+- `npm test` 通过。
+- 三种角色权限行为不变。
+- API 请求路径、参数和响应契约不变。
+- AI 任务中心未被纳入生产页面和验收范围。
+- 375px 至 1920px 页面布局可用。
+- 无障碍、键盘、焦点和异步反馈通过验证。
+- 无页面级横向滚动。
+- 生产 `/healthz` SHA 与部署提交一致。
+- 浏览器截图和验收记录已归档。
