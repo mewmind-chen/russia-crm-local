@@ -89,15 +89,14 @@ test('mobile workbench rules target live panes and controls', () => {
 });
 
 test('login heading keeps fixed responsive breakpoint sizes', () => {
-  assert.match(cssRule('.login-brand h1'), /font-size:76px/);
-  assert.match(cssRule('.login-brand h1', mediaBlock('max-width:1400px')), /font-size:64px/);
-  assert.match(cssRule('.login-brand h1', mediaBlock('max-width:1100px')), /font-size:52px/);
-  assert.match(cssRule('.login-brand h1', mediaBlock('max-width:900px')), /font-size:42px/);
+  assert.match(cssRule('.login-brand h1'), /font-size:42px/);
+  assert.match(cssRule('.login-brand h1', mediaBlock('max-width:1100px')), /font-size:34px/);
+  assert.match(cssRule('.login-brand h1', mediaBlock('max-width:900px')), /font-size:28px/);
   assert.doesNotMatch(cssRule('.login-brand h1'), /font-size:clamp\([^)]*vw/);
 });
 
 test('all CRM frontend assets and visible badge share the current release version', () => {
-  const version = '20260822-issue340-frontend-optimization-v1';
+  const version = '20260824-studio-deck-v1';
   assert.match(html, new RegExp(`data-app-version="${version}"`));
   const versions = [...html.matchAll(/sales-assets\/[^"]+\?v=([^"&]+)/g)].map(match => match[1]);
   assert.ok(versions.length >= 4);

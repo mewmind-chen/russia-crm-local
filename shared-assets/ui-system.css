@@ -1,24 +1,24 @@
 :root {
-  --ui-bg: #f3f5f7;
+  --ui-bg: #f4f6f5;
   --ui-panel: #ffffff;
-  --ui-panel-soft: #f7f8fa;
-  --ui-line: #e4e8ee;
-  --ui-line-strong: #cfd6df;
-  --ui-text: #151c28;
-  --ui-muted: #667180;
-  --ui-primary: #0b7c70;
-  --ui-primary-strong: #096257;
-  --ui-primary-soft: #e0f3f0;
-  --ui-danger: #d92d20;
-  --ui-warning: #b54708;
-  --ui-success: #067647;
-  --ui-radius-sm: 8px;
+  --ui-panel-soft: #eef2f0;
+  --ui-line: #e7ebe9;
+  --ui-line-strong: #d5dbd8;
+  --ui-text: #1a2321;
+  --ui-muted: #556360;
+  --ui-primary: #0f766e;
+  --ui-primary-strong: #0a6459;
+  --ui-primary-soft: #e6f4f1;
+  --ui-danger: #c2413b;
+  --ui-warning: #b06f11;
+  --ui-success: #0f766e;
+  --ui-radius-sm: 7px;
   --ui-radius: 10px;
-  --ui-radius-lg: 16px;
-  --ui-sidebar: 232px;
-  --ui-topbar: 60px;
-  --ui-shadow: 0 1px 2px rgba(21, 28, 40, .05);
-  --ui-shadow-float: 0 20px 50px rgba(21, 28, 40, .16);
+  --ui-radius-lg: 10px;
+  --ui-sidebar: 236px;
+  --ui-topbar: 52px;
+  --ui-shadow: 0 1px 2px rgba(20, 35, 32, .05);
+  --ui-shadow-float: 0 6px 18px -8px rgba(20, 35, 32, .13);
 }
 
 body[data-app] {
@@ -98,12 +98,12 @@ body[data-app="sales"] .brand-block {
 
 body[data-app="sales"] .brand-mark,
 body[data-app="intelligence"] .brand-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #0e8a7d, #085f55);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 4px 10px rgba(11,124,112,.25);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--ui-primary);
+  color: #eafaf7;
+  box-shadow: none;
 }
 
 body[data-app="sales"] .brand-block strong {
@@ -132,10 +132,10 @@ body[data-app="sales"] .nav-group:first-child {
 
 body[data-app="sales"] .nav-group-label {
   padding: 0 10px 6px;
-  color: #8a94a3;
-  font-size: 11px;
+  color: var(--ui-muted);
+  font-size: 10px;
   font-weight: 750;
-  letter-spacing: .06em;
+  letter-spacing: .08em;
 }
 
 body[data-app="sales"] .nav button,
@@ -158,11 +158,12 @@ body[data-app="sales"] .nav button.active {
   background: var(--ui-primary-soft);
   color: var(--ui-primary-strong);
   box-shadow: none;
+  font-weight: 650;
 }
 
 body[data-app="sales"] .nav button b {
-  background: var(--ui-primary);
-  color: #fff;
+  background: var(--ui-panel-soft);
+  color: var(--ui-muted);
 }
 
 body[data-app="sales"] .nav .danger-count {
@@ -191,21 +192,21 @@ body[data-app="sales"] .topbar {
   top: 0;
   z-index: 40;
   min-height: var(--ui-topbar);
-  height: var(--ui-topbar);
+  height: auto;
   padding: 0;
-  background: color-mix(in srgb, var(--ui-bg) 84%, transparent);
+  background: var(--ui-bg);
   border-bottom: 1px solid var(--ui-line);
-  backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: none;
 }
 
 body[data-app="sales"] .topbar h1 {
-  font-size: 16px;
-  letter-spacing: -.02em;
+  font-size: 21px;
+  letter-spacing: 0;
 }
 
 body[data-app="sales"] .topbar .eyebrow {
   margin-bottom: 2px;
-  color: #8a94a3;
+  color: var(--ui-muted);
   font-size: 9px;
 }
 
@@ -219,7 +220,7 @@ body[data-app="sales"] .team-card,
 body[data-app="sales"] .market-card,
 body[data-app="sales"] .alert-kpi {
   border-color: var(--ui-line);
-  border-radius: var(--ui-radius-lg);
+  border-radius: 10px;
   box-shadow: var(--ui-shadow);
 }
 
@@ -227,8 +228,9 @@ body[data-app="sales"] .button,
 body[data-app="sales"] input,
 body[data-app="sales"] select,
 body[data-app="sales"] textarea,
-body[data-app="sales"] .search-box {
-  border-radius: var(--ui-radius);
+body[data-app="sales"] .search-box,
+body[data-app="sales"] .icon-button {
+  border-radius: var(--ui-radius-sm);
 }
 
 .menu-button,
