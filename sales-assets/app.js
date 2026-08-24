@@ -517,7 +517,7 @@
     const main = (primary || []).filter(Boolean);
     const overflow = (more || []).filter(Boolean);
     const moreMarkup = overflow.length
-      ? `<details class="row-more"><summary class="more" title="${overflow.length} 项行内操作">⋯ ${overflow.length}</summary><div class="row-more-menu">${overflow.join('')}</div></details>`
+      ? `<details class="row-more"><summary class="more" title="更多" aria-label="更多">更多</summary><div class="row-more-menu">${overflow.join('')}</div></details>`
       : '';
     return `<div class="row-actions">${main.join('')}${moreMarkup}</div>`;
   }
