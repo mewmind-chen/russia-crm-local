@@ -31,8 +31,8 @@ test('approved semantic tokens and typography define the CRM shell', () => {
   assert.match(css, /\.topbar\{[^}]*min-height:52px/);
   assert.match(css, /body\[data-app="sales"\] \.nav button\.active\{[^}]*background:var\(--brand-subtle\)/);
   assert.match(css, /\.panel-head \.eyebrow,[^{]*\.section-intro \.eyebrow\{display:none\}/);
-  assert.match(css, /\.data-table th\{[^}]*font-size:12px/);
-  assert.match(css, /\.data-table td\{[^}]*font-size:13px/);
+  assert.match(css, /\.data-table th\{[^}]*font-size:11px/);
+  assert.match(css, /\.data-table td\{[^}]*font-size:12\.5px/);
   assert.match(css, /body\[data-theme="deck"\]/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.ok(
@@ -177,8 +177,75 @@ test('business tables have readable anchors and semantic secondary content', () 
   assert.match(js, /tp-company-anchor/);
   assert.match(js, /tp-status-dot/);
   const css = appCss();
-  assert.match(css, /\.data-table th\{[^}]*font-size:12px/);
-  assert.match(css, /\.data-table td\{[^}]*font-size:13px/);
+  assert.match(css, /\.data-table th\{[^}]*font-size:11px/);
+  assert.match(css, /\.data-table td\{[^}]*font-size:12\.5px/);
+  assert.match(css, /\.data-table td\{[^}]*padding:10px 14px/);
+  assert.match(css, /\.button\.tiny\{[^}]*min-height:25px/);
+  assert.match(css, /body\[data-app="sales"\] \.notification-item\{[^}]*padding:10px 14px/);
+  assert.match(css, /body\[data-app="sales"\] \.manager-task-card,[\s\S]*?padding:10px 14px/);
+  assert.match(css, /body\[data-app="sales"\] \.manager-task-actions \.button\{[^}]*min-height:25px/);
+  assert.match(css, /body\[data-app="sales"\] \.protected-data-table td,[\s\S]*?padding:10px 14px/);
+  assert.match(css, /body\[data-app="sales"\] \.insight-hub-card\{[\s\S]*?padding:10px 14px/);
+  assert.match(css, /body\[data-app="sales"\] \.feed-item\{[^}]*padding:7px 0/);
+  assert.match(css, /body\[data-app="sales"\] \.data-table \.button,[\s\S]*?min-height:25px/);
+  assert.match(css, /\.pending-queue-row\{[^}]*min-height:82px/);
   assert.match(css, /\.tp-company-anchor\{[^}]*font-size:13\.5px/);
   assert.match(css, /\.data-table tbody tr:hover/);
+});
+
+test('list rows use V3 two-line entity language and overflow actions', () => {
+  const js = appJs();
+  const css = appCss();
+  const slice = (startName, endName) => {
+    const start = js.indexOf(`function ${startName}(`);
+    const end = js.indexOf(`function ${endName}(`);
+    assert.notEqual(start, -1, `missing ${startName}`);
+    assert.notEqual(end, -1, `missing ${endName}`);
+    return js.slice(start, end);
+  };
+  assert.match(js, /function hostLabel\(/);
+  assert.match(js, /function listEntityMarkup\(/);
+  assert.match(js, /function listChipMarkup\(/);
+  assert.match(js, /function rowActionCluster\(/);
+  assert.match(js, /class="an tp-company-anchor"/);
+  assert.match(js, /class="row-more"/);
+  assert.match(js, /summary class="more"/);
+  assert.match(js, /closest\([^)]*summary[^)]*details/);
+
+  const pipeline = slice('renderPipeline', 'pipelineStayMarkup');
+  assert.match(pipeline, /listEntityMarkup\(/);
+  assert.match(pipeline, /rowActionCluster\(/);
+  assert.match(js, /停留 \$\{days\} 天/);
+  assert.doesNotMatch(pipeline, /pipeline-fact-note/);
+  assert.doesNotMatch(pipeline, /company-star-line/);
+
+  const customers = slice('renderCustomers', 'loadRecycleBin');
+  assert.match(customers, /listEntityMarkup\(/);
+  assert.match(customers, /assignment-actions/);
+  assert.doesNotMatch(customers, /创建人：/);
+  assert.doesNotMatch(customers, /websiteMarkup\(account\.website/);
+  assert.doesNotMatch(customers, /sourceTagMarkup\(account, 4\)/);
+
+  const intake = slice('renderIntake', 'customerProfileFrameUrl');
+  assert.match(intake, /listEntityMarkup\(/);
+  assert.match(intake, /listChipMarkup\(/);
+  assert.match(intake, /data-open-customer="\$\{item\.crm_customer_id\}"/);
+  assert.doesNotMatch(intake, /具名联系人与联系方式完备/);
+  assert.doesNotMatch(intake, /productChipMarkup\(/);
+  assert.doesNotMatch(intake, /websiteMarkup\(item\.website\)/);
+
+  const users = slice('renderUsers', 'renderManagerTaskSettings');
+  assert.match(users, /class="an"/);
+  assert.match(users, /user-row-actions/);
+  assert.match(users, /data-edit-user/);
+  assert.doesNotMatch(users, /class="person"/);
+  assert.doesNotMatch(users, /class="avatar"/);
+
+  assert.match(css, /\.an\{[^}]*font-size:13\.5px/);
+  assert.match(css, /\.id\{[^}]*font-size:11px/);
+  assert.match(css, /\.more\{[^}]*height:25px/);
+  assert.match(css, /\.chip\{[^}]*font-size:11px/);
+  assert.match(css, /\.row-actions\{/);
+  assert.doesNotMatch(css, /\.pipeline-action-row strong\{font-size:11px/);
+  assert.match(css, /\.pending-queue-row\{[^}]*min-height:82px/);
 });

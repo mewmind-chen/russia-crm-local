@@ -487,6 +487,40 @@
       ? `<div class="source-tag-row">${shown.map(tag => `<span class="source-tag ${esc(tag.source)}" title="${esc(tag.category || '客户标签')}">${esc(tag.name)}</span>`).join('')}${tags.length > shown.length ? `<span class="source-tag manual">+${tags.length - shown.length}</span>` : ''}</div>`
       : '';
   }
+  function hostLabel(value) {
+    return uiFormat.website(value)?.label || '';
+  }
+  function listEntityMarkup(name, metaParts = [], extra = '') {
+    const display = String(name || '').trim();
+    const meta = (Array.isArray(metaParts) ? metaParts : [metaParts])
+      .map(part => String(part || '').trim())
+      .filter(Boolean)
+      .map(part => {
+        if (part === display) return '';
+        const prefix = `${display} · `;
+        return part.startsWith(prefix) ? part.slice(prefix.length) : part;
+      })
+      .filter(Boolean)
+      .join(' · ');
+    return `<div class="list-entity"><div class="an tp-company-anchor">${esc(name)}</div>${
+      meta ? `<div class="id">${esc(meta)}</div>` : ''}${extra || ''}</div>`;
+  }
+  function listChipMarkup(account, limit = 2) {
+    const tags = accountSourceTags(account);
+    if (!tags.length) return '';
+    const shown = tags.slice(0, limit);
+    const overflow = tags.length - shown.length;
+    return `<span class="chip-row">${shown.map(tag => `<span class="chip">${esc(tag.name)}</span>`).join('')}${
+      overflow ? `<span class="chip">+${overflow}</span>` : ''}</span>`;
+  }
+  function rowActionCluster(primary = [], more = []) {
+    const main = (primary || []).filter(Boolean);
+    const overflow = (more || []).filter(Boolean);
+    const moreMarkup = overflow.length
+      ? `<details class="row-more"><summary class="more" title="${overflow.length} 项行内操作">⋯ ${overflow.length}</summary><div class="row-more-menu">${overflow.join('')}</div></details>`
+      : '';
+    return `<div class="row-actions">${main.join('')}${moreMarkup}</div>`;
+  }
   function jsonList(value) {
     try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; } catch (_e) { return []; }
   }
@@ -1089,6 +1123,20 @@
     };
   }
 
+  async function fetchLinkedSchema(controller, transform) {
+    if (!controller) return null;
+    const pageKey = controller.pageKey;
+    const payload = controller.serialize('draft');
+    const params = new URLSearchParams({
+      permissionVersion: String(payload.permissionVersion || ''),
+      filters: JSON.stringify(componentPayloadToRaw(payload)),
+    });
+    const result = await api(`/filter-schema/${pageKey}?${params}`);
+    const schema = result?.schema;
+    if (!schema) return null;
+    return typeof transform === 'function' ? transform(schema) : schema;
+  }
+
   function resetCustomerSelection() {
     state.selectedCustomerIds.clear();
     state.customerSelectionMode = 'explicit';
@@ -1209,6 +1257,7 @@
       }
       state.customerFilterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
         controller,
+        fetchLinkedSchema: linkedController => fetchLinkedSchema(linkedController, customerFilterSchema),
         resultMeta: {
           total: state.customerList.total,
           shown: state.customerList.rows.length,
@@ -1494,6 +1543,7 @@
       }
       meta.filterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
         controller,
+        fetchLinkedSchema,
         resultMeta: { total: meta.total, shown: meta.rows.length },
       });
       await loadAuthorizedBusinessPage(pageKey, { reset: true });
@@ -2217,6 +2267,7 @@
       meta.filterController = controller;
       meta.filterMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
         controller,
+        fetchLinkedSchema,
         resultMeta: {
           total: meta.total,
           shown: state.data[config.dataKey].length,
@@ -2873,51 +2924,75 @@
     $('#intakeTable').innerHTML = table(
       intakeHeaders,
       items.map(item => {
+        let primaryActions = [];
+        let moreActions = [];
         let actions = '';
-        if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取客户</button><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button><button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button></div>`;
-        else if (salesView && item.status === 'assigned') actions = `<div class="assignment-actions"><span class="pill amber">管理员确认中</span><button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button></div>`;
-        else if (!salesView && intakeItemAssignable(item)) actions = '—';
-        // Resolved link_existing identity conflicts keep assignable=false and a
-        // linked master; surface the master entry before the identity-review
-        // branch so a resolved link never shows a "needs review" action.
-        else if (item.linkedMasterExternalId) actions =
-          `<button class="text-button" data-open-customer="${item.linkedMasterExternalId}">查看已关联客户</button>`;
-        // Identity-review branch: the backend marks these items with the boolean
-        // assignable=false (plus identityWarning/claimBlocked), so this must run
-        // after the assignable branch above and before the plain assigned row.
-        else if (!salesView && intakeNeedsIdentityReview(item)) actions = `<div class="assignment-actions">${intakeReviewActionMarkup(item)}</div>`;
-        else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) actions = `<div class="assignment-actions"><button class="text-button" data-intake-assign="${item.id}">重新分配</button><button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button></div>`;
-        else if (!salesView && item.status === 'assigned') actions = '<span class="pill amber">管理员确认中</span>';
-        else if (!salesView && item.status === 'claimed') actions = item.crm_customer_id
-          ? `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看 CRM 客户</button>`
-          : '—';
-        else if (item.duplicate_state === 'exact' && item.crm_customer_id) actions =
-          `<button class="text-button" data-open-customer="${item.crm_customer_id}">查看已关联客户</button>`;
-        else if (item.status === 'returned' && item.crm_customer_id) actions =
-          `<button class="text-button" type="button" data-returned-history="${esc(item.crm_customer_id)}">查看开发历史</button>`;
-        else actions = '—';
+        if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) {
+          primaryActions = [
+            `<button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取</button>`,
+            `<button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button>`,
+          ];
+          moreActions = [`<button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button>`];
+        } else if (salesView && item.status === 'assigned') {
+          primaryActions = [
+            `<span class="pill amber">管理员确认中</span>`,
+            `<button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button>`,
+          ];
+        } else if (!salesView && intakeItemAssignable(item)) {
+          actions = '—';
+        } else if (item.linkedMasterExternalId) {
+          primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.linkedMasterExternalId}">查看已关联客户</button>`];
+        } else if (!salesView && intakeNeedsIdentityReview(item)) {
+          primaryActions = [intakeReviewActionMarkup(item)];
+        } else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) {
+          primaryActions = [`<button class="button secondary tiny" data-intake-assign="${item.id}">分配</button>`];
+          moreActions = [`<button class="text-button danger-text" data-intake-unassign="${item.id}">取消分配</button>`];
+        } else if (!salesView && item.status === 'assigned') {
+          primaryActions = ['<span class="pill amber">管理员确认中</span>'];
+        } else if (!salesView && item.status === 'claimed') {
+          if (item.crm_customer_id) {
+            primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.crm_customer_id}">打开客户</button>`];
+          }
+        } else if (item.duplicate_state === 'exact' && item.crm_customer_id) {
+          primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.crm_customer_id}">查看已关联客户</button>`];
+        } else if (item.status === 'returned' && item.crm_customer_id) {
+          primaryActions = [`<button class="button secondary tiny" type="button" data-returned-history="${esc(item.crm_customer_id)}">开发历史</button>`];
+        }
+        if (primaryActions.length || moreActions.length) {
+          actions = `<div class="assignment-actions">${rowActionCluster(primaryActions, moreActions)}</div>`;
+        } else if (!actions) {
+          actions = '—';
+        }
         const signals = intakeSignals(item);
         const layers = showAssignmentAI ? intakeDecisionLayers(item) : null;
-        const sourceMeta = `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`;
         const customerTags = (Array.isArray(item.customerTags) ? item.customerTags : [])
           .concat((Array.isArray(item.customer_tags) ? item.customer_tags
             : jsonList(item.customer_tags_json || item.customer_tags || item.tags_json || '[]'))
             .map(tag => typeof tag === 'object' ? tag : { name: tag, category: '客户标签', isPreset: false }));
-        const website = websiteMarkup(item.website);
-        const productSummary = productChipMarkup(item.product_focus || item.potential_demand);
-        const contactCompleteness = item.contact_name && item.contact_methods
-          ? '具名联系人与联系方式完备'
-          : item.contact_name ? '已有具名联系人，联系方式待补齐' : '具名联系人与联系方式待补齐';
         const blockCopy = intakeBlockStatusLabel(item);
         const assignmentBlock = blockCopy
           || (item.assignable === false
             ? (item.assignmentBlockReason || item.decision_reason || (showAI ? signals.riskStatus : '') || '')
             : '');
+        const dueCopy = item.claim_due_at
+          ? `领取截止 ${shortDate(item.claim_due_at, true)}`
+          : esc(item.return_reason || '');
+        const sourceMeta = `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`;
+        const extra = [
+          item.identityWarning?.active
+            ? `<span class="pill amber" title="${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}">${esc(item.identityWarning.label || '名称待核验')}</span>`
+            : '',
+          listChipMarkup({ customerTags }, 2),
+        ].filter(Boolean).join('');
         const businessColumns = [
-          `<div class="company-cell"><strong class="tp-company-anchor">${esc(accountDisplayName(item))}</strong><span>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc([item.country, item.city].filter(Boolean).join(' / ') || '地区未标注')}</span>${item.identityWarning?.active ? `<span><span class="pill amber">${esc(item.identityWarning.label || '名称待核验')}</span> <span class="subtle">${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}</span></span>` : ''}<span>${website}</span><span>${esc([item.industry, item.customer_type].filter(Boolean).join(' · ') || '行业 / 类型未标注')}</span>${productSummary}${sourceTagMarkup({ customer_type: item.customer_type, industry: item.industry, customerTags }, 4)}${sourceMeta}</div>`,
-          `<div class="intake-contact"><strong><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span> ${esc(item.contact_name || '暂无具名联系人')}</strong><span>${esc(item.contact_title || '')}</span><span>${esc(item.contact_methods || '需要继续寻找联系方式')}</span><span>${esc(contactCompleteness)}</span></div>`,
-          `<div class="decision-stack"><strong>${esc(item.assigned_owner_name || '待手动分配')}</strong>${salesView || !assignmentBlock ? '' : `<span class="decision-block">${esc(assignmentBlock)}</span>`}</div>`,
-          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}${item.reviewVagueHint ? `<span class="pill amber">${esc(item.reviewVagueHint)}</span>` : ''}${item.developmentHistory ? `<span class="pill amber">曾开发</span>` : ''}<span class="${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : 'subtle'}">${item.claim_due_at ? `领取截止 ${shortDate(item.claim_due_at, true)}` : esc(item.return_reason || '')}</span>${item.crm_assignment_status ? `<span class="subtle">CRM：${esc(item.crm_assignment_status === 'claimed' ? '已领取' : item.crm_assignment_status === 'assigned' ? '待领取' : item.crm_assignment_status === 'returned' ? '已退回' : item.crm_assignment_status)}</span>` : ''}</div>`,
+          listEntityMarkup(
+            accountDisplayName(item),
+            [accountIdentity(item), hostLabel(item.website), item.industry || item.customer_type],
+            extra,
+          ),
+          `<div class="intake-contact"><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>${item.contact_name ? `<span class="id">${esc(item.contact_name)}</span>` : ''}</div>`,
+          `<div class="decision-stack">${esc(item.assigned_owner_name || '待手动分配')}${salesView || !assignmentBlock ? '' : `<div class="id">${esc(assignmentBlock)}</div>`}</div>`,
+          `<div class="assignment-cell">${statusMarkup(item.status, { [item.status]: intakeStatusDisplay(item).label })}${item.reviewVagueHint ? `<span class="pill amber">${esc(item.reviewVagueHint)}</span>` : ''}${item.developmentHistory ? `<span class="chip">曾开发</span>` : ''}${dueCopy ? `<div class="id ${item.status === 'assigned' && item.claim_due_at < state.data.generatedAt ? 'overdue-text' : ''}">${dueCopy}</div>` : ''}</div>`,
           actions,
         ];
         const aiColumns = [
@@ -4120,26 +4195,29 @@
         const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
           && !account.intake_item_id && account.source_file === 'CRM手工新增';
         const lifecycleActions = [
-          state.customerStarView !== 'all' ? `<button class="text-button" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
-          state.customerStarView !== 'all' && can('record_activity') ? `<button class="text-button" type="button" data-pipeline-progress="${esc(account.id)}">记录新进展</button>` : '',
+          state.customerStarView !== 'all' ? `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
+          state.customerStarView !== 'all' && can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
           canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
           canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
           canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
-        ].filter(Boolean).join('');
+        ].filter(Boolean);
         const primaryStatus = customerPrimaryStatus(alert);
         return [
           canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          `<div class="company-cell"><div class="company-star-line">${starButtonMarkup(account, true)}<strong class="tp-company-anchor">${esc(accountDisplayName(account))}</strong></div><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.customer_type || account.source || '—')} · 创建人：${esc(creatorDisplayName(account))}</span>${starPeopleMarkup(account)}${account.isStarred ? `<button class="text-button customer-star-reason" type="button" data-edit-star-reason="${esc(account.id)}">${account.myStar?.reason ? '修改关注原因' : '添加关注原因'}</button>` : ''}${websiteMarkup(account.website || account.domain)}${sourceTagMarkup(account, 4)}</div>`,
-          `<div class="company-cell"><strong>${esc(account.country || '—')}</strong><span>${esc(account.industry || '—')}</span></div>`,
+          listEntityMarkup(
+            accountDisplayName(account),
+            [accountIdentity(account), hostLabel(account.website || account.domain)],
+          ),
+          `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
           statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
-          esc(account.owner_name || '未分配'),
+          `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
           `<span>${relative(account.last_activity_at)}</span>`,
-          `<div class="company-cell"><strong class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</strong><span>${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</span>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}</div>`,
+          `<span class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</span><div class="id">${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</div>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}`,
           `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span>`,
           `${primaryStatus.tone === 'good'
             ? `<span class="good-text">${esc(primaryStatus.label)}</span>`
             : `<span class="pill ${primaryStatus.tone}">${esc(primaryStatus.label)}</span>`}`,
-          `${lifecycleActions ? `<div class="assignment-actions">${lifecycleActions}</div>` : ''}`,
+          `${lifecycleActions.length ? `<div class="assignment-actions">${rowActionCluster(lifecycleActions.slice(0, 2), lifecycleActions.slice(2))}</div>` : ''}`,
         ];
       }).map((row, index) => {
         row._id = accounts[index].id;
@@ -4637,23 +4715,22 @@
       : selected === 'worth_deepening' ? '值得深挖'
         : queueItems.find(item => item[0] === selected)?.[1] || '全部当前行动';
     const detailMarkup = rows.length ? `<table class="pipeline-grid"><thead><tr class="pipeline-list-head"><th>客户</th><th>当前阶段·停留</th><th>下一步·计划</th><th>负责人·星标</th><th>操作</th></tr></thead><tbody>${rows.map(account => {
-      const latestReaction = account.latestReaction || '暂无明确反应';
       const next = account.next_action || '暂未确定下一步';
       const stay = pipelineStayMarkup(account);
+      const primaryActions = [
+        can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
+        `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>`,
+      ];
+      const moreActions = [
+        can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : '',
+        can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : '',
+      ];
       return `<tr class="pipeline-action-row">
-        <td><div class="pipeline-action-customer">
-          <div class="company-star-line">${starButtonMarkup(account, true)}<strong>${esc(accountDisplayName(account))}</strong></div>
-          <span>${esc(accountIdentity(account))}</span>
-        </div></td>
-        <td><strong>${esc(account.stageLabel || stageLabel(account.stage))}</strong>${stay}<div class="pipeline-fact-note">${esc(latestReaction)}</div></td>
-        <td><strong>${esc(next)}</strong><small>${account.next_action_at ? shortDate(account.next_action_at, true) : '未设置时间'}</small></td>
-        <td>${esc(account.owner_name || '未分配')}${account.isStarred ? '<span class="pipeline-star-mark">★</span>' : '<span class="pipeline-unrated">☆</span>'}${starPeopleMarkup(account)}</td>
-        <td><div class="pipeline-action-buttons">
-          <button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>
-          ${can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录新进展</button>` : ''}
-          ${can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : ''}
-          ${can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : ''}
-        </div></td>
+        <td>${listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)])}</td>
+        <td>${esc(account.stageLabel || stageLabel(account.stage))}${stay}</td>
+        <td>${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div></td>
+        <td>${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}</td>
+        <td>${rowActionCluster(primaryActions, moreActions)}</td>
       </tr>`;
     }).join('')}</tbody></table>` : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
     $('#pipelineBoard').innerHTML = `
@@ -4674,7 +4751,7 @@
     const days = Math.max(0, Math.floor((Date.now() - new Date(raw).getTime()) / 86400000));
     if (!Number.isFinite(days)) return '<span class="pipeline-dwell">—</span>';
     const tone = days >= 14 ? 'over' : days >= 7 ? 'near' : '';
-    return `<span class="pipeline-dwell ${tone}">${days} 天</span>`;
+    return `<div class="pipeline-dwell dw ${tone}">停留 ${days} 天</div>`;
   }
 
   function normalizeTodayTaskAction(value) {
@@ -5702,7 +5779,7 @@
         });
         state.teamStatus[controllerKey] = controller;
         state.teamStatus[mountKey] = window.TradePulseFilterComponent.mountFilterComponent(root, {
-          controller, resultMeta: { total: 0, shown: 0 },
+          controller, fetchLinkedSchema, resultMeta: { total: 0, shown: 0 },
         });
       }
       if (can('view_team')) await loadTeamStatus({ reset: true });
@@ -6002,28 +6079,28 @@
     $('#userTable').innerHTML = table(
       ['用户', '角色', '权限组', '个人调整', '状态', '操作'],
       users.map(user => [
-        `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
+        `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`,
         `<span class="pill">${roleLabel(user.role)}</span>`,
         esc(user.permissionGroupName || '—'),
-        user.permissionOverrideCount ? `<span class="pill amber">${user.permissionOverrideCount} 项调整</span>` : '<span class="subtle">无个人调整</span>',
+        user.permissionOverrideCount ? `<span class="chip">${user.permissionOverrideCount} 项调整</span>` : '<span class="id">无个人调整</span>',
         `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
         canMutate
           ? `<div class="user-row-actions">
-              <button class="text-button" data-edit-user="${user.id}">编辑账号</button>
-              <button class="text-button" data-edit-overrides="${user.id}">个人权限</button>
+              <button class="button secondary tiny" data-edit-user="${user.id}">编辑</button>
+              <button class="button secondary tiny" data-edit-overrides="${user.id}">权限</button>
               ${user.id === state.data.user.id
                 ? '<span class="current-account-label">当前账号</span>'
                 : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>
                   ${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}
                   <button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>`}
             </div>`
-          : '<span class="subtle">无变更权限</span>',
+          : '<span class="id">无变更权限</span>',
       ]),
     );
     $('#archivedUserTable').innerHTML = table(
       ['用户', '角色', '归档时间', '操作'],
       archivedUsers.map(user => [
-        `<div class="person"><span class="avatar">${esc(user.name.slice(0, 1))}</span><div><strong>${esc(user.name)}</strong><small>${esc(user.email)}</small></div></div>`,
+        `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`,
         `<span class="pill gray">${roleLabel(user.role)}</span>`,
         shortDate(user.archivedAt, true),
         canMutate
@@ -9164,7 +9241,7 @@
     });
     state.activityCorrection.targetController = controller;
     state.activityCorrection.targetMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
-      controller, resultMeta: { total: result.total, shown: state.activityCorrection.targets.length },
+      controller, fetchLinkedSchema, resultMeta: { total: result.total, shown: state.activityCorrection.targets.length },
     });
     controller.updateSchema(result.schema);
     await loadActivityCorrectionTargets({ reset: true });
@@ -9359,7 +9436,7 @@
     });
     state.activityCorrection.proposalController = controller;
     state.activityCorrection.proposalMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
-      controller, resultMeta: { total: result.total, shown: state.activityCorrection.proposalRows.length },
+      controller, fetchLinkedSchema, resultMeta: { total: result.total, shown: state.activityCorrection.proposalRows.length },
     });
     controller.updateSchema(result.schema);
     await loadActivityCorrectionProposals({ reset: true });
@@ -9547,7 +9624,7 @@
     });
     state.activityCorrection.historyController = controller;
     state.activityCorrection.historyMount = window.TradePulseFilterComponent.mountFilterComponent(root, {
-      controller, resultMeta: { total: result.total, shown: state.activityCorrection.historyRows.length },
+      controller, fetchLinkedSchema, resultMeta: { total: result.total, shown: state.activityCorrection.historyRows.length },
     });
     controller.updateSchema(result.schema);
     await loadActivityCorrections({ reset: true });
@@ -12394,20 +12471,24 @@
     }
     const mismatchRecord = event.target.closest('[data-open-mismatch-record]');
     if (mismatchRecord) openMismatchRecord(mismatchRecord.dataset.openMismatchRecord);
+    const listRowChrome = event.target.closest('button,a,input,select,textarea,summary,details');
     const recycleCustomer = event.target.closest('[data-open-recycle-customer]');
     if (recycleCustomer
-      && (!event.target.closest('button,a,input,select,textarea')
-        || recycleCustomer.matches('button[data-open-recycle-customer]'))) {
+      && (!listRowChrome || recycleCustomer.matches('button[data-open-recycle-customer]'))) {
       openRecycleCustomer(recycleCustomer.dataset.openRecycleCustomer);
     }
     const customer = event.target.closest('[data-open-customer],[data-customer]');
-    if (customer && (!event.target.closest('button,a,input,select,textarea') || customer.matches('button[data-open-customer]'))) openCustomer(customer.dataset.openCustomer || customer.dataset.customer);
+    if (customer && (!listRowChrome || customer.matches('button[data-open-customer]'))) {
+      openCustomer(customer.dataset.openCustomer || customer.dataset.customer);
+    }
     const intakeProfile = event.target.closest('[data-intake-profile]');
-    if (intakeProfile && (!event.target.closest('button,a,input,select,textarea') || intakeProfile.matches('button[data-intake-profile]'))) openIntakeProfile(intakeProfile.dataset.intakeProfile);
+    if (intakeProfile && (!listRowChrome || intakeProfile.matches('button[data-intake-profile]'))) {
+      openIntakeProfile(intakeProfile.dataset.intakeProfile);
+    }
     const intakeMaster = event.target.closest('[data-open-intake-master]');
     if (intakeMaster) openIntakeMasterProfile(intakeMaster.dataset.openIntakeMaster);
     const master = event.target.closest('[data-open-master]');
-    if (master && (!event.target.closest('button,a,input,select,textarea') || master.matches('button[data-open-master]'))) {
+    if (master && (!listRowChrome || master.matches('button[data-open-master]'))) {
       openCustomerProfile(master.dataset.openMaster);
     }
     const stageJump = event.target.closest('[data-stage-jump]');
