@@ -14,33 +14,91 @@ const crm = () => read('sales-crm.html');
 test('approved semantic tokens and typography define the CRM shell', () => {
   const css = appCss();
   for (const contract of [
-    '--surface-page:#f5f7f9',
+    '--surface-page:#f4f6f5',
     '--surface-panel:#fff',
-    '--surface-subtle:#f7f9fb',
-    '--text-primary:#18212f',
-    '--text-secondary:#667085',
-    '--border-default:#e2e7ed',
+    '--surface-subtle:#eef2f0',
+    '--text-primary:#1a2321',
+    '--text-secondary:#556360',
+    '--border-default:#e7ebe9',
     '--brand:#0f766e',
-    '--brand-hover:#0b625b',
-    '--brand-subtle:#e7f5f2',
-    '--info:#2563eb',
-    '--warning:#b7791f',
+    '--brand-hover:#0a6459',
+    '--brand-subtle:#e6f4f1',
+    '--info:#33689b',
+    '--warning:#b06f11',
     '--danger:#c2413b',
   ]) assert.match(css.toLowerCase(), new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(css, /h1\{[^}]*font-size:24px/);
-  assert.match(css, /\.topbar\{[^}]*min-height:64px/);
-  assert.match(css, /\.nav button\.active\{[^}]*background:var\(--brand-subtle\)/);
+  assert.match(css, /h1\{[^}]*font-size:21px/);
+  assert.match(css, /\.topbar\{[^}]*min-height:52px/);
+  assert.match(css, /body\[data-app="sales"\] \.nav button\.active\{[^}]*background:var\(--brand-subtle\)/);
   assert.match(css, /\.panel-head \.eyebrow,[^{]*\.section-intro \.eyebrow\{display:none\}/);
   assert.match(css, /\.data-table th\{[^}]*font-size:12px/);
   assert.match(css, /\.data-table td\{[^}]*font-size:13px/);
-  assert.doesNotMatch(css, /letter-spacing:\s*-\./);
+  assert.match(css, /body\[data-theme="deck"\]/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.ok(
     crm().indexOf('/shared-assets/ui-system.css') < crm().indexOf('/sales-assets/app.css'),
     'CRM app styles must load after the shared shell so approved typography wins',
   );
-  assert.match(css, /body\[data-app="sales"\] \.topbar h1\{[^}]*font-size:24px/);
-  assert.match(css, /body\[data-app="sales"\] \.panel,[\s\S]*?border-radius:8px;box-shadow:none/);
+  assert.match(css, /body\[data-app="sales"\] \.topbar h1\{[^}]*font-size:21px/);
+  assert.match(css, /body\[data-app="sales"\] \.panel,[\s\S]*?border-radius:10px/);
+  assert.match(crm(), /id="themeSwitcher"/);
+  assert.match(css, /\.funnel-bar\{[^}]*height:15px/);
+  assert.match(css, /\.button\{[^}]*min-height:34px/);
+  assert.match(css, /#pipelineBoard \.pipeline-tabs-row/);
+  assert.match(css, /#pipelineBoard \.pipeline-stage-cell/);
+  assert.match(css, /#pipelineBoard \.pipeline-queue-grid/);
+  assert.match(css, /#pipelineBoard \.pipeline-grid/);
+  assert.match(css, /#poolView \.studio-pills-row/);
+  assert.match(css, /#poolView \.intake-kpi-primary/);
+  assert.match(appJs(), /intake-kpi-secondary/);
+  assert.match(appJs(), /manager-metric-primary/);
+  assert.match(css, /\.team-progress-metrics-rest/);
+  assert.match(css, /\.access-section-tabs button\{[^}]*border-radius:20px/);
+  assert.match(appJs(), /theme=\$\{theme\}/);
+  assert.match(appJs(), /pipeline-list-head/);
+  assert.match(appJs(), /function viewSubtitle/);
+  assert.match(crm(), /id="viewSub"/);
+  assert.match(read('Index.html'), /q\.get\('theme'\)==='deck'/);
+  assert.match(read('sales-assets/filter-component.css'), /border-radius: 10px/);
+});
+
+test('card and field fills use surface tokens so Deck does not leave white tiles', () => {
+  const css = appCss();
+  const withoutRoot = css.replace(/:root\{[^}]+\}/, '');
+  const leftoverWhite = [...withoutRoot.matchAll(/background:#fff(?![0-9a-fA-F])/g)].filter(match => {
+    const ctx = withoutRoot.slice(Math.max(0, match.index - 140), match.index);
+    return !(ctx.includes('checkbox') && ctx.includes('::after'));
+  });
+  assert.equal(
+    leftoverWhite.length,
+    0,
+    leftoverWhite.map(match => withoutRoot.slice(Math.max(0, match.index - 70), match.index + 18)).join('\n'),
+  );
+  assert.doesNotMatch(withoutRoot, /background:#fafcfb/);
+  assert.doesNotMatch(withoutRoot, /background:#f7faf8/);
+  assert.doesNotMatch(withoutRoot, /background:#f7f9f8/);
+  assert.match(css, /\.customer-bulk-bar\{[^}]*background:var\(--surface-header\)/);
+});
+
+test('warning fills use tokens so Deck amber blocks stay readable', () => {
+  const css = appCss();
+  const withoutRoot = css.replace(/:root\{[^}]+\}/, '');
+  for (const brown of ['#76551d', '#72511d', '#765800', '#744916', '#8b6512', '#8b5e00', '#75540c', '#9a5c14']) {
+    assert.doesNotMatch(
+      withoutRoot.toLowerCase(),
+      new RegExp(brown),
+      `warning text ${brown} must use var(--warning) so Deck contrast holds`,
+    );
+  }
+  assert.match(css, /--warning-border:#ead6af/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--warning-subtle:#352914/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--warning-border:#6e5424/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--amberbg:var\(--warning-subtle\)/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--redbg:var\(--danger-subtle\)/);
+  assert.match(css, /\.maintenance-warning\{[^}]*color:var\(--text-primary\)/);
+  assert.match(css, /\.protected-gate\.is-disabled\{[^}]*color:var\(--text-primary\)/);
+  assert.match(css, /\.pipeline-star-distribution\{[^}]*color:var\(--warning\)/);
+  assert.match(css, /\.customer-star-meta\{[^}]*color:var\(--warning\)/);
 });
 
 test('shell navigation and icon-only actions use semantic line icons', () => {
@@ -121,6 +179,6 @@ test('business tables have readable anchors and semantic secondary content', () 
   const css = appCss();
   assert.match(css, /\.data-table th\{[^}]*font-size:12px/);
   assert.match(css, /\.data-table td\{[^}]*font-size:13px/);
-  assert.match(css, /\.tp-company-anchor\{[^}]*font-size:14px/);
+  assert.match(css, /\.tp-company-anchor\{[^}]*font-size:13\.5px/);
   assert.match(css, /\.data-table tbody tr:hover/);
 });

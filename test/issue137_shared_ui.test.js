@@ -68,7 +68,7 @@ test('shared advanced filter is a labelled secondary control with icon, count an
   assert.match(html, /class="tp-filter-advanced-label">详细筛选<\/span>/);
   assert.match(html, /class="tp-filter-advanced-count" data-filter-advanced-count\s+aria-label="已选 1 个高级条件"\s+>1<\/span>/);
   assert.match(html, /class="tp-filter-advanced-arrow" aria-hidden="true">▼<\/span>/);
-  assert.match(filterCss, /\.tp-filter-advanced > summary\s*\{[^}]*border:\s*1px solid/);
+  assert.match(filterCss, /\.tp-filter-advanced > summary\s*\{[^}]*border:\s*0/);
   assert.match(filterCss, /\.tp-filter-advanced (?:> )?summary:focus-visible/);
 });
 

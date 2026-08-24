@@ -410,9 +410,7 @@
         chips.push(`<button class="tp-filter-chip" type="button" data-filter-remove="${escapeHtml(field.key)}" data-filter-value="${escapeHtml(removalValue)}">${escapeHtml(field.label)}：${escapeHtml(display)} <span aria-hidden="true">×</span></button>`);
       });
     });
-    return chips.length
-      ? `<div class="tp-filter-chip-list">${chips.join('')}</div>`
-      : '<p class="tp-filter-empty-copy">暂无条件，显示当前权限范围内全部数据</p>';
+    return chips;
   }
 
   function renderResultMeta(resultMeta = {}) {
@@ -493,6 +491,10 @@
     const selectedAdvancedCount = advancedFields.filter(field => (
       state.draft[field.key] !== undefined
     )).length;
+    const chips = renderAppliedChips(schema, state);
+    const resultStatus = appliedCount
+      ? `已启用条件 · ${appliedCount} 项`
+      : '暂无条件，显示当前权限范围内全部数据';
     return `<section class="tp-filter-component" data-filter-status="ready"
         data-schema-version="${escapeHtml(schema.schemaVersion)}"
         data-permission-version="${escapeHtml(schema.permissionVersion)}">
@@ -504,22 +506,21 @@
           <button class="tp-filter-apply" type="button" data-filter-apply>应用筛选</button>
         </div>
       </div>
-      ${advancedFields.length ? `<details class="tp-filter-advanced">
-        <summary aria-expanded="false">
-          ${renderAdvancedFilterIcon()}
-          <span class="tp-filter-advanced-label">详细筛选</span>
-          <span class="tp-filter-advanced-count" data-filter-advanced-count
-            aria-label="已选 ${selectedAdvancedCount} 个高级条件" ${selectedAdvancedCount ? '' : 'hidden'}>${selectedAdvancedCount}</span>
-          <span class="tp-filter-advanced-arrow" aria-hidden="true">▼</span>
-        </summary>
-        <div class="tp-filter-advanced-grid">${advancedFields.map(field => renderCompactField(field, state)).join('')}</div>
-      </details>` : ''}
-      <div class="tp-filter-applied">
-        <div class="tp-filter-applied-head">
-          <strong>${appliedCount ? `已启用条件 · ${appliedCount} 项` : '当前结果'}</strong>
-          ${renderResultMeta(model.resultMeta)}
+      <div class="tp-filter-foot">
+        ${advancedFields.length ? `<details class="tp-filter-advanced">
+          <summary aria-expanded="false">
+            ${renderAdvancedFilterIcon()}
+            <span class="tp-filter-advanced-label">详细筛选</span>
+            <span class="tp-filter-advanced-count" data-filter-advanced-count
+              aria-label="已选 ${selectedAdvancedCount} 个高级条件" ${selectedAdvancedCount ? '' : 'hidden'}>${selectedAdvancedCount}</span>
+            <span class="tp-filter-advanced-arrow" aria-hidden="true">▼</span>
+          </summary>
+          <div class="tp-filter-advanced-grid">${advancedFields.map(field => renderCompactField(field, state)).join('')}</div>
+        </details>` : ''}
+        <div class="tp-filter-applied">
+          <div class="tp-filter-applied-head">当前结果 ${renderResultMeta(model.resultMeta)} · ${resultStatus}</div>
+          ${chips.length ? `<div class="tp-filter-chip-list">${chips.join('')}</div>` : ''}
         </div>
-        ${renderAppliedChips(schema, state)}
       </div>
     </section>`;
   }

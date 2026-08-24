@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="zh-CN" data-app-version="20260822-issue340-frontend-optimization-v1">
+<html lang="zh-CN" data-app-version="20260824-studio-deck-v1">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
-  <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260720-5">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260822-issue340-frontend-optimization-v1">
-  <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260822-issue340-frontend-optimization-v1">
+  <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260824-studio-deck-v1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260824-studio-deck-v1">
+  <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260824-studio-deck-v1">
 </head>
-<body data-app="sales">
+<body data-app="sales" data-theme="studio">
   <div id="loginScreen" class="login-screen">
     <div class="login-brand">
       <div class="login-mark">TP</div>
@@ -93,8 +93,16 @@
         <div>
           <p id="viewEyebrow" class="eyebrow">经营概览</p>
           <h1 id="viewTitle">经营驾驶舱</h1>
+          <p id="viewSub" class="view-sub">全公司口径</p>
         </div>
         <div class="top-actions">
+          <label class="theme-switcher" title="界面主题">
+            <span class="hidden">主题</span>
+            <select id="themeSwitcher" aria-label="界面主题">
+              <option value="studio">明亮</option>
+              <option value="deck">夜间</option>
+            </select>
+          </label>
           <button id="notificationButton" data-view="notifications" data-permission="view_notifications" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
             <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
           </button>
@@ -173,26 +181,28 @@
       </section>
 
       <section id="poolView" class="view">
-        <div id="intakeSummary" class="metric-grid"></div>
+        <div id="intakeAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <div id="intakeSummary" class="intake-kpi-stack"></div>
+        <div class="studio-pills-row" id="intakePillsRow">
+          <div class="segmented" id="intakeTabs">
+            <button class="active" data-intake-status="">全部</button>
+            <button data-intake-status="unassigned">待分配</button>
+            <button data-intake-status="assigned">待领取</button>
+            <button data-intake-status="returned">已退回</button>
+          </div>
+          <div class="studio-pills-tools" id="intakeManagerActions">
+            <button id="intakeSettingsBtn" class="button secondary tiny">同步设置</button>
+            <button id="scanIntakeBtn" class="button primary tiny">同步线索</button>
+          </div>
+        </div>
         <div class="section-intro">
           <div><p class="eyebrow">线索池</p><h2 id="intakeHeading">线索池</h2><p id="intakeSubheading">集中查看线索资料、分配、领取、退回和后续流转。</p></div>
-          <div id="intakeManagerActions" class="top-actions">
-            <button id="intakeSettingsBtn" class="button secondary">同步设置</button>
-            <button id="scanIntakeBtn" class="button primary">⇣ 同步线索</button>
-          </div>
         </div>
         <article class="panel">
           <div class="toolbar">
             <span id="intakeAuthorizedResultCount" class="toolbar-count"></span>
           </div>
-          <div id="intakeAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
           <div class="toolbar intake-toolbar hidden">
-            <div class="segmented" id="intakeTabs">
-              <button class="active" data-intake-status="">全部</button>
-              <button data-intake-status="unassigned">待分配</button>
-              <button data-intake-status="assigned">待领取</button>
-              <button data-intake-status="returned">已退回</button>
-            </div>
             <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人" aria-label="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>
             <span id="intakeModeLabel" class="toolbar-count"></span>
@@ -232,8 +242,8 @@
       </section>
 
       <section id="customersView" class="view">
+        <div id="customerAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel customer-portfolio-panel">
-          <div id="customerAuthorizedFilters" aria-live="polite"></div>
           <div class="toolbar customer-list-toolbar">
             <div class="customer-star-view" role="group" aria-label="星标客户范围">
               <button class="text-button active" type="button" data-customer-star-view="all">全部客户</button>
@@ -322,8 +332,8 @@
       </section>
 
       <section id="alertsView" class="view">
-        <div class="alert-summary" id="alertSummary"></div>
         <div id="alertsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <div class="alert-summary" id="alertSummary"></div>
         <article class="panel manager-anomaly-panel" data-permission="view_team" data-ai-business>
           <div class="panel-head">
             <div><p class="eyebrow">需主管关注</p><h2>需主管关注优先队列</h2></div>
@@ -349,8 +359,8 @@
       </section>
 
       <section id="notificationsView" class="view">
-        <div id="notificationSummary" class="metric-grid"></div>
         <div id="notificationsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
+        <div id="notificationSummary" class="metric-grid"></div>
         <article class="panel">
           <div class="section-intro notification-intro">
             <div><p class="eyebrow">通知中心</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
@@ -391,6 +401,7 @@
       </section>
 
       <section id="managerTasksView" class="view manager-workspace-view">
+        <div id="managerTaskFilters" class="authorized-filter-host" aria-live="polite"></div>
         <div id="managerTaskSummary" class="metric-grid manager-task-summary" aria-live="polite"></div>
         <div class="section-intro manager-workspace-intro">
           <div><p class="eyebrow">主管协助事项</p><h2>主管协助事项</h2><p>按授权范围处理延期计划、首次触达停滞和已计划动作超时。</p></div>
@@ -399,7 +410,6 @@
             <button id="managerTaskExport" class="button secondary" type="button" data-permission="export_data">导出当前结果</button>
           </div>
         </div>
-        <div id="managerTaskFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel manager-task-panel">
           <div class="toolbar manager-task-toolbar">
             <span id="managerTaskResultCount" class="toolbar-count">进入页面后加载授权任务</span>
@@ -537,7 +547,6 @@
       <section id="usersView" class="view access-admin-view">
         <div class="section-intro access-intro">
           <div><p class="eyebrow">用户与权限</p><h2>用户与权限</h2><p>集中管理成员账号、权限基线与关键系统操作。</p></div>
-          <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
         </div>
         <div id="accessSummary" class="access-summary-grid" aria-label="用户与权限概况">
           <article class="access-summary-card">
@@ -563,6 +572,9 @@
           <button id="accessGovernanceTab" type="button" role="tab" aria-selected="false" aria-controls="accessGovernancePanel" data-access-section="governance">
             <span>系统与审计</span><small>运行状态与操作记录</small>
           </button>
+          <div class="studio-pills-tools">
+            <button id="newUserBtn" data-permission="manage_users" class="button primary tiny">＋ 新增用户</button>
+          </div>
         </div>
 
         <section id="accessAccountsPanel" class="access-workspace-panel" role="tabpanel" aria-labelledby="accessAccountsTab">
@@ -786,9 +798,38 @@
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-  <script src="/sales-assets/filter-component.js?v=20260822-issue340-frontend-optimization-v1"></script>
-  <script src="/sales-assets/ui-format.js?v=20260822-issue340-frontend-optimization-v1"></script>
-  <script src="/sales-assets/next-action-time.js?v=20260822-issue340-frontend-optimization-v1"></script>
-  <script src="/sales-assets/app.js?v=20260822-issue340-frontend-optimization-v1"></script>
+  <script src="/sales-assets/filter-component.js?v=20260824-studio-deck-v1"></script>
+  <script src="/sales-assets/ui-format.js?v=20260824-studio-deck-v1"></script>
+  <script src="/sales-assets/next-action-time.js?v=20260824-studio-deck-v1"></script>
+  <script src="/sales-assets/app.js?v=20260824-studio-deck-v1"></script>
+  <script>
+    (function () {
+      var KEY = 'tp-theme';
+      var allowed = { studio: 1, deck: 1 };
+      function apply(theme) {
+        if (!allowed[theme]) theme = 'studio';
+        document.body.setAttribute('data-theme', theme);
+        var sel = document.getElementById('themeSwitcher');
+        if (sel) sel.value = theme;
+        try { localStorage.setItem(KEY, theme); } catch (_e) {}
+        var frame = document.getElementById('customerProfileFrame');
+        if (frame && frame.getAttribute('src')) {
+          try {
+            var url = new URL(frame.src, location.origin);
+            if (url.searchParams.get('profile') === '1') {
+              url.searchParams.set('theme', theme);
+              frame.src = url.toString();
+            }
+          } catch (_err) {}
+        }
+      }
+      var saved = 'studio';
+      try { saved = localStorage.getItem(KEY) || 'studio'; } catch (_e) {}
+      apply(saved);
+      document.getElementById('themeSwitcher')?.addEventListener('change', function (event) {
+        apply(event.target.value);
+      });
+    })();
+  </script>
 </body>
 </html>

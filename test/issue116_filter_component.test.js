@@ -359,6 +359,36 @@ test('compact layout keeps common fields visible and advanced filters collapsed'
   assert.match(html, /42 条结果/);
 });
 
+test('studio filter keeps one footer row: text 详细筛选 plus current-result copy', () => {
+  const html = renderFilterComponent({
+    schema: schema({
+      fields: [
+        ...schema().fields,
+        {
+          key: 'stage',
+          label: '客户阶段',
+          type: 'select',
+          operator: 'eq',
+          placement: 'more',
+          options: [{ value: 'qualified', label: '已确认' }],
+        },
+      ],
+    }),
+    state: { draft: {}, applied: {} },
+    resultMeta: { total: 18, shown: 18 },
+  });
+  const css = fs.readFileSync(cssPath, 'utf8');
+
+  assert.match(html, /class="tp-filter-foot"/);
+  assert.match(html, /<div class="tp-filter-foot">[\s\S]*<details class="tp-filter-advanced">[\s\S]*<div class="tp-filter-applied">/);
+  assert.match(html, /当前结果/);
+  assert.match(html, /18 条结果/);
+  assert.match(html, /暂无条件，显示当前权限范围内全部数据/);
+  assert.match(css, /\.tp-filter-foot\s*\{/);
+  assert.match(css, /\.tp-filter-advanced > summary\s*\{[^}]*border:\s*0/);
+  assert.match(css, /\.tp-filter-applied\s*\{[^}]*background:\s*(?:none|transparent)/);
+});
+
 test('presentation grouping does not alter serialized authorization payload', () => {
   const controller = createFilterController({
     pageKey: 'customers',

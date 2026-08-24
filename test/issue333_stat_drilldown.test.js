@@ -24,7 +24,7 @@ test('dashboard metrics and cumulative funnel stages are semantic drill-down but
   const dashboard = block(app, 'function renderDashboard()', 'function percent(');
   assert.match(dashboard, /data-dashboard-drilldown=/);
   assert.match(dashboard, /<button[^>]+class="metric/);
-  assert.match(dashboard, /<button[^>]+class="funnel-row"[^>]+data-stage-jump=/);
+  assert.match(dashboard, /<button[^>]+class="funnel-row[\s\S]*?data-stage-jump=/);
 
   const click = block(app, "document.addEventListener('click'", "document.addEventListener('input'");
   assert.match(click, /openDashboardDrilldown/);

@@ -278,6 +278,30 @@
     protectedCustomers: ['客户保护与查重', '客户保护与查重处理'],
     maintenance: ['数据维护', '数据维护'],
   };
+  function viewSubtitle(view) {
+    return ({
+      dashboard: '全公司口径 · 看生命周期与待处理',
+      pipeline: '全公司口径 · 按当前阶段安排推进动作',
+      pool: '集中分配、领取和退回线索',
+      users: '成员账号、权限组与审计',
+      alerts: '同一对象只显示一行待办',
+      notifications: '认领、业务提醒与投递状态',
+      contacts: '采购、老板、工程师等潜在联系人',
+      recon: '公开资料、核验记录与更新时间',
+      customers: '已领取客户的经营全景',
+      recycleBin: '不对口与手动删除记录',
+      customerProfile: '查看完整客户资料',
+      managerTasks: '延期、停滞与计划超时',
+      managerMetrics: '跟进计划形成与执行',
+      activityCorrections: '更正历史与待确认',
+      team: '真实推进与协作事实',
+      insights: '企业判断与对接人评价',
+      markets: '国家、批次与分段转化',
+      protectedCustomers: '身份冲突与查重核验',
+      maintenance: '预览影响范围后再执行',
+      aiTasks: '任务排队、成本与复核',
+    }[view] || '全公司口径');
+  }
   const viewPermissions = {
     intake: 'view_intake', pool: 'view_intake', pending: 'view_intake', claimed: 'view_intake', customerProfile: 'view_customers',
     recycleBin: 'view_own_mismatch_history',
@@ -1786,6 +1810,7 @@
   function renderAll() {
     renderNavigationCounts();
     if ($('#lastRefresh')) $('#lastRefresh').textContent = `更新于 ${shortDate(state.data.generatedAt, true)}`;
+    if ($('#viewSub') && state.view) $('#viewSub').textContent = viewSubtitle(state.view);
     renderDashboard();
     renderIntake();
     renderCustomers();
@@ -1893,8 +1918,8 @@
       ['rfq', '正式询价', summary.rfqs, `会议后 ${percent(summary.rfqs, summary.meetings)}`, ''],
       ['won', '成交订单', summary.orders, money(summary.revenue), ''],
     ];
-    $('#summaryCards').innerHTML = cards.map(([key, label, value, note, cls]) => (
-      `<button type="button" class="metric ${cls}" data-dashboard-drilldown="${esc(key)}"><span>${label}</span><strong>${value}</strong><small>${note}</small></button>`
+    $('#summaryCards').innerHTML = cards.map(([key, label, value, note, cls], index) => (
+      `<button type="button" class="metric ${index ? '' : 'lead '}${cls}" data-dashboard-drilldown="${esc(key)}"><span>${label}</span><strong>${value}</strong><small>${note}</small></button>`
     )).join('');
     const attentionSummary = $('#attentionSummary');
     if (attentionSummary) {
@@ -1911,7 +1936,7 @@
     const max = Math.max(1, funnel[0]?.count || 1);
     $('#funnelChart').innerHTML = funnel.map((item, index) => {
       const previous = index ? funnel[index - 1].count : accounts.length;
-      return `<button type="button" class="funnel-row" data-stage-jump="${item.key}" title="到达过该阶段的客户数，点击查看累计口径列表">
+      return `<button type="button" class="funnel-row${item.count ? '' : ' ghost'}" data-stage-jump="${item.key}" title="到达过该阶段的客户数，点击查看累计口径列表">
         <span class="funnel-label">${esc(item.label)}</span><div class="funnel-track"><div class="funnel-bar" style="width:${item.count / max * 100}%"></div></div>
         <span class="funnel-count">${item.count}</span><span class="funnel-rate">${percent(item.count, previous)}</span>
       </button>`;
@@ -1920,16 +1945,20 @@
     $('#attentionList').innerHTML = attention.length ? attention.map(item => {
       const account = state.data.accounts.find(row => row.id === item.customerId);
       const displayCustomer = account || item;
-      return `<div class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
-        <i class="severity-dot ${item.urgency || item.severity}"></i><div><strong>${esc(accountDisplayName(displayCustomer))}</strong><span>${esc(accountIdentity(displayCustomer))}${accountIdentity(displayCustomer) ? ' · ' : ''}${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span></div><b>${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b>
-      </div>`;
+      return `<button type="button" class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
+        <div class="attention-item-main">
+          <div class="attention-item-row"><strong>${esc(accountDisplayName(displayCustomer))}</strong><b class="pill ${item.urgency === 'immediate' || item.severity === 'critical' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber'}">${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b></div>
+          <span class="attention-why">${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span>
+          <span class="attention-id">${esc(accountIdentity(displayCustomer) || '')}</span>
+        </div>
+      </button>`;
     }).join('') : '<div class="empty">当前没有需要处理的异常</div>';
     renderCountrySnapshot(accounts);
     const activities = filteredActivities(accounts).slice(0, 8);
     $('#activityFeed').innerHTML = activities.length ? activities.map(activity => {
       const account = state.data.accounts.find(item => item.id === activity.customer_id);
       const meta = activityMeta[activity.activity_type] || [activity.activity_type, '记'];
-      return `<div class="feed-item" data-open-customer="${activity.customer_id}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(accountDisplayName(account))} · ${esc(meta[0])}</strong><span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')} · ${relative(activity.occurred_at)}</span></div></div>`;
+      return `<div class="feed-item" data-open-customer="${activity.customer_id}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(accountDisplayName(account))}</strong><span>${esc(meta[0])} · ${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')}</span></div><time class="feed-ago">${esc(relative(activity.occurred_at))}</time></div>`;
     }).join('') : '<div class="empty">当前周期没有有效动作</div>';
   }
   function percent(numerator, denominator) {
@@ -2653,20 +2682,20 @@
     return salesView ? [
       ['today', '今日收到线索', stats.todayAssigned, '今日分配给你'],
       ['assigned', '待领取', stats.assigned, `领取时限 ${settings.claimSlaHours} 小时`],
+      ['overdue', '领取超期', stats.overdueClaim, '管理者将收到预警'],
       ['claimed', '已领取', stats.claimed, '已转入个人CRM'],
       ['crm', '已进入 CRM', stats.claimed, '点击进入 CRM 客户全景'],
       ['contacted', '当前触达', stats.contacted, '当前开发中已触达'],
       ['returned', '已退回', stats.returned, '必须说明原因'],
-      ['overdue', '领取超期', stats.overdueClaim, '管理者将收到预警'],
     ] : [
       ['today', '今日同步线索', stats.todayImported, '仍属于线索池'],
       ['unassigned', '待分配', stats.pending + stats.approved, '勾选或筛选后手动指定销售'],
       ['assigned', '待销售领取', stats.assigned, `时限 ${settings.claimSlaHours} 小时`],
+      ['overdue', '领取超期', stats.overdueClaim, '系统异常预警'],
       ['crm', '已进入 CRM', stats.claimed, '已领取客户进入 CRM 全景'],
       ['contacted', '当前触达', stats.contacted, '当前开发漏斗中已触达'],
       ['idle', '闲置资源', stats.idle, '待分配或退回'],
       ['returned', '退回待处理', stats.returned, '需要重新分配'],
-      ['overdue', '领取超期', stats.overdueClaim, '系统异常预警'],
     ];
   }
 
@@ -2797,7 +2826,7 @@
     $$('#intakeTabs button').forEach(item => {
       const status = item.dataset.intakeStatus;
       item.classList.toggle('active', status === state.intakeStatus);
-      item.textContent = `${tabLabels[status]} ${tabCounts[status] || 0}`;
+      item.innerHTML = `${tabLabels[status]}<b>${tabCounts[status] || 0}</b>`;
       item.classList.toggle('hidden', salesView && !['', 'assigned'].includes(status));
     });
     $('#intakeHeading').textContent = salesView ? '我的线索' : '线索池';
@@ -2816,7 +2845,10 @@
     renderIntakeActiveFilters();
     const summary = intakeStatCards(salesView, stats, intake.settings);
     const activeStat = intakeActiveStatCard();
-    $('#intakeSummary').innerHTML = summary.map(([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' || key === 'crm' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
+    const intakeCard = ([key, label, value, note]) => `<button type="button" class="metric ${key === activeStat ? 'is-active' : ''} ${key === 'overdue' && value ? 'alert' : ''}" data-intake-stat="${key}" aria-pressed="${key === activeStat}" ${key === 'claimed' || key === 'contacted' || key === 'crm' ? 'data-intake-stat-crm="1"' : ''}><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`;
+    const rest = summary.slice(4);
+    $('#intakeSummary').style.setProperty('--intake-secondary-cols', String(rest.length || 4));
+    $('#intakeSummary').innerHTML = `<div class="intake-kpi-primary">${summary.slice(0, 4).map(intakeCard).join('')}</div>${rest.length ? `<div class="intake-kpi-secondary">${rest.map(intakeCard).join('')}</div>` : ''}`;
     const items = intake.items || [];
     const canManualAssign = !salesView && can('manage_intake');
     const assignableItems = items.filter(intakeItemAssignable);
@@ -2934,7 +2966,8 @@
 
   function customerProfileFrameUrl(externalCustomerId, intakeItemId = '') {
     const intakeParam = intakeItemId ? `&intake=${encodeURIComponent(intakeItemId)}` : '';
-    return `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=${encodeURIComponent(externalCustomerId)}${intakeParam}`;
+    const theme = document.body.getAttribute('data-theme') === 'deck' ? 'deck' : 'studio';
+    return `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&theme=${theme}&customer=${encodeURIComponent(externalCustomerId)}${intakeParam}`;
   }
 
   function reloadCustomerProfileFrame() {
@@ -4574,12 +4607,17 @@
       ['manager_assistance', '待主管协助', Number(summary.managerAssistance || 0), '等待主管处理'],
     ];
     const topMarkup = topItems.map(([key, label, count, note]) => {
-      return `<button class="pipeline-overview-card" type="button" data-pipeline-queue="${key}">
+      const tone = key === 'manager_assistance' ? ' amber' : '';
+      return `<button class="pipeline-overview-card${tone}" type="button" data-pipeline-queue="${key}" title="${esc(note)}">
         <span>${label}</span><strong>${count}</strong><small>${note}</small>
       </button>`;
     }).join('');
-    const stageMarkup = state.data.stages.filter(stage => stage.key !== 'new').map(stage =>
-      `<div><span>${esc(stage.label)}</span><strong>${Number(summary.stages?.[stage.key] || 0)}</strong></div>`).join('');
+    const stagePeak = Math.max(0, ...state.data.stages.filter(stage => stage.key !== 'new')
+      .map(stage => Number(summary.stages?.[stage.key] || 0)));
+    const stageMarkup = state.data.stages.filter(stage => stage.key !== 'new').map(stage => {
+      const count = Number(summary.stages?.[stage.key] || 0);
+      return `<button type="button" class="pipeline-stage-cell${count && count === stagePeak ? ' hot' : ''}" data-stage-jump="${esc(stage.key)}"><span>${esc(stage.label)}</span><strong>${count}</strong></button>`;
+    }).join('');
     const queueMarkup = queueItems.map(([key, label, tone]) =>
       `<button type="button" class="pipeline-queue-card ${tone}${selected === key ? ' selected' : ''}"
         data-pipeline-queue="${key}" aria-pressed="${selected === key}">
@@ -4587,52 +4625,56 @@
       </button>`).join('');
     const starViewMarkup = `<div class="pipeline-star-view" role="group" aria-label="星标客户范围">
       <button class="text-button ${state.pipelineStarView === 'all' ? 'active' : ''}" type="button" data-pipeline-star-view="all">全部客户</button>
-      <button class="text-button ${state.pipelineStarView === 'mine' ? 'active' : ''}" type="button" data-pipeline-star-view="mine">我的星标 ${Number(starSummary.mine || 0)}</button>
-      ${starSummary.canViewTeam ? `<button class="text-button ${state.pipelineStarView === 'team' ? 'active' : ''}" type="button" data-pipeline-star-view="team">团队星标 ${Number(starSummary.team || 0)}</button>` : ''}
+      <button class="text-button ${state.pipelineStarView === 'mine' ? 'active' : ''}" type="button" data-pipeline-star-view="mine">我的星标 <b>${Number(starSummary.mine || 0)}</b></button>
+      ${starSummary.canViewTeam ? `<button class="text-button ${state.pipelineStarView === 'team' ? 'active' : ''}" type="button" data-pipeline-star-view="team">团队星标 <b>${Number(starSummary.team || 0)}</b></button>` : ''}
     </div>`;
-    const teamDistribution = starSummary.canViewTeam
-      ? `<div class="pipeline-star-distribution"><strong>团队星标分布</strong>${queueItems.map(([key, label]) =>
-        `<span>${label} ${Number(starSummary.teamQueueDistribution?.[key] || 0)}</span>`).join('')}</div>`
-      : '';
+    const teamDistribution = `<div class="pipeline-star-distribution" aria-label="星标分布">
+      <span>星标分布</span>
+      <span class="pipeline-star-chip">我的 <b>${Number(starSummary.mine || 0)}</b></span>
+      ${starSummary.canViewTeam ? `<span class="pipeline-star-chip">团队 <b>${Number(starSummary.team || 0)}</b></span>` : ''}
+    </div>`;
     const activeLabel = selected === 'need_decision' ? '需要判断'
       : selected === 'worth_deepening' ? '值得深挖'
         : queueItems.find(item => item[0] === selected)?.[1] || '全部当前行动';
-    const detailMarkup = rows.length ? rows.map(account => {
+    const detailMarkup = rows.length ? `<table class="pipeline-grid"><thead><tr class="pipeline-list-head"><th>客户</th><th>当前阶段·停留</th><th>下一步·计划</th><th>负责人·星标</th><th>操作</th></tr></thead><tbody>${rows.map(account => {
       const latestReaction = account.latestReaction || '暂无明确反应';
       const next = account.next_action || '暂未确定下一步';
-      const queueLabels = (account.actionQueueLabels || []).map(label =>
-        `<span class="pill gray">${esc(label)}</span>`).join('');
-      return `<article class="pipeline-action-row">
-        <div class="pipeline-action-customer">
+      const stay = pipelineStayMarkup(account);
+      return `<tr class="pipeline-action-row">
+        <td><div class="pipeline-action-customer">
           <div class="company-star-line">${starButtonMarkup(account, true)}<strong>${esc(accountDisplayName(account))}</strong></div>
-          <span>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.owner_name || '未分配')}</span>
-          <small>${esc(account.stageLabel || stageLabel(account.stage))}</small>
-          ${starPeopleMarkup(account)}
-          ${account.isStarred ? `<button class="text-button customer-star-reason" type="button" data-edit-star-reason="${esc(account.id)}">${account.myStar?.reason ? '修改关注原因' : '添加关注原因'}</button>` : ''}
-        </div>
-        <div><span class="pipeline-fact-label">最近客户反应</span><strong>${esc(latestReaction)}</strong>${queueLabels}</div>
-        <div><span class="pipeline-fact-label">下一步计划</span><strong>${esc(next)}</strong><small>${account.next_action_at ? shortDate(account.next_action_at, true) : '未设置时间'}</small></div>
-        <div><span class="pipeline-fact-label">业务里程碑</span><strong>询价 ${Number(account.rfqCount || 0)} · 订单 ${Number(account.orderCount || 0)}</strong><small>报价 ${Number(account.quoteCount || 0)}</small></div>
-        <div class="pipeline-action-buttons">
+          <span>${esc(accountIdentity(account))}</span>
+        </div></td>
+        <td><strong>${esc(account.stageLabel || stageLabel(account.stage))}</strong>${stay}<div class="pipeline-fact-note">${esc(latestReaction)}</div></td>
+        <td><strong>${esc(next)}</strong><small>${account.next_action_at ? shortDate(account.next_action_at, true) : '未设置时间'}</small></td>
+        <td>${esc(account.owner_name || '未分配')}${account.isStarred ? '<span class="pipeline-star-mark">★</span>' : '<span class="pipeline-unrated">☆</span>'}${starPeopleMarkup(account)}</td>
+        <td><div class="pipeline-action-buttons">
           <button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>
           ${can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录新进展</button>` : ''}
           ${can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : ''}
           ${can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : ''}
-        </div>
-      </article>`;
-    }).join('') : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody></table>` : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
     $('#pipelineBoard').innerHTML = `
       <section class="pipeline-overview-grid">${topMarkup}</section>
-      <section class="pipeline-stage-strip" aria-label="客户阶段概览">${stageMarkup}</section>
-      ${starViewMarkup}
-      ${teamDistribution}
       <section class="pipeline-queue-grid">${queueMarkup}</section>
+      <section class="pipeline-stage-strip" aria-label="客户阶段概览"><div class="pipeline-stage-rail-label">阶段分布</div><div class="pipeline-stage-cells">${stageMarkup}</div></section>
+      <div class="pipeline-tabs-row">${starViewMarkup}${teamDistribution}</div>
       <section class="pipeline-action-detail">
-        <div class="pipeline-action-heading"><div><h3>${esc(activeLabel)}</h3><span>${Number(meta.total || 0)} 个客户</span></div>
-          ${selected ? '<button class="text-button" type="button" data-pipeline-queue="">返回全部行动</button>' : ''}
-        </div>
+        ${selected ? `<div class="pipeline-action-heading"><div><h3>${esc(activeLabel)}</h3><span>${Number(meta.total || 0)} 个客户</span></div>
+          <button class="text-button" type="button" data-pipeline-queue="">返回全部行动</button></div>` : ''}
         ${detailMarkup}
       </section>`;
+  }
+
+  function pipelineStayMarkup(account) {
+    const raw = account.stage_entered_at || account.last_activity_at || account.updated_at;
+    if (!raw) return '<span class="pipeline-dwell">—</span>';
+    const days = Math.max(0, Math.floor((Date.now() - new Date(raw).getTime()) / 86400000));
+    if (!Number.isFinite(days)) return '<span class="pipeline-dwell">—</span>';
+    const tone = days >= 14 ? 'over' : days >= 7 ? 'near' : '';
+    return `<span class="pipeline-dwell ${tone}">${days} 天</span>`;
   }
 
   function normalizeTodayTaskAction(value) {
@@ -5042,7 +5084,7 @@
       }
       : metricSummary(rows);
     if ($('#managerMetricSummary')) {
-      $('#managerMetricSummary').innerHTML = [
+      const metricItems = [
         ['activeCustomers', '当前开发客户', summary.sampleSize, '点击查看客户'],
         ['deferredCustomers', '延期客户', summary.counts.deferredCustomers, '点击查看客户'],
         ['thresholdCustomers', '需要主管关注', summary.counts.thresholdCustomers, '点击查看客户'],
@@ -5050,7 +5092,12 @@
         ['onTimeActionCustomers', '计划后按时行动', summary.counts.onTimeActionCustomers, `按时率 ${summary.onTimeRate}%`],
         ['firstTouchSilentCustomers', '首次触达后未继续推进', summary.counts.firstTouchSilentCustomers, '点击查看客户'],
         ['unimprovedAfterInterventionCustomers', '协助后仍未改善', summary.counts.unimprovedAfterInterventionCustomers, '点击查看客户'],
-      ].map(([kind, label, value, note]) => `<button type="button" class="metric" data-manager-metric-kind="${esc(kind)}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`).join('');
+      ];
+      const metricCard = ([kind, label, value, note]) =>
+        `<button type="button" class="metric" data-manager-metric-kind="${esc(kind)}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></button>`;
+      $('#managerMetricSummary').innerHTML = `
+        <div class="manager-metric-primary">${metricItems.slice(0, 4).map(metricCard).join('')}</div>
+        <div class="manager-metric-secondary">${metricItems.slice(4).map(metricCard).join('')}</div>`;
     }
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取延期统计…</div>'
@@ -5283,6 +5330,7 @@
         ['待评价企业', rows.filter(item => item.evaluationStatus !== 'evaluated').length, '当前已加载结果'],
       ].map(([label, value, note]) =>
         `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+      $('#insightSummary')?.style.setProperty('--insight-cols', '4');
       $('#insightResultCount').textContent = `已显示 ${rows.length} / ${authorizedMeta.total} 家企业`;
       $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
         <article class="insight-hub-card">
@@ -5307,6 +5355,7 @@
     ];
     $('#insightSummary').innerHTML = insightMetrics
       .map(([label, value, note]) => `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
+    $('#insightSummary')?.style.setProperty('--insight-cols', String(insightMetrics.length > 4 ? insightMetrics.length : 4));
     const search = ($('#insightSearch')?.value || '').trim().toLowerCase();
     const coverage = $('#insightCoverageFilter')?.value || '';
     const rows = accounts.filter(account => {
@@ -5407,9 +5456,12 @@
       return;
     }
     const sample = data.sample || {};
-    $('#teamProgressSummary').innerHTML = `<div class="team-progress-metrics">
-      ${Object.entries(teamProgressLabels).map(([key, label]) => `<article class="team-progress-metric"><span>${label}</span><strong>${Number(data.counts?.[key] || 0)}</strong><small>样本 ${Number(sample.size || 0)}${sample.unavailable ? ' · 样本不足' : ''}</small></article>`).join('')}
-    </div><div class="team-ratio-strip">${Object.entries(teamRatioLabels).map(([key, label]) => `<span><b>${label}</b><strong>${Number(data.ratios?.[key] || 0).toFixed(1)}%</strong></span>`).join('')}</div>`;
+    const progressEntries = Object.entries(teamProgressLabels);
+    const progressCard = ([key, label]) =>
+      `<article class="team-progress-metric"><span>${label}</span><strong>${Number(data.counts?.[key] || 0)}</strong><small>样本 ${Number(sample.size || 0)}${sample.unavailable ? ' · 样本不足' : ''}</small></article>`;
+    $('#teamProgressSummary').innerHTML = `<div class="team-progress-metrics">${progressEntries.slice(0, 4).map(progressCard).join('')}</div>
+      <div class="team-progress-metrics team-progress-metrics-rest">${progressEntries.slice(4).map(progressCard).join('')}</div>
+      <div class="team-ratio-strip">${Object.entries(teamRatioLabels).map(([key, label]) => `<span><b>${label}</b><strong>${Number(data.ratios?.[key] || 0).toFixed(1)}%</strong></span>`).join('')}</div>`;
     $('#teamProgressSales').innerHTML = data.sales?.length ? data.sales.map(row => {
       const user = userById(row.salesUserId);
       return `<article class="team-progress-person">
@@ -13310,6 +13362,7 @@
     $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
     $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
     $('#viewTitle').textContent = viewMeta[canonicalView][1];
+    if ($('#viewSub')) $('#viewSub').textContent = viewSubtitle(canonicalView);
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
     document.body.classList.toggle('access-admin-active', canonicalView === 'users');
     if (canonicalView === 'pool') renderIntake();

@@ -108,7 +108,7 @@ test('CRM list, customer detail, profile page and action workbench expose neutra
   assert.match(html, /id="drawerStarBtn"/);
   assert.match(app, /data-toggle-customer-star/);
   assert.match(app, /data-pipeline-star-view/);
-  assert.match(app, /团队星标分布/);
+  assert.match(app, /星标分布/);
   assert.match(app, /关注原因（可选）/);
   assert.doesNotMatch(app, /星标等级|D级客户/);
 });
