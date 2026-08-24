@@ -359,6 +359,34 @@ test('compact layout keeps common fields visible and advanced filters collapsed'
   assert.match(html, /42 条结果/);
 });
 
+test('advanced filters render as compact labelled fields instead of facet cards', () => {
+  const html = renderFilterComponent({
+    schema: schema({
+      fields: [
+        ...schema().fields,
+        {
+          key: 'stage',
+          label: '客户阶段',
+          type: 'select',
+          operator: 'eq',
+          placement: 'more',
+          options: [{ value: 'qualified', label: '已确认' }],
+        },
+      ],
+    }),
+    state: { draft: {}, applied: {} },
+  });
+  const css = fs.readFileSync(cssPath, 'utf8');
+
+  assert.match(html, /data-filter-menu="tag_customer_type"/);
+  assert.match(html, /class="tp-filter-menu-value">全部<\/span>/);
+  assert.match(html, /data-filter-basic="stage"/);
+  assert.doesNotMatch(html, /class="tp-filter-facet-row"/);
+  assert.doesNotMatch(html, /个可用选项/);
+  assert.match(css, /flex:\s*0 0 132px/);
+  assert.match(css, /\.tp-filter-advanced-grid\s*\{[^}]*flex-wrap:\s*wrap/);
+});
+
 test('studio filter keeps one footer row: text 详细筛选 plus current-result copy', () => {
   const html = renderFilterComponent({
     schema: schema({
@@ -539,6 +567,95 @@ test('primary multi-select rerender restores only the active menu disclosure', (
   });
   assert.equal(controller.getState().applied.country, undefined);
   assert.equal(root.menus.every(menu => menu.open === false), true);
+});
+
+test('filter option menus stay open on a second click and close when the pointer leaves', () => {
+  class FilterRoot {
+    constructor() {
+      this.listeners = {};
+      this.menus = [];
+      this.html = '';
+    }
+
+    set innerHTML(value) {
+      this.html = value;
+      this.menus = [...value.matchAll(/data-filter-menu="([^"]+)"/g)].map(match => ({
+        dataset: { filterMenu: match[1] },
+        open: false,
+        contains() { return false; },
+      }));
+    }
+
+    get innerHTML() {
+      return this.html;
+    }
+
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    }
+
+    removeEventListener(type) {
+      delete this.listeners[type];
+    }
+
+    contains() {
+      return true;
+    }
+
+    querySelectorAll(selector) {
+      return selector === '[data-filter-menu]' ? this.menus : [];
+    }
+  }
+
+  const root = new FilterRoot();
+  const controller = createFilterController({
+    pageKey: 'customers',
+    schema: schema(),
+    storage: new MemoryStorage(),
+  });
+  mountFilterComponent(root, { controller });
+
+  const countryMenu = root.menus.find(menu => menu.dataset.filterMenu === 'country');
+  countryMenu.open = true;
+  let prevented = false;
+  root.listeners.click({
+    target: {
+      closest(selector) {
+        if (selector === 'summary') {
+          return {
+            closest: inner => (inner === '[data-filter-menu]' ? countryMenu : null),
+          };
+        }
+        if (selector === '[data-filter-menu]') return countryMenu;
+        return null;
+      },
+    },
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(countryMenu.open, true);
+  assert.equal(prevented, true);
+
+  assert.equal(typeof root.listeners.mouseout, 'function');
+  root.listeners.mouseout({
+    target: {
+      closest: selector => (selector === '[data-filter-menu]' ? countryMenu : null),
+    },
+    relatedTarget: null,
+  });
+  assert.equal(countryMenu.open, false);
+
+  countryMenu.open = true;
+  const inside = { closest: () => countryMenu };
+  countryMenu.contains = node => node === inside;
+  root.listeners.mouseout({
+    target: {
+      closest: selector => (selector === '[data-filter-menu]' ? countryMenu : null),
+    },
+    relatedTarget: inside,
+  });
+  assert.equal(countryMenu.open, true);
 });
 
 test('advanced multi-select rerender preserves an open disclosure until apply or clear', () => {

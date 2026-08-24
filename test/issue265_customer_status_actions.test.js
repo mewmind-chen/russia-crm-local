@@ -57,7 +57,7 @@ test('Issue 265 lifecycle actions live only in the actions column', () => {
   const render = functionBlock(app, 'renderCustomers');
   assert.match(render, /lifecycleActions = \[[\s\S]*?data-return-customer[\s\S]*?data-reject-customer[\s\S]*?data-trash-customer/);
   assert.match(render, /const primaryStatus = customerPrimaryStatus\(alert\)/);
-  const statusCellEnd = render.indexOf('lifecycleActions ?');
+  const statusCellEnd = render.search(/lifecycleActions(?:\.length)? \?/);
   const statusCell = render.slice(
     render.indexOf("primaryStatus.tone === 'good'"),
     statusCellEnd,

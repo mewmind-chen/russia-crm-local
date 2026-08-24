@@ -341,9 +341,14 @@
     return value === undefined ? [] : [String(value)];
   }
 
+  function optionIsDisabled(option, selected) {
+    return option.count === 0 && !selected;
+  }
+
   function renderOption(field, option, selected) {
     const count = option.count === undefined ? '' : `<small>${escapeHtml(option.count)}</small>`;
-    return `<button class="tp-filter-option" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-value="${escapeHtml(option.value)}" aria-pressed="${selected ? 'true' : 'false'}"><span>${escapeHtml(option.label)}</span>${count}</button>`;
+    const disabled = optionIsDisabled(option, selected);
+    return `<button class="tp-filter-option" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-value="${escapeHtml(option.value)}" aria-pressed="${selected ? 'true' : 'false'}"${disabled ? ' disabled' : ''}><span>${escapeHtml(option.label)}</span>${count}</button>`;
   }
 
   function renderFacetRow(field, state) {
@@ -387,7 +392,10 @@
     }
     return `<label class="tp-filter-basic-field"><span>${escapeHtml(field.label)}</span><select data-filter-basic="${escapeHtml(field.key)}" ${field.multi ? 'multiple' : ''}>
       ${field.multi ? '' : '<option value="">全部</option>'}
-      ${field.options.map(option => `<option value="${escapeHtml(option.value)}" ${selected.includes(option.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+      ${field.options.map(option => {
+        const isSelected = selected.includes(option.value);
+        return `<option value="${escapeHtml(option.value)}" ${isSelected ? 'selected' : ''}${optionIsDisabled(option, isSelected) ? ' disabled' : ''}>${escapeHtml(option.label)}</option>`;
+      }).join('')}
     </select></label>`;
   }
 
@@ -446,20 +454,32 @@
   }
 
   function renderCompactField(field, state) {
-    if (['facet', 'tag'].includes(field.type)) return renderFacetRow(field, state);
+    if (['facet', 'tag'].includes(field.type) || field.multi) return renderMenuField(field, state);
     return renderMoreField(field, state);
   }
 
-  function renderPrimaryField(field, state) {
-    if (!['facet', 'tag'].includes(field.type)) return renderMoreField(field, state);
+  function renderMenuField(field, state) {
     const selected = selectedValuesFor(state, field);
-    return `<details class="tp-filter-menu" data-filter-menu="${escapeHtml(field.key)}">
-      <summary>${escapeHtml(field.label)}${selected.length ? ` <span>${selected.length}</span>` : ''}</summary>
-      <div class="tp-filter-menu-options">
-        <button class="tp-filter-option tp-filter-all" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-all="true" aria-pressed="${selected.length ? 'false' : 'true'}">全部</button>
-        ${field.options.map(option => renderOption(field, option, selected.includes(option.value))).join('')}
-      </div>
-    </details>`;
+    const summaryText = selected.length === 1
+      ? chipLabel(field, selected[0])
+      : selected.length > 1
+        ? `已选 ${selected.length}`
+        : '全部';
+    return `<div class="tp-filter-basic-field">
+      <span>${escapeHtml(field.label)}</span>
+      <details class="tp-filter-menu" data-filter-menu="${escapeHtml(field.key)}">
+        <summary><span class="tp-filter-menu-value">${escapeHtml(summaryText)}</span>${selected.length ? ` <span>${selected.length}</span>` : ''}</summary>
+        <div class="tp-filter-menu-options">
+          <button class="tp-filter-option tp-filter-all" type="button" data-filter-field="${escapeHtml(field.key)}" data-filter-all="true" aria-pressed="${selected.length ? 'false' : 'true'}">全部</button>
+          ${field.options.map(option => renderOption(field, option, selected.includes(option.value))).join('')}
+        </div>
+      </details>
+    </div>`;
+  }
+
+  function renderPrimaryField(field, state) {
+    if (!['facet', 'tag'].includes(field.type) && !field.multi) return renderMoreField(field, state);
+    return renderMenuField(field, state);
   }
 
   function renderAdvancedFilterIcon() {
@@ -533,6 +553,8 @@
     let status = options.status || 'ready';
     let error = options.error || '';
     let resultMeta = options.resultMeta || {};
+    let linkTimer = 0;
+    let linkEpoch = 0;
 
     function render() {
       rootElement.innerHTML = renderFilterComponent({
@@ -551,13 +573,81 @@
       if (menu) menu.open = true;
     }
 
+    function captureFilterUi() {
+      const active = typeof document !== 'undefined' ? document.activeElement : null;
+      const searchKey = active?.dataset?.filterSearch || '';
+      return {
+        advancedWasOpen: typeof rootElement.querySelector === 'function'
+          && Boolean(rootElement.querySelector('.tp-filter-advanced')?.open),
+        openMenu: typeof rootElement.querySelectorAll === 'function'
+          ? ([...rootElement.querySelectorAll('[data-filter-menu]')].find(element => element.open)
+            ?.dataset.filterMenu || '')
+          : '',
+        searchKey,
+        selectionStart: searchKey ? active.selectionStart : null,
+        selectionEnd: searchKey ? active.selectionEnd : null,
+      };
+    }
+
+    function restoreFilterUi(ui = {}) {
+      restoreOpenMenu(ui.openMenu);
+      restoreAdvancedDisclosure(ui.advancedWasOpen);
+      if (!ui.searchKey || typeof rootElement.querySelector !== 'function') return;
+      const input = rootElement.querySelector(`[data-filter-search="${ui.searchKey}"]`);
+      if (!input || typeof input.focus !== 'function') return;
+      input.focus();
+      if (ui.selectionStart != null && typeof input.setSelectionRange === 'function') {
+        input.setSelectionRange(ui.selectionStart, ui.selectionEnd);
+      }
+    }
+
+    async function refreshLinkedSchema() {
+      if (typeof options.fetchLinkedSchema !== 'function') return;
+      const epoch = ++linkEpoch;
+      const ui = captureFilterUi();
+      try {
+        const schema = await options.fetchLinkedSchema(controller);
+        if (epoch !== linkEpoch || !schema) return;
+        controller.updateSchema(schema);
+        render();
+        restoreFilterUi(ui);
+      } catch (_error) {}
+    }
+
+    function scheduleLinkedSchemaRefresh() {
+      if (typeof options.fetchLinkedSchema !== 'function') return;
+      if (linkTimer) clearTimeout(linkTimer);
+      linkTimer = setTimeout(() => {
+        linkTimer = 0;
+        void refreshLinkedSchema();
+      }, 160);
+    }
+
+    function syncAdvancedToggle(advanced) {
+      if (!advanced) return;
+      const summary = advanced.querySelector?.('summary');
+      summary?.setAttribute?.('aria-expanded', String(Boolean(advanced.open)));
+      const arrow = summary?.querySelector?.('.tp-filter-advanced-arrow');
+      if (arrow) arrow.textContent = advanced.open ? '▲' : '▼';
+      const label = summary?.querySelector?.('.tp-filter-advanced-label');
+      if (label) label.textContent = advanced.open ? '收起详细筛选' : '详细筛选';
+    }
+
     function restoreAdvancedDisclosure(wasOpen) {
       if (!wasOpen || typeof rootElement.querySelector !== 'function') return;
       const advanced = rootElement.querySelector('.tp-filter-advanced');
-      if (advanced) advanced.open = true;
+      if (!advanced) return;
+      advanced.open = true;
+      syncAdvancedToggle(advanced);
     }
 
     function handleClick(event) {
+      const menuSummary = event.target.closest?.('summary');
+      const openMenu = menuSummary?.closest?.('[data-filter-menu]');
+      if (openMenu && rootElement.contains(openMenu)) {
+        if (openMenu.open) event.preventDefault?.();
+        return;
+      }
       const all = event.target.closest('[data-filter-all]');
       if (all && rootElement.contains(all)) {
         const menuField = all.closest?.('[data-filter-menu]')?.dataset.filterMenu || '';
@@ -566,27 +656,32 @@
         render();
         restoreOpenMenu(menuField);
         restoreAdvancedDisclosure(advancedWasOpen);
+        scheduleLinkedSchemaRefresh();
         return;
       }
       const option = event.target.closest('.tp-filter-option[data-filter-value]');
       if (option && rootElement.contains(option)) {
+        if (option.disabled) return;
         const menuField = option.closest?.('[data-filter-menu]')?.dataset.filterMenu || '';
         const advancedWasOpen = Boolean(option.closest?.('.tp-filter-advanced')?.open);
         controller.toggleValue(option.dataset.filterField, option.dataset.filterValue);
         render();
         restoreOpenMenu(menuField);
         restoreAdvancedDisclosure(advancedWasOpen);
+        scheduleLinkedSchemaRefresh();
         return;
       }
       const remove = event.target.closest('[data-filter-remove]');
       if (remove && rootElement.contains(remove)) {
         controller.remove(remove.dataset.filterRemove, remove.dataset.filterValue);
         render();
+        scheduleLinkedSchemaRefresh();
         return;
       }
       if (event.target.closest('[data-filter-clear]')) {
         controller.clearAll();
         render();
+        scheduleLinkedSchemaRefresh();
         return;
       }
       if (event.target.closest('[data-filter-apply]')) {
@@ -599,12 +694,14 @@
       const search = event.target.closest('[data-filter-search]');
       if (search && rootElement.contains(search)) {
         controller.setDraft(search.dataset.filterSearch, search.value);
+        scheduleLinkedSchemaRefresh();
         return;
       }
       const input = event.target.closest('[data-filter-basic]');
       if (!input || !rootElement.contains(input) || !['date', 'text'].includes(input.type)) return;
       setBasicDraft(input);
       syncAdvancedCount();
+      scheduleLinkedSchemaRefresh();
     }
 
     function setBasicDraft(input) {
@@ -637,21 +734,33 @@
       if (!input || !rootElement.contains(input)) return;
       setBasicDraft(input);
       syncAdvancedCount();
+      scheduleLinkedSchemaRefresh();
+    }
+
+    function handleMenuMouseOut(event) {
+      const menu = event.target.closest?.('[data-filter-menu]');
+      if (!menu || !rootElement.contains(menu) || !menu.open) return;
+      const next = event.relatedTarget;
+      if (next && (next === menu || (typeof menu.contains === 'function' && menu.contains(next)))) {
+        return;
+      }
+      if (next && typeof next.closest === 'function' && next.closest('[data-filter-menu]') === menu) {
+        return;
+      }
+      menu.open = false;
     }
 
     function handleToggle(event) {
       const advanced = event.target.closest?.('.tp-filter-advanced');
       if (!advanced || !rootElement.contains(advanced)) return;
-      const summary = advanced.querySelector('summary');
-      summary?.setAttribute('aria-expanded', String(advanced.open));
-      const arrow = summary?.querySelector('.tp-filter-advanced-arrow');
-      if (arrow) arrow.textContent = advanced.open ? '▲' : '▼';
+      syncAdvancedToggle(advanced);
     }
 
     rootElement.addEventListener('click', handleClick);
     rootElement.addEventListener('input', handleInput);
     rootElement.addEventListener('change', handleChange);
     rootElement.addEventListener('toggle', handleToggle, true);
+    rootElement.addEventListener('mouseout', handleMenuMouseOut);
     render();
 
     return {
@@ -671,10 +780,14 @@
         render();
       },
       destroy() {
+        linkEpoch += 1;
+        if (linkTimer) clearTimeout(linkTimer);
+        linkTimer = 0;
         rootElement.removeEventListener('click', handleClick);
         rootElement.removeEventListener('input', handleInput);
         rootElement.removeEventListener('change', handleChange);
         rootElement.removeEventListener('toggle', handleToggle, true);
+        rootElement.removeEventListener('mouseout', handleMenuMouseOut);
         rootElement.innerHTML = '';
       },
     };
