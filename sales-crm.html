@@ -93,6 +93,7 @@
         <div>
           <p id="viewEyebrow" class="eyebrow">经营概览</p>
           <h1 id="viewTitle">经营驾驶舱</h1>
+          <p id="viewSub" class="view-sub">全公司口径</p>
         </div>
         <div class="top-actions">
           <label class="theme-switcher" title="界面主题">
@@ -181,25 +182,27 @@
 
       <section id="poolView" class="view">
         <div id="intakeAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <div id="intakeSummary" class="metric-grid"></div>
+        <div id="intakeSummary" class="intake-kpi-stack"></div>
+        <div class="studio-pills-row" id="intakePillsRow">
+          <div class="segmented" id="intakeTabs">
+            <button class="active" data-intake-status="">全部</button>
+            <button data-intake-status="unassigned">待分配</button>
+            <button data-intake-status="assigned">待领取</button>
+            <button data-intake-status="returned">已退回</button>
+          </div>
+          <div class="studio-pills-tools" id="intakeManagerActions">
+            <button id="intakeSettingsBtn" class="button secondary tiny">同步设置</button>
+            <button id="scanIntakeBtn" class="button primary tiny">同步线索</button>
+          </div>
+        </div>
         <div class="section-intro">
           <div><p class="eyebrow">线索池</p><h2 id="intakeHeading">线索池</h2><p id="intakeSubheading">集中查看线索资料、分配、领取、退回和后续流转。</p></div>
-          <div id="intakeManagerActions" class="top-actions">
-            <button id="intakeSettingsBtn" class="button secondary">同步设置</button>
-            <button id="scanIntakeBtn" class="button primary">⇣ 同步线索</button>
-          </div>
         </div>
         <article class="panel">
           <div class="toolbar">
             <span id="intakeAuthorizedResultCount" class="toolbar-count"></span>
           </div>
           <div class="toolbar intake-toolbar hidden">
-            <div class="segmented" id="intakeTabs">
-              <button class="active" data-intake-status="">全部</button>
-              <button data-intake-status="unassigned">待分配</button>
-              <button data-intake-status="assigned">待领取</button>
-              <button data-intake-status="returned">已退回</button>
-            </div>
             <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人" aria-label="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>
             <span id="intakeModeLabel" class="toolbar-count"></span>
@@ -544,7 +547,6 @@
       <section id="usersView" class="view access-admin-view">
         <div class="section-intro access-intro">
           <div><p class="eyebrow">用户与权限</p><h2>用户与权限</h2><p>集中管理成员账号、权限基线与关键系统操作。</p></div>
-          <button id="newUserBtn" data-permission="manage_users" class="button primary">＋ 新增用户</button>
         </div>
         <div id="accessSummary" class="access-summary-grid" aria-label="用户与权限概况">
           <article class="access-summary-card">
@@ -570,6 +572,9 @@
           <button id="accessGovernanceTab" type="button" role="tab" aria-selected="false" aria-controls="accessGovernancePanel" data-access-section="governance">
             <span>系统与审计</span><small>运行状态与操作记录</small>
           </button>
+          <div class="studio-pills-tools">
+            <button id="newUserBtn" data-permission="manage_users" class="button primary tiny">＋ 新增用户</button>
+          </div>
         </div>
 
         <section id="accessAccountsPanel" class="access-workspace-panel" role="tabpanel" aria-labelledby="accessAccountsTab">

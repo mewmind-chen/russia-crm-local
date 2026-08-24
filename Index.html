@@ -145,7 +145,7 @@
     .recon-monitor-card span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; font-weight: 650; }
     .recon-monitor-card strong { display: block; color: var(--text); font-size: 22px; line-height: 1.1; }
     .recon-monitor-card p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
-    .recon-monitor-card.warning { background: #fffaf0; border-color: #f7cf79; }
+    .recon-monitor-card.warning { background: var(--warning-soft); border-color: #f7cf79; }
     .recon-monitor-card.danger { background: #fff8f7; border-color: #fda29b; }
     .recon-monitor-strip { border: 1px solid var(--line); background: #f8fafc; border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
     .recon-monitor-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -154,7 +154,7 @@
     .recon-monitor-jobs { display: grid; grid-template-columns: repeat(2,minmax(280px,1fr)); gap: 12px; }
     .recon-job-card { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px; display: grid; gap: 10px; box-shadow: var(--shadow-soft); transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease; }
     .recon-job-card:hover { box-shadow: var(--shadow-hover); border-color: #cfd6e1; }
-    .recon-job-card.stale { border-color: #f7cf79; background: #fffaf0; }
+    .recon-job-card.stale { border-color: #f7cf79; background: var(--warning-soft); }
     .recon-job-card.failed { border-color: #fda29b; background: #fff8f7; }
     .recon-job-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .recon-job-top h3 { margin: 0; font-size: 14px; }
@@ -542,7 +542,7 @@
     }
     .metric span { color: #717c8e; font-weight: 660; }
     .metric strong { font-size: 27px; font-weight: 760; letter-spacing: -0.035em; }
-    .metric.warning { border-color: rgba(161,92,7,0.2); background: #fffaf0; }
+    .metric.warning { border-color: #f0c36a; background: var(--warning-soft); }
     .metric.danger { border-color: rgba(180,35,24,0.18); background: #fff5f4; }
     .panel { border-radius: 18px; }
     .panel-head { min-height: 52px; padding: 13px 16px; border-bottom-color: rgba(23,32,51,0.07); background: rgba(255,255,255,0.48); }

@@ -63,7 +63,7 @@ test('live conflict and duplicate details use the safe-area action footer', () =
   assert.match(app, /<footer class="pending-detail-actions duplicate-review-actions">\s*<button[^>]*data-duplicate-resolution-save[^>]*>[^<]*<\/button>\s*<\/footer>/);
   assert.match(cssRule('.pending-detail-actions'), /position:sticky/);
   assert.match(cssRule('.pending-detail-actions'), /border-top:1px solid var\(--line\)/);
-  assert.match(cssRule('.pending-detail-actions'), /background:#fff/);
+  assert.match(cssRule('.pending-detail-actions'), /background:var\(--surface-panel\)/);
   assert.match(cssRule('.pending-detail-actions .button'), /min-height:44px/);
 });
 

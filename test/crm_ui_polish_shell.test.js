@@ -46,11 +46,59 @@ test('approved semantic tokens and typography define the CRM shell', () => {
   assert.match(css, /\.button\{[^}]*min-height:34px/);
   assert.match(css, /#pipelineBoard \.pipeline-tabs-row/);
   assert.match(css, /#pipelineBoard \.pipeline-stage-cell/);
+  assert.match(css, /#pipelineBoard \.pipeline-queue-grid/);
+  assert.match(css, /#pipelineBoard \.pipeline-grid/);
+  assert.match(css, /#poolView \.studio-pills-row/);
+  assert.match(css, /#poolView \.intake-kpi-primary/);
+  assert.match(appJs(), /intake-kpi-secondary/);
+  assert.match(appJs(), /manager-metric-primary/);
+  assert.match(css, /\.team-progress-metrics-rest/);
   assert.match(css, /\.access-section-tabs button\{[^}]*border-radius:20px/);
   assert.match(appJs(), /theme=\$\{theme\}/);
   assert.match(appJs(), /pipeline-list-head/);
+  assert.match(appJs(), /function viewSubtitle/);
+  assert.match(crm(), /id="viewSub"/);
   assert.match(read('Index.html'), /q\.get\('theme'\)==='deck'/);
   assert.match(read('sales-assets/filter-component.css'), /border-radius: 10px/);
+});
+
+test('card and field fills use surface tokens so Deck does not leave white tiles', () => {
+  const css = appCss();
+  const withoutRoot = css.replace(/:root\{[^}]+\}/, '');
+  const leftoverWhite = [...withoutRoot.matchAll(/background:#fff(?![0-9a-fA-F])/g)].filter(match => {
+    const ctx = withoutRoot.slice(Math.max(0, match.index - 140), match.index);
+    return !(ctx.includes('checkbox') && ctx.includes('::after'));
+  });
+  assert.equal(
+    leftoverWhite.length,
+    0,
+    leftoverWhite.map(match => withoutRoot.slice(Math.max(0, match.index - 70), match.index + 18)).join('\n'),
+  );
+  assert.doesNotMatch(withoutRoot, /background:#fafcfb/);
+  assert.doesNotMatch(withoutRoot, /background:#f7faf8/);
+  assert.doesNotMatch(withoutRoot, /background:#f7f9f8/);
+  assert.match(css, /\.customer-bulk-bar\{[^}]*background:var\(--surface-header\)/);
+});
+
+test('warning fills use tokens so Deck amber blocks stay readable', () => {
+  const css = appCss();
+  const withoutRoot = css.replace(/:root\{[^}]+\}/, '');
+  for (const brown of ['#76551d', '#72511d', '#765800', '#744916', '#8b6512', '#8b5e00', '#75540c', '#9a5c14']) {
+    assert.doesNotMatch(
+      withoutRoot.toLowerCase(),
+      new RegExp(brown),
+      `warning text ${brown} must use var(--warning) so Deck contrast holds`,
+    );
+  }
+  assert.match(css, /--warning-border:#ead6af/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--warning-subtle:#352914/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--warning-border:#6e5424/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--amberbg:var\(--warning-subtle\)/);
+  assert.match(css, /body\[data-theme="deck"\]\{[^}]*--redbg:var\(--danger-subtle\)/);
+  assert.match(css, /\.maintenance-warning\{[^}]*color:var\(--text-primary\)/);
+  assert.match(css, /\.protected-gate\.is-disabled\{[^}]*color:var\(--text-primary\)/);
+  assert.match(css, /\.pipeline-star-distribution\{[^}]*color:var\(--warning\)/);
+  assert.match(css, /\.customer-star-meta\{[^}]*color:var\(--warning\)/);
 });
 
 test('shell navigation and icon-only actions use semantic line icons', () => {
