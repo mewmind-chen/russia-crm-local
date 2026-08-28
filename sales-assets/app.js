@@ -4292,17 +4292,27 @@
       + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
 
+  function accountLifecycleActive(account) {
+    if (account?.state?.lifecycle) return account.state.lifecycle.key === 'active';
+    return String(account?.lifecycle_status || 'active') === 'active';
+  }
+
+  function accountAssignmentReturned(account) {
+    if (account?.state?.assignment) return account.state.assignment.key === 'returned';
+    return String(account?.assignment_status || '') === 'returned';
+  }
+
   function canReturnCustomer(account) {
     if (!account || !can('manage_customer_recycle')) return false;
-    if (String(account.lifecycle_status || 'active') !== 'active') return false;
-    if (String(account.assignment_status || '') === 'returned') return false;
+    if (!accountLifecycleActive(account)) return false;
+    if (accountAssignmentReturned(account)) return false;
     return true;
   }
 
   function canRejectCustomer(account) {
     if (!account || (!can('manage_customer_recycle') && !can('reject_own_customer_mismatch'))) return false;
-    if (String(account.lifecycle_status || 'active') !== 'active') return false;
-    if (String(account.assignment_status || '') === 'returned') return false;
+    if (!accountLifecycleActive(account)) return false;
+    if (accountAssignmentReturned(account)) return false;
     return true;
   }
 

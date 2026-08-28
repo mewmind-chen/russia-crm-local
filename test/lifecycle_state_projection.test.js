@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { adminFixture, seededFixture } = require('./helpers/permission_fixture');
 const {
@@ -149,4 +151,13 @@ test('sales user profile for out-of-scope account does not include state', async
   const profile = await response.json();
   assert.equal(response.status, 403, profile.error);
   assert.equal(profile.state, undefined, 'out-of-scope profile must not include state');
+});
+
+test('frontend recycle guards consume the unified state DTO first', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+  assert.match(appSource, /function accountLifecycleActive/);
+  assert.match(appSource, /account\.state\.lifecycle\.key === 'active'/);
+  assert.match(appSource, /function accountAssignmentReturned/);
+  assert.match(appSource, /account\.state\.assignment\.key === 'returned'/);
+  assert.match(appSource, /canReturnCustomer\(account\)[\s\S]{0,220}accountLifecycleActive/);
 });
