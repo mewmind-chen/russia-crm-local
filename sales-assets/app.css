@@ -386,6 +386,9 @@ button.metric.alert{background:var(--danger-subtle)}
 .customer-profile-widgets{grid-row:2;min-height:0;overflow:auto;border-bottom:1px solid var(--line);background:var(--surface-page)}
 .profile-widget-host{display:grid;gap:12px;padding:14px 16px}
 .profile-widget-facts{display:grid;gap:12px}
+body.profile-widgets-only .customer-profile-view.active{grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+body.profile-widgets-only .customer-profile-widgets{grid-row:2;min-height:0;max-height:none;overflow:auto;border-bottom:0}
+body.profile-widgets-only .customer-profile-frame.hidden{display:none !important}
 .profile-widget-section{border:1px solid var(--line);border-radius:12px;background:var(--surface-panel);padding:12px 14px}
 .profile-widget-section h3{margin:0 0 8px;font-size:12px;color:var(--text-secondary);letter-spacing:.02em}
 .profile-widget-section .fact{background:var(--surface-subtle);border-radius:9px;padding:10px;min-width:0}

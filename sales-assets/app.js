@@ -3094,17 +3094,39 @@
     );
   }
 
-  function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
+  function isProfileWidgetsMode() {
+    try { return new URLSearchParams(location.search).get('profileView') === 'widgets'; } catch (_e) { return false; }
+  }
+
+  function applyProfileViewMode() {
+    const on = isProfileWidgetsMode();
+    document.body.classList.toggle('profile-widgets-only', on);
+    const frame = $('#customerProfileFrame');
+    const widgets = $('#customerProfileWidgets');
+    if (frame) frame.classList.toggle('hidden', on);
+    if (widgets) widgets.classList.remove('hidden');
+  }
+
+  async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
     widgetRoot.replaceChildren();
     if (typeof window.TradePulseProfileWidgets === 'undefined') return;
-    // schema 就绪时按 customer_profile 目录渲染事实区块；未就绪回退到仅联系人资产。
     const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
     const profileSchema = state.fieldSchemas?.customer_profile;
     if (fieldWidget && profileSchema?.fields?.length) {
       const account = state.data?.accounts?.find(item => item.external_customer_id === externalCustomerId);
-      const poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId);
+      let poolRecord = null;
+      try {
+        const endpoint = intakeItemId
+          ? `/api/sales-crm/intake/${encodeURIComponent(intakeItemId)}/profile`
+          : `/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}`;
+        const profile = await api(endpoint);
+        poolRecord = profile.customerPool?.[0] || null;
+      } catch (_e) {
+        poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId) || null;
+      }
+      if (!poolRecord) poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId) || null;
       const facts = fieldWidget.renderProfileFacts({
         schema: profileSchema,
         data: profileFactsData(account, poolRecord),
@@ -3117,6 +3139,7 @@
         widgetRoot.appendChild(host);
       }
     }
+    applyProfileViewMode();
     window.TradePulseProfileWidgets.mountContacts(widgetRoot, {
       customerId: externalCustomerId,
       intakeItemId,
