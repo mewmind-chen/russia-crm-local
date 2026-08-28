@@ -19,6 +19,7 @@ const { resolveActivityReaction } = require('../lib/domains/activity/request');
 const { noPlanStreakForActivities } = require('../lib/domains/planning/streak');
 const { reasonOrder, urgencyFor, groupAlerts } = require('../lib/domains/planning/alerts');
 const { emptyCustomerPlanRisk } = require('../lib/domains/planning/risk');
+const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../lib/domains/intake/query');
 
 const {
   normalizeCountry,
@@ -347,6 +348,23 @@ test('emptyCustomerPlanRisk builds the no-risk fallback frame', () => {
   assert.equal(risk.state, 'none');
   assert.equal(risk.currentConsecutiveDeferredCount, 0);
   assert.deepEqual(risk.history, []);
+});
+
+test('intakeQueryValues normalizes and dedupes list params', () => {
+  assert.deepEqual(intakeQueryValues('A,,B,B'), ['A', 'B']);
+  assert.deepEqual(intakeQueryValues(['C', ' C ', 'D', 'c']), ['C', 'D', 'c']);
+  assert.deepEqual(intakeQueryValues([], 3), []);
+  assert.deepEqual(intakeQueryValues('a,b,c,d', 3), ['a', 'b', 'c']);
+});
+
+test('intakeQueryBoolean and intakeQueryDate map query flags and dates', () => {
+  assert.equal(intakeQueryBoolean('1'), true);
+  assert.equal(intakeQueryBoolean('no'), false);
+  assert.equal(intakeQueryBoolean('maybe'), null);
+  assert.equal(intakeQueryDate(''), '');
+  assert.equal(intakeQueryDate('2026-08-28'), '2026-08-28 00:00:00');
+  assert.equal(intakeQueryDate('2026-08-28', true), '2026-08-28 23:59:59');
+  assert.equal(intakeQueryDate('28/08/2026'), '');
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
