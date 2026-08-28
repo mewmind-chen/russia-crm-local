@@ -247,3 +247,22 @@ test('pipeline whitelist projection keeps reaction and queue fields like the bla
   assert.equal(projected.state.nextAction.text, '',
     'pipeline state.nextAction text must be hidden');
 });
+
+test('insights whitelist projection matches the legacy blacklist on evaluation rows', () => {
+  const { redactContactFields, contactSafeInsightsRecord } = require('../lib/domains/identity');
+  const row = {
+    customerId: 'CRM-1', externalCustomerId: 'RU-1', companyName: 'Firm', nickname: '',
+    country: 'RU', city: '', stage: 'meeting', priority: 'B',
+    ownerId: 'U-1', ownerName: 'A',
+    evaluationCount: 2, evaluationStatus: 'evaluated', latestEvaluationId: 'EV-1',
+    subjectType: 'company', subjectId: 'S-1', subjectName: '秘密采购', subjectTitle: 'Procurement',
+    evaluationText: '秘密评价', authorId: 'U-M', authorName: '经理',
+    aiStatus: 'completed', aiSummary: '秘密摘要', aiLabelsJson: '[]', aiRisksJson: '[]',
+    aiStrategy: '秘密策略', evaluatedAt: 't', evaluationUpdatedAt: 't',
+    aiLabels: ['有前景'], aiRisks: ['价格敏感'],
+  };
+  const redacted = redactContactFields(row);
+  const projected = contactSafeInsightsRecord(row);
+  assert.deepEqual(projected, redacted,
+    'insights whitelist must be identical to the legacy blacklist output');
+});
