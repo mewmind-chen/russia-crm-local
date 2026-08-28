@@ -11,7 +11,7 @@ const {
 } = require('../lib/domains/customer/normalize');
 const { validateRecycleReason } = require('../lib/domains/customer/recycle');
 const { customerCreateRequestHash } = require('../lib/domains/customer/create');
-const { creatorDisplayName, historyAccountSummary } = require('../lib/domains/customer/summary');
+const { creatorDisplayName, historyAccountSummary, changedFieldLabels } = require('../lib/domains/customer/summary');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -108,6 +108,16 @@ test('customerCreateRequestHash is stable and ignores the client idempotency key
   assert.equal(customerCreateRequestHash(user, { ...payload, idempotencyKey: 'b' }), first);
   assert.notEqual(customerCreateRequestHash({ id: 'U-2' }, payload), first);
   assert.notEqual(customerCreateRequestHash(user, { ...payload, country: '巴西' }), first);
+});
+
+test('changedFieldLabels maps account labels and falls back to raw field names', () => {
+  assert.deepEqual(changedFieldLabels({ nickname: { from: '', to: '新昵称' } }, 'to'),
+    { 昵称: '新昵称' });
+  assert.deepEqual(changedFieldLabels({ establishedYear: { from: 0, to: 2020 } }, 'from'),
+    { 成立年份: 0 });
+  assert.deepEqual(changedFieldLabels({ unknownField: { from: 'a', to: 'b' } }, 'to'),
+    { unknownField: 'b' });
+  assert.deepEqual(changedFieldLabels(null, 'to'), {});
 });
 
 test('creatorDisplayName resolves system, named, and unknown creators', () => {
