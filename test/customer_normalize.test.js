@@ -10,6 +10,7 @@ const {
   normalizeCustomerStarReason,
 } = require('../lib/domains/customer/normalize');
 const { validateRecycleReason } = require('../lib/domains/customer/recycle');
+const { customerCreateRequestHash } = require('../lib/domains/customer/create');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -96,4 +97,14 @@ test('validateRecycleReason accepts 2-500 characters and rejects out-of-range va
     return true;
   });
   assert.throws(() => validateRecycleReason('x'.repeat(501), { httpError }), /2至500/);
+});
+
+test('customerCreateRequestHash is stable and ignores the client idempotency key', () => {
+  const user = { id: 'U-1' };
+  const payload = { companyName: 'Firm', country: '俄罗斯' };
+  const first = customerCreateRequestHash(user, payload);
+  assert.equal(customerCreateRequestHash(user, { ...payload, idempotencyKey: 'a' }), first);
+  assert.equal(customerCreateRequestHash(user, { ...payload, idempotencyKey: 'b' }), first);
+  assert.notEqual(customerCreateRequestHash({ id: 'U-2' }, payload), first);
+  assert.notEqual(customerCreateRequestHash(user, { ...payload, country: '巴西' }), first);
 });
