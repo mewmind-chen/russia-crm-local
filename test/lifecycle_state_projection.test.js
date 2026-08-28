@@ -173,3 +173,44 @@ test('frontend stage and manager display fall back to the unified state DTO', ()
   assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)\)\}[\s\S]{0,80}\$\{stay\}/);
   assert.match(appSource, /\['原阶段', stageLabel\(accountStageOf\(account\)\)\]/);
 });
+
+test('account whitelist projection matches the legacy blacklist apart from the state DTO', () => {
+  const { redactContactFields, contactSafeAccountRecord } = require('../lib/domains/identity');
+  const account = {
+    id: 'CRM-1', external_customer_id: 'RU-1', company_name: 'Firm', nickname: '昵称',
+    country: 'RU', city: 'M', website: 'https://x.com', industry: 'auto',
+    customer_type: 'mfr', source: '展会', product_focus: 'MCU', priority: 'B',
+    potential_value: 0, stage: 'meeting', owner_id: 'U-1', created_by: 'U-2',
+    first_claimed_by: 'U-1', first_claimed_at: 't', manager_id: 'U-M',
+    manager_required: 1, manager_status: '待介入', last_activity_at: 't',
+    next_action: '跟进', next_action_at: 't', next_action_time_basis: 'utc',
+    loss_reason: '', created_at: 't', updated_at: 't', intake_item_id: 'I-1',
+    assignment_status: 'claimed', assigned_at: 't', claim_due_at: 't', claimed_at: 't',
+    return_reason: '', lifecycle_status: 'active', recycle_kind: '', recycle_reason: '',
+    recycled_by: '', recycled_at: '', previous_owner_id: '', established_year: 2020,
+    owner_name: 'A', manager_name: 'M', creator_name: 'C', master_description: 'desc',
+    current_pool: '未分池', rating: 'A', best_contact_level: 'L1',
+    contact_recon_status: 'done', deep_report: 'report', source_file: 'file.csv',
+    stageLabel: '深度沟通', customerTags: [{ id: 1, name: 'x' }],
+    lifecycleStatus: 'active', assignmentStatus: 'claimed', managerStatus: '待介入',
+    nextAction: '跟进', nextActionAt: 't',
+    state: {
+      stage: { key: 'meeting', terminal: false },
+      lifecycle: { key: 'active', recycled: false },
+      assignment: { key: 'claimed', ownerId: 'U-1', current: true },
+      manager: { required: true, status: '待介入' },
+      nextAction: { text: '跟进', at: 't', planned: true, degraded: false, overdue: false },
+    },
+  };
+  const redacted = redactContactFields(account);
+  const projected = contactSafeAccountRecord(account);
+  const { state: _redactedState, ...redactedRest } = redacted;
+  const { state: _projectedState, ...projectedRest } = projected;
+  assert.deepEqual(projectedRest, redactedRest,
+    'non-state account keys must be identical to the legacy blacklist output');
+  assert.ok(projected.state, 'state DTO must be preserved by the whitelist');
+  assert.equal(projected.state.nextAction.text, '',
+    'state.nextAction text must be hidden by the whitelist');
+  assert.equal(redacted.state.nextAction, undefined,
+    'legacy blacklist strips state.nextAction recursively');
+});
