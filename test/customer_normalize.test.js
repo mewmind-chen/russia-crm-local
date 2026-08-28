@@ -14,6 +14,7 @@ const {
   PROGRESS_TYPE_MAP,
   resolveActivityRequestSpec,
 } = require('../lib/domains/activity/progress');
+const { publicActivityRecord, publicActivityRecords } = require('../lib/domains/activity/serialize');
 
 const {
   normalizeCountry,
@@ -228,6 +229,35 @@ test('resolveActivityRequestSpec validates legacy activity types and channels', 
 test('progress constants mirror the request-spec stage mapping', () => {
   assert.equal(ACTIVITY_STAGE.meeting, 'meeting');
   assert.equal(PROGRESS_TYPE_MAP.whatsapp.channel, 'WhatsApp');
+});
+
+test('publicActivityRecord serializes progress, reaction, and provenance consistently', () => {
+  const record = publicActivityRecord({
+    id: 'ACT-1', customer_id: 'CRM-1', user_id: 'U-1', activity_type: 'social',
+    channel: 'WhatsApp', outcome: 'aws', progress_key: 'whatsapp',
+    reaction_option_id: 'R-1', reaction_label_snapshot: '有回复',
+    next_action: '跟进', next_action_at: 't', manager_required: 1, no_plan: 1,
+    superseded_at: 't', superseded_by: 'ACT-9', is_test_data: 0,
+    provenance: { kind: 'superseded_original', replacementActivityId: 'ACT-9', replacementCustomerId: 'CRM-9' },
+  }, new Set(['ACT-1']));
+  assert.equal(record.progressType, 'whatsapp');
+  assert.equal(record.activityType, 'social');
+  assert.equal(record.reactionSnapshot, '有回复');
+  assert.equal(record.managerRequired, true);
+  assert.equal(record.noPlan, true);
+  assert.equal(record.supersededBy, '');
+  assert.equal(record.provenance.replacementActivityId, '');
+  assert.equal(typeof record.effective, 'boolean');
+  assert.equal(record.reaction_label_snapshot, '有回复', 'raw snake_case keys are preserved in the public row');
+});
+
+test('publicActivityRecords applies a shared visible-id set across the batch', () => {
+  const records = publicActivityRecords([
+    { id: 'ACT-1', activity_type: 'email', channel: 'email', superseded_by: '' },
+    { id: 'ACT-2', activity_type: 'note', channel: 'other', superseded_by: 'ACT-1' },
+  ]);
+  assert.equal(records[1].supersededBy, 'ACT-1');
+  assert.equal(records[0].effective, true);
 });
 
 test('creatorDisplayName resolves system, named, and unknown creators', () => {
