@@ -7,7 +7,9 @@ const {
   normalizeCountry,
   normalizeEstablishedYear,
   normalizeAccountNickname,
+  normalizeCustomerStarReason,
 } = require('../lib/domains/customer/normalize');
+const { validateRecycleReason } = require('../lib/domains/customer/recycle');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -64,4 +66,34 @@ test('normalizeAccountNickname rejects blank, control, and oversized values', ()
   });
   assert.throws(() => normalizeAccountNickname('a\u0000b', { badRequest }), /控制字符/);
   assert.throws(() => normalizeAccountNickname('一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一', { badRequest }), /最多40/);
+});
+
+test('normalizeCustomerStarReason collapses whitespace and enforces limits', () => {
+  assert.equal(normalizeCustomerStarReason(''), '');
+  assert.equal(normalizeCustomerStarReason('  重点  客户  '), '重点 客户');
+  const badRequest = message => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+  };
+  assert.throws(() => normalizeCustomerStarReason('a\u0000b', { badRequest }), /控制字符/);
+  assert.throws(() => normalizeCustomerStarReason('a'.repeat(101), { badRequest }), /最多100/);
+});
+
+test('validateRecycleReason accepts 2-500 characters and rejects out-of-range values', () => {
+  const httpError = (statusCode, message, code) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    error.code = code;
+    return error;
+  };
+  assert.equal(validateRecycleReason(' 退回 '), '退回');
+  assert.equal(validateRecycleReason('x'.repeat(500)), 'x'.repeat(500));
+  assert.throws(() => validateRecycleReason('x', { httpError }), error => {
+    assert.equal(error.statusCode, 400);
+    assert.equal(error.code, 'INVALID_RECYCLE_REASON');
+    assert.match(error.message, /2至500/);
+    return true;
+  });
+  assert.throws(() => validateRecycleReason('x'.repeat(501), { httpError }), /2至500/);
 });
