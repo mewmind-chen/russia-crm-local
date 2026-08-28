@@ -182,3 +182,55 @@ test('profile edit owner change keeps assignment status consistent', async t => 
   assert.equal(account.owner_id, 'U-OTHER');
   assert.equal(account.assignment_status, 'claimed');
 });
+
+test('claimed versus returned account state pair with the intake lifecycle contract', () => {
+  const claimed = buildAccountInsertState({ stage: 'qualified', assignmentStatus: 'claimed', ownerId: 'U-1' });
+  assert.equal(claimed.assignment_status, 'claimed');
+  assert.equal(claimed.owner_id, 'U-1');
+  assert.equal(claimed.lifecycle_status, 'active');
+
+  const returned = buildAccountStatePatch({
+    lifecycleStatus: 'active',
+    assignmentStatus: 'returned',
+    ownerId: null,
+  });
+  assert.equal(returned.lifecycle_status, 'active');
+  assert.equal(returned.assignment_status, 'returned');
+  assert.equal(returned.owner_id, null);
+});
+
+test('unassigned versus claimed account state keeps the owner pairing rule intact', () => {
+  assert.deepEqual(buildAccountInsertState({ assignmentStatus: 'unassigned', ownerId: '' }), {
+    stage: 'new',
+    lifecycle_status: 'active',
+    assignment_status: 'unassigned',
+    owner_id: null,
+  });
+  assert.deepEqual(buildAccountInsertState({ assignmentStatus: 'claimed', ownerId: 'U-9' }), {
+    stage: 'new',
+    lifecycle_status: 'active',
+    assignment_status: 'claimed',
+    owner_id: 'U-9',
+  });
+});
+
+test('recycled lifecycle write keeps the returned assignment boundary intact', () => {
+  assert.deepEqual(
+    buildAccountStatePatch({ lifecycleStatus: 'recycled', assignmentStatus: 'returned', ownerId: null }),
+    {
+      lifecycle_status: 'recycled',
+      assignment_status: 'returned',
+      owner_id: null,
+    },
+  );
+  // Lifecycle and assignment stay independent dimensions in the write shim;
+  // only the returning call sites pair recycled lifecycle with returned/clear.
+  assert.deepEqual(
+    buildAccountStatePatch({ lifecycleStatus: 'recycled', assignmentStatus: 'claimed', ownerId: 'U-1' }),
+    {
+      lifecycle_status: 'recycled',
+      assignment_status: 'claimed',
+      owner_id: 'U-1',
+    },
+  );
+});
