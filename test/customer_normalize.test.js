@@ -17,6 +17,7 @@ const {
 const { publicActivityRecord, publicActivityRecords } = require('../lib/domains/activity/serialize');
 const { resolveActivityReaction } = require('../lib/domains/activity/request');
 const { noPlanStreakForActivities } = require('../lib/domains/planning/streak');
+const { reasonOrder, urgencyFor, groupAlerts } = require('../lib/domains/planning/alerts');
 
 const {
   normalizeCountry,
@@ -313,6 +314,28 @@ test('noPlanStreakForActivities stops at a planned activity and ignores test dat
   assert.equal(streak.count, 0);
   assert.equal(streak.streakStartId, '');
   assert.equal(noPlanStreakForActivities([]).count, 0);
+});
+
+test('reasonOrder and urgencyFor derive alert priority buckets', () => {
+  assert.equal(reasonOrder({ code: 'OVERDUE', customerPriority: 'A', overdueHours: 80 }), 40);
+  assert.equal(reasonOrder({ code: 'OVERDUE', customerPriority: 'C', overdueHours: 80 }), 70);
+  assert.equal(reasonOrder({ code: 'UNKNOWN' }), 999);
+  assert.equal(urgencyFor({ code: 'OVERDUE', customerPriority: 'A', overdueHours: 80 }), 'immediate');
+  assert.equal(urgencyFor({ code: 'NO_NEXT' }), 'today');
+  assert.equal(urgencyFor({ code: 'STALE' }), 'attention');
+});
+
+test('groupAlerts merges overdue-claim siblings and orders groups by urgency', () => {
+  const base = { customerId: 'CRM-1', id: 'A', code: 'UNCLAIMED', intakeItemId: 'I-1', overdueHours: 2, updatedAt: 't', companyName: 'X', title: '未认领' };
+  const grouped = groupAlerts([
+    { ...base, code: 'UNCLAIMED', title: '未认领' },
+    { ...base, code: 'UNCLAIMED_LEAD', title: '未认领线索', customerPriority: 'B' },
+    { ...base, code: 'STALE', id: 'B', title: '过期', customerPriority: 'A' },
+  ]);
+  assert.equal(grouped.length, 1);
+  const group = grouped[0];
+  assert.equal(group.reasonCount, 2, 'overdue claims merge into one semantic reason');
+  assert.equal(group.maxOverdueHours, 2);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
