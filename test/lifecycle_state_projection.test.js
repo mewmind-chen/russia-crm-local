@@ -295,3 +295,25 @@ test('alerts whitelist projection matches the legacy blacklist with alert-copy p
   assert.equal(projected.managerRequest.reason, undefined,
     'manager request narrative must be hidden');
 });
+
+test('activity whitelist projection matches the legacy blacklist on activity rows', () => {
+  const { redactContactFields, contactSafeActivityRecord } = require('../lib/domains/identity');
+  const row = {
+    id: 'ACT-1', customer_id: 'CRM-1', user_id: 'U-1', activity_type: 'email', channel: 'email',
+    outcome: '已回复', summary: '秘密摘要', next_action: '秘密跟进', next_action_at: 't',
+    stage_before: 'contacted', stage_after: 'replied', manager_required: 0,
+    progress_key: 'reply', reaction_option_id: 'R-1', reaction_label_snapshot: '有回复',
+    occurred_at: 't', created_at: 't', no_plan: 0, superseded_at: '', superseded_by: '',
+    is_test_data: 0, user_name: 'A', actor_name: 'A',
+    provenance: {
+      kind: 'original', originalActivityId: 'ACT-1', originalCustomerId: 'CRM-1',
+      originalActivityType: 'email', sourceActivityId: '',
+    },
+  };
+  const redacted = redactContactFields(row);
+  const projected = contactSafeActivityRecord(row);
+  assert.deepEqual(projected, redacted,
+    'activity whitelist must be identical to the legacy blacklist output');
+  assert.equal(projected.summary, undefined, 'activity narrative must be hidden');
+  assert.equal(projected.provenance.kind, 'original', 'provenance metadata must stay visible');
+});
