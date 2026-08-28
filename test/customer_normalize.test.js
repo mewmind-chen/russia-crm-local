@@ -9,6 +9,11 @@ const {
   legacyProgressKey,
   scopedActivityProvenance,
 } = require('../lib/domains/activity/present');
+const {
+  ACTIVITY_STAGE,
+  PROGRESS_TYPE_MAP,
+  resolveActivityRequestSpec,
+} = require('../lib/domains/activity/progress');
 
 const {
   normalizeCountry,
@@ -188,6 +193,41 @@ test('scopedActivityProvenance hides replacement ids that are not visible', () =
     kind: 'replacement', originalActivityId: '', originalCustomerId: '',
   });
   assert.equal(scopedActivityProvenance({ provenance: null }, visible), null);
+});
+
+test('resolveActivityRequestSpec resolves modern progress keys with legacy=false', () => {
+  const spec = resolveActivityRequestSpec({ progressType: 'meeting' });
+  assert.equal(spec.progressKey, 'meeting');
+  assert.equal(spec.activityType, 'meeting');
+  assert.equal(spec.channel, 'video');
+  assert.equal(spec.proposedStage, 'meeting');
+  assert.equal(spec.legacy, false);
+  const badRequest = message => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+  };
+  assert.throws(() => resolveActivityRequestSpec({ progressType: 'bogus' }, { badRequest }), /不支持的本次进展类型/);
+});
+
+test('resolveActivityRequestSpec validates legacy activity types and channels', () => {
+  const badRequest = message => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+  };
+  const spec = resolveActivityRequestSpec({ activityType: 'social', channel: 'WhatsApp' });
+  assert.equal(spec.progressKey, 'whatsapp');
+  assert.equal(spec.channel, 'WhatsApp');
+  assert.equal(spec.proposedStage, 'connected');
+  assert.equal(spec.legacy, true);
+  assert.throws(() => resolveActivityRequestSpec({ activityType: 'bogus' }, { badRequest }), /请选择有效的本次进展/);
+  assert.throws(() => resolveActivityRequestSpec({ activityType: 'email', channel: 'chip' }, { badRequest }), /不支持的进展渠道/);
+});
+
+test('progress constants mirror the request-spec stage mapping', () => {
+  assert.equal(ACTIVITY_STAGE.meeting, 'meeting');
+  assert.equal(PROGRESS_TYPE_MAP.whatsapp.channel, 'WhatsApp');
 });
 
 test('creatorDisplayName resolves system, named, and unknown creators', () => {
