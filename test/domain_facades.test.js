@@ -19,6 +19,15 @@ test('identity facade delegates to the existing access-control source of truth',
   }
 });
 
+test('identity facade keeps constants and contact redaction proxies for the sales runtime', () => {
+  assert.equal(identity.PERMISSION_DEFINITIONS, accessControl.PERMISSION_DEFINITIONS);
+  assert.equal(identity.PERMISSION_DESCRIPTIONS, accessControl.PERMISSION_DESCRIPTIONS);
+  assert.equal(identity.ROLE_PERMISSIONS, accessControl.ROLE_PERMISSIONS);
+  for (const name of ['redactContactFields', 'contactSafePoolRecord', 'contactSafeReconRecord']) {
+    assert.equal(identity[name], accessControl[name], `${name} must remain an exact delegate`);
+  }
+});
+
 test('identity facade preserves permission outputs and denial status', () => {
   const user = { id: 'U-1', role: 'sales', permissions: { view_customers: true } };
   assert.deepEqual(identity.permissionsFor(user), accessControl.permissionsFor(user));

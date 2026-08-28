@@ -128,7 +128,7 @@ test('management routes are explicit and export reuses the authorized filter val
 
   assert.match(
     salesCrmSource,
-    /require\('\.\/filter_authorization'\)/,
+    /require\('\.\/filter_authorization'\)|require\('\.\/domains\/filter'\)/,
     'the HTTP layer must use the authorization kernel',
   );
   const exportSource = functionSlice(salesCrmSource, 'exportCrmData', 'exportCrmCsv');
