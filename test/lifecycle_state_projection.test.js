@@ -266,3 +266,32 @@ test('insights whitelist projection matches the legacy blacklist on evaluation r
   assert.deepEqual(projected, redacted,
     'insights whitelist must be identical to the legacy blacklist output');
 });
+
+test('alerts whitelist projection matches the legacy blacklist with alert-copy preservation', () => {
+  const { redactContactFields, contactSafeAlertsRecord } = require('../lib/domains/identity');
+  const alert = {
+    id: 'OVERDUE-CRM-1', code: 'OVERDUE', severity: 'critical', title: '跟进任务已超期',
+    detail: '秘密跟进 已超过计划时间', action: '今天完成跟进',
+    customerId: 'CRM-1', companyName: 'Firm', officialCompanyName: 'Firm', nickname: '',
+    externalCustomerId: 'RU-1', intakeItemId: '', ownerId: 'U-1', ownerName: 'A',
+    assignedAt: '', actionKind: 'record_activity', allowedActions: ['record_activity'],
+    dueAt: 't', stage: 'meeting', customerPriority: 'B', overdueHours: 20, updatedAt: 't',
+    reasons: [
+      { code: 'OVERDUE', title: '跟进任务已超期', detail: '秘密跟进 已超过计划时间', action: '今天完成跟进', dueAt: 't', overdueHours: 20 },
+    ],
+    reasonCount: 1, urgency: 'today', urgencyLabel: '今天完成', otherReasons: [],
+    maxOverdueHours: 20,
+    managerRequest: {
+      requesterId: 'U-1', requesterName: 'A', requestedAt: 't',
+      reason: '秘密原因', progress: 'email', summary: '秘密摘要', outcome: '秘密结果',
+    },
+    managerReply: { repliedById: 'U-M', repliedByName: 'M', repliedAt: 't', result: '秘密结果' },
+  };
+  const redacted = redactContactFields(alert, { preserveAlertCopy: true });
+  const projected = contactSafeAlertsRecord(alert);
+  assert.deepEqual(projected, redacted,
+    'alerts whitelist must be identical to the legacy blacklist output');
+  assert.equal(projected.title, '跟进任务已超期', 'alert copy must stay visible');
+  assert.equal(projected.managerRequest.reason, undefined,
+    'manager request narrative must be hidden');
+});
