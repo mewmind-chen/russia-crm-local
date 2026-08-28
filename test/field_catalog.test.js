@@ -149,7 +149,7 @@ test('lead_flow aliases the intake catalog', () => {
 });
 
 // —— 渲染一致性：schema 驱动的列与旧权限/开关门控必须一致 ——
-const { intakeColumnKeys } = require('../sales-assets/field-widget');
+const { intakeColumnKeys, profileSections, renderProfileFacts, PROFILE_SECTION_LABELS } = require('../sales-assets/field-widget');
 
 function schemaFor(role, keys, features) {
   const { effectiveFieldSchema } = fieldCatalog();
@@ -203,4 +203,79 @@ test('intake columns match legacy gates: fit iff ai_stations, contact iff view_c
 test('intake schema column order matches legacy render order', () => {
   const keys = intakeColumnKeys(schemaFor('manager', ['view_intake', 'view_contacts'], { ai_stations: true }));
   assert.deepEqual(keys, ['company', 'fit', 'contact', 'owner', 'status']);
+});
+
+// —— customer_profile 回归守卫：31字段/6分组/权限/section 变更即时防漏 ——
+function customerProfileSchema(role, keys, features = {}) {
+  const { effectiveFieldSchema } = fieldCatalog();
+  return effectiveFieldSchema({ pageKey: 'customer_profile', user: { role }, permissions: permissions(...keys), features });
+}
+
+test('customer_profile admin sees 31 fields across 6 sections with expected section sizes', () => {
+  const { effectiveFieldSchema, FIELDS_CATALOG } = fieldCatalog();
+  const raw = FIELDS_CATALOG.customer_profile;
+  assert.equal(raw.length, 31, 'customer_profile must be 31 fields');
+  const bySection = raw.reduce((acc, f) => { acc[f.section] = (acc[f.section] || 0) + 1; return acc; }, {});
+  assert.deepEqual(bySection, { identity_region: 8, business_profile: 6, product_focus: 2, contact_channels: 5, compliance: 2, source_record: 8 });
+  const admin = effectiveFieldSchema({ pageKey: 'customer_profile', user: { role: 'admin' }, permissions: permissions('view_contacts', 'view_recon', 'view_all_customers'), features: {} });
+  assert.equal(admin.fields.length, 31);
+  assert.equal(admin.version, 'field-schema-v1');
+  assert.ok(admin.fields.every(f => typeof f.section === 'string' && f.section.length > 0), 'section must be serialized');
+  assert.ok(admin.fields.every(f => typeof f.label === 'string' && f.label.length > 0));
+});
+
+test('customer_profile hides contact_channels without view_contacts', () => {
+  const without = customerProfileSchema('sales', []);
+  assert.equal(without.fields.some(f => f.key === 'email'), false);
+  assert.equal(without.fields.some(f => f.key === 'phone'), false);
+  assert.equal(without.fields.some(f => f.key === 'contactCount'), false);
+  const withContact = customerProfileSchema('sales', ['view_contacts']);
+  assert.equal(withContact.fields.some(f => f.key === 'email'), true);
+  assert.equal(withContact.fields.some(f => f.key === 'phone'), true);
+  const email = withContact.fields.find(f => f.key === 'email');
+  assert.equal(email.sensitive, true);
+  assert.equal(without.fields.length, 22, 'sales without any view_* must see 22 fields');
+});
+
+test('customer_profile hides deepReport/sourceFile without view_recon and creatorName/customerSource without view_all_customers', () => {
+  const base = customerProfileSchema('sales', ['view_contacts']);
+  assert.equal(base.fields.some(f => f.key === 'deepReport'), false);
+  assert.equal(base.fields.some(f => f.key === 'sourceFile'), false);
+  assert.equal(base.fields.some(f => f.key === 'creatorName'), false);
+  assert.equal(base.fields.some(f => f.key === 'customerSource'), false);
+  const withRecon = customerProfileSchema('sales', ['view_contacts', 'view_recon']);
+  assert.equal(withRecon.fields.some(f => f.key === 'deepReport'), true);
+  assert.equal(withRecon.fields.some(f => f.key === 'sourceFile'), true);
+  const withAll = customerProfileSchema('admin', ['view_contacts', 'view_recon', 'view_all_customers']);
+  assert.equal(withAll.fields.some(f => f.key === 'creatorName'), true);
+  assert.equal(withAll.fields.some(f => f.key === 'customerSource'), true);
+});
+
+test('customer_profile is visible in listFieldPages and profileSections groups correctly', () => {
+  const { listFieldPages } = fieldCatalog();
+  assert.ok(listFieldPages().includes('customer_profile'));
+  const admin = customerProfileSchema('admin', ['view_contacts', 'view_recon', 'view_all_customers']);
+  const sections = profileSections(admin);
+  assert.equal(sections.length, 6);
+  assert.deepEqual(sections.map(s => s.section), ['identity_region', 'business_profile', 'product_focus', 'contact_channels', 'compliance', 'source_record']);
+  assert.deepEqual(sections.map(s => s.label), ['身份与地区', '业务画像', '产品关注', '联系渠道', '合规信息', '来源与记录']);
+  sections.forEach(sec => assert.ok(PROFILE_SECTION_LABELS[sec.section], `unknown section ${sec.section}`));
+  assert.equal(profileSections(null).length, 0);
+  assert.equal(profileSections({ fields: [] }).length, 0);
+});
+
+test('renderProfileFacts produces 6 sections for admin and respects permission filtering', () => {
+  const admin = customerProfileSchema('admin', ['view_contacts', 'view_recon', 'view_all_customers']);
+  const salesRestricted = customerProfileSchema('sales', []);
+  const data = { companyName: 'ACME', country: '俄罗斯', email: 'a@b.c', phone: '+7', deepReport: 'r1', creatorName: '系统导入', sanctionStatus: '未制裁', website: 'https://example.com' };
+  const html = renderProfileFacts({ schema: admin, data });
+  assert.match(html, /身份与地区/);
+  assert.match(html, /联系渠道/);
+  assert.match(html, /来源与记录/);
+  assert.equal((html.match(/profile-widget-section/g) || []).length, 6);
+  const htmlRestricted = renderProfileFacts({ schema: salesRestricted, data });
+  assert.doesNotMatch(htmlRestricted, /a@b\.c/);
+  assert.doesNotMatch(htmlRestricted, /系统导入/);
+  assert.equal(renderProfileFacts({ schema: null, data }), '');
+  assert.equal(renderProfileFacts({ schema: { fields: [] }, data }), '');
 });
