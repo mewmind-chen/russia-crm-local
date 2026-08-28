@@ -4,6 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  normalizeActivityReactionName,
+  activityReactionNameKey,
+  legacyProgressKey,
+  scopedActivityProvenance,
+} = require('../lib/domains/activity/present');
+
+const {
   normalizeCountry,
   normalizeEstablishedYear,
   normalizeAccountNickname,
@@ -138,6 +145,49 @@ test('publicAccountContact maps labels, source, and ids consistently', () => {
   assert.equal(contact.updatedBy, 'U-1');
   assert.equal(contact.archivedAt, '');
   assert.equal(publicAccountContact({ match_status: 'x', procurement_role: 'x', source_type: 'manual' }).matchStatusLabel, '待确认');
+});
+
+test('activity reaction name normalization collapses whitespace and enforces limits', () => {
+  const badRequest = message => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+  };
+  assert.equal(normalizeActivityReactionName('  有兴趣  跟进  '), '有兴趣 跟进');
+  assert.throws(() => normalizeActivityReactionName('', { badRequest }), /不能为空/);
+  assert.throws(() => normalizeActivityReactionName('a\u0000b', { badRequest }), /控制字符/);
+  assert.throws(() => normalizeActivityReactionName('  ', { badRequest }), /不能为空/);
+  assert.throws(() => normalizeActivityReactionName('a'.repeat(41), { badRequest }), /最多40/);
+});
+
+test('activity reaction name key lowercases in zh-CN and preserves whitespace folding', () => {
+  assert.equal(activityReactionNameKey('有兴趣'), '有兴趣');
+  assert.equal(activityReactionNameKey('A B'), 'a b');
+});
+
+test('legacyProgressKey maps social channels and falls back for others', () => {
+  assert.equal(legacyProgressKey('email', 'email'), 'email');
+  assert.equal(legacyProgressKey('social', 'WhatsApp'), 'whatsapp');
+  assert.equal(legacyProgressKey('social', 'Telegram'), 'telegram');
+  assert.equal(legacyProgressKey('social', 'LinkedIn'), 'linkedin');
+  assert.equal(legacyProgressKey('social', '展会'), 'social');
+  assert.equal(legacyProgressKey('note', 'other'), 'note');
+});
+
+test('scopedActivityProvenance hides replacement ids that are not visible', () => {
+  const visible = new Set(['ACT-1']);
+  const superseded = { kind: 'superseded_original', replacementActivityId: 'ACT-9', replacementCustomerId: 'CRM-9' };
+  assert.deepEqual(scopedActivityProvenance({ provenance: superseded, superseded_by: 'ACT-9' }, visible), {
+    kind: 'superseded_original', replacementActivityId: '', replacementCustomerId: '',
+  });
+  assert.deepEqual(scopedActivityProvenance({ provenance: { ...superseded, replacementActivityId: 'ACT-1' }, superseded_by: 'ACT-1' }, visible), {
+    kind: 'superseded_original', replacementActivityId: 'ACT-1', replacementCustomerId: 'CRM-9',
+  });
+  const replacement = { kind: 'replacement', originalActivityId: 'ACT-9', originalCustomerId: 'CRM-9' };
+  assert.deepEqual(scopedActivityProvenance({ provenance: replacement }, visible), {
+    kind: 'replacement', originalActivityId: '', originalCustomerId: '',
+  });
+  assert.equal(scopedActivityProvenance({ provenance: null }, visible), null);
 });
 
 test('creatorDisplayName resolves system, named, and unknown creators', () => {
