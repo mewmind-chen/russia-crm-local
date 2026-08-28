@@ -18,6 +18,7 @@ const { publicActivityRecord, publicActivityRecords } = require('../lib/domains/
 const { resolveActivityReaction } = require('../lib/domains/activity/request');
 const { noPlanStreakForActivities } = require('../lib/domains/planning/streak');
 const { reasonOrder, urgencyFor, groupAlerts } = require('../lib/domains/planning/alerts');
+const { emptyCustomerPlanRisk } = require('../lib/domains/planning/risk');
 
 const {
   normalizeCountry,
@@ -336,6 +337,16 @@ test('groupAlerts merges overdue-claim siblings and orders groups by urgency', (
   const group = grouped[0];
   assert.equal(group.reasonCount, 2, 'overdue claims merge into one semantic reason');
   assert.equal(group.maxOverdueHours, 2);
+});
+
+test('emptyCustomerPlanRisk builds the no-risk fallback frame', () => {
+  const risk = emptyCustomerPlanRisk({ customerId: 'CRM-1' }, { id: 'CRM-1', external_customer_id: 'RU-1', owner_id: 'U-1' });
+  assert.equal(risk.customerId, 'RU-1');
+  assert.equal(risk.accountId, 'CRM-1');
+  assert.equal(risk.currentOwnerId, 'U-1');
+  assert.equal(risk.state, 'none');
+  assert.equal(risk.currentConsecutiveDeferredCount, 0);
+  assert.deepEqual(risk.history, []);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
