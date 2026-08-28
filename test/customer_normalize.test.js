@@ -16,6 +16,7 @@ const {
 } = require('../lib/domains/activity/progress');
 const { publicActivityRecord, publicActivityRecords } = require('../lib/domains/activity/serialize');
 const { resolveActivityReaction } = require('../lib/domains/activity/request');
+const { noPlanStreakForActivities } = require('../lib/domains/planning/streak');
 
 const {
   normalizeCountry,
@@ -288,6 +289,30 @@ test('resolveActivityReaction surfaces stale, invalid, and mismatch errors', () 
   const different = { id: 'R9', name: '其他' };
   assert.throws(() => resolveActivityReaction({ reactionOptionId: 'R1', outcome: '有兴趣' }, { ...opts,
     findReactionById: () => ({ id: 'R1', name: '有兴趣' }), findReactionByKey: () => different }), /与文字不一致/);
+});
+
+test('noPlanStreakForActivities counts trailing no-plan activities in time order', () => {
+  const mk = (id, at, no) => ({ id, occurred_at: at, no_plan: no });
+  const streak = noPlanStreakForActivities([
+    mk('A1', '2026-08-20 10:00:00', 0),
+    mk('A2', '2026-08-21 10:00:00', 1),
+    mk('A3', '2026-08-22 10:00:00', 1),
+    mk('A4', '2026-08-23 10:00:00', 1),
+  ]);
+  assert.equal(streak.count, 3);
+  assert.equal(streak.streakStartId, 'A2');
+});
+
+test('noPlanStreakForActivities stops at a planned activity and ignores test data', () => {
+  const mk = (id, at, no, test) => ({ id, occurred_at: at, no_plan: no, is_test_data: test });
+  const streak = noPlanStreakForActivities([
+    mk('A1', '2026-08-20 10:00:00', 0, 0),
+    mk('A2', '2026-08-21 10:00:00', 1, 1),
+    mk('A3', '2026-08-22 10:00:00', 0, 0),
+  ]);
+  assert.equal(streak.count, 0);
+  assert.equal(streak.streakStartId, '');
+  assert.equal(noPlanStreakForActivities([]).count, 0);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
