@@ -12,6 +12,7 @@ const {
 const { validateRecycleReason } = require('../lib/domains/customer/recycle');
 const { customerCreateRequestHash } = require('../lib/domains/customer/create');
 const { creatorDisplayName, historyAccountSummary, changedFieldLabels } = require('../lib/domains/customer/summary');
+const { publicAccountContact } = require('../lib/domains/customer/contacts');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -118,6 +119,25 @@ test('changedFieldLabels maps account labels and falls back to raw field names',
   assert.deepEqual(changedFieldLabels({ unknownField: { from: 'a', to: 'b' } }, 'to'),
     { unknownField: 'b' });
   assert.deepEqual(changedFieldLabels(null, 'to'), {});
+});
+
+test('publicAccountContact maps labels, source, and ids consistently', () => {
+  const contact = publicAccountContact({
+    id: 'CON-1', customer_id: 'CRM-1', external_customer_id: 'RU-1',
+    name: 'Buyer', title: 'Procurement', department: 'Purchasing',
+    phone: '+7', email: 'b@x.test', social: '',
+    match_status: 'match', procurement_role: 'yes', work_content: 'engine',
+    source_type: 'recon', created_by: 'U-1', updated_by: '',
+    created_at: 't', updated_at: 't', archived_at: '',
+  });
+  assert.equal(contact.id, 'local:CON-1');
+  assert.equal(contact.rawId, 'CON-1');
+  assert.equal(contact.matchStatusLabel, '对口');
+  assert.equal(contact.procurementRoleLabel, '负责采购');
+  assert.equal(contact.sourceLabel, '联系人研究');
+  assert.equal(contact.updatedBy, 'U-1');
+  assert.equal(contact.archivedAt, '');
+  assert.equal(publicAccountContact({ match_status: 'x', procurement_role: 'x', source_type: 'manual' }).matchStatusLabel, '待确认');
 });
 
 test('creatorDisplayName resolves system, named, and unknown creators', () => {
