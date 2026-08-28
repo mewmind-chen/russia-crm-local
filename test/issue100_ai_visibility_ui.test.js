@@ -22,10 +22,15 @@ test('one effective AI station gate controls every business AI surface', () => {
 });
 
 test('disabled intake rendering removes AI headers, cells and the third decision track', () => {
-  assert.match(app, /const intakeHeaders = \[[\s\S]*?\.\.\.\(showAI \? \['Fit \/ readiness \/ 优先级'\] : \[\]\)/);
-  assert.match(app, /\.\.\.\(showAssignmentAI \? \['候选销售排名'\] : \[\]\)/);
+  // AI 门控契约：showAI/showAssignmentAI 驱动列定义，schema 就绪时由 intakeColumnKeys
+  // 进一步裁剪（等价性由 field_catalog.test.js 的 intake columns match legacy gates 覆盖）。
+  assert.match(app, /const showAI = technicalAIPresentationAllowed\(\)/);
+  assert.match(app, /const showAssignmentAI = showAI && !salesView/);
+  assert.match(app, /header: 'Fit \/ readiness \/ 优先级', fieldClass: 'col-fit', visible: showAI/);
+  assert.match(app, /header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI/);
   assert.match(app, /salesView \? '负责人' : '负责人 \/ 阻断原因'/);
-  assert.match(app, /const row = showAI\s*\? \[businessColumns\[0\], \.\.\.aiColumns, \.\.\.businessColumns\.slice\(1\)\]\s*: businessColumns/);
+  assert.match(app, /const intakeColumns = \[[\s\S]*?\]\.filter\(column => \{/);
+  assert.match(app, /const row = intakeColumns\.map\(column => \(\{/);
   assert.match(app, /<div class="decision-review-grid \$\{showAI \? '' : 'without-ai'\}">/);
   assert.match(css, /\.decision-review-grid\.without-ai\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/);
   assert.match(app, /const suggestedOwnerId = customerAIEnabled\(\) \? item\.suggested_owner_id : ''/);

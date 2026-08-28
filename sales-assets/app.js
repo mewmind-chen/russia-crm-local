@@ -67,6 +67,7 @@
   const state = {
     data: null,
     view: 'dashboard',
+    fieldSchemas: {},
     selectedCustomerId: '',
     timelineModalEvents: [],
     alertSeverity: '',
@@ -252,6 +253,46 @@
       },
     },
   };
+
+  // —— 字段目录试点 ——
+  // 服务端按 角色+权限+开关 计算有效字段 schema（见 lib/field_catalog.js），前端按 schema
+  // 驱动抽屉事实区与线索池列渲染；schema 未就绪或接口失败时回退到硬编码实现，保证契约测试
+  // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
+  // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
+  let fieldSchemaRenderEpoch = 0;
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow']) {
+    const requestedKeys = pageKeys.slice();
+    let loaded = 0;
+    for (const pageKey of requestedKeys) {
+      try {
+        const response = await api(`/api/sales-crm/field-schema/${encodeURIComponent(pageKey)}`);
+        if (response?.ok && response.schema?.fields?.length) {
+          state.fieldSchemas[pageKey] = response.schema;
+          loaded += 1;
+        }
+      } catch (_error) {
+        // 保持静默，回退到原有渲染
+      }
+    }
+    if (!loaded) return;
+    const epoch = ++fieldSchemaRenderEpoch;
+    // 仅当此刻正在展示依赖 schema 的视图时才重绘，避免无关页面被反复刷新。
+    // 竞态保护：新一轮 preload 启动时 epoch 递增，旧一轮的延迟重绘会被放弃。
+    requestAnimationFrame(() => {
+      if (epoch !== fieldSchemaRenderEpoch) return;
+      if (state.data && state.selectedCustomerId
+        && $('#customerDrawer')?.classList.contains('open')
+        && state.data.accounts?.some(item => item.id === state.selectedCustomerId)) {
+        renderDrawer();
+      }
+      if (state.data && state.view === 'customerProfile' && state.selectedCustomerId) {
+        renderCustomerProfileHeader();
+      }
+      if (state.data && state.view === 'pool') {
+        renderIntake();
+      }
+    });
+  }
 
   const viewMeta = {
     dashboard: ['经营概览', '经营驾驶舱'],
@@ -1581,6 +1622,7 @@
     resetActivityCorrectionState();
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      void preloadFieldSchemas();
       const bootstrapReactions = bootstrapActivityReactions(state.data);
       renderAppVersionBadge();
       state.activityReactions = normalizeActivityReactions(bootstrapReactions);
@@ -2909,15 +2951,25 @@
     renderIntakeAssignmentBar();
     const showAI = technicalAIPresentationAllowed();
     const showAssignmentAI = showAI && !salesView;
-    const intakeHeaders = [
-      '线索资料 / 客户标签',
-      ...(showAI ? ['Fit / readiness / 优先级'] : []),
-      ...(showAssignmentAI ? ['候选销售排名'] : []),
-      '联系质量 / 联系人',
-      salesView ? '负责人' : '负责人 / 阻断原因',
-      '状态 / 时限',
-      '操作',
-    ];
+    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+    const intakeSchema = state.fieldSchemas?.intake || state.fieldSchemas?.lead_flow;
+    const schemaColumns = fieldWidget ? fieldWidget.intakeColumnKeys(intakeSchema) : null;
+    // 列由字段目录驱动：schema 就绪时按服务端可见字段裁剪列（candidates/actions 非数据字段，
+    // 分别沿用原 AI 开关与固定显示逻辑）；schema 缺失时回退到原硬编码列。
+    const intakeColumns = [
+      { key: 'company', header: '线索资料 / 客户标签', fieldClass: 'col-company', visible: true },
+      { key: 'fit', header: 'Fit / readiness / 优先级', fieldClass: 'col-fit', visible: showAI },
+      { key: 'candidates', header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI },
+      { key: 'contact', header: '联系质量 / 联系人', fieldClass: 'col-contact', visible: true },
+      { key: 'owner', header: salesView ? '负责人' : '负责人 / 阻断原因', fieldClass: 'col-owner', visible: true },
+      { key: 'status', header: '状态 / 时限', fieldClass: 'col-status', visible: true },
+      { key: 'actions', header: '操作', fieldClass: 'col-actions', visible: true },
+    ].filter(column => {
+      if (column.key === 'candidates' || column.key === 'actions') return column.visible;
+      return schemaColumns ? schemaColumns.includes(column.key) : column.visible;
+    });
+    const intakeHeaders = intakeColumns.map(column => column.header);
+    const intakeColumnClasses = intakeColumns.map(column => column.fieldClass);
     if (canManualAssign) {
       intakeHeaders.unshift('<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>');
     }
@@ -2999,9 +3051,15 @@
           `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
           ...(showAssignmentAI ? [`<div class="ranked-candidates">${layers.ai}</div>`] : []),
         ];
-        const row = showAI
-          ? [businessColumns[0], ...aiColumns, ...businessColumns.slice(1)]
-          : businessColumns;
+        const row = intakeColumns.map(column => ({
+          company: businessColumns[0],
+          fit: aiColumns[0],
+          candidates: aiColumns[1],
+          contact: businessColumns[1],
+          owner: businessColumns[2],
+          status: businessColumns[3],
+          actions: businessColumns[4],
+        }[column.key]));
         if (canManualAssign) {
           row.unshift(intakeItemAssignable(item)
             ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.intakeSelectAllScope || state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
@@ -3013,10 +3071,7 @@
     );
     applyTableColumnClasses($('#intakeTable'), [
       canManualAssign ? 'col-check' : '',
-      'col-company',
-      ...(showAI ? ['col-fit'] : []),
-      ...(showAssignmentAI ? ['col-candidates'] : []),
-      'col-contact', 'col-owner', 'col-status', 'col-actions',
+      ...intakeColumnClasses,
     ]);
     if (!items.length) $('#intakeTable').innerHTML = '<div class="empty">暂无符合条件的线索</div>';
     const selectVisible = $('#selectVisibleIntake');
@@ -9704,6 +9759,32 @@
       ['官网', account.website, 'website'],
       ['联系人质量', account.best_contact_level],
     ];
+    // 字段目录试点：schema 就绪时按服务端字段 schema 渲染事实区（见 lib/field_catalog.js），
+    // 否则回退到 accountFacts 硬编码渲染。window.TradePulseFieldWidget 缺失时同样回退。
+    let factsHtml = '';
+    const schemaFacts = state.fieldSchemas?.crm_drawer;
+    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+    if (schemaFacts?.fields?.length && fieldWidget) {
+      try {
+        factsHtml = window.TradePulseFieldWidget.renderFacts({
+          schema: schemaFacts,
+          data: account,
+          formatters: {
+            text: (item, field) => item?.[field.sourceKey],
+            textOrDash: (item, field) => item?.[field.sourceKey] || field.defaultValue || '—',
+            creator: item => creatorDisplayName(item),
+            relative: (item, field) => relative(item?.[field.sourceKey]),
+            aiLabels: item => technicalAIPresentationAllowed()
+              ? (labelsForAccount(item.id).join('、') || '暂无AI标签') : '',
+            managerStatus: item => item.manager_status
+              || (item.manager_required ? '待介入' : '暂不需要'),
+            website: item => websiteMarkup(item?.website),
+          },
+        });
+      } catch (_error) {
+        factsHtml = '';
+      }
+    }
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
@@ -9711,7 +9792,7 @@
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div>${nextActionTimeMarkup(account)}</div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
-        ${accountFacts.map(drawerFactMarkup).join('')}
+        ${factsHtml || accountFacts.map(drawerFactMarkup).join('')}
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
@@ -11413,6 +11494,7 @@
     const previousAIEnabled = Boolean(previous?.features?.aiStations);
     const previousSalesPackEnabled = previousAIEnabled && Boolean(previous?.features?.salesPack);
     const next = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+    void preloadFieldSchemas();
     for (const config of Object.values(researchConfig)) {
       if (previous?.[config.dataKey]?.length) next[config.dataKey] = previous[config.dataKey];
     }
