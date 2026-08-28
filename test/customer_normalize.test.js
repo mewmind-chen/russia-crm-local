@@ -11,6 +11,7 @@ const {
 } = require('../lib/domains/customer/normalize');
 const { validateRecycleReason } = require('../lib/domains/customer/recycle');
 const { customerCreateRequestHash } = require('../lib/domains/customer/create');
+const { creatorDisplayName, historyAccountSummary } = require('../lib/domains/customer/summary');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -107,4 +108,29 @@ test('customerCreateRequestHash is stable and ignores the client idempotency key
   assert.equal(customerCreateRequestHash(user, { ...payload, idempotencyKey: 'b' }), first);
   assert.notEqual(customerCreateRequestHash({ id: 'U-2' }, payload), first);
   assert.notEqual(customerCreateRequestHash(user, { ...payload, country: '巴西' }), first);
+});
+
+test('creatorDisplayName resolves system, named, and unknown creators', () => {
+  assert.equal(creatorDisplayName({ created_by: 'system' }), '系统导入');
+  assert.equal(creatorDisplayName({ created_by: 'U-1', creator_name: 'Anna' }), 'Anna');
+  assert.equal(creatorDisplayName({ created_by: 'U-1' }), '历史数据/未知');
+  assert.equal(creatorDisplayName(null), '历史数据/未知');
+});
+
+test('historyAccountSummary maps account rows to the development-history shape', () => {
+  assert.deepEqual(historyAccountSummary({
+    company_name: ' Firm ', nickname: ' 昵称 ', external_customer_id: 'RU-1',
+    country: '俄罗斯', stage: 'meeting', assignment_status: 'claimed',
+    lifecycle_status: 'active',
+  }), {
+    companyName: 'Firm', nickname: '昵称', externalCustomerId: 'RU-1',
+    country: '俄罗斯', stageLabel: '深度沟通', status: 'CRM 客户',
+  });
+  assert.equal(historyAccountSummary({
+    assignment_status: 'returned', lifecycle_status: 'recycled', stage: 'unknown-stage',
+  }).status, '已退回线索池');
+  assert.equal(historyAccountSummary({
+    assignment_status: 'claimed', lifecycle_status: 'recycled', stage: 'unknown-stage',
+  }).status, '历史客户');
+  assert.equal(historyAccountSummary({ stage: 'unknown-stage' }).stageLabel, 'unknown-stage');
 });
