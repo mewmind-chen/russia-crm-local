@@ -161,3 +161,13 @@ test('frontend recycle guards consume the unified state DTO first', () => {
   assert.match(appSource, /account\.state\.assignment\.key === 'returned'/);
   assert.match(appSource, /canReturnCustomer\(account\)[\s\S]{0,220}accountLifecycleActive/);
 });
+
+test('frontend stage and manager display fall back to the unified state DTO', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+  assert.match(appSource, /function accountStageOf\(account\)/);
+  assert.match(appSource, /account\?\.stage \|\| account\?\.state\?\.stage\?\.key/);
+  assert.match(appSource, /function managerStateDisplay\(account\)/);
+  assert.match(appSource, /account\?\.state\?\.manager\?\.status/);
+  assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)/);
+  assert.match(appSource, /\['管理介入', managerStateDisplay\(account\)\]/);
+});

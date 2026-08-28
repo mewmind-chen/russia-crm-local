@@ -4302,6 +4302,15 @@
     return String(account?.assignment_status || '') === 'returned';
   }
 
+  function accountStageOf(account) {
+    return account?.stage || account?.state?.stage?.key || '';
+  }
+
+  function managerStateDisplay(account) {
+    if (account?.state?.manager?.status) return account.state.manager.status;
+    return account?.manager_status || (account?.manager_required ? '待介入' : '暂不需要');
+  }
+
   function canReturnCustomer(account) {
     if (!account || !can('manage_customer_recycle')) return false;
     if (!accountLifecycleActive(account)) return false;
@@ -4424,7 +4433,7 @@
             [accountIdentity(account), hostLabel(account.website || account.domain)],
           ),
           `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
-          statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
+          statusMarkup(accountStageOf(account), { [accountStageOf(account)]: stageLabel(accountStageOf(account)) }),
           `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
           `<span>${relative(account.last_activity_at)}</span>`,
           `<span class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</span><div class="id">${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</div>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}`,
@@ -9898,7 +9907,7 @@
       allowNickname: false,
     });
     syncStarButton($('#drawerStarBtn'), account);
-    $('#drawerStage').textContent = stageLabel(account.stage);
+    $('#drawerStage').textContent = stageLabel(accountStageOf(account));
     $('#drawerCompany').textContent = accountDisplayName(account);
     $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
     const activities = state.data.activities.filter(item => item.customer_id === account.id);
@@ -9915,7 +9924,7 @@
       ['成立年份', account.established_year || '未填写'],
       ...(technicalAIPresentationAllowed() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
-      ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
+      ['管理介入', managerStateDisplay(account)],
       ['官网', account.website, 'website'],
       ['联系人质量', account.best_contact_level],
     ];

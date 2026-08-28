@@ -181,6 +181,7 @@ function executableDrawerLifecycle() {
     'hasMeaningfulAlertCopy', 'alertReasons', 'esc', 'shortDate', 'sourceTagMarkup',
     'drawerFactMarkup', 'customerAiSection', 'can', 'canReturnCustomer',
     'canRejectCustomer', 'renderActivityTimelineItem', 'nextActionTimeMarkup',
+    'accountStageOf', 'managerStateDisplay',
   ];
   const identity = value => String(value || '');
   const dependencyValues = [
@@ -189,6 +190,8 @@ function executableDrawerLifecycle() {
     () => false, () => [], identity, identity, () => '', () => '',
     () => '', () => '', () => false, () => false, () => false, () => '',
     value => `<span data-next-action-time>${identity(value.next_action_at)}</span>`,
+    account => account?.stage || account?.state?.stage?.key || '',
+    account => account?.state?.manager?.status || account?.manager_status || (account?.manager_required ? '待介入' : '暂不需要'),
   ];
   const compile = Function(
     'state', '$', 'document', 'setInterval', 'clearInterval',
