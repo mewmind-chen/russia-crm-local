@@ -168,3 +168,25 @@ test('mountContacts loads the live profile and renders into the host element', a
     global.fetch = originalFetch;
   }
 });
+
+test('profile widget respects hiddenSections preferences when rendering facts', () => {
+  const { renderProfileFacts, profileSections, normalizeProfilePreferences } = require('../sales-assets/field-widget');
+  const schema = {
+    fields: [
+      { key: 'customerId', label: '客户ID', section: 'identity_region', sourceKey: 'customerId', kind: 'text' },
+      { key: 'companyName', label: '公司名称', section: 'identity_region', sourceKey: 'companyName', kind: 'text' },
+      { key: 'email', label: '邮箱', section: 'contact_channels', sourceKey: 'email', kind: 'text' },
+      { key: 'phone', label: '电话', section: 'contact_channels', sourceKey: 'phone', kind: 'text' },
+      { key: 'deepReport', label: '深度报告', section: 'source_record', sourceKey: 'deepReport', kind: 'text' },
+    ],
+  };
+  const preferences = normalizeProfilePreferences({ hiddenSections: ['contact_channels'] });
+  const sections = profileSections(schema, preferences);
+  assert.equal(sections.some(section => section.section === 'contact_channels'), false);
+  assert.equal(sections.length, 2);
+  const html = renderProfileFacts({ schema, data: { customerId: 'RU-9001', companyName: 'ACME', email: 'a@b.c', phone: '+7', deepReport: 'r1' }, preferences });
+  assert.doesNotMatch(html, /邮箱/);
+  assert.doesNotMatch(html, /a@b\.c/);
+  assert.match(html, /客户ID/);
+  assert.match(html, /深度报告/);
+});

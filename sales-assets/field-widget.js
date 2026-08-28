@@ -77,11 +77,20 @@
     other: '其他',
   });
 
-  function profileSections(schema) {
+  function normalizeProfilePreferences(preferences = {}) {
+    const hiddenSections = Array.isArray(preferences.hiddenSections)
+      ? [...new Set(preferences.hiddenSections.map(section => String(section || '').trim()).filter(Boolean))]
+      : [];
+    return Object.freeze({ hiddenSections });
+  }
+
+  function profileSections(schema, preferences = {}) {
     if (!schema || !Array.isArray(schema.fields) || !schema.fields.length) return [];
+    const hiddenSections = new Set(normalizeProfilePreferences(preferences).hiddenSections);
     const groups = new Map();
     for (const field of schema.fields) {
       const section = field.section || 'other';
+      if (hiddenSections.has(section)) continue;
       if (!groups.has(section)) groups.set(section, []);
       groups.get(section).push(field);
     }
@@ -94,8 +103,8 @@
 
   // 按 section 分组渲染客户完整资料区块；data 为 getCustomerProfileData 返回的 customerPool[0]
   // 合并结构（buildPoolCustomer + profileAccess 等），formatters 与 renderFacts 同构。
-  function renderProfileFacts({ schema, data, formatters = {} }) {
-    const sections = profileSections(schema);
+  function renderProfileFacts({ schema, data, formatters = {}, preferences = {} }) {
+    const sections = profileSections(schema, preferences);
     if (!sections.length) return '';
     return sections.map(({ label, fields }) => {
       const facts = renderFacts({ schema: { fields }, data, formatters });
@@ -112,6 +121,7 @@
   return Object.freeze({
     INTAKE_COLUMN_FIELDS,
     PROFILE_SECTION_LABELS,
+    normalizeProfilePreferences,
     intakeColumnKeys,
     profileSections,
     renderFacts,

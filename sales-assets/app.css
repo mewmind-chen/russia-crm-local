@@ -395,6 +395,11 @@ body.profile-widgets-only .customer-profile-frame.hidden{display:none !important
 .profile-widget-section .fact span{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}
 .profile-widget-section .fact strong{font-size:11px}
 .profile-widget-section .tp-website{display:inline-block;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.profile-widget-preferences{border:1px dashed var(--line);border-radius:12px;background:var(--surface-panel);padding:10px 12px;display:grid;gap:8px}
+.profile-widget-preference-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.profile-widget-preference-head strong{font-size:12px}
+.profile-widget-preference-actions{display:flex;flex-wrap:wrap;gap:8px}
+.profile-widget-preference-actions .button.tiny{min-height:26px;padding:0 10px;font-size:11px;border-radius:999px}
 .profile-widget{display:grid;gap:12px}
 .profile-widget-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .profile-widget-head .eyebrow{font-size:8px;margin-bottom:2px}

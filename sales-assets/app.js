@@ -3098,6 +3098,39 @@
     try { return new URLSearchParams(location.search).get('profileView') === 'widgets'; } catch (_e) { return false; }
   }
 
+  function profilePreferencesKey() {
+    return `tp-profile-prefs:${String(state.data?.user?.id || 'anonymous')}`;
+  }
+
+  function defaultProfilePreferences() {
+    return Object.freeze({ hiddenSections: [] });
+  }
+
+  function loadProfilePreferences() {
+    try {
+      const raw = window.localStorage?.getItem(profilePreferencesKey()) || '';
+      if (!raw) return defaultProfilePreferences();
+      const parsed = JSON.parse(raw);
+      const hiddenSections = Array.isArray(parsed.hiddenSections) ? parsed.hiddenSections : [];
+      return Object.freeze({ hiddenSections: [...new Set(hiddenSections.map(value => String(value || '').trim()).filter(Boolean))] });
+    } catch (_e) {
+      return defaultProfilePreferences();
+    }
+  }
+
+  function saveProfilePreferences(preferences) {
+    try { window.localStorage?.setItem(profilePreferencesKey(), JSON.stringify(preferences || defaultProfilePreferences())); } catch (_e) {}
+  }
+
+  function toggleProfileSectionPreference(section) {
+    const current = loadProfilePreferences();
+    const hidden = new Set(current.hiddenSections);
+    if (hidden.has(section)) hidden.delete(section); else hidden.add(section);
+    const next = Object.freeze({ hiddenSections: [...hidden] });
+    saveProfilePreferences(next);
+    return next;
+  }
+
   function applyProfileViewMode() {
     const on = isProfileWidgetsMode();
     document.body.classList.toggle('profile-widgets-only', on);
@@ -3114,6 +3147,7 @@
     if (typeof window.TradePulseProfileWidgets === 'undefined') return;
     const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
     const profileSchema = state.fieldSchemas?.customer_profile;
+    const profilePreferences = loadProfilePreferences();
     if (fieldWidget && profileSchema?.fields?.length) {
       const account = state.data?.accounts?.find(item => item.external_customer_id === externalCustomerId);
       let poolRecord = null;
@@ -3131,6 +3165,7 @@
         schema: profileSchema,
         data: profileFactsData(account, poolRecord),
         formatters: profileFactsFormatters(),
+        preferences: profilePreferences,
       });
       if (facts) {
         const host = document.createElement('div');
@@ -3138,6 +3173,13 @@
         host.innerHTML = facts;
         widgetRoot.appendChild(host);
       }
+      const preferenceBar = document.createElement('div');
+      preferenceBar.className = 'profile-widget-preferences';
+      preferenceBar.innerHTML = `<div class="profile-widget-preference-head"><strong>字段显示偏好</strong><span class="subtle">仅隐藏当前视图区块，不影响权限或数据下发</span></div><div class="profile-widget-preference-actions">${fieldWidget.profileSections(profileSchema, profilePreferences).map(section => {
+        const hidden = profilePreferences.hiddenSections.includes(section.section);
+        return `<button class="button secondary tiny" type="button" data-profile-section-toggle="${esc(section.section)}">${hidden ? '显示' : '隐藏'} ${esc(section.label)}</button>`;
+      }).join('')}</div>`;
+      widgetRoot.appendChild(preferenceBar);
     }
     applyProfileViewMode();
     window.TradePulseProfileWidgets.mountContacts(widgetRoot, {
@@ -12500,6 +12542,23 @@
     }
     const nav = event.target.closest('[data-view]');
     if (nav) switchView(nav.dataset.view);
+    const profileSectionToggle = event.target.closest('[data-profile-section-toggle]');
+    if (profileSectionToggle) {
+      const section = String(profileSectionToggle.dataset.profileSectionToggle || '').trim();
+      if (section) {
+        const next = toggleProfileSectionPreference(section);
+        const label = profileSectionToggle.textContent || '';
+        profileSectionToggle.textContent = profileSectionToggle.textContent.includes('隐藏')
+          ? profileSectionToggle.textContent.replace('隐藏', '显示')
+          : profileSectionToggle.textContent.replace('显示', '隐藏');
+        if (state.view === 'customerProfile' && state.customerProfileExternalId) {
+          void mountCustomerProfileWidgets(state.customerProfileExternalId, state.customerProfileIntakeItemId);
+        } else {
+          saveProfilePreferences(next);
+        }
+      }
+      return;
+    }
     const go = event.target.closest('[data-go]');
     if (go) switchView(go.dataset.go);
     const teamSection = event.target.closest('[data-team-section]');
