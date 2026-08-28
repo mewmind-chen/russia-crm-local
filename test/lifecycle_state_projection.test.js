@@ -126,6 +126,20 @@ test('master profile without CRM account does not include state', async t => {
   assert.ok(profile.customerPool, 'profile payload must still include customer data');
 });
 
+test('pipeline list rows include state projection', async t => {
+  const fx = await adminFixture({});
+  t.after(() => fx.close());
+  const response = await fx.request('/api/sales-crm/lists/pipeline', { cookie: fx.adminCookie });
+  const body = await response.json();
+  assert.equal(response.status, 200, body.error);
+  assert.ok(body.rows.length > 0);
+  for (const row of body.rows) {
+    assert.ok('state' in row, 'each pipeline row must have state');
+    assert.ok(row.state.stage, 'state.stage must be present');
+    assert.ok('stage' in row, 'legacy stage field must be preserved');
+  }
+});
+
 test('sales user profile for out-of-scope account does not include state', async t => {
   const fx = await seededFixture({ managerViewAll: false });
   t.after(() => fx.close());
