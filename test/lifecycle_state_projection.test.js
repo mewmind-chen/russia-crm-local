@@ -214,3 +214,36 @@ test('account whitelist projection matches the legacy blacklist apart from the s
   assert.equal(redacted.state.nextAction, undefined,
     'legacy blacklist strips state.nextAction recursively');
 });
+
+test('pipeline whitelist projection keeps reaction and queue fields like the blacklist', () => {
+  const { redactContactFields, contactSafePipelineRecord } = require('../lib/domains/identity');
+  const row = {
+    id: 'CRM-1', external_customer_id: 'RU-1', company_name: 'Firm', nickname: '',
+    country: 'RU', city: '', website: '', industry: '', customer_type: '',
+    source: '', priority: 'B', potential_value: 0, stage: 'meeting', owner_id: 'U-1',
+    manager_required: 1, manager_status: '待介入', last_activity_at: 't',
+    next_action: '秘密跟进', next_action_at: 't', created_at: 't', updated_at: 't',
+    assignment_status: 'claimed', lifecycle_status: 'active',
+    owner_name: 'A', creator_name: 'C', stageLabel: '深度沟通',
+    latest_reaction: '有回复', latest_progress_key: 'reply',
+    latest_activity_summary: '秘密摘要', rfq_count: 1, quote_count: 0, order_count: 0,
+    actionQueueKeys: ['due_followup'], actionQueueLabels: ['到期跟进'],
+    state: {
+      stage: { key: 'meeting', terminal: false },
+      lifecycle: { key: 'active', recycled: false },
+      assignment: { key: 'claimed', ownerId: 'U-1', current: true },
+      manager: { required: true, status: '待介入' },
+      nextAction: { text: '秘密跟进', at: 't', planned: true, degraded: false, overdue: false },
+    },
+  };
+  const redacted = redactContactFields(row);
+  const projected = contactSafePipelineRecord(row);
+  const { state: _redactedState, ...redactedRest } = redacted;
+  const { state: _projectedState, ...projectedRest } = projected;
+  assert.deepEqual(projectedRest, redactedRest,
+    'pipeline keys must be identical to the legacy blacklist output');
+  assert.equal(projected.actionQueueKeys[0], 'due_followup',
+    'action queue must stay visible for the pipeline board');
+  assert.equal(projected.state.nextAction.text, '',
+    'pipeline state.nextAction text must be hidden');
+});
