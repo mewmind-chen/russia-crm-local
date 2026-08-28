@@ -381,6 +381,46 @@ button.metric.alert{background:var(--danger-subtle)}
 .customer-profile-actions{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .customer-profile-toolbar h2{margin:2px 0 0;font-size:17px}
 .customer-profile-frame{grid-row:3;display:block;width:100%;height:100%;min-height:0;border:0;background:var(--surface-panel)}
+
+/* Profile widgets: first-party customer profile modules above the legacy iframe detail layer */
+.customer-profile-widgets{grid-row:2;min-height:0;overflow:auto;border-bottom:1px solid var(--line);background:var(--surface-page)}
+.profile-widget-host{display:grid;gap:12px;padding:14px 16px}
+.profile-widget-facts{display:grid;gap:12px}
+.profile-widget-section{border:1px solid var(--line);border-radius:12px;background:var(--surface-panel);padding:12px 14px}
+.profile-widget-section h3{margin:0 0 8px;font-size:12px;color:var(--text-secondary);letter-spacing:.02em}
+.profile-widget-section .fact{background:var(--surface-subtle);border-radius:9px;padding:10px;min-width:0}
+.profile-widget-section .fact span{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}
+.profile-widget-section .fact strong{font-size:11px}
+.profile-widget-section .tp-website{display:inline-block;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.profile-widget{display:grid;gap:12px}
+.profile-widget-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.profile-widget-head .eyebrow{font-size:8px;margin-bottom:2px}
+.profile-widget-head h3{margin:0;font-size:14px}
+.profile-widget-body{display:grid;gap:12px}
+.profile-widget-master-channels{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.profile-widget-master-channels strong{color:var(--text-primary);font-weight:600}
+.profile-widget-contact-list{display:grid;gap:10px}
+.profile-widget-contact-card{border:1px solid var(--line);border-radius:10px;background:var(--surface-panel);padding:11px 13px;display:grid;gap:8px}
+.profile-widget-contact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.profile-widget-contact-head strong{font-size:13px}
+.profile-widget-contact-meta{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.profile-widget-contact-methods{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.profile-widget-contact-flags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px}
+.profile-widget-contact-actions{display:flex;gap:6px;justify-content:flex-end}
+.profile-widget-pill{border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:11px;color:var(--muted);flex:0 0 auto}
+.profile-widget-pill.muted{opacity:.65}
+.profile-widget-muted{font-size:11px;color:var(--muted)}
+.profile-widget-empty{font-size:12px;color:var(--muted);padding:16px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+.profile-widget-contact-form{border:1px solid var(--line);border-radius:10px;background:var(--surface-subtle);padding:12px}
+.profile-widget-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.profile-widget-form-grid .span-2{grid-column:span 2}
+.profile-widget-form-grid label{display:grid;gap:4px;font-size:11px;color:var(--muted)}
+.profile-widget-form-grid input{border:1px solid var(--line);border-radius:8px;background:var(--surface-panel);color:var(--text-primary);padding:8px 10px;font-size:12px;outline:none}
+.profile-widget-form-grid input:focus{border-color:#57a582;box-shadow:0 0 0 3px rgba(87,165,130,.12)}
+.profile-widget-form-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}
+.profile-widget-form-status{font-size:11px;color:var(--muted);margin-right:auto}
+@media(max-width:780px){.profile-widget-form-grid{grid-template-columns:1fr}.profile-widget-form-grid .span-2{grid-column:span 1}}
+body[data-theme="deck"] .profile-widget-contact-card,body[data-theme="deck"] .profile-widget-contact-form{background:var(--surface-panel)}
 body.customer-profile-active{height:100dvh;overflow:hidden}
 body.customer-profile-active .app-shell{height:100dvh;min-height:0;overflow:hidden}
 body.customer-profile-active .main{height:100dvh;min-height:0;padding-bottom:0;overflow:hidden}

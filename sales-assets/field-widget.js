@@ -63,6 +63,47 @@
       .filter(key => (INTAKE_COLUMN_FIELDS[key] || []).some(fieldKey => visible.has(fieldKey)));
   }
 
+  // —— 客户资料分区渲染 ——
+  // customer_profile 字段目录带 section 分组（身份与地区/业务画像/产品关注/联系渠道/合规信息/来源与记录）。
+  // profileSections：把有效 schema 字段按 section 分组（保持 section 内 sortOrder），
+  // 返回 [{ section, label, fields }]，无 section 的字段归入 'other'。
+  const PROFILE_SECTION_LABELS = Object.freeze({
+    identity_region: '身份与地区',
+    business_profile: '业务画像',
+    product_focus: '产品关注',
+    contact_channels: '联系渠道',
+    compliance: '合规信息',
+    source_record: '来源与记录',
+    other: '其他',
+  });
+
+  function profileSections(schema) {
+    if (!schema || !Array.isArray(schema.fields) || !schema.fields.length) return [];
+    const groups = new Map();
+    for (const field of schema.fields) {
+      const section = field.section || 'other';
+      if (!groups.has(section)) groups.set(section, []);
+      groups.get(section).push(field);
+    }
+    return Array.from(groups.entries()).map(([section, fields]) => ({
+      section,
+      label: PROFILE_SECTION_LABELS[section] || section,
+      fields,
+    }));
+  }
+
+  // 按 section 分组渲染客户完整资料区块；data 为 getCustomerProfileData 返回的 customerPool[0]
+  // 合并结构（buildPoolCustomer + profileAccess 等），formatters 与 renderFacts 同构。
+  function renderProfileFacts({ schema, data, formatters = {} }) {
+    const sections = profileSections(schema);
+    if (!sections.length) return '';
+    return sections.map(({ label, fields }) => {
+      const facts = renderFacts({ schema: { fields }, data, formatters });
+      if (!facts) return '';
+      return `<section class="profile-widget-section"><h3>${escapeHtml(label)}</h3>${facts}</section>`;
+    }).join('');
+  }
+
   function mount(container, options = {}) {
     if (!container) return;
     container.innerHTML = renderFacts(options);
@@ -70,8 +111,11 @@
 
   return Object.freeze({
     INTAKE_COLUMN_FIELDS,
+    PROFILE_SECTION_LABELS,
     intakeColumnKeys,
+    profileSections,
     renderFacts,
+    renderProfileFacts,
     mount,
   });
 }));

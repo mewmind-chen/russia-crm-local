@@ -260,7 +260,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -3094,6 +3094,89 @@
     );
   }
 
+  function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
+    const widgetRoot = $('#profileWidgetRoot');
+    if (!widgetRoot) return;
+    widgetRoot.replaceChildren();
+    if (typeof window.TradePulseProfileWidgets === 'undefined') return;
+    // schema 就绪时按 customer_profile 目录渲染事实区块；未就绪回退到仅联系人资产。
+    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+    const profileSchema = state.fieldSchemas?.customer_profile;
+    if (fieldWidget && profileSchema?.fields?.length) {
+      const account = state.data?.accounts?.find(item => item.external_customer_id === externalCustomerId);
+      const poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId);
+      const facts = fieldWidget.renderProfileFacts({
+        schema: profileSchema,
+        data: profileFactsData(account, poolRecord),
+        formatters: profileFactsFormatters(),
+      });
+      if (facts) {
+        const host = document.createElement('div');
+        host.className = 'profile-widget-facts';
+        host.innerHTML = facts;
+        widgetRoot.appendChild(host);
+      }
+    }
+    window.TradePulseProfileWidgets.mountContacts(widgetRoot, {
+      customerId: externalCustomerId,
+      intakeItemId,
+    });
+  }
+
+  // 把列表/主档两路数据源合并为 customer_profile 目录期望的 camelCase 结构。
+  // buildPoolCustomer 返回 camelCase；account 为 snake_case（来自 crm_accounts）。
+  function profileFactsData(account, poolRecord) {
+    const pool = poolRecord || {};
+    return {
+      customerId: pool.customerId || account?.external_customer_id || '',
+      companyName: pool.companyName || account?.company_name || '',
+      russianName: pool.russianName || '',
+      englishName: pool.englishName || '',
+      country: pool.country || account?.country || '',
+      city: pool.city || '',
+      website: pool.website || account?.website || '',
+      inn: pool.inn || '',
+      industry: pool.industry || account?.industry || '',
+      customerType: pool.customerType || account?.customer_type || '',
+      description: pool.description || '',
+      products: pool.products || account?.product_focus || '',
+      rating: pool.rating || '',
+      currentPool: pool.currentPool || '',
+      productFocus: pool.products || account?.product_focus || '',
+      recommendedProducts: pool.recommendedProducts || '',
+      email: pool.email || '',
+      phone: pool.phone || '',
+      contactCount: pool.contactCount || '',
+      bestContactLevel: pool.bestContactLevel || '',
+      salesReadyContactCount: pool.salesReadyContactCount || '',
+      sanctionStatus: pool.sanctionStatus || '',
+      riskStatus: pool.riskStatus || '',
+      deepReport: pool.deepReport || '',
+      sourceFile: pool.sourceFile || '',
+      verified: pool.verified || '',
+      notes: pool.notes || '',
+      createdAt: pool.createdAt || account?.created_at || '',
+      updatedAt: pool.updatedAt || account?.updated_at || '',
+      creatorName: pool.creatorName || account?.creator_name || '',
+      customerSource: pool.customerSource || account?.source || '',
+    };
+  }
+
+  function profileFactsFormatters() {
+    return {
+      text: (data, field) => data?.[field.sourceKey] ?? field.defaultValue ?? '—',
+      textOrDash: (data, field) => data?.[field.sourceKey] ?? field.defaultValue ?? '—',
+      website: (data, field) => websiteMarkup(data?.[field.sourceKey]),
+      sanction: (data, field) => {
+        const value = data?.[field.sourceKey];
+        if (!value || value === '未知') return '<span class="tp-empty-value">未核验</span>';
+        const tone = value === '受制裁' ? 'red' : value === '未制裁' ? 'green' : 'amber';
+        return `<strong class="tp-status ${tone}">${esc(value)}</strong>`;
+      },
+      creator: (data, field) => esc(data?.[field.sourceKey] ?? ''),
+    };
+  }
+
   function customerProfileFrameUrl(externalCustomerId, intakeItemId = '') {
     const intakeParam = intakeItemId ? `&intake=${encodeURIComponent(intakeItemId)}` : '';
     const theme = document.body.getAttribute('data-theme') === 'deck' ? 'deck' : 'studio';
@@ -3125,6 +3208,7 @@
     closeDrawer();
     switchView('customerProfile');
     renderCustomerProfileHeader();
+    mountCustomerProfileWidgets(externalCustomerId);
     const frame = $('#customerProfileFrame');
     frame.src = customerProfileFrameUrl(externalCustomerId);
     const url = new URL(location.href);
@@ -3214,6 +3298,7 @@
     closeDrawer();
     switchView('customerProfile');
     renderCustomerProfileHeader();
+    mountCustomerProfileWidgets(externalCustomerId, state.customerProfileIntakeItemId);
     $('#customerProfileFrame').src = customerProfileFrameUrl(externalCustomerId, state.customerProfileIntakeItemId);
     const url = new URL(location.href);
     url.searchParams.set('customer', externalCustomerId);
