@@ -15,6 +15,7 @@ const {
   resolveActivityRequestSpec,
 } = require('../lib/domains/activity/progress');
 const { publicActivityRecord, publicActivityRecords } = require('../lib/domains/activity/serialize');
+const { resolveActivityReaction } = require('../lib/domains/activity/request');
 
 const {
   normalizeCountry,
@@ -249,6 +250,44 @@ test('publicActivityRecord serializes progress, reaction, and provenance consist
   assert.equal(record.provenance.replacementActivityId, '');
   assert.equal(typeof record.effective, 'boolean');
   assert.equal(record.reaction_label_snapshot, '有回复', 'raw snake_case keys are preserved in the public row');
+});
+
+test('resolveActivityReaction resolves custom, by-id, and by-key reactions', () => {
+  const badRequest = message => { const e = new Error(message); e.statusCode = 400; return e; };
+  const conflictError = (message, code) => { const e = new Error(message); e.statusCode = 409; e.code = code; return e; };
+  const opts = { badRequest, conflictError };
+  assert.deepEqual(resolveActivityReaction({ reactionCustom: '自定义' }, { ...opts,
+    findReactionById: () => null, findReactionByKey: () => null }), { id: '', name: '自定义' });
+  assert.throws(() => resolveActivityReaction({ reactionCustom: 'x', reactionOptionId: 'R1' }, { ...opts }),
+    /不能与标准选项同时提交/);
+
+  const byId = { id: 'R1', name: '有兴趣' };
+  assert.deepEqual(resolveActivityReaction({ reactionOptionId: 'R1' }, { ...opts,
+    findReactionById: () => byId, findReactionByKey: () => null }), { id: 'R1', name: '有兴趣' });
+
+  const byKey = { id: 'R2', name: '有兴趣' };
+  assert.deepEqual(resolveActivityReaction({ outcome: '有兴趣' }, { ...opts,
+    findReactionById: () => null, findReactionByKey: () => byKey }), { id: 'R2', name: '有兴趣' });
+
+  assert.deepEqual(resolveActivityReaction({}, { ...opts,
+    findReactionById: () => null, findReactionByKey: () => null }), { id: '', name: '' });
+});
+
+test('resolveActivityReaction surfaces stale, invalid, and mismatch errors', () => {
+  const badRequest = message => { const e = new Error(message); e.statusCode = 400; return e; };
+  const conflictError = (message, code) => { const e = new Error(message); e.statusCode = 409; e.code = code; return e; };
+  const opts = { badRequest, conflictError };
+  assert.throws(() => resolveActivityReaction({ reactionOptionId: 'R1' }, { ...opts,
+    findReactionById: () => null }), error => {
+    assert.equal(error.statusCode, 409);
+    assert.equal(error.code, 'ACTIVITY_REACTION_STALE');
+    return true;
+  });
+  assert.throws(() => resolveActivityReaction({ outcome: '无效' }, { ...opts,
+    findReactionByKey: () => null }), /请选择有效的客户反应/);
+  const different = { id: 'R9', name: '其他' };
+  assert.throws(() => resolveActivityReaction({ reactionOptionId: 'R1', outcome: '有兴趣' }, { ...opts,
+    findReactionById: () => ({ id: 'R1', name: '有兴趣' }), findReactionByKey: () => different }), /与文字不一致/);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
