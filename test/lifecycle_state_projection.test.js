@@ -317,3 +317,29 @@ test('activity whitelist projection matches the legacy blacklist on activity row
   assert.equal(projected.summary, undefined, 'activity narrative must be hidden');
   assert.equal(projected.provenance.kind, 'original', 'provenance metadata must stay visible');
 });
+
+test('commerce whitelist projection matches the legacy blacklist on rfq, quote, and order rows', () => {
+  const { redactContactFields, contactSafeCommerceRecord } = require('../lib/domains/identity');
+  const rows = [
+    {
+      id: 'RFQ-1', customer_id: 'CRM-1', user_id: 'U-1', activity_id: 'ACT-1',
+      reference: 'RFQ-2026', status: 'open', bom_lines: 8, expected_value: 12000,
+      product_category: 'MCU', completeness: 80, received_at: 't', quoted_at: '',
+      created_at: 't',
+    },
+    {
+      id: 'Q-1', rfq_id: 'RFQ-1', customer_id: 'CRM-1', user_id: 'U-1', activity_id: 'ACT-2',
+      amount: 15000, currency: 'USD', gross_margin: 8, loss_leader: 0, status: 'sent',
+      sent_at: 't', next_follow_at: 't', created_at: 't',
+    },
+    {
+      id: 'O-1', customer_id: 'CRM-1', quote_id: 'Q-1', user_id: 'U-1', activity_id: 'ACT-3',
+      amount: 15000, currency: 'USD', gross_margin: 5, is_repeat: 0,
+      ordered_at: 't', created_at: 't',
+    },
+  ];
+  for (const row of rows) {
+    assert.deepEqual(contactSafeCommerceRecord(row), redactContactFields(row),
+      'commerce whitelist must be identical to the legacy blacklist output');
+  }
+});
