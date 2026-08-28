@@ -170,4 +170,6 @@ test('frontend stage and manager display fall back to the unified state DTO', ()
   assert.match(appSource, /account\?\.state\?\.manager\?\.status/);
   assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)/);
   assert.match(appSource, /\['管理介入', managerStateDisplay\(account\)\]/);
+  assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)\)\}[\s\S]{0,80}\$\{stay\}/);
+  assert.match(appSource, /\['原阶段', stageLabel\(accountStageOf\(account\)\)\]/);
 });

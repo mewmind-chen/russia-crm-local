@@ -4951,7 +4951,7 @@
       ];
       return `<tr class="pipeline-action-row">
         <td>${listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)])}</td>
-        <td>${esc(account.stageLabel || stageLabel(account.stage))}${stay}</td>
+        <td>${esc(account.stageLabel || stageLabel(accountStageOf(account)))}${stay}</td>
         <td>${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div></td>
         <td>${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}</td>
         <td>${rowActionCluster(primaryActions, moreActions)}</td>
@@ -8949,7 +8949,7 @@
           ['回收操作人', recycle.recycledByName || recycle.recycledBy || '—'],
           ['回收时间', shortDate(recycle.recycledAt, true)],
           ['回收原因', recycle.reason || '—'],
-          ['原阶段', stageLabel(account.stage)], ['CRM 客户编号', customerId],
+          ['原阶段', stageLabel(accountStageOf(account))], ['CRM 客户编号', customerId],
           ['客户主档编号', account.external_customer_id || master.customerId || '—'],
         ].map(([label, value]) => `<div class="fact"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
