@@ -33,7 +33,10 @@ const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeat
 const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
 const { duplicateFingerprint } = require('../lib/domains/customer/dedupe');
 const { redactAuditPayload } = require('../lib/domains/audit/redact');
-const { normalizeActivityActionQueueKey, publicActivityReaction } = require('../lib/domains/activity/present');
+const { normalizeActivityActionQueueKey, publicActivityReaction, escapeActivitySearchLike } = require('../lib/domains/activity/present');
+const { hashPassword } = require('../lib/domains/auth/credentials');
+const { parseCookies } = require('../lib/domains/auth/session');
+const { normalizeListQuery, listPage } = require('../lib/domains/list/pagination');
 
 const {
   normalizeCountry,
@@ -689,4 +692,33 @@ test('normalizeActivityActionQueueKey accepts pipeline keys and publicActivityRe
   assert.deepEqual(publicActivityReaction({ id: 'R-1', name: '有兴趣', action_queue_key: 'due_followup', sort_order: 3, active: 1 }), {
     id: 'R-1', name: '有兴趣', actionQueueKey: 'due_followup', sortOrder: 3, active: true,
   });
+});
+
+test('hashPassword is scrypt-based and parseCookies decodes the session header', () => {
+  const creds = hashPassword('s3cret');
+  assert.equal(typeof creds.hash, 'string');
+  assert.equal(creds.hash.length, 128);
+  assert.equal(creds.salt.length > 0, true);
+  const salted = hashPassword('same', 'x'.repeat(32));
+  assert.notEqual(salted.hash, hashPassword('same', 'y'.repeat(32)).hash);
+  assert.deepEqual(parseCookies('a=1; sales_session=abc%20def; '), { a: '1', sales_session: 'abc def' });
+  assert.deepEqual(parseCookies(''), {});
+});
+
+test('normalizeListQuery and listPage normalize pagination within bounds', () => {
+  assert.deepEqual(normalizeListQuery({ page: 2, pageSize: 50, search: '  Acme ' }), { page: 2, pageSize: 50, offset: 50, search: 'Acme' });
+  assert.equal(normalizeListQuery({ page: 0 }).page, 1);
+  assert.equal(normalizeListQuery({ pageSize: 100 }).pageSize, 100);
+  assert.equal(normalizeListQuery({ pageSize: 30 }).pageSize, 50);
+  assert.equal(normalizeListQuery({ search: 'x'.repeat(200) }).search.length, 120);
+  assert.deepEqual(listPage({ page: 3, pageSize: 25 }), { page: 3, pageSize: 25, offset: 50 });
+  assert.equal(listPage({ pageSize: 500 }).pageSize, 100);
+  assert.equal(listPage({}, 20).pageSize, 20);
+  assert.equal(listPage({ page: 0 }).page, 1);
+});
+
+test('escapeActivitySearchLike escapes SQL LIKE wildcards', () => {
+  assert.equal(escapeActivitySearchLike('a_b%c\\d'), 'a\\_b\\%c\\\\d');
+  assert.equal(escapeActivitySearchLike('plain'), 'plain');
+  assert.equal(escapeActivitySearchLike(''), '');
 });
