@@ -32,6 +32,8 @@ const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
 const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeatureDisabled } = require('../lib/domains/insights/evaluation');
 const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
 const { duplicateFingerprint } = require('../lib/domains/customer/dedupe');
+const { redactAuditPayload } = require('../lib/domains/audit/redact');
+const { normalizeActivityActionQueueKey, publicActivityReaction } = require('../lib/domains/activity/present');
 
 const {
   normalizeCountry,
@@ -668,4 +670,23 @@ test('normalizeEvaluation projects the DTO shape and without* strips AI fields',
   assert.equal(error.message, 'AI feature is disabled');
   assert.equal(error.statusCode, 409);
   assert.equal(error.code, 'AI_FEATURE_DISABLED');
+});
+
+test('redactAuditPayload replaces sensitive keys recursively and leaves others intact', () => {
+  assert.deepEqual(redactAuditPayload({ name: 'Acme', password: 'secret', nested: { token: 'abc', note: 'ok' } }), {
+    name: 'Acme', password: '[REDACTED]', nested: { token: '[REDACTED]', note: 'ok' },
+  });
+  assert.deepEqual(redactAuditPayload([{ authorization: 'Bearer x' }, 'plain']), [{ authorization: '[REDACTED]' }, 'plain']);
+  assert.equal(redactAuditPayload('plain'), 'plain');
+  assert.equal(redactAuditPayload(null), null);
+  assert.deepEqual(redactAuditPayload({ previewId: 'p-1', confirmationText: 'yes' }), { previewId: '[REDACTED]', confirmationText: '[REDACTED]' });
+});
+
+test('normalizeActivityActionQueueKey accepts pipeline keys and publicActivityReaction projects the DTO', () => {
+  assert.equal(normalizeActivityActionQueueKey(' due_followup '), 'due_followup');
+  assert.equal(normalizeActivityActionQueueKey(''), '');
+  assert.throws(() => normalizeActivityActionQueueKey('bogus'), { message: '请选择有效的行动队列' });
+  assert.deepEqual(publicActivityReaction({ id: 'R-1', name: '有兴趣', action_queue_key: 'due_followup', sort_order: 3, active: 1 }), {
+    id: 'R-1', name: '有兴趣', actionQueueKey: 'due_followup', sortOrder: 3, active: true,
+  });
 });
