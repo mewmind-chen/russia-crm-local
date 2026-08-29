@@ -37,6 +37,7 @@ const { normalizeActivityActionQueueKey, publicActivityReaction, escapeActivityS
 const { hashPassword } = require('../lib/domains/auth/credentials');
 const { parseCookies } = require('../lib/domains/auth/session');
 const { safeUser } = require('../lib/domains/auth/user');
+const { intakeActionIdempotencyKey, manualAssignmentRequestHash, manualAssignmentRequiresPreview } = require('../lib/domains/intake/assignment');
 const { normalizeListQuery, listPage } = require('../lib/domains/list/pagination');
 
 const {
@@ -739,6 +740,19 @@ test('safeUser projects the response DTO without credentials', () => {
   assert.equal(user.permissionOverrideCount, 1);
   assert.equal(user.password_hash, undefined);
   assert.equal(safeUser(null), null);
+});
+
+test('intake assignment idempotency, request hash, and preview requirement are deterministic', () => {
+  const user = { id: 'U-1' };
+  assert.equal(intakeActionIdempotencyKey(user, { action: 'claim', itemId: 'IN-1', reason: 'ok' }), intakeActionIdempotencyKey(user, { action: 'claim', itemId: 'IN-1', reason: 'ok' }));
+  assert.notEqual(intakeActionIdempotencyKey(user, { action: 'claim', itemId: 'IN-1', reason: 'ok' }), intakeActionIdempotencyKey(user, { action: 'claim', itemId: 'IN-1', reason: 'no' }));
+  assert.equal(intakeActionIdempotencyKey(user, { idempotencyKey: 'custom-key' }), 'custom-key');
+  assert.equal(intakeActionIdempotencyKey(user, { idempotencyKey: 'x'.repeat(300) }).length, 240);
+  assert.equal(manualAssignmentRequestHash(user, { itemIds: ['IN-1'], ownerId: 'U-2' }), manualAssignmentRequestHash(user, { itemIds: ['IN-1'], ownerId: 'U-2' }));
+  assert.equal(manualAssignmentRequiresPreview({ itemIds: ['IN-1'] }), false);
+  assert.equal(manualAssignmentRequiresPreview({ allFiltered: true }), true);
+  assert.equal(manualAssignmentRequiresPreview({ filterScope: { filters: { stage: ['new'] } } }), true);
+  assert.equal(manualAssignmentRequiresPreview({}), false);
 });
 
 test('buildTeamReport aggregates per-sales performance with rates and ranking', () => {
