@@ -39,6 +39,7 @@ const { parseCookies } = require('../lib/domains/auth/session');
 const { safeUser } = require('../lib/domains/auth/user');
 const { intakeActionIdempotencyKey, manualAssignmentRequestHash, manualAssignmentRequiresPreview } = require('../lib/domains/intake/assignment');
 const { normalizeListQuery, listPage } = require('../lib/domains/list/pagination');
+const { json, parseJsonObject } = require('../lib/domains/json/parse');
 
 const {
   normalizeCountry,
@@ -753,6 +754,20 @@ test('intake assignment idempotency, request hash, and preview requirement are d
   assert.equal(manualAssignmentRequiresPreview({ allFiltered: true }), true);
   assert.equal(manualAssignmentRequiresPreview({ filterScope: { filters: { stage: ['new'] } } }), true);
   assert.equal(manualAssignmentRequiresPreview({}), false);
+});
+
+test('json parses resiliently and parseJsonObject narrows to a plain object', () => {
+  assert.deepEqual(json('{"a":1}'), { a: 1 });
+  assert.deepEqual(json('[1,2]'), [1, 2]);
+  assert.deepEqual(json(''), []);
+  assert.deepEqual(json('null'), []);
+  assert.deepEqual(json('not json'), []);
+  assert.deepEqual(json('{"a":1}', {}), { a: 1 });
+  assert.deepEqual(parseJsonObject('{"a":1}'), { a: 1 });
+  assert.deepEqual(parseJsonObject('[1,2]'), {});
+  assert.deepEqual(parseJsonObject('{"a":1}'), { a: 1 });
+  assert.deepEqual(parseJsonObject('garbage'), {});
+  assert.deepEqual(parseJsonObject(null), {});
 });
 
 test('buildTeamReport aggregates per-sales performance with rates and ranking', () => {
