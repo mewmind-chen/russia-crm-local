@@ -33,7 +33,7 @@ const {
 const { validateRecycleReason } = require('../lib/domains/customer/recycle');
 const { customerCreateRequestHash } = require('../lib/domains/customer/create');
 const { creatorDisplayName, historyAccountSummary, changedFieldLabels } = require('../lib/domains/customer/summary');
-const { publicAccountContact } = require('../lib/domains/customer/contacts');
+const { publicAccountContact, cleanContactFields } = require('../lib/domains/customer/contacts');
 
 test('normalizeCountry maps aliases and preserves unknown values', () => {
   assert.equal(normalizeCountry('ru'), '俄罗斯');
@@ -424,6 +424,21 @@ test('assignment link predicates match current and reused returned accounts', ()
   assert.equal(reusableReturnedAccountForIntake([linked], item).id, 'CRM-1');
   assert.equal(reusableReturnedAccountForIntake([{ id: 'CRM-2', external_customer_id: 'RU-1', lifecycle_status: 'recycled', recycle_kind: 'sales_return' }], item).id, 'CRM-2');
   assert.equal(reusableReturnedAccountForIntake([{ id: 'CRM-3', external_customer_id: 'RU-1', lifecycle_status: 'active' }], item), null);
+});
+
+test('cleanContactFields trims, truncates, and enforces enum defaults', () => {
+  const cleaned = cleanContactFields({
+    name: ' A ', title: 'B', department: 'x'.repeat(300), phone: 'P', email: 'e',
+    social: 's', matchStatus: 'match', procurementRole: 'no', workContent: 'w',
+  });
+  assert.equal(cleaned.name, 'A');
+  assert.equal(cleaned.department.length, 160);
+  assert.equal(cleaned.matchStatus, 'match');
+  assert.equal(cleaned.procurementRole, 'no');
+  const defaults = cleanContactFields({});
+  assert.equal(defaults.matchStatus, 'pending');
+  assert.equal(defaults.procurementRole, 'pending');
+  assert.equal(defaults.workContent, '');
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
