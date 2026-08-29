@@ -40,7 +40,7 @@ test('addQuote routes its next-action write through the plan gateway', () => {
 
 test('addOrder routes its next-action write through the plan gateway', () => {
   assertNoPlanColumns(
-    functionSlice(salesCrmSource, 'addOrder', 'customerCreateRequestHash'),
+    functionSlice(salesCrmSource, 'addOrder', 'reserveCustomerCreate'),
     'addOrder',
   );
 });

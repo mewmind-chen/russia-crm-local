@@ -19,7 +19,7 @@ const STATE = [/applyAccountStatePatch\(/];
 const STATE_AND_PLAN = [/applyAccountStatePatch\(/, /applyAccountPlanPatch\(/];
 
 test('claiming an intake item routes assignment and first-touch plan through the gateways', () => {
-  const body = functionSlice(salesCrmSource, 'manageIntake', 'todayTaskError');
+  const body = functionSlice(salesCrmSource, 'manageIntake', 'deferAccountPlan');
   assertNoColumns(body, STATE_COLUMNS, STATE, 'manageIntake claim');
   assertNoColumns(body, PLAN_COLUMNS, [/applyAccountPlanPatch\(/], 'manageIntake claim');
 });

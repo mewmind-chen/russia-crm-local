@@ -40,7 +40,7 @@ test('addQuote routes its stage write through the lifecycle gateway', () => {
 
 test('addOrder routes its stage write through the lifecycle gateway', () => {
   assertNoStateColumns(
-    functionSlice(salesCrmSource, 'addOrder', 'customerCreateRequestHash'),
+    functionSlice(salesCrmSource, 'addOrder', 'reserveCustomerCreate'),
     'addOrder',
   );
 });
