@@ -23,6 +23,7 @@ const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../l
 const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
 const { validateMargin, validateRfqPayload, commerceActionIdempotencyKey } = require('../lib/domains/commerce/rules');
 const { isCurrentIntakeAccount, isReturnedAccountForIntake, reusableReturnedAccountForIntake } = require('../lib/domains/assignment/link');
+const { buildCountryReport, buildCohortReport } = require('../lib/domains/reporting/builders');
 
 const {
   normalizeCountry,
@@ -439,6 +440,46 @@ test('cleanContactFields trims, truncates, and enforces enum defaults', () => {
   assert.equal(defaults.matchStatus, 'pending');
   assert.equal(defaults.procurementRole, 'pending');
   assert.equal(defaults.workContent, '');
+});
+
+function reportingRows() {
+  const accounts = [{ id: 'CRM-1', country: '俄罗斯', stage: 'won', assigned_at: '2026-08-01 10:00:00' }];
+  const activities = [
+    { customer_id: 'CRM-1', activity_type: 'email' },
+    { customer_id: 'CRM-1', activity_type: 'reply' },
+    { customer_id: 'CRM-1', activity_type: 'meeting' },
+    { customer_id: 'CRM-1', activity_type: 'rfq' },
+  ];
+  const orders = [{ customer_id: 'CRM-1', amount: 1000, gross_margin: 10, is_repeat: 0 }];
+  return { accounts, activities, orders };
+}
+
+test('buildCountryReport aggregates accounts and derives funnel rates', () => {
+  const reports = buildCountryReport(...Object.values(reportingRows()));
+  assert.equal(reports.length, 1);
+  const row = reports[0];
+  assert.equal(row.accounts, 1);
+  assert.equal(row.contacted, 1);
+  assert.equal(row.replied, 1);
+  assert.equal(row.meetings, 1);
+  assert.equal(row.orders, 1);
+  assert.equal(row.revenue, 1000);
+  assert.equal(row.grossProfit, 100);
+  assert.equal(row.contactRate, 100);
+  assert.equal(row.sampleStatus, '样本不足');
+});
+
+test('buildCohortReport groups by month and computes stage-based rates', () => {
+  const reports = buildCohortReport(...Object.values(reportingRows()));
+  assert.equal(reports.length, 1);
+  const row = reports[0];
+  assert.equal(row.cohort, '2026-08');
+  assert.equal(row.contacted, 1);
+  assert.equal(row.replied, 1);
+  assert.equal(row.meetings, 1);
+  assert.equal(row.ordered, 1);
+  assert.equal(row.revenue, 1000);
+  assert.equal(row.contactRate, 100);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
