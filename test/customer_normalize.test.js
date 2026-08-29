@@ -24,6 +24,11 @@ const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
 const { validateMargin, validateRfqPayload, commerceActionIdempotencyKey } = require('../lib/domains/commerce/rules');
 const { isCurrentIntakeAccount, isReturnedAccountForIntake, reusableReturnedAccountForIntake } = require('../lib/domains/assignment/link');
 const { buildCountryReport, buildCohortReport } = require('../lib/domains/reporting/builders');
+const { csvCell, csvSerialize } = require('../lib/domains/reporting/csv');
+const { advanceStage } = require('../lib/domains/commerce/rules');
+const { identityConflictNote } = require('../lib/domains/customer/identity');
+const { parseMismatchRecordKey, mismatchRecordNotFound } = require('../lib/domains/customer/recycle');
+const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
 
 const {
   normalizeCountry,
@@ -514,4 +519,67 @@ test('historyAccountSummary maps account rows to the development-history shape',
     assignment_status: 'claimed', lifecycle_status: 'recycled', stage: 'unknown-stage',
   }).status, '历史客户');
   assert.equal(historyAccountSummary({ stage: 'unknown-stage' }).stageLabel, 'unknown-stage');
+});
+
+test('safeEvaluationLabel sanitizes suspicious evaluation labels', () => {
+  assert.equal(safeEvaluationLabel(' 已深度 沟通 '), '已深度 沟通');
+  assert.equal(safeEvaluationLabel('a'.repeat(50)).length, 40);
+  assert.equal(safeEvaluationLabel('email@example.com'), '');
+  assert.equal(safeEvaluationLabel('https://evil.example/x'), '');
+  assert.equal(safeEvaluationLabel('www.evil.example'), '');
+  assert.equal(safeEvaluationLabel('1234567890123'), '');
+  assert.equal(safeEvaluationLabel({ name: ' 有效 标签 ' }), '有效 标签');
+  assert.equal(safeEvaluationLabel(''), '');
+  assert.equal(safeEvaluationLabel(undefined), '');
+  assert.equal(safeEvaluationLabel(null), '');
+});
+
+test('csvCell sanitizes formulas and quotes separators while csvSerialize renders a BOM document', () => {
+  assert.equal(csvCell('plain'), 'plain');
+  assert.equal(csvCell('=SUM(A1)'), `'=SUM(A1)`);
+  assert.equal(csvCell('+123'), `'+123`);
+  assert.equal(csvCell('-bad'), `'-bad`);
+  assert.equal(csvCell('@mention'), `'@mention`);
+  assert.equal(csvCell('  =leading'), `'  =leading`);
+  assert.equal(csvCell('a,b'), '"a,b"');
+  assert.equal(csvCell('say "hi"'), '"say ""hi"""');
+  assert.equal(csvCell('line\nbreak'), '"line\nbreak"');
+  assert.equal(csvCell(null), '');
+  assert.equal(csvCell(0), '0');
+  const document = csvSerialize(['名称', '备注'], [['ACME, Inc.', '=x'], ['中 "引" 号', 'ok']]);
+  assert.equal(document, '\uFEFF名称,备注\r\n"ACME, Inc.",\'=x\r\n"中 ""引"" 号",ok\r\n');
+});
+
+test('advanceStage enforces monotonic stage progression', () => {
+  assert.equal(advanceStage('new', 'meeting'), 'meeting');
+  assert.equal(advanceStage('meeting', 'new'), 'meeting');
+  assert.equal(advanceStage('meeting', ''), 'meeting');
+  assert.equal(advanceStage('new', 'lost'), 'lost');
+  assert.equal(advanceStage('lost', 'meeting'), 'meeting');
+  assert.equal(advanceStage('won', 'lost'), 'lost');
+});
+
+test('identityConflictNote extracts a trimmed note from string or reason envelope', () => {
+  assert.equal(identityConflictNote('  hello  '), 'hello');
+  assert.equal(identityConflictNote({ reason: ' 重复 公司 ' }), '重复 公司');
+  assert.equal(identityConflictNote({ reason: '' }), '');
+  assert.equal(identityConflictNote({}), '');
+  assert.equal(identityConflictNote(null), '');
+  assert.equal(identityConflictNote(undefined), '');
+});
+
+test('parseMismatchRecordKey parses account and intake keys and rejects malformed ones', () => {
+  assert.deepEqual(parseMismatchRecordKey('account:CRM-1'), { sourceType: 'account', sourceId: 'CRM-1', recordKey: 'account:CRM-1' });
+  assert.deepEqual(parseMismatchRecordKey('intake:IN-2'), { sourceType: 'intake', sourceId: 'IN-2', recordKey: 'intake:IN-2' });
+  assert.deepEqual(parseMismatchRecordKey('  account:CRM-3  '), { sourceType: 'account', sourceId: 'CRM-3', recordKey: 'account:CRM-3' });
+  for (const bad of ['', 'account', 'account:', 'other:CRM-1', 'a:b:c', '  ']) {
+    assert.throws(() => parseMismatchRecordKey(bad), { message: '不对口记录不存在' });
+  }
+  const capture = [];
+  const notFound = mismatchRecordNotFound({ httpError: (statusCode, message, code) => {
+    capture.push([statusCode, message, code]);
+    return { statusCode, message, code };
+  } });
+  assert.deepEqual(capture, [[404, '不对口记录不存在', 'MISMATCH_RECORD_NOT_FOUND']]);
+  assert.equal(notFound.statusCode, 404);
 });
