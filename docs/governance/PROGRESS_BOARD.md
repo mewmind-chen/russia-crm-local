@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-29 16:38:36`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-29 17:41:03`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,12 +8,12 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `bbe33a8`（相对 origin/main ahead 93） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 1904/1904 |
-| 核心测试 | `npm test` 1542/1542 |
-| sales_crm.js | 13295 行 |
-| lib/domains | 42 个文件，生产接线 28 个 |
+| HEAD | `5c23b32`（相对 origin/main ahead 101） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 1913/1913 |
+| 核心测试 | `npm test` 1552/1552 |
+| sales_crm.js | 12973 行 |
+| lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-29-phase-a-wiring-recovery-batch-6.md` |
 
 ## 提交分布（origin/main..HEAD）
@@ -21,10 +21,10 @@
 | 类别 | 数量 |
 |---|---|
 | refactor(state) 状态写收敛 | 8 |
-| refactor(domains) 域接线 | 10 |
+| refactor(domains) 域接线 | 17 |
 | refactor(其他/通用) | 37 |
 | feat(...) | 15 |
-| docs(governance) | 11 |
+| docs(governance) | 12 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -45,22 +45,32 @@
 
 | 模块 | 状态 | 接线提交 |
 |---|---|---|
+| `lib/domains/activity/present.js` | [x] 已接线 | e9f29d0 |
+| `lib/domains/activity/progress.js` | [x] 已接线 | f5eb7f2 |
+| `lib/domains/activity/request.js` | [x] 已接线 | 0fcbf71 |
 | `lib/domains/activity/serialize.js` | [x] 已接线 | 7328b51 |
 | `lib/domains/assignment/link.js` | [x] 已接线 | 48ba93c |
 | `lib/domains/audit/redact.js` | [x] 已接线 | 0560e9c |
 | `lib/domains/auth/access.js` | [x] 已接线 | ad657ac |
 | `lib/domains/auth/credentials.js` | [x] 已接线 | ad657ac |
 | `lib/domains/auth/session.js` | [x] 已接线 | ad657ac |
+| `lib/domains/auth/user.js` | [x] 已接线 | 8a0ee7d |
 | `lib/domains/commerce/rules.js` | [x] 已接线 | a853a16 |
 | `lib/domains/customer/contacts.js` | [x] 已接线 | ad657ac |
+| `lib/domains/customer/create.js` | [x] 已接线 | 5c23b32 |
+| `lib/domains/customer/dedupe.js` | [x] 已接线 | dab8168 |
 | `lib/domains/customer/identity.js` | [x] 已接线 | ad657ac |
+| `lib/domains/customer/normalize.js` | [x] 已接线 | 47daed9 |
 | `lib/domains/customer/recycle.js` | [x] 已接线 | a853a16 |
 | `lib/domains/customer/summary.js` | [x] 已接线 | ad657ac |
+| `lib/domains/filter/errors.js` | [x] 已接线 | 5c23b32 |
 | `lib/domains/http/error.js` | [x] 已接线 | d51596c |
 | `lib/domains/http/routes.js` | [x] 已接线 | d51596c |
+| `lib/domains/insights/evaluation.js` | [x] 已接线 | 8a0ee7d |
 | `lib/domains/insights/labels.js` | [x] 已接线 | 873d1b0 |
 | `lib/domains/intake/assignment.js` | [x] 已接线 | 48ba93c |
 | `lib/domains/intake/decision.js` | [x] 已接线 | 48ba93c |
+| `lib/domains/intake/owner.js` | [x] 已接线 | 8a0ee7d |
 | `lib/domains/intake/query.js` | [x] 已接线 | 48ba93c |
 | `lib/domains/json/parse.js` | [x] 已接线 | 0560e9c |
 | `lib/domains/lifecycle/collaboration_write.js` | [x] 已接线 | 2245032 |
@@ -71,22 +81,12 @@
 | `lib/domains/planning/alerts.js` | [x] 已接线 | 7328b51 |
 | `lib/domains/planning/risk.js` | [x] 已接线 | 7328b51 |
 | `lib/domains/planning/streak.js` | [x] 已接线 | 7328b51 |
+| `lib/domains/planning/today_task.js` | [x] 已接线 | 5c23b32 |
 | `lib/domains/reporting/builders.js` | [x] 已接线 | 13c5368 |
 | `lib/domains/reporting/csv.js` | [x] 已接线 | 873d1b0 |
-| `lib/domains/activity/present.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/activity/progress.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/activity/request.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/auth/user.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/customer/create.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/customer/dedupe.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/customer/normalize.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/filter/errors.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
 | `lib/domains/filter/index.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
 | `lib/domains/identity/index.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
 | `lib/domains/identity/middleware.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/insights/evaluation.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/intake/owner.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/planning/today_task.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
 
 ### 已完成
 
