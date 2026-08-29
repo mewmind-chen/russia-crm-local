@@ -21,6 +21,7 @@ const { reasonOrder, urgencyFor, groupAlerts } = require('../lib/domains/plannin
 const { emptyCustomerPlanRisk } = require('../lib/domains/planning/risk');
 const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../lib/domains/intake/query');
 const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
+const { validateMargin, validateRfqPayload, commerceActionIdempotencyKey } = require('../lib/domains/commerce/rules');
 
 const {
   normalizeCountry,
@@ -383,6 +384,33 @@ test('chooseIntakeOwner scores country, language, channel, and load deterministi
   assert.ok(balanced, 'unmatched candidates still pick by load balance');
   assert.equal(balanced.userId, 'U-1');
   assert.equal(balanced.reason, '按当前负荷均衡分配');
+});
+
+test('validateMargin clamps gross margin to the allowed range', () => {
+  const badRequest = message => { const e = new Error(message); e.statusCode = 400; return e; };
+  assert.equal(validateMargin('8.35', false, { badRequest }), 8.4);
+  assert.equal(validateMargin('-2.5', true, { badRequest }), -2.5);
+  assert.throws(() => validateMargin('200', false, { badRequest }), /毛利率/);
+  assert.throws(() => validateMargin('-5', false, { badRequest }), /毛利率/);
+});
+
+test('validateRfqPayload validates bom lines, expected value, and completeness', () => {
+  const badRequest = message => { const e = new Error(message); e.statusCode = 400; return e; };
+  assert.doesNotThrow(() => validateRfqPayload({ bomLines: 10, expectedValue: 1000, completeness: 80 }, { badRequest }));
+  assert.throws(() => validateRfqPayload({ bomLines: -1 }, { badRequest }), /BOM 行数/);
+  assert.throws(() => validateRfqPayload({ expectedValue: -5 }, { badRequest }), /预估金额/);
+  assert.throws(() => validateRfqPayload({ completeness: 101 }, { badRequest }), /完整度/);
+});
+
+test('commerceActionIdempotencyKey prefers a client key and derives a hash otherwise', () => {
+  const user = { id: 'U-1' };
+  const payload = { amount: 100, currency: 'USD' };
+  assert.equal(commerceActionIdempotencyKey(user, 'order', { ...payload, idempotencyKey: 'k1' }, 'CRM-1'), 'k1');
+  assert.equal(commerceActionIdempotencyKey(user, 'order', { ...payload, clientRequestId: 'c1' }, 'CRM-1'), 'c1');
+  const hash = commerceActionIdempotencyKey(user, 'order', payload, 'CRM-1');
+  assert.match(hash, /^commerce:/);
+  assert.equal(commerceActionIdempotencyKey(user, 'order', payload, 'CRM-1'), hash);
+  assert.notEqual(commerceActionIdempotencyKey(user, 'quote', payload, 'CRM-1'), hash);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
