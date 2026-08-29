@@ -20,6 +20,7 @@ const { noPlanStreakForActivities } = require('../lib/domains/planning/streak');
 const { reasonOrder, urgencyFor, groupAlerts } = require('../lib/domains/planning/alerts');
 const { emptyCustomerPlanRisk } = require('../lib/domains/planning/risk');
 const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../lib/domains/intake/query');
+const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
 
 const {
   normalizeCountry,
@@ -365,6 +366,23 @@ test('intakeQueryBoolean and intakeQueryDate map query flags and dates', () => {
   assert.equal(intakeQueryDate('2026-08-28'), '2026-08-28 00:00:00');
   assert.equal(intakeQueryDate('2026-08-28', true), '2026-08-28 23:59:59');
   assert.equal(intakeQueryDate('28/08/2026'), '');
+});
+
+test('chooseIntakeOwner scores country, language, channel, and load deterministically', () => {
+  const users = [
+    { id: 'U-1', role: 'sales', active: 1, countries_json: '["俄罗斯"]', languages_json: '["中文","俄语"]', channels_json: '["邮件"]' },
+    { id: 'U-2', role: 'sales', active: 1, countries_json: '[]', languages_json: '[]', channels_json: '[]' },
+    { id: 'U-3', role: 'manager', active: 1, countries_json: '[]', languages_json: '[]', channels_json: '[]' },
+    { id: 'U-4', role: 'sales', active: 0, countries_json: '[]', languages_json: '[]', channels_json: '[]' },
+  ];
+  const winner = chooseIntakeOwner({ country: '俄罗斯', contact_methods: 'email' }, users, { 'U-1': 1 }, { 'U-1': 0 });
+  assert.equal(winner.userId, 'U-1');
+  assert.match(winner.reason, /国家经验：俄罗斯/);
+  assert.match(winner.reason, /俄语能力/);
+  const balanced = chooseIntakeOwner({ country: '未知' }, users);
+  assert.ok(balanced, 'unmatched candidates still pick by load balance');
+  assert.equal(balanced.userId, 'U-1');
+  assert.equal(balanced.reason, '按当前负荷均衡分配');
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
