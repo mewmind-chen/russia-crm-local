@@ -145,10 +145,11 @@ test('team progress drilldown returns only the requested server page', async t =
 
 test('offset-paginated intake, research and today-task orderings end in unique keys', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
+  const alertsModule = fs.readFileSync(path.join(__dirname, '..', 'lib', 'domains', 'planning', 'alerts.js'), 'utf8');
   assert.match(source, /i\.created_at DESC,i\.match_score DESC,i\.id ASC LIMIT \? OFFSET \?/);
   assert.match(source, /pc\.updated_at DESC,pc\.person_id ASC/);
   assert.match(source, /r\.updated_at DESC,r\.job_id ASC/);
-  assert.match(source, /String\(left\.customerId \|\| ''\)\.localeCompare/);
-  assert.match(source, /String\(left\.intakeItemId \|\| ''\)\.localeCompare/);
-  assert.match(source, /String\(left\.id \|\| ''\)\.localeCompare/);
+  assert.match(alertsModule, /String\(left\.customerId \|\| ''\)\.localeCompare/);
+  assert.match(alertsModule, /String\(left\.intakeItemId \|\| ''\)\.localeCompare/);
+  assert.match(alertsModule, /String\(left\.id \|\| ''\)\.localeCompare/);
 });
