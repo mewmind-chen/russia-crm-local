@@ -23,7 +23,7 @@ const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../l
 const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
 const { validateMargin, validateRfqPayload, commerceActionIdempotencyKey } = require('../lib/domains/commerce/rules');
 const { isCurrentIntakeAccount, isReturnedAccountForIntake, reusableReturnedAccountForIntake } = require('../lib/domains/assignment/link');
-const { buildCountryReport, buildCohortReport } = require('../lib/domains/reporting/builders');
+const { buildCountryReport, buildCohortReport, buildTeamReport } = require('../lib/domains/reporting/builders');
 const { csvCell, csvSerialize } = require('../lib/domains/reporting/csv');
 const { advanceStage } = require('../lib/domains/commerce/rules');
 const { identityConflictNote } = require('../lib/domains/customer/identity');
@@ -36,6 +36,7 @@ const { redactAuditPayload } = require('../lib/domains/audit/redact');
 const { normalizeActivityActionQueueKey, publicActivityReaction, escapeActivitySearchLike } = require('../lib/domains/activity/present');
 const { hashPassword } = require('../lib/domains/auth/credentials');
 const { parseCookies } = require('../lib/domains/auth/session');
+const { safeUser } = require('../lib/domains/auth/user');
 const { normalizeListQuery, listPage } = require('../lib/domains/list/pagination');
 
 const {
@@ -721,4 +722,45 @@ test('escapeActivitySearchLike escapes SQL LIKE wildcards', () => {
   assert.equal(escapeActivitySearchLike('a_b%c\\d'), 'a\\_b\\%c\\\\d');
   assert.equal(escapeActivitySearchLike('plain'), 'plain');
   assert.equal(escapeActivitySearchLike(''), '');
+});
+
+test('safeUser projects the response DTO without credentials', () => {
+  const row = {
+    id: 'U-1', email: 'a@b.co', name: '王五', role: 'sales', active: 1, archived_at: '',
+    must_change_password: 0, languages_json: '["zh"]', countries_json: '[]', channels_json: '["whatsapp"]',
+    permissions: { view_customers: true }, permission_group_id: 'G-1', permission_group_name: '销售组',
+    permissionOverrides: { view_contacts: true }, created_at: '2026-01-01',
+  };
+  const user = safeUser(row);
+  assert.equal(user.id, 'U-1');
+  assert.equal(user.email, 'a@b.co');
+  assert.deepEqual(user.languages, ['zh']);
+  assert.equal(user.permissions.view_customers, true);
+  assert.equal(user.permissionOverrideCount, 1);
+  assert.equal(user.password_hash, undefined);
+  assert.equal(safeUser(null), null);
+});
+
+test('buildTeamReport aggregates per-sales performance with rates and ranking', () => {
+  const sales = { id: 'U-1', name: '王五', role: 'sales', email: 'a@b.co', permissions: {}, permissionOverrides: {}, created_at: '2026-01-01' };
+  const manager = { id: 'U-2', name: '经理', role: 'manager', email: 'm@b.co', permissions: {}, permissionOverrides: {}, created_at: '2026-01-01' };
+  const accounts = [
+    { id: 'C-1', owner_id: 'U-1', stage: 'quoted', country: '俄罗斯', next_action: '报价', next_action_at: '2026-08-30 10:00', manager_required: 0, assigned_at: '2026-08-01 00:00' },
+    { id: 'C-2', owner_id: 'U-1', stage: 'lost', country: '俄罗斯', next_action: '', next_action_at: '', manager_required: 0, assigned_at: '2026-08-01 00:00' },
+  ];
+  const activities = [
+    { id: 'A-1', customer_id: 'C-1', activity_type: 'email', channel: 'email' },
+    { id: 'A-2', customer_id: 'C-1', activity_type: 'reply', channel: 'email' },
+  ];
+  const rfqs = [{ id: 'R-1', customer_id: 'C-1', completeness: 80 }];
+  const quotes = [{ id: 'Q-1', customer_id: 'C-1' }];
+  const orders = [{ id: 'O-1', customer_id: 'C-1', is_repeat: 0, amount: 1000, gross_margin: 20 }];
+  const report = buildTeamReport([manager, sales], accounts, activities, rfqs, quotes, orders);
+  assert.equal(report.length, 1);
+  const row = report[0];
+  assert.equal(row.user.id, 'U-1');
+  assert.equal(row.metrics.assigned, 2);
+  assert.equal(row.metrics.orders, 1);
+  assert.equal(row.overall > 0, true);
+  assert.deepEqual(row.bestCountries, ['俄罗斯']);
 });
