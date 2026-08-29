@@ -22,6 +22,7 @@ const { emptyCustomerPlanRisk } = require('../lib/domains/planning/risk');
 const { intakeQueryValues, intakeQueryBoolean, intakeQueryDate } = require('../lib/domains/intake/query');
 const { chooseIntakeOwner } = require('../lib/domains/intake/owner');
 const { validateMargin, validateRfqPayload, commerceActionIdempotencyKey } = require('../lib/domains/commerce/rules');
+const { isCurrentIntakeAccount, isReturnedAccountForIntake, reusableReturnedAccountForIntake } = require('../lib/domains/assignment/link');
 
 const {
   normalizeCountry,
@@ -411,6 +412,18 @@ test('commerceActionIdempotencyKey prefers a client key and derives a hash other
   assert.match(hash, /^commerce:/);
   assert.equal(commerceActionIdempotencyKey(user, 'order', payload, 'CRM-1'), hash);
   assert.notEqual(commerceActionIdempotencyKey(user, 'quote', payload, 'CRM-1'), hash);
+});
+
+test('assignment link predicates match current and reused returned accounts', () => {
+  const item = { id: 'I-1', external_customer_id: 'RU-1' };
+  const linked = { id: 'CRM-1', intake_item_id: 'I-1', lifecycle_status: 'active', assignment_status: 'returned' };
+  assert.equal(isCurrentIntakeAccount(linked, item), true);
+  assert.equal(isReturnedAccountForIntake(linked, item), true);
+  assert.equal(isCurrentIntakeAccount({ id: 'CRM-9', intake_item_id: 'X' }, item), false);
+  assert.equal(isReturnedAccountForIntake({ id: 'CRM-1', intake_item_id: 'I-1', lifecycle_status: 'recycled', recycle_kind: 'manual_delete' }, item), false);
+  assert.equal(reusableReturnedAccountForIntake([linked], item).id, 'CRM-1');
+  assert.equal(reusableReturnedAccountForIntake([{ id: 'CRM-2', external_customer_id: 'RU-1', lifecycle_status: 'recycled', recycle_kind: 'sales_return' }], item).id, 'CRM-2');
+  assert.equal(reusableReturnedAccountForIntake([{ id: 'CRM-3', external_customer_id: 'RU-1', lifecycle_status: 'active' }], item), null);
 });
 
 test('publicActivityRecords applies a shared visible-id set across the batch', () => {
