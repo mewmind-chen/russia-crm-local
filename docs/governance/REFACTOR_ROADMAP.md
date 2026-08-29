@@ -2,15 +2,15 @@
 
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@a853a16`（相对基线 ahead 89，未合并）
-状态：路线图执行中；阶段 B §1 完成门达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 A 接线恢复推进至 27 个模块已接入（含 B 组函数级），全绿
+执行分支：`codex/frontend-widget-pilot@af770f5`（相对基线 ahead 92，未合并）
+状态：路线图执行中；阶段 B §1 完成门达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 A 接线恢复推进至 27 个模块已接入（含 B 组函数级与注入式接线），全绿
 
 ## 当前进度快照
 
 | 阶段 | 状态 | 已有证据 | 尚未完成 |
 |---|---|---|---|
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
-| 阶段 A：后端结构化切分 | 接线恢复中（27 模块已接入） | `lib/domains/` 42 个文件；27 个域模块已重新接入 sales_crm.js（8 个接线切片、18 契约断言），sales_crm.js 13,323 行 | 剩余模块需逐个核验（部分按裁定保持内联、部分已漂移需同步调用点、部分仅函数级一致）；聚合文件仍超 1.3 万行 |
+| 阶段 A：后端结构化切分 | 接线恢复中（27 模块已接入） | `lib/domains/` 42 个文件；27 个域模块已重新接入 sales_crm.js（9 个接线切片、19 契约断言），sales_crm.js 13,295 行 | 剩余模块需逐个核验（部分按裁定保持内联、部分已漂移需同步调用点）；聚合文件仍超 1.3 万行 |
 | 阶段 B：状态真源 | §1 完成门达成 | 全部写点收敛到 state_write/collaboration_write 网关（8 切片、34 契约断言），零裸写 | §4 强化（assert*Transition 前置校验全面落地）、状态解释器统一消费 |
 | 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交 | 白名单兼容回归已恢复；页面覆盖未完成 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
@@ -189,8 +189,8 @@
 恢复顺序固定为：
 
 1. 阶段 B §1 完成门已达成（8 个状态写切片 `13cd37a`→`227b3d7` 已独立提交），契约测试 34/34。
-2. 阶段 A 接线恢复 8 个切片已落地（`0560e9c`/`d51596c`/`873d1b0`/`7328b51`/`48ba93c`/`ad657ac`/`13c5368`/`a853a16`：27 个域模块重新接入，含 B 组函数级接线），接线契约 18/18；全量 1903/1903 绿灯。
-3. 继续阶段 A：全量逐字核验结论已固化——14 个模块可 drop-in、6 个函数级部分可接、约 15 个不宜接线（已接线 + 用户裁定保持内联的 identity/filter/middleware + 已漂移的 normalize/create/progress/request/errors/today_task）。下一批可评估 B 组剩余（customer/recycle 的 validateRecycleReason 等经调用点注入 httpError 接线）与未核验模块（activity/present、customer/dedupe、auth/user）。
+2. 阶段 A 接线恢复 9 个切片已落地（`0560e9c`/`d51596c`/`873d1b0`/`7328b51`/`48ba93c`/`ad657ac`/`13c5368`/`a853a16`/`af770f5`：27 个域模块重新接入，含 B 组函数级与注入式接线），接线契约 19/19；全量 1904/1904 绿灯。
+3. 继续阶段 A：全量逐字核验结论已固化——14 个模块可 drop-in、6 个函数级部分可接、约 15 个不宜接线（已接线 + 用户裁定保持内联的 identity/filter/middleware + 已漂移的 normalize/create/progress/request/errors/today_task）。下一批可评估未核验模块（activity/present、customer/dedupe、auth/user）与已漂移模块（需同步调用点）。
 4. 阶段 B 收尾：§4 强化、AI 写点（受红线约束）与种子收敛、明确 `last_activity_at` 归属；再收敛 pipeline 与 accounts 的 state DTO 边界差异。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。
