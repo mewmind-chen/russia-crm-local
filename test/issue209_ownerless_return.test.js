@@ -127,11 +127,9 @@ test('Issue 209 applies the same owner-independent rule to an explicitly authori
 
 test('Issue 209 frontend uses lifecycle and permission instead of owner presence', () => {
   const eligibility = appJs.match(/function canReturnCustomer\(account\) \{[\s\S]*?\n  \}/)?.[0] || '';
-  assert.match(eligibility, /accountLifecycleActive/);
-  assert.match(eligibility, /accountAssignmentReturned/);
+  assert.match(eligibility, /String\(account\.lifecycle_status \|\| 'active'\) !== 'active'/);
+  assert.match(eligibility, /String\(account\.assignment_status \|\| ''\) === 'returned'/);
   assert.match(eligibility, /can\('manage_customer_recycle'\)/);
-  assert.match(appJs, /function accountLifecycleActive\(account\)[\s\S]*?state\.lifecycle\.key === 'active'/);
-  assert.match(appJs, /function accountAssignmentReturned\(account\)[\s\S]*?state\.assignment\.key === 'returned'/);
   assert.doesNotMatch(eligibility, /!account\.owner_id/);
   assert.doesNotMatch(eligibility, /account\.owner_id === state\.data\.user\.id/);
   assert.doesNotMatch(appJs, /负责人明确且状态为已分配或已领取的客户可退回/);

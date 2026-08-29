@@ -4292,36 +4292,17 @@
       + (filters.createdFrom ? 1 : 0) + (filters.createdTo ? 1 : 0);
   }
 
-  function accountLifecycleActive(account) {
-    if (account?.state?.lifecycle) return account.state.lifecycle.key === 'active';
-    return String(account?.lifecycle_status || 'active') === 'active';
-  }
-
-  function accountAssignmentReturned(account) {
-    if (account?.state?.assignment) return account.state.assignment.key === 'returned';
-    return String(account?.assignment_status || '') === 'returned';
-  }
-
-  function accountStageOf(account) {
-    return account?.stage || account?.state?.stage?.key || '';
-  }
-
-  function managerStateDisplay(account) {
-    if (account?.state?.manager?.status) return account.state.manager.status;
-    return account?.manager_status || (account?.manager_required ? '待介入' : '暂不需要');
-  }
-
   function canReturnCustomer(account) {
     if (!account || !can('manage_customer_recycle')) return false;
-    if (!accountLifecycleActive(account)) return false;
-    if (accountAssignmentReturned(account)) return false;
+    if (String(account.lifecycle_status || 'active') !== 'active') return false;
+    if (String(account.assignment_status || '') === 'returned') return false;
     return true;
   }
 
   function canRejectCustomer(account) {
     if (!account || (!can('manage_customer_recycle') && !can('reject_own_customer_mismatch'))) return false;
-    if (!accountLifecycleActive(account)) return false;
-    if (accountAssignmentReturned(account)) return false;
+    if (String(account.lifecycle_status || 'active') !== 'active') return false;
+    if (String(account.assignment_status || '') === 'returned') return false;
     return true;
   }
 
@@ -4433,7 +4414,7 @@
             [accountIdentity(account), hostLabel(account.website || account.domain)],
           ),
           `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
-          statusMarkup(accountStageOf(account), { [accountStageOf(account)]: stageLabel(accountStageOf(account)) }),
+          statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
           `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
           `<span>${relative(account.last_activity_at)}</span>`,
           `<span class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</span><div class="id">${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</div>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}`,
@@ -4951,7 +4932,7 @@
       ];
       return `<tr class="pipeline-action-row">
         <td>${listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)])}</td>
-        <td>${esc(account.stageLabel || stageLabel(accountStageOf(account)))}${stay}</td>
+        <td>${esc(account.stageLabel || stageLabel(account.stage))}${stay}</td>
         <td>${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div></td>
         <td>${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}</td>
         <td>${rowActionCluster(primaryActions, moreActions)}</td>
@@ -8949,7 +8930,7 @@
           ['回收操作人', recycle.recycledByName || recycle.recycledBy || '—'],
           ['回收时间', shortDate(recycle.recycledAt, true)],
           ['回收原因', recycle.reason || '—'],
-          ['原阶段', stageLabel(accountStageOf(account))], ['CRM 客户编号', customerId],
+          ['原阶段', stageLabel(account.stage)], ['CRM 客户编号', customerId],
           ['客户主档编号', account.external_customer_id || master.customerId || '—'],
         ].map(([label, value]) => `<div class="fact"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
@@ -9907,7 +9888,7 @@
       allowNickname: false,
     });
     syncStarButton($('#drawerStarBtn'), account);
-    $('#drawerStage').textContent = stageLabel(accountStageOf(account));
+    $('#drawerStage').textContent = stageLabel(account.stage);
     $('#drawerCompany').textContent = accountDisplayName(account);
     $('#drawerMeta').textContent = [accountIdentity(account), account.country, account.city, account.industry, account.customer_type].filter(Boolean).join(' · ');
     const activities = state.data.activities.filter(item => item.customer_id === account.id);
@@ -9924,7 +9905,7 @@
       ['成立年份', account.established_year || '未填写'],
       ...(technicalAIPresentationAllowed() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
       ['最近动作', relative(account.last_activity_at)],
-      ['管理介入', managerStateDisplay(account)],
+      ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
       ['官网', account.website, 'website'],
       ['联系人质量', account.best_contact_level],
     ];

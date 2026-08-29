@@ -90,32 +90,33 @@ test('accounts list response includes state projection for each row', async t =>
   const accounts = await fx.requestJson('/api/sales-crm/accounts', { cookie: fx.adminCookie });
   assert.ok(accounts.rows.length > 0);
   for (const row of accounts.rows) {
-    assert.ok('state' in row, 'each account row must have state');
-    assert.ok(row.state.stage, 'state.stage must be present');
-    assert.ok(typeof row.state.stage.terminal === 'boolean', 'state.stage.terminal must be boolean');
-    assert.ok('stage' in row, 'legacy stage field must be preserved');
+    assert.ok('stage' in row, 'legacy stage field must be present');
+    assert.ok('lifecycle_status' in row, 'legacy lifecycle_status field must be present');
+    assert.ok('assignment_status' in row, 'legacy assignment_status field must be present');
+    assert.ok(!('state' in row), 'accounts list no longer attaches a state DTO');
   }
 });
 
-test('bootstrap response includes state projection for each account', async t => {
+test('bootstrap response keeps legacy state columns without a state DTO', async t => {
   const fx = await adminFixture({});
   t.after(() => fx.close());
   const bootstrap = await fx.requestJson('/api/sales-crm/bootstrap', { cookie: fx.adminCookie });
   assert.ok(bootstrap.accounts.length > 0);
   for (const account of bootstrap.accounts) {
-    assert.ok('state' in account, 'each bootstrap account must have state');
-    assert.ok(account.state.stage, 'state.stage must be present');
     assert.ok('stage' in account, 'legacy stage field must be preserved');
+    assert.ok('lifecycle_status' in account, 'legacy lifecycle_status field must be present');
+    assert.ok('assignment_status' in account, 'legacy assignment_status field must be present');
+    assert.ok(!('state' in account), 'bootstrap accounts no longer attach a state DTO');
   }
 });
 
-test('profile for accessible CRM account includes state', async t => {
+test('profile for accessible CRM account keeps the CRM status contract', async t => {
   const fx = await adminFixture({});
   t.after(() => fx.close());
   const profile = await fx.requestJson('/api/sales-crm/profile/RU-9001', { cookie: fx.adminCookie });
-  assert.ok(profile.state, 'profile must include state for accessible CRM account');
-  assert.ok(profile.state.stage, 'state.stage must be present');
-  assert.equal(profile.state.stage.key, 'qualified');
+  assert.ok(profile.profileAccess, 'profile must include profileAccess');
+  assert.equal(profile.profileAccess.status, 'crm_accessible');
+  assert.ok(profile.customerPool, 'profile payload must still include customer data');
 });
 
 test('master profile without CRM account does not include state', async t => {
@@ -153,29 +154,22 @@ test('sales user profile for out-of-scope account does not include state', async
   assert.equal(profile.state, undefined, 'out-of-scope profile must not include state');
 });
 
-test('frontend recycle guards consume the unified state DTO first', () => {
+test('frontend recycle guards read lifecycle and assignment columns directly', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
-  assert.match(appSource, /function accountLifecycleActive/);
-  assert.match(appSource, /account\.state\.lifecycle\.key === 'active'/);
-  assert.match(appSource, /function accountAssignmentReturned/);
-  assert.match(appSource, /account\.state\.assignment\.key === 'returned'/);
-  assert.match(appSource, /canReturnCustomer\(account\)[\s\S]{0,220}accountLifecycleActive/);
+  assert.match(appSource, /String\(account\.lifecycle_status \|\| 'active'\) !== 'active'/);
+  assert.match(appSource, /String\(account\.assignment_status \|\| ''\) === 'returned'/);
+  assert.match(appSource, /canReturnCustomer\(account\)[\s\S]{0,220}lifecycle_status/);
 });
 
-test('frontend stage and manager display fall back to the unified state DTO', () => {
+test('frontend stage and manager display read account columns directly', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
-  assert.match(appSource, /function accountStageOf\(account\)/);
-  assert.match(appSource, /account\?\.stage \|\| account\?\.state\?\.stage\?\.key/);
-  assert.match(appSource, /function managerStateDisplay\(account\)/);
-  assert.match(appSource, /account\?\.state\?\.manager\?\.status/);
-  assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)/);
-  assert.match(appSource, /\['管理介入', managerStateDisplay\(account\)\]/);
-  assert.match(appSource, /stageLabel\(accountStageOf\(account\)\)\)\}[\s\S]{0,80}\$\{stay\}/);
-  assert.match(appSource, /\['原阶段', stageLabel\(accountStageOf\(account\)\)\]/);
+  assert.match(appSource, /stageLabel\(account\.stage\)/);
+  assert.match(appSource, /account\.manager_status \|\| \(account\.manager_required \? '待介入' : '暂不需要'\)/);
+  assert.doesNotMatch(appSource, /accountStageOf|managerStateDisplay|state\.stage\?\.key/);
 });
 
 test('account whitelist projection matches the legacy blacklist apart from the state DTO', () => {
-  const { redactContactFields, contactSafeAccountRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafeAccountRecord } = require('../lib/access_control');
   const account = {
     id: 'CRM-1', external_customer_id: 'RU-1', company_name: 'Firm', nickname: '昵称',
     country: 'RU', city: 'M', website: 'https://x.com', industry: 'auto',
@@ -216,7 +210,7 @@ test('account whitelist projection matches the legacy blacklist apart from the s
 });
 
 test('pipeline whitelist projection keeps reaction and queue fields like the blacklist', () => {
-  const { redactContactFields, contactSafePipelineRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafePipelineRecord } = require('../lib/access_control');
   const row = {
     id: 'CRM-1', external_customer_id: 'RU-1', company_name: 'Firm', nickname: '',
     country: 'RU', city: '', website: '', industry: '', customer_type: '',
@@ -249,7 +243,7 @@ test('pipeline whitelist projection keeps reaction and queue fields like the bla
 });
 
 test('insights whitelist projection matches the legacy blacklist on evaluation rows', () => {
-  const { redactContactFields, contactSafeInsightsRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafeInsightsRecord } = require('../lib/access_control');
   const row = {
     customerId: 'CRM-1', externalCustomerId: 'RU-1', companyName: 'Firm', nickname: '',
     country: 'RU', city: '', stage: 'meeting', priority: 'B',
@@ -268,7 +262,7 @@ test('insights whitelist projection matches the legacy blacklist on evaluation r
 });
 
 test('alerts whitelist projection matches the legacy blacklist with alert-copy preservation', () => {
-  const { redactContactFields, contactSafeAlertsRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafeAlertsRecord } = require('../lib/access_control');
   const alert = {
     id: 'OVERDUE-CRM-1', code: 'OVERDUE', severity: 'critical', title: '跟进任务已超期',
     detail: '秘密跟进 已超过计划时间', action: '今天完成跟进',
@@ -297,7 +291,7 @@ test('alerts whitelist projection matches the legacy blacklist with alert-copy p
 });
 
 test('activity whitelist projection matches the legacy blacklist on activity rows', () => {
-  const { redactContactFields, contactSafeActivityRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafeActivityRecord } = require('../lib/access_control');
   const row = {
     id: 'ACT-1', customer_id: 'CRM-1', user_id: 'U-1', activity_type: 'email', channel: 'email',
     outcome: '已回复', summary: '秘密摘要', next_action: '秘密跟进', next_action_at: 't',
@@ -319,7 +313,7 @@ test('activity whitelist projection matches the legacy blacklist on activity row
 });
 
 test('commerce whitelist projection matches the legacy blacklist on rfq, quote, and order rows', () => {
-  const { redactContactFields, contactSafeCommerceRecord } = require('../lib/domains/identity');
+  const { redactContactFields, contactSafeCommerceRecord } = require('../lib/access_control');
   const rows = [
     {
       id: 'RFQ-1', customer_id: 'CRM-1', user_id: 'U-1', activity_id: 'ACT-1',

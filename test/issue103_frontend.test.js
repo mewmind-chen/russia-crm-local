@@ -55,10 +55,8 @@ test('Issue #103 preserves the AI gate and applies one return eligibility rule e
   assert.match(js, /const showAssignmentAI = showAI && !salesView/);
   assert.match(js, /header: 'Fit \/ readiness \/ 优先级', fieldClass: 'col-fit', visible: showAI/);
   assert.match(js, /function canReturnCustomer\(account\)/);
-  assert.match(js, /function accountLifecycleActive\(account\)/);
-  assert.match(js, /account\.state\.lifecycle\.key === 'active'/);
-  assert.match(js, /function accountAssignmentReturned\(account\)/);
-  assert.match(js, /account\.state\.assignment\.key === 'returned'/);
+  assert.match(js, /String\(account\.lifecycle_status \|\| 'active'\) !== 'active'/);
+  assert.match(js, /String\(account\.assignment_status \|\| ''\) === 'returned'/);
   assert.match(js, /can\('manage_customer_recycle'\)/);
   assert.match(js, /const canReturn = canReturnCustomer\(account\)/);
   assert.match(js, /\$\{canReturnCustomer\(account\)/);
