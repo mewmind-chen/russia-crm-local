@@ -11,12 +11,12 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@a783c8c`，干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@03d3e91`，干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`a783c8c`（本轮阶段 B 三个状态切片：reject/return 网关收敛 + quote/order stage 前置校验）
-- 重构分支相对 `origin/main`：ahead 66（业务）+ 1（治理），未合并；本地未配置发布或生产动作。
+- 当前重构提交：`03d3e91`（阶段 B 续：addQuote/addOrder 的 stage/updated_at 写收敛到 state_write 网关）
+- 重构分支相对 `origin/main`：ahead 67（业务）+ 2（治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
@@ -26,6 +26,7 @@
 - `13cd37a`：`rejectCrmCustomer` 的 stage/lifecycle/assignment/owner 写收敛到 `lib/domains/lifecycle/state_write` 网关，回收专属字段仍直写。
 - `06a9868`：`applyCustomerReturn` 的 assignment/owner 写经同一网关，lifecycle 保持 active、stage 不动。
 - `a783c8c`：`addQuote`/`addOrder` 增加 stage 前置校验（报价前 stage≤quoted、首单前 stage≤won、复购任意），放在幂等回放短路之后。
+- `03d3e91`：`addQuote`/`addOrder` 的 stage/updated_at **写入**也收敛到 `applyAccountStatePatch`；`next_action*` 与 `last_activity_at` 仍直写（计划收敛为下一切片）。
 
 已经形成的主要切片包括：
 
@@ -41,7 +42,7 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `a783c8c`：13,860 行。
+- 当前提交态 `03d3e91`：13,861 行。
 - `sales-assets/app.js` 当前仍为 14,096 行。
 - 客户完整资料仍保留 iframe 兼容路径；尚未形成完整 widget 注册表。
 
@@ -65,9 +66,9 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1492/1492` 通过。
-- `node --test`：全量 `1852/1852` 通过（含此前修复的 12 个失败场景）。
-- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4。
+- `npm test`：全量 core `1497/1497` 通过。
+- `node --test`：全量 `1857/1857` 通过（含此前修复的 12 个失败场景）。
+- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_commerce_contract` 5/5。
 
 本轮新增 3 个契约测试文件共 8 个断言（reject/return 状态写收敛 + quote/order stage 前置校验），覆盖阶段 B 契约 §4 不变量与 §3.2 stage 推进。
 
@@ -80,14 +81,14 @@
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
 - 前端字段目录/widget 试点：已实现多个切片，但 widget 注册表和 iframe 收敛尚未完成。
 - 后端领域拆分：`lib/domains/` 42 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用，生产接线仅剩 3 个 lifecycle 模块经其他 lib 存活。
-- 阶段 B 状态真源：本轮首批落地——`rejectCrmCustomer`/`applyCustomerReturn` 写路径收敛到 `state_write` 网关，`addQuote`/`addOrder` 加 stage 前置校验；`addQuote`/`addOrder` 的 stage **写入本身**仍直写 SQL，未收敛到网关，保留为后续切片。
+- 阶段 B 状态真源：首批 + 续：`rejectCrmCustomer`/`applyCustomerReturn` 写路径收敛到 `state_write` 网关，`addQuote`/`addOrder` 加 stage 前置校验并把 stage/updated_at 写收敛到网关；剩余直写为 `next_action*`/`last_activity_at`（计划字段，属 collaboration_write 收敛范围）。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 生产部署/UAT：本轮未执行，不得从本地结果推断生产状态。
 
 ## 6. 下一步允许动作
 
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
-2. 阶段 B 后续切片：把 `addQuote`/`addOrder` 的 stage **写入**收敛到 `state_write` 网关（本轮只加了前置校验）；继续收敛其他状态下发的 stage/next_action 直写。
+2. 阶段 B 后续：把 `addQuote`/`addOrder`（及 `addActivity`/AI next_action 等）的 `next_action*`/`last_activity_at` 直写收敛到 `collaboration_write`/计划网关。
 3. 按接线清单逐模块把 `lib/domains/` 中被 WIP 回退的模块重新接入 `sales_crm.js`（保持兼容 forwarder；优先从有契约测试的 lifecycle 网关开始）。
 4. 收敛 pipeline 与 accounts/bootstrap/profile 之间 state DTO 的边界差异。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。

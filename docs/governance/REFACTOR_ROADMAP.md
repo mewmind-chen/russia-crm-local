@@ -2,8 +2,8 @@
 
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@a783c8c`（相对基线 ahead 67，未合并）
-状态：路线图执行中；阶段 B 首批状态写收敛已落地（reject/return 网关 + quote/order stage 前置校验），全绿
+执行分支：`codex/frontend-widget-pilot@03d3e91`（相对基线 ahead 69，未合并）
+状态：路线图执行中；阶段 B 状态写收敛已推进至 quote/order（前置校验 + stage 写网关），全绿
 
 ## 当前进度快照
 
@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
 | 阶段 A：后端结构化切分 | 进行中（接线恢复中） | `lib/domains/` 42 个文件；审计确认 WIP 回退其在 sales_crm.js 的全部引用 | 需按接线清单重建接线；聚合文件仍超 1.3 万行 |
-| 阶段 B：状态真源 | 首批落地 | reject/return 经 state_write 网关、quote/order stage 前置校验、契约测试 8 项 | addQuote/addOrder 的 stage 写入仍直写，未收敛网关 |
+| 阶段 B：状态真源 | 进行中（多切片已落地） | reject/return 经 state_write、quote/order 前置校验 + stage 写网关，契约测试 13 项 | `next_action*`/`last_activity_at` 直写仍未收敛到计划网关 |
 | 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交 | 白名单兼容回归已恢复；页面覆盖未完成 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
 | 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
@@ -188,8 +188,8 @@
 
 恢复顺序固定为：
 
-1. 阶段 B 首批状态写收敛已落地并独立提交（`13cd37a`/`06a9868`/`a783c8c`），契约测试 8/8、全量 1852/1852 绿灯。
-2. 继续阶段 B：把 `addQuote`/`addOrder` 的 stage 写入收敛到 `state_write` 网关（本轮仅加了前置校验），并收其他商务/回收写点。
+1. 阶段 B 状态写收敛已推进并独立提交（`13cd37a`/`06a9868`/`a783c8c`/`03d3e91`），契约测试 13 项、全量 1857/1857 绿灯。
+2. 继续阶段 B：把 `addQuote`/`addOrder`（及 `addActivity`/AI next_action 等）的 `next_action*`/`last_activity_at` 直写收敛到 `collaboration_write` 计划网关。
 3. 按接线清单（见 `sessions/2026-08-29-state-write-convergence.md`）重新接入 `lib/domains/` 中被 WIP 回退的模块，优先经 lifecycle 网关。
 4. 收敛 pipeline 与 accounts/bootstrap/profile 之间 state DTO 的边界差异。
 
