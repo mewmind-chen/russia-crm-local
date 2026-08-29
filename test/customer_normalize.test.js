@@ -40,6 +40,8 @@ const { safeUser } = require('../lib/domains/auth/user');
 const { intakeActionIdempotencyKey, manualAssignmentRequestHash, manualAssignmentRequiresPreview } = require('../lib/domains/intake/assignment');
 const { normalizeListQuery, listPage } = require('../lib/domains/list/pagination');
 const { json, parseJsonObject } = require('../lib/domains/json/parse');
+const { anonymousSalesRoute } = require('../lib/domains/http/routes');
+const { notificationVisibleForFeatures } = require('../lib/domains/notifications/visibility');
 
 const {
   normalizeCountry,
@@ -768,6 +770,23 @@ test('json parses resiliently and parseJsonObject narrows to a plain object', ()
   assert.deepEqual(parseJsonObject('{"a":1}'), { a: 1 });
   assert.deepEqual(parseJsonObject('garbage'), {});
   assert.deepEqual(parseJsonObject(null), {});
+});
+
+test('notificationVisibleForFeatures gates station-specific codes by feature flags', () => {
+  const on = { ai_stations: { effectiveEnabled: true }, sales_pack: { effectiveEnabled: true } };
+  const noAI = { ai_stations: { effectiveEnabled: false }, sales_pack: { effectiveEnabled: true } };
+  const noPack = { ai_stations: { effectiveEnabled: true }, sales_pack: { effectiveEnabled: false } };
+  assert.equal(notificationVisibleForFeatures('SALES_PACK_READY', on), true);
+  assert.equal(notificationVisibleForFeatures('SALES_PACK_READY', noAI), false);
+  assert.equal(notificationVisibleForFeatures('SALES_PACK_FAILED', noPack), false);
+  assert.equal(notificationVisibleForFeatures('CUSTOMER_DUE', noAI), true);
+});
+
+test('anonymousSalesRoute collapses paths to route templates', () => {
+  assert.equal(anonymousSalesRoute('GET', '/api/sales-crm/accounts/CRM-1'), 'GET /accounts/:customerId');
+  assert.equal(anonymousSalesRoute('POST', '/api/sales-crm/accounts/bulk-assign'), 'POST /accounts/:customerId');
+  assert.equal(anonymousSalesRoute('get', '/api/sales-crm/notifications/N-1/read'), 'GET /notifications/:notificationId/read');
+  assert.equal(anonymousSalesRoute('GET', '/api/sales-crm/accounts/CRM-1?page=1'), 'GET /accounts/:customerId');
 });
 
 test('buildTeamReport aggregates per-sales performance with rates and ranking', () => {
