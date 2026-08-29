@@ -38,7 +38,8 @@
 - 测试命令、总数、通过/失败数和失败归因；
 - 权限、数据、迁移、依赖和运行时影响；
 - 回滚点、风险、阻塞和下一步最小动作；
-- 更新 `CURRENT_STATE.md`，新增当次 `sessions/*.md`。
+- 更新 `CURRENT_STATE.md`，新增当次 `sessions/*.md`；
+- **重新生成进度看板**：运行 `npm run board`（`node scripts/progress_board.js`），把再生成的 `PROGRESS_BOARD.md` 与 `progress-board.html` 随治理文档一并提交——看板数据自动推导自 git 提交、`lib/` 扫描与治理文档，无需手工更新；每个切片收尾都必须执行，作为完成定义的一部分（“做一个任务就自动更新，不用提示”的机制保证）。
 
 ## 强制暂停条件
 

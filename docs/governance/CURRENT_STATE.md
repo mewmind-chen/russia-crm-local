@@ -40,6 +40,8 @@
 
 **阶段 A 接线恢复（首批 7 个模块）**：按接线清单把被 WIP 回退的纯 helper 域模块重新接入 `sales_crm.js`（逐字一致、drop-in，行为不变）；`sales_crm.js` 行数从 13,970 降至 13,850。已接线域模块：`json/parse`、`list/pagination`、`audit/redact`、`notifications/visibility`、`http/error`、`http/routes`、`reporting/csv`、`insights/labels`（与既有 lifecycle 三网关合计 11 个模块被生产代码引用）。其余被回退模块（customer/activity/planning/intake/commerce/auth/reporting-builders 等）需逐块核对逐字一致性后恢复。
 
+**进度看板**：`docs/governance/PROGRESS_BOARD.md`（仓库内真值）与 `docs/governance/progress-board.html`（浏览器可视化）由 `scripts/progress_board.js` 自动生成（`npm run board`；`npm run board:watch` 实时监听）。数据自动推导自 git 提交（origin/main..HEAD）、`lib/` 代码扫描与治理文档（CURRENT_STATE/sessions），无手工维护字段；每个切片收尾按 WORK_PROTOCOL 自动再生成并随治理文档提交。
+
 已经形成的主要切片包括：
 
 - 字段目录与 schema 驱动显示：线索池、客户资料字段分组、profile widgets、用户级 section 偏好。

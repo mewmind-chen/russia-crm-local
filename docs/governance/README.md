@@ -35,6 +35,7 @@
 ## 文档分工
 
 - `CURRENT_STATE.md`：唯一滚动更新的进度、Git 和测试状态。
+- `PROGRESS_BOARD.md` / `progress-board.html`：自动生成的重构进度看板（`npm run board` 再生成；每切片收尾自动更新），数据推导自 git、`lib/` 扫描与治理文档。
 - `REPOSITORY_MAP.md`：目录职责、代码入口和开发边界。
 - `REFACTOR_ROADMAP.md`：长期阶段、门禁和当前恢复点。
 - `DECISION_LOG.md`：已经作出的关键决策，不覆盖旧决策。

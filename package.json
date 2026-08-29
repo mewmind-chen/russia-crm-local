@@ -6,6 +6,8 @@
     "test": "node scripts/run-core-tests.js",
     "test:ai-legacy": "node scripts/run-core-tests.js --ai",
     "check:ai-boundary": "node scripts/check-ai-boundary.js",
+    "board": "node scripts/progress_board.js",
+    "board:watch": "node scripts/progress_board.js --watch",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "crm:setup": "node -e \"require('./lib/sales_crm').installSalesCrm(); console.log('Sales CRM ready')\"",
