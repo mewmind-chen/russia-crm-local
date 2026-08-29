@@ -18,8 +18,11 @@ test('customer normalize helpers are wired from domain module, not inlined', () 
   assert.doesNotMatch(source, /^function normalizeEstablishedYear\(/m);
   assert.doesNotMatch(source, /^function normalizeAccountNickname\(/m);
   assert.doesNotMatch(source, /^function normalizeCustomerStarReason\(/m);
-  // 注入点：normalizeEstablishedYear 3 + normalizeAccountNickname 2 + normalizeCustomerStarReason 1 = 6
-  // （activity_present 批已有 10 处，合计下限 16）
-  const injections = (source.match(/\{ badRequest \}/g) || []).length;
-  assert.ok(injections >= 16, `expected >=16 injected call sites, got ${injections}`);
+  // normalize 系调用点必须注入 { badRequest }
+  assert.match(source, /normalizeCustomerStarReason\(payload\.reason, \{ badRequest \}\)/);
+  assert.match(source, /normalizeAccountNickname\(payload\?\.nickname, \{ badRequest \}\)/);
+  assert.match(source, /normalizeAccountNickname\(payload\.nickname, \{ badRequest \}\)/);
+  assert.match(source, /normalizeEstablishedYear\(customerInput\.establishedYear, \{ badRequest \}\)/);
+  assert.match(source, /normalizeEstablishedYear\(payload\.establishedYear, \{ badRequest \}\)/);
+  assert.match(source, /normalizeEstablishedYear\(next, \{ badRequest \}\)/);
 });
