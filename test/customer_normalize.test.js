@@ -32,6 +32,8 @@ const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
 const { httpError, badRequest, notFound, conflictError } = require('../lib/domains/http/error');
 const { filterVersionError } = require('../lib/domains/filter/errors');
 const { inaccessibleOrMissing } = require('../lib/domains/auth/access');
+const planningTodayTask = require('../lib/domains/planning/today_task');
+const { todayTaskError, normalizeTodayTaskDate } = planningTodayTask;
 const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeatureDisabled } = require('../lib/domains/insights/evaluation');
 const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
 const { duplicateFingerprint, hydrateDuplicateCandidate, reviewCandidateRows, reviewHasProtectedExact } = require('../lib/domains/customer/dedupe');
@@ -819,6 +821,15 @@ test('filterVersionError builds the stable conflict error', () => {
   const built = filterVersionError({ httpError });
   assert.equal(built.code, 'FILTER_VERSION_CONFLICT');
   assert.equal(built.statusCode, 409);
+});
+
+test('todayTaskError preserves status and code and date normalization delegates parsing', () => {
+  const error = todayTaskError(400, '无效操作');
+  assert.equal(error.statusCode, 400);
+  assert.equal(error.code, 'TODAY_TASK_INVALID');
+  const custom = todayTaskError(409, '过期', 'STALE', { error: httpError });
+  assert.equal(custom.code, 'STALE');
+  assert.equal(normalizeTodayTaskDate('2026-08-29 10:00', { parseBusinessDateTime: value => `parsed:${value}` }), 'parsed:2026-08-29 10:00');
 });
 
 test('inaccessibleOrMissing hides existence from scoped actors', () => {
