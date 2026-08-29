@@ -29,6 +29,9 @@ const { advanceStage } = require('../lib/domains/commerce/rules');
 const { identityConflictNote } = require('../lib/domains/customer/identity');
 const { parseMismatchRecordKey, mismatchRecordNotFound } = require('../lib/domains/customer/recycle');
 const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
+const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeatureDisabled } = require('../lib/domains/insights/evaluation');
+const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
+const { duplicateFingerprint } = require('../lib/domains/customer/dedupe');
 
 const {
   normalizeCountry,
@@ -582,4 +585,87 @@ test('parseMismatchRecordKey parses account and intake keys and rejects malforme
   } });
   assert.deepEqual(capture, [[404, '不对口记录不存在', 'MISMATCH_RECORD_NOT_FOUND']]);
   assert.equal(notFound.statusCode, 404);
+});
+
+test('duplicateFingerprint is deterministic and legacy rule versions keep the v1 contract', () => {
+  const input = {
+    companyName: ' Acme ', website: 'https://acme.example', country: '俄罗斯',
+    city: '莫斯科', industry: '连接器', customerType: '渠道', nickname: 'Acme', russianName: '', englishName: 'Acme',
+  };
+  assert.equal(duplicateFingerprint(input), duplicateFingerprint(input));
+  assert.notEqual(duplicateFingerprint(input), duplicateFingerprint(input, 'legacy-v1'));
+  assert.equal(duplicateFingerprint({ companyName: 'Acme', country: '俄罗斯' }), duplicateFingerprint({ companyName: ' Acme ', country: ' 俄罗斯 ' }));
+  assert.equal(duplicateFingerprint({}, 'legacy-v1'), duplicateFingerprint({}, 'legacy-v1'));
+});
+
+test('serializeArbitrationDecision projects the stable DTO shape', () => {
+  assert.deepEqual(serializeArbitrationDecision({
+    disposition: 'assign', assignable: true, managerReview: false, userId: 'U-1',
+    suggestedUserId: 'U-1', deterministicUserId: 'U-1', aiUserId: 'AI-1', source: 'deterministic_rules',
+    reasonCode: 'ok', reason: '正常', aiConfidence: 0.8,
+  }), {
+    disposition: 'assign', assignable: true, managerReview: false, userId: 'U-1',
+    suggestedUserId: 'U-1', deterministicUserId: 'U-1', aiUserId: 'AI-1', source: 'deterministic_rules',
+    reasonCode: 'ok', reason: '正常', aiConfidence: 0.8,
+  });
+  assert.deepEqual(serializeArbitrationDecision({}), {
+    disposition: '', assignable: false, managerReview: false, userId: '', suggestedUserId: '',
+    deterministicUserId: '', aiUserId: '', source: '', reasonCode: '', reason: '', aiConfidence: 0,
+  });
+});
+
+test('withoutArbitrationAI masks AI influence in arbitration decisions', () => {
+  const decision = {
+    disposition: 'assign', source: 'ai_ranking', reasonCode: 'ranking_based',
+    reason: 'AI 推荐高分', userId: 'U-1', deterministicUserId: 'U-1', assignable: true, managerReview: false,
+  };
+  const safe = withoutArbitrationAI(decision, 'fallback');
+  assert.equal(safe.source, 'deterministic_rules');
+  assert.equal(safe.reasonCode, 'deterministic_fallback');
+  assert.equal(safe.reason, '按确定性规则与当前负荷分配');
+  const kept = withoutArbitrationAI({ disposition: 'assign', source: 'rules', reasonCode: 'low_load', reason: '负荷低', userId: 'U-1' });
+  assert.equal(kept.source, 'rules');
+  assert.equal(kept.reasonCode, 'low_load');
+});
+
+test('serializeRecommendation projects the ranked candidate DTO shape', () => {
+  assert.deepEqual(serializeRecommendation({
+    available: true, reasonCode: 'ok', resultId: 'R-1', jobId: 'J-1', snapshotId: 'S-1',
+    confidence: 0.9, reviewRequired: false,
+    rankedCandidates: [{ userId: 'U-1', score: 10, reasons: ['a', 'b'] }],
+  }), {
+    available: true, reasonCode: 'ok', resultId: 'R-1', jobId: 'J-1', snapshotId: 'S-1',
+    confidence: 0.9, reviewRequired: false,
+    rankedCandidates: [{ userId: 'U-1', score: 10, reasons: ['a', 'b'] }],
+  });
+  assert.deepEqual(serializeRecommendation({}), {
+    available: false, reasonCode: '', resultId: '', jobId: '', snapshotId: '',
+    confidence: 0, reviewRequired: false, rankedCandidates: [],
+  });
+});
+
+test('normalizeEvaluation projects the DTO shape and without* strips AI fields', () => {
+  const row = {
+    id: 'EV-1', customer_id: 'CRM-1', subject_type: 'account', subject_id: 'CRM-1', subject_name: 'Acme',
+    subject_title: '销售', evaluation_text: '不错', author_id: 'U-1', author_name: '王五',
+    ai_status: 'done', ai_summary: 'AI', ai_labels_json: '["好"]', ai_order_keys_json: '["k"]',
+    ai_risks_json: '[]', ai_strategy: 's', ai_model: 'm', ai_error: '', ai_generated_at: '2026-01-01',
+    created_at: '2026-01-02',
+  };
+  const evaluation = normalizeEvaluation(row);
+  assert.equal(evaluation.id, 'EV-1');
+  assert.equal(evaluation.customerId, 'CRM-1');
+  assert.equal(evaluation.aiLabels[0], '好');
+  assert.equal(evaluation.aiStatus, 'done');
+  const manual = withoutEvaluationAI(evaluation);
+  assert.equal(manual.aiStatus, undefined);
+  assert.equal(manual.evaluationText, '不错');
+  assert.equal(withoutEvaluationAIRow({ ai_status: 'done', name: 'Acme' }).name, 'Acme');
+  assert.equal(withoutEvaluationAIRow({ ai_status: 'done' }).ai_status, undefined);
+  assert.equal(withoutEvaluationAI(null), null);
+  assert.equal(withoutEvaluationAIRow(null), null);
+  const error = aiFeatureDisabled();
+  assert.equal(error.message, 'AI feature is disabled');
+  assert.equal(error.statusCode, 409);
+  assert.equal(error.code, 'AI_FEATURE_DISABLED');
 });
