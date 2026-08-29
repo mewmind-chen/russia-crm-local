@@ -31,7 +31,7 @@ const { parseMismatchRecordKey, mismatchRecordNotFound } = require('../lib/domai
 const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
 const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeatureDisabled } = require('../lib/domains/insights/evaluation');
 const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
-const { duplicateFingerprint } = require('../lib/domains/customer/dedupe');
+const { duplicateFingerprint, hydrateDuplicateCandidate, reviewCandidateRows, reviewHasProtectedExact } = require('../lib/domains/customer/dedupe');
 const { redactAuditPayload } = require('../lib/domains/audit/redact');
 const { normalizeActivityActionQueueKey, publicActivityReaction, escapeActivitySearchLike } = require('../lib/domains/activity/present');
 const { hashPassword } = require('../lib/domains/auth/credentials');
@@ -763,4 +763,23 @@ test('buildTeamReport aggregates per-sales performance with rates and ranking', 
   assert.equal(row.metrics.orders, 1);
   assert.equal(row.overall > 0, true);
   assert.deepEqual(row.bestCountries, ['俄罗斯']);
+});
+
+test('hydrateDuplicateCandidate prefers live catalog values and review helpers parse row JSON', () => {
+  const catalog = [{
+    customerId: 'C-1', crmAccountId: 'CRM-1', companyName: 'Acme 正式', nickname: 'Acme', website: 'https://acme.example',
+    country: '俄罗斯', ownerId: 'U-1', ownerName: '王五', customerStage: 'meeting', assignmentStatus: 'claimed',
+  }];
+  const hydrated = hydrateDuplicateCandidate({ customerId: 'C-1', crmAccountId: 'CRM-1', score: 0.8, matchedBy: 'fuzzy' }, catalog);
+  assert.equal(hydrated.companyName, 'Acme 正式');
+  assert.equal(hydrated.ownerId, 'U-1');
+  assert.equal(hydrated.score, 0.8);
+  assert.equal(hydrated.matchedBy, 'fuzzy');
+  assert.equal(hydrated.website, 'https://acme.example');
+  assert.equal(hydrateDuplicateCandidate({ customerId: 'C-X', score: 2 }, []).customerId, 'C-X');
+  assert.deepEqual(reviewCandidateRows({ current_candidates_json: '[{"customerId":"C-1"},{"score":1}]' }).map(row => row.customerId), ['C-1']);
+  assert.deepEqual(reviewCandidateRows({ candidates_json: '[{"customerId":"C-2"}]' }).map(row => row.customerId), ['C-2']);
+  assert.equal(reviewHasProtectedExact({ current_candidates_json: '[{"isProtected":true,"exact":true}]' }), true);
+  assert.equal(reviewHasProtectedExact({ current_candidates_json: '[{"isProtected":true,"exact":false}]' }), false);
+  assert.equal(reviewHasProtectedExact({}), false);
 });
