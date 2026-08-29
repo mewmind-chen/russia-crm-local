@@ -27,8 +27,11 @@ const { buildCountryReport, buildCohortReport, buildTeamReport } = require('../l
 const { csvCell, csvSerialize } = require('../lib/domains/reporting/csv');
 const { advanceStage } = require('../lib/domains/commerce/rules');
 const { identityConflictNote } = require('../lib/domains/customer/identity');
-const { parseMismatchRecordKey, mismatchRecordNotFound } = require('../lib/domains/customer/recycle');
+const { parseMismatchRecordKey, mismatchRecordNotFound, assertCustomerReturnEligible, manualReturnBatchId } = require('../lib/domains/customer/recycle');
 const { safeEvaluationLabel } = require('../lib/domains/insights/labels');
+const { httpError, badRequest, notFound, conflictError } = require('../lib/domains/http/error');
+const { filterVersionError } = require('../lib/domains/filter/errors');
+const { inaccessibleOrMissing } = require('../lib/domains/auth/access');
 const { normalizeEvaluation, withoutEvaluationAI, withoutEvaluationAIRow, aiFeatureDisabled } = require('../lib/domains/insights/evaluation');
 const { serializeArbitrationDecision, withoutArbitrationAI, serializeRecommendation } = require('../lib/domains/intake/decision');
 const { duplicateFingerprint, hydrateDuplicateCandidate, reviewCandidateRows, reviewHasProtectedExact } = require('../lib/domains/customer/dedupe');
@@ -787,6 +790,44 @@ test('anonymousSalesRoute collapses paths to route templates', () => {
   assert.equal(anonymousSalesRoute('POST', '/api/sales-crm/accounts/bulk-assign'), 'POST /accounts/:customerId');
   assert.equal(anonymousSalesRoute('get', '/api/sales-crm/notifications/N-1/read'), 'GET /notifications/:notificationId/read');
   assert.equal(anonymousSalesRoute('GET', '/api/sales-crm/accounts/CRM-1?page=1'), 'GET /accounts/:customerId');
+});
+
+test('httpError family builds status-tagged errors', () => {
+  const e = httpError(404, '未找到', 'NOT_FOUND');
+  assert.equal(e.message, '未找到');
+  assert.equal(e.statusCode, 404);
+  assert.equal(e.code, 'NOT_FOUND');
+  assert.equal(httpError(500, 'x').code, undefined);
+  assert.equal(badRequest('参数错误').statusCode, 400);
+  assert.equal(notFound('记录不存在').statusCode, 404);
+  assert.equal(conflictError('冲突', 'CONFLICT').code, 'CONFLICT');
+  assert.equal(conflictError('冲突').statusCode, 409);
+});
+
+test('recycle eligibility and manual batch id helpers', () => {
+  const capture = [];
+  const injected = { httpError: (statusCode, message, code) => { capture.push([statusCode, code]); return { statusCode, code }; } };
+  assert.throws(() => assertCustomerReturnEligible({ assignment_status: 'returned' }, injected), { statusCode: 409 });
+  assert.deepEqual(capture, [[409, 'CUSTOMER_RETURN_STATE_INVALID']]);
+  const eligible = { assignment_status: 'claimed', lifecycle_status: 'active' };
+  assert.equal(assertCustomerReturnEligible(eligible), eligible);
+  assert.equal(manualReturnBatchId('2026-08-29 10:00'), 'BATCH-MANUAL-RETURN-20260829');
+});
+
+test('filterVersionError builds the stable conflict error', () => {
+  assert.equal(filterVersionError().message, '筛选权限已更新，请重新加载筛选项');
+  const built = filterVersionError({ httpError });
+  assert.equal(built.code, 'FILTER_VERSION_CONFLICT');
+  assert.equal(built.statusCode, 409);
+});
+
+test('inaccessibleOrMissing hides existence from scoped actors', () => {
+  const fullScope = inaccessibleOrMissing({ permissions: { view_all_customers: true, manage_intake: true } }, '客户不存在');
+  assert.equal(fullScope.statusCode, 404);
+  assert.equal(fullScope.message, '客户不存在');
+  const scoped = inaccessibleOrMissing({ permissions: { view_all_customers: false } }, '客户不存在');
+  assert.equal(scoped.statusCode, 403);
+  assert.equal(scoped.message, '无权访问该客户');
 });
 
 test('buildTeamReport aggregates per-sales performance with rates and ranking', () => {
