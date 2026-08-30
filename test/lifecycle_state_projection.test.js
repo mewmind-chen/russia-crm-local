@@ -129,7 +129,7 @@ test('master profile without CRM account does not include state', async t => {
   assert.ok(profile.customerPool, 'profile payload must still include customer data');
 });
 
-test('pipeline list rows include state projection', async t => {
+test('pipeline list rows keep legacy state columns without a state DTO', async t => {
   const fx = await adminFixture({});
   t.after(() => fx.close());
   const response = await fx.request('/api/sales-crm/lists/pipeline', { cookie: fx.adminCookie });
@@ -137,9 +137,10 @@ test('pipeline list rows include state projection', async t => {
   assert.equal(response.status, 200, body.error);
   assert.ok(body.rows.length > 0);
   for (const row of body.rows) {
-    assert.ok('state' in row, 'each pipeline row must have state');
-    assert.ok(row.state.stage, 'state.stage must be present');
     assert.ok('stage' in row, 'legacy stage field must be preserved');
+    assert.ok('lifecycle_status' in row, 'legacy lifecycle_status field must be present');
+    assert.ok('assignment_status' in row, 'legacy assignment_status field must be present');
+    assert.ok(!('state' in row), 'pipeline rows no longer attach a state DTO');
   }
 });
 
