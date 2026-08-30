@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 01:07:24`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 03:00:51`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,11 +8,11 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `64b4ff7`（相对 origin/main ahead 103） |
+| HEAD | `0ae90af`（相对 origin/main ahead 105） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 1913/1913 |
-| 核心测试 | `npm test` 1552/1552 |
-| sales_crm.js | 12973 行 |
+| 全量测试 | `node --test` 1914/1914 |
+| 核心测试 | `npm test` 1553/1553 |
+| sales_crm.js | 12967 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-29-phase-a-wiring-recovery-batch-7-13-complete.md` |
 
@@ -21,10 +21,10 @@
 | 类别 | 数量 |
 |---|---|
 | refactor(state) 状态写收敛 | 8 |
-| refactor(domains) 域接线 | 17 |
+| refactor(domains) 域接线 | 18 |
 | refactor(其他/通用) | 37 |
 | feat(...) | 15 |
-| docs(governance) | 14 |
+| docs(governance) | 15 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -117,7 +117,7 @@
 
 ### 待办
 
-- [ ] **B-P1** §4 强化：assert*Transition 前置校验全面落地
+- [ ] **B-P1** §4 强化续：recycled/returned/plan 不变量 assert* 守卫（quote/order guard 已落地 0ae90af）
 - [ ] **B-P2** AI next_action 写点与测试专用种子收敛（AI 受红线约束）
 - [ ] **B-P3** pipeline 与 accounts 的 state DTO 边界差异收敛
 
