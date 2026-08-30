@@ -3,7 +3,7 @@
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
 执行分支：`codex/frontend-widget-pilot@cb6c6e4`（相对基线 ahead 108，未合并）
-状态：路线图执行中；阶段 B §1 完成门达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B §4 强化推进中（assert*Transition 守卫 + 状态契约不变量守卫 + time_basis 投影维度），全绿
+状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B §1 写点收敛完成门达成（含 updateAccount profile 编辑，lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 B §4 强化推进中（assert*Transition 守卫 + 状态契约不变量守卫 + time_basis 投影维度 + 告警/报告/pipeline 读路径投影消费），全绿
 
 ## 当前进度快照
 
@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
 | 阶段 A：后端结构化切分 | 接线恢复完成（39/42 已接入） | `lib/domains/` 42 个文件；39 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 12,966 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；聚合文件仍超 1.2 万行 |
-| 阶段 B：状态真源 | §1 完成门+§4 强化推进中 | 全部写点收敛到 state_write/collaboration_write 网关（8 切片、34 契约断言），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影 | §4.4 剩余（assertAccountStateContract 接入回收路径）、AI 写点收敛、状态解释器统一消费 |
+| 阶段 B：状态真源 | §1 完成门+§4 强化推进中 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影 | §4 剩余（assertAccountStateContract 接入回收路径）、AI 写点收敛（红线）、状态解释器统一消费 |
 | 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交 | 白名单兼容回归已恢复；页面覆盖未完成 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
 | 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
@@ -192,6 +192,7 @@
 2. 阶段 A 接线恢复 13 个切片已全部落地（`0560e9c`→`5c23b32`：42 个域模块中 39 个重新接入，含纯函数 drop-in 与注入式错误构造经调用点注入保持语义），接线契约 24/24；全量 1913/1913 绿灯。
 3. 阶段 A 接线恢复完成：剩余 `identity/index`、`identity/middleware`、`filter/index` 三个模块按用户裁定保持内联/精简，不再接线。后续如需继续减单体，评估已漂移模块（如 `customer/normalize` 的纯常量/配置类）。
 4. 阶段 B §4 强化已分 6 片落地：`0ae90af` `addQuote`/`addOrder` stage 前置校验提炼为网关 `assertQuoteTransition`/`assertFirstOrderTransition` 守卫（`STAGE_INDEX` 单调推进 + `STAGE_PRECONDITION_VIOLATION`）；`9186a6d` 注册 `assertAccountStateContract` 不变量守卫（§4.1 recycled 不配 claimed/assigned、§4.2 returned 不绑 owner）；`cb6c6e4` `projectNextAction` 纳入 time_basis 维度（§4.3 有值必配 basis 否则 degraded）；`754d023` `buildAlerts` 告警路径收敛到 `projectNextAction` 投影（§4.4）并修正 issue225 测试种子补写 basis；`c4bba3f` `buildTeamReport` 报告路径 planned/overdue 收敛到 `projectNextAction` 投影（§4.4）；`fe77fb4` `pipelineActionKeys` 的 due_followup/manager_assistance 收敛到 `projectNextAction.overdue`/`projectManagerState`，并移除失效的 `nowText` 参数（§4.4）。全量 1927/1927 绿灯。
-5. 阶段 B 收尾：继续 §4 强化剩余（§4.4 将 `assertAccountStateContract` 接入回收/恢复路径的完整视图校验）、AI 写点（受红线约束）与种子收敛、明确 `last_activity_at` 归属；再收敛 pipeline 与 accounts 的 state DTO 边界差异。
+5. 阶段 B §1 收尾：`aabe4d9` 把 `updateAccount`（profile 编辑，此前经动态字段直写 stage/owner/assignment/next_action/manager_*）收敛到 state/plan/manager 三个网关，claim/unassign 权限子流保持；§1"零裸写"完成门经审计纠正后达成。全量 1934/1934 绿灯。
+6. 阶段 B 收尾：继续 §4 强化剩余（将 `assertAccountStateContract` 接入回收/恢复路径的完整视图校验）、AI 写点（受红线约束）与种子收敛、明确 `last_activity_at` 归属（已定为活动溯源）；再收敛 pipeline 与 accounts 的 state DTO 边界差异。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。

@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 06:34:14`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 08:21:29`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,11 +8,11 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `64986a0`（相对 origin/main ahead 123） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 1927/1927 |
-| 核心测试 | `npm test` 1566/1566 |
-| sales_crm.js | 12969 行 |
+| HEAD | `aabe4d9`（相对 origin/main ahead 125） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 1934/1934 |
+| 核心测试 | `npm test` 1573/1573 |
+| sales_crm.js | 12984 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-30-audit-ai-next-action-and-updateaccount-write.md` |
 
@@ -20,11 +20,11 @@
 
 | 类别 | 数量 |
 |---|---|
-| refactor(state) 状态写收敛 | 8 |
+| refactor(state) 状态写收敛 | 9 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 40 |
 | feat(...) | 15 |
-| docs(governance) | 28 |
+| docs(governance) | 29 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -99,7 +99,7 @@
 
 ## 阶段 B：状态真源
 
-> **进行中** — §1 写点收敛大部完成，但 updateAccount（profile 编辑）仍经动态字段拼装直写 stage/owner/assignment/next_action（审计纠正，待收敛）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；契约测试 50 断言。
+> **进行中** — §1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；契约测试 57 断言。
 
 ### 已落地切片
 
@@ -114,13 +114,13 @@
 | 今日任务/纯计划写收敛 | `8743912` | 2026-08-29 |
 | 领取/主管任务/超时线索/重分配写收敛 | `531bc71` | 2026-08-29 |
 | 回收/恢复写收敛 | `227b3d7` | 2026-08-29 |
+| updateAccount profile 编辑写收敛 | `aabe4d9` | 2026-08-30 |
 
 ### 待办
 
-- [ ] **B-P1** 收敛 updateAccount 直写（profile 编辑，经 state_write/collaboration_write，保持 claim/unassign 子流权限）
-- [ ] **B-P2** §4 强化续：§4.4 剩余（assertAccountStateContract 接入回收/恢复路径完整视图校验）
-- [ ] **B-P3** AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源
-- [ ] **B-P4** pipeline 与 accounts 的 state DTO 边界差异收敛
+- [ ] **B-P1（§4 剩余）** assertAccountStateContract 接入回收/恢复路径完整视图校验
+- [ ] **B-P2** AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源
+- [ ] **B-P3** pipeline 与 accounts 的 state DTO 边界差异收敛
 
 ## 阶段 C：权限/筛选/字段
 
