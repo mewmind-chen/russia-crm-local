@@ -132,7 +132,7 @@
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
-4. 阶段 C（权限/筛选/字段）为当前执行阶段：`78e698b`/`5e992fe`/`1835f73` 已把 accounts 列表、intake 页、通知页切到字段级白名单。续：评估并收敛剩余 `redactContactFields` 路径（evaluation/alert payload `sales_crm.js:7022/9975/10631/11631`、db bootstrap `db.js:1564/1707`；AI 相关 `assistant.js`/`task_center.js` 红线除外）、统一 `buildAccessContext` 与列表查询范围解释器、按页面落地"权限→字段→筛选"合同测试。
+4. 阶段 C（权限/筛选/字段）为当前执行阶段：`78e698b`/`5e992fe`/`1835f73` 已把 accounts 列表、intake 页、通知页切到字段级白名单。**大聚合 payload 白名单化已出设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`，8 片 S1–S8）：按"形状先于组合"推进——S2 intake-state 复合（接 `sales_crm.js:11631`）→ S3 timeline/master → S4 bootstrap → S5 recycle-profile → S6 export → S7 db bootstrap；每片沿用"白名单键集 + 等价契约 + API 行为契约"范式。统一 `buildAccessContext` 与列表范围解释器、按页面"权限→字段→筛选"合同为其后主线。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
