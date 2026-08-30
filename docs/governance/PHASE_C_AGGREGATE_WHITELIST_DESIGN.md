@@ -23,23 +23,26 @@
 
 ## 3. 形状清单与白名单映射
 
-| 形状 | 现有白名单 | 需新建立 |
-|---|---|---|
-| account rows | ✅ `contactSafeAccountRecord` | |
-| pool rows | ✅ `contactSafePoolRecord` | |
-| recon rows | ✅ `contactSafeReconRecord` | |
-| evaluation rows（insights） | ✅ `contactSafeInsightsRecord`（需核验 evaluation payload 键集） | |
-| alert rows（alarm copy） | ✅ `contactSafeAlertsRecord`（需核验 preserveAlertCopy ≡） | |
-| activity rows | ✅ `contactSafeActivityRecord` | |
-| commerce rows（rfq/quote/order） | ✅ `contactSafeCommerceRecord` | |
-| intake-state items（P1/P3） | ❌（区别于 29 键版本） | ✅ `CONTACT_SAFE_INTAKE_STATE_ITEM_KEYS` + `contactSafeIntakeStateItemRecord` |
-| intake-state settings/stats/batches | ❌ | ✅ 推导各自键集（settings 多为内部配置，或可直接按需保留） |
-| timeline rows（activity+account 混合） | ✅ activity 白名单（需核验 timeline 特有键） | ⚠ 可能需补键 |
-| master profile | ❌ | ✅ 推导键集 |
-| people / prospect rows | ❌ | ✅ 推导键集（仅 P2） |
-| 复合 payload 容器 | ❌ | ✅ 各路径复合投影函数 |
+> **关键发现（2026-08-30 S1 审计）**：`loadIntakeState`（P1/P3）的 items 经 `queryIntakeFlowPage` 之外的 enrichment 带**深度嵌套内容**——`arbitration`（ruleDecision 含 `reason`、aiRecommendation、rankedCandidates、history 带 `actorName`+嵌套 aiRecommendation）、`developmentHistory`、`signals`（AI）、`customerTags`、`identityWarning`。黑名单是**递归**剥离（在每层嵌套内剥 CONTACT_KEYS，如 `arbitration.ruleDecision.reason`、`history.notes`、`developmentHistory.summary`）；字段级白名单是**保留顶层键、值原样拷贝**——会对嵌套对象内的 contact 子字段**泄漏**。
+>
+> **结论**：P1/P3（loadIntakeState items）**不适合作顶层白名单**——忠实转换需要按每个嵌套形状各建递归白名单，复杂度等同黑名单且无简化收益；强行顶层白名单违反"不泄漏联系方式"合规不变量。**P1/P3 不建议本设计推进**（或需另立"递归逐形状白名单"独立子项目）。其余路径（P4/P5 的 account/activity/commerce/timeline/evaluations 为扁平行）可安全白名单化。
 
-新白名单一律按既定范式推导：先对真实端点行跑 `redactContactFields` → 得"黑名单保留键集"，据此建白名单键集，再用等价契约锁定。
+| 形状 | 现有白名单 | 需新建立 | 可行性 |
+|---|---|---|---|
+| account rows | ✅ `contactSafeAccountRecord` | | ✅ 扁平 |
+| pool rows | ✅ `contactSafePoolRecord` | | ✅ 扁平 |
+| recon rows | ✅ `contactSafeReconRecord` | | ✅ 扁平 |
+| evaluation rows（insights） | ✅ `contactSafeInsightsRecord`（需核验 evaluation payload 键集） | | ✅ 扁平 |
+| alert rows（alarm copy） | ✅ `contactSafeAlertsRecord`（需核验 preserveAlertCopy ≡） | | ✅ 需专项核验 |
+| activity rows | ✅ `contactSafeActivityRecord` | | ✅ 扁平 |
+| commerce rows（rfq/quote/order） | ✅ `contactSafeCommerceRecord` | | ✅ 扁平 |
+| timeline rows（activity+account 混合） | ✅ activity 白名单（需核验 timeline 特有键） | | ⚠ 需补键核验 |
+| **intake-state items（P1/P3）** | ❌ | ❌ **不建议**（深度嵌套泄漏） | ⛔ 保留黑名单或递归子项目 |
+| intake-state settings/stats/batches | ❌ | ⚠ 仅 P3 不经 enrichment 时扁平 | ⚠ 待定 |
+| master profile | ❌ | ✅ 推导键集 | ⚠ 需核验 |
+| people / prospect rows | ❌ | ✅ 推导键集（仅 P2） | ⚠ 需核验嵌套 |
+
+新白名单一律按既定范式推导：先对真实端点行跑 `redactContactFields` → 得"黑名单保留键集"，据此建白名单键集，再用等价契约锁定；**凡白名单键的值为非空对象/数组，须校验该嵌套值的 CONTACT_KEYS 子键是否泄漏，泄漏则改归黑名单路径或建递归白名单**。
 
 ## 4. 复合投影设计
 
@@ -50,33 +53,28 @@
 // 已是空/门控(如 !view_contacts 时 contacts:[]) 的字段原样保留。
 ```
 
-候选函数（放进 `access_control.js`，按片添加）：
-- `contactSafeIntakeStatePayload(payload)`（settings/stats 推导键集 + items 用新 intake-state item 白名单 + batches 推导）
-- `contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload` / `contactSafeExportPayload`（P2/P4/P5 各自的顶层字段→形状白名单）
+候选函数（放进 `access_control.js`，按片添加）：`contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload` / `contactSafeExportPayload`（P2/P4/P5 各自的顶层字段→形状白名单）。P1/P3（loadIntakeState）**退出本设计**（见 §3 嵌套泄漏）——其 `redactContactFields` 调用保留，或在独立"递归逐形状白名单"子项目处理。
 
-等价测试策略：对真实端点行构造"同形状对象"，断言 `复合白名单(payload) deepEqual redactContactFields(payload)`；对每个新键集先单测等价，再组合。
+等价测试策略：对真实端点行构造"同形状对象"，断言 `复合白名单(payload) deepEqual redactContactFields(payload)`；对每个新键集先单测等价，再组合。复合投影必须以"被保留键的嵌套值不泄漏 CONTACT_KEYS 子键"为前提。
 
-## 5. 切片拆分（依赖 DAG）
+## 5. 切片拆分（依赖 DAG，已排除 P1/P3）
 
-按"形状先于组合"原则，先建被复用的形状白名单，再建复合投影：
+按"形状先于组合"原则，先建被复用的形状白名单，再建复合投影；每片执行前先用 §3 泄漏校验确认该形状嵌套安全。
 
-1. **S1 基础形状**：`CONTACT_SAFE_INTAKE_STATE_ITEM_KEYS`（P1/P3 items）+ `contactSafeIntakeStateItemRecord`；等价契约（loadIntakeState items 行）。
-2. **S2 intake-state 复合**：`contactSafeIntakeStatePayload`（settings/stats/batches 键集 + S1）；接线 `sales_crm.js:11631`（P3，边界最小的单端点）；契约 = 等价 + `GET /api/sales-crm/intake` API 行为。
-3. **S3 timeline + master 形状**：推导 timeline（buildCustomerTimeline 行）与 master profile 键集/白名单；等价契约。
-4. **S4 bootstrap sis 复线**：用 S2+S3 接线 `sales_crm.js:7022/7025/7096`（P1 bootstrap 内 timeline + intake-state + alerts + evaluations）；`contactSafeAlertsRecord` preserveAlertCopy 等价核验。
-5. **S5 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（S4 复用 timeline + account/activity/commerce/insights）；接线 P4。
-6. **S6 export 复合**：`contactSafeExportPayload`（S5 复用）；接线 P5。
-7. **S7 db bootstrap 复合**：people/prospect 键集 + `contactSafeBootstrapPayload`；接线 P2。
-8. **S8 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外）；范围解释器统一与按页面合约为下一主线。
+1. **S3 timeline + master 形状**：推导 timeline（buildCustomerTimeline 行）与 master profile 键集/白名单；泄漏校验 + 等价契约。
+2. **S4 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（account/activity/commerce/timeline/insights + S3）；接线 P4；契约 = 等价 + `GET /api/sales-crm/accounts/:id/recycle-profile` API 行为。
+3. **S5 export 复合**：`contactSafeExportPayload`（复用 account/activity/commerce/evaluation 现有白名单）；接线 P5；契约 = 等价 + `GET /api/sales-crm/export` API 行为。
+4. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。
+5. **S7 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 loadIntakeState 除外——被 §3 判定不建议转换）；范围解释器统一与按页面合约为下一主线。
 
-依赖：S2→S1；S4→S2,S3；S5→S4（及 account/activity/commerce/insights 现有）；S6→S5；S7→S5（+people/prospect）。S3/S5/S6/S7 相对独立，可按需并行。
+依赖：S4→S3（及 account/activity/commerce/insights 现有）；S5 独立（复用现有）；S6→S4。S3/S5/S6 相对独立可并行。
 
 每片完成定义：契约测试（结构 + 等价 + 行为）绿 → 受影响域专项 → 全量 `node --test` → core → `git diff --check` → 更新 CURRENT_STATE + session → 独立提交。
 
 ## 6. 风险与门禁
 
 - **行为保持**：等价契约保证无 view_contacts 用户可见字段逐键一致；复合投影不得改变空字段/门控字段。
+- **嵌套泄漏（本轮发现的最高风险）**：凡白名单保留键的值为非空对象/数组，其内部 CONTACT_KEYS 子键会被泄漏（白名单不递归、黑名单递归）。每个新键集接线前必须做泄漏校验（扫描保留值中的 CONTACT_KEYS 子键）；泄漏则改回黑名单路径或建递归白名单。**P1/P3（loadIntakeState）因深度嵌套 AI/仲裁内容已在 §3 判定不建议转换。**
 - **preserveAlertCopy**：alert 形状须核验 `contactSafeAlertsRecord` 与 `redactContactFields(payload,{preserveAlertCopy:true})` 等价，必要时为 alarm-copy 记录单列键集。
-- **intake-state 双形状**：勿把 P1/P3 items 与 `queryIntakeFlowPage` items 混用同一 29 键白名单（键集不同）。
 - **红线**：不改 `ai_stations/**`、`assistant.js`/`task_center.js` 内调用；不改 AI 触发点。
 - 未全绿前不叠加下一阶段功能。
