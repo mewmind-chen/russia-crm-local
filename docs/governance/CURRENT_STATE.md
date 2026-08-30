@@ -15,13 +15,13 @@
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`24aa67e`（阶段 D commerce 金额/币种/毛利校验下沉）
-- 重构分支相对 `origin/main`：ahead 168（109 业务 + 59 治理），未合并；本地未配置发布或生产动作。
+- 当前重构提交：`b4cfdfc`（阶段 D addQuote/addOrder 编排下沉为 commitQuote/commitOrder 域服务）
+- 重构分支相对 `origin/main`：ahead 171（110 业务 + 61 治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
 
-`origin/main..HEAD` 当前 108 个业务提交 + 57 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛、阶段 C accounts+intake+通知 白名单三片 + S3 形状片 + 范围等价契约、阶段 D commerce 幂等保留 + 行级写下沉 + 金额/币种/毛利校验下沉，以及看板自动化：
+`origin/main..HEAD` 当前 108 个业务提交 + 57 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛、阶段 C accounts+intake+通知 白名单三片 + S3 形状片 + 范围等价契约、阶段 D commerce 幂等保留 + 行级写下沉 + 金额/币种/毛利校验下沉 + addQuote/addOrder 编排下沉，以及看板自动化：
 
 - `13cd37a`：`rejectCrmCustomer` 的 stage/lifecycle/assignment/owner 写收敛到 `lib/domains/lifecycle/state_write` 网关，回收专属字段仍直写。
 - `06a9868`：`applyCustomerReturn` 的 assignment/owner 写经同一网关，lifecycle 保持 active、stage 不动。
@@ -67,6 +67,7 @@
 - `1d15546`：阶段 D 商业闭环首片——quote/order 幂等保留生命周期（`reserveCommerceAction`/`completeCommerceAction`/`clearCommerceActionReservation`，操作 `crm_commerce_action_requests`）从 `sales_crm.js` 迁出至新域模块 `lib/domains/commerce/action_request.js`，`conflictError`/`json`/`nowText` 由调用点注入保持原 409 错误码与 `started→completed` 状态迁移、错误回退清理语义；`addQuote`/`addOrder` 调用点注入保持语义。契约测试 `test/domain_wiring_commerce_action_request_contract.test.js`（1 结构 + 3 行为：保留/清理、in-flight 拒绝 + 绑定冲突、完成重放）。对应路线图阶段 D 关键动作"RFQ / quote / order / action request 的事务边界显式化"。
 - `f5c650e`：阶段 D 商业闭环次片——RFQ/quote/order 行级写入下沉：`crm_rfqs`/`crm_quotes`/`crm_orders` 的 INSERT/UPDATE 从 `addQuote`、`addOrder` 与 `recordActivity` 的 rfq 分支迁出至新域模块 `lib/domains/commerce/write.js`（`insertRfqRow`/`insertQuoteRow`/`markRfqQuoted`/`insertOrderRow`）。纯行写、无错误构造，时间戳/ID 全由调用点传入，逐字一致 drop-in。契约测试 `test/domain_wiring_commerce_write_contract.test.js`（1 结构 + 3 行为：quote 插入 + rfq 置 quoted 形状、order 保留 repeat、rfq 绑定来源 activity）。
 - `24aa67e`：阶段 D 商业闭环第三片——quote/order 金额/币种/毛利校验下沉：`COMMERCE_CURRENCIES`/`validateMoney`/`validateCurrency`/`validateMargin` 从 `sales_crm.js` 内联迁至 `lib/domains/commerce/rules.js`（`validateMargin` 已在域版，本轮补三定义）。错误构造由调用点注入 `{ badRequest }`，校验消息与归一数值逐字一致；`addQuote`/`addOrder` 调用点注入保持语义，内联四定义删除。`validateRfqPayload` 仍按既有裁定（注入式、与内联版行为差异）保持内联。契约测试并入 `test/domain_wiring_commerce_recycle_contract.test.js`（2 结构+行为）。
+- `b4cfdfc`：阶段 D 商业闭环第四片——`addQuote`/`addOrder` 的**完整编排**下沉为 `lib/domains/commerce/write.js` 的 place 级域服务 `commitQuote`/`commitOrder`（权限/校验/幂等保留/阶段守卫/事务体/next_action 入队/完成清理）。同域依赖由 `write.js` 内部 require（`./rules`、`./action_request`）；跨域与 sales_crm helper（`assertPermission`/`getAccountForUser`/`assert*Transition`/`applyAccountStatePatch`/`applyAccountPlanPatch`/`linkCommerceActivity`/`recordExplicitPlanIfEnabled`/`enqueueNextActionForEvent`/`parseBusinessDateTime`/`nowText`/`id`/`badRequest`/`conflictError`/`json`）经 `deps` 注入，行为逐字节一致。`sales_crm.js` 收敛为薄委托（db → 注入 → 服务 → close），不再导入 quote/order 行写、幂等生命周期与校验函数（`write.js` 仅导出 `insertRfqRow`/`commitQuote`/`commitOrder`）。新增契约 `test/domain_wiring_commerce_commit_contract.test.js`（5 断言：结构 + 引用端到端 + 幂等重放）；`state_write_*`/`collaboration_write_*`/`stage_precondition_guard`/三段 wiring 契约按新边界更新。`sales_crm.js` 13001→12883 行（-118）。
 
 **阶段 B §1 完成门（经 2026-08-30 审计发现并已收尾）**：对 `lib/` 扫描确认 `crm_accounts` 的 `stage`/`lifecycle_status`/`assignment_status`/`owner_id`/`next_action*`/`manager_*`/`updated_at` **已无裸直写**。审计发现 `updateAccount`（profile 编辑）曾经动态 `fields.push` → `UPDATE crm_accounts SET ${fields.join(',')}` 直写这些列（此前"零裸写"声明不实，因为核验正则以"状态列与 UPDATE 同排"匹配、漏扫动态字段拼装），已由 `aabe4d9` 收敛到三个网关（`applyAccountStatePatch`/`applyAccountPlanPatch`/`applyManagerStatusPatch`），claim/unassign 权限子流保持。`last_activity_at`（活动时间戳）与回收专属字段（`recycle_*`/`previous_owner_id`/`loss_reason`/`return_reason`）为明确的网关列之外直写。测试专用种子（`smoke_test_data.js`、`seedAccounts`）按契约 §2 不在收敛范围。
 
@@ -88,7 +89,7 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `aabe4d9`：12,984 行。
+- 当前提交态 `b4cfdfc`：12,883 行。
 - `sales-assets/app.js` 当前仍为 14,096 行。
 - 客户完整资料仍保留 iframe 兼容路径；尚未形成完整 widget 注册表。
 
@@ -112,11 +113,11 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1599/1599` 通过。
-- `node --test`：全量 `1969/1969` 通过（含此前修复的 12 个失败场景）。
-- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 14 文件 28 断言全绿；报价/订单/阶段边界回归 22/22。
+- `npm test`：全量 core `1614/1614` 通过。
+- `node --test`：全量 `1975/1975` 通过。
+- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
-阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 = 10 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
+阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
@@ -127,10 +128,10 @@
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
 - 前端字段目录/widget 试点：已实现多个切片，但 widget 注册表和 iframe 收敛尚未完成。
 - 后端领域拆分：`lib/domains/` 42 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复 13 个切片后 39 个域模块已接线（`sales_crm.js` require 38 个 + `state_projection` 经 `business_page_filters.js`），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
-- 阶段 A 接线恢复：**13 个切片全部完成**——42 个域模块中 39 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,984 行；仅剩 3 个模块按用户裁定不接线。
+- 阶段 A 接线恢复：**13 个切片全部完成**——42 个域模块中 39 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,883 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
 - 阶段 C 权限/筛选/字段：**推进中（主体完成）**——字段目录 + 白名单投影已存在；`78e698b`（accounts）/`5e992fe`（intake）/`1835f73`（通知）列表路径白名单化；`38bfe7d` S3 形状（timeline/auditLog）；`2ca107b` 范围解释器等价契约；`45e0c05` 权限→字段→筛选合同（schema 不泄漏、联系人筛选对无 view_contacts 缺席、账户白名单剥联系人字段）；`f2056e5` 范围解释器代码级统一（共享 `accountVisibilityScope`，同时修复空 WHERE 子句 bug——老 schema 缺 `lifecycle_status`/`is_test_data` 列时 `WHERE` 空子句非法，以 `1=1` 为基底保证合法）。大聚合设计三轮审计（P1/P3 嵌套泄漏、S5 users 密码哈希、S6 联系形状源头门控）均入册。剩余仅：可选残值（legacy customers 形状白名单）。
-- 阶段 D 线索/任务/商业闭环：**推进中**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546` quote/order 幂等保留迁入 `domains/commerce/action_request.js`）、RFQ/quote/order 行级写（`f5c650e` 迁入 `domains/commerce/write.js`）、金额/币种/毛利校验（`24aa67e` 迁入 `domains/commerce/rules.js`）均已显式化。剩余：`addQuote`/`addOrder` 的编排逻辑（权限/事务/链接）可继续下沉为 `write.js` 的 place 级 `commitQuote`/`commitOrder` 域服务；manager intervention 与 deferred plan 为独立用例。
+- 阶段 D 线索/任务/商业闭环：**推进中**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、`addQuote`/`addOrder` 完整编排下沉（`b4cfdfc` commitQuote/commitOrder 域服务）均已显式化。剩余：manager intervention 与 deferred plan 为**独立用例**（不在 commerce 闭环内）；前端状态解释器统一与阶段 E/G 待后续。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 生产部署/UAT：本轮未执行，不得从本地结果推断生产状态。
 
@@ -140,7 +141,7 @@
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
 4. 阶段 C（权限/筛选/字段）：**主体完成**——列表路径白名单化（accounts/intake/通知）、S3 形状（timeline/auditLog）、范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`，含空 WHERE 修复）、按页面"权限→字段→筛选"合同（`45e0c05`）均落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；S6（db bootstrap）联系形状源头门控、低价值。剩余仅：可选残值（legacy customers 形状白名单，S6 审计确认其余联系形状已源头门控，低价值可暂缓）。
-5. 阶段 D（线索/任务/商业闭环）为当前执行阶段：intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）均已下沉。下一步最小动作：把 `addQuote`/`addOrder` 的编排逻辑（权限/校验/幂等/事务/活动计划链接/next_action 入队）兑现为 `domains/commerce/write.js` 的 place 级域服务（`commitQuote`/`commitOrder`，注入网关依赖保持语义）；manager intervention 与 deferred plan 为后续独立用例。
+5. 阶段 D（线索/任务/商业闭环）为当前执行阶段：intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、addQuote/addOrder 完整编排下沉（`b4cfdfc`，commitQuote/commitOrder place 级域服务）均已显式化——**RFQ→quote→order 商业闭环领域边界成型**。剩余为独立用例（manager intervention / deferred plan）与前端的阶段 E/G。可评估进入阶段 E（前端 widget 注册表 / iframe 收敛）的准备动作。
 6. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
