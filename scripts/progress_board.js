@@ -208,6 +208,7 @@ function buildPhases(env) {
         ['access', '通知页切字段级白名单（contactSafeNotificationRecord 新投影）', '1835f73', ''],
         ['access', 'S3 形状：timeline/auditLog 白名单（含 provenance 泄漏校验）', '38bfe7d', ''],
         ['access', '范围解释器统一：accountScope ≡ buildAccessContext 等价契约', '2ca107b', ''],
+        ['access', '按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）', '45e0c05', ''],
       ],
       pending: [
         ['access', '主线：buildAccessContext 与列表查询范围解释器统一', '', ''],
