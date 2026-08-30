@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 15:24:12`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 15:32:11`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `4b9cb44`（相对 origin/main ahead 163） |
+| HEAD | `7a63878`（相对 origin/main ahead 166） |
 | 工作区 | 干净 |
-| 全量测试 | `node --test` 1965/1965 |
+| 全量测试 | `node --test` 1969/1969 |
 | 核心测试 | `npm test` 1599/1599 |
-| sales_crm.js | 12986 行 |
-| lib/domains | 43 个文件，生产接线 40 个 |
-| 最近会话 | `2026-08-30-phase-d-commerce-action-request.md` |
+| sales_crm.js | 13019 行 |
+| lib/domains | 44 个文件，生产接线 41 个 |
+| 最近会话 | `2026-08-30-phase-d-commerce-write.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 50 |
+| refactor(其他/通用) | 51 |
 | feat(...) | 15 |
-| docs(governance) | 56 |
+| docs(governance) | 58 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -57,6 +57,7 @@
 | `lib/domains/auth/user.js` | [x] 已接线 | 8a0ee7d |
 | `lib/domains/commerce/action_request.js` | [x] 已接线 | 1d15546 |
 | `lib/domains/commerce/rules.js` | [x] 已接线 | a853a16 |
+| `lib/domains/commerce/write.js` | [x] 已接线 | f5c650e |
 | `lib/domains/customer/contacts.js` | [x] 已接线 | ad657ac |
 | `lib/domains/customer/create.js` | [x] 已接线 | 5c23b32 |
 | `lib/domains/customer/dedupe.js` | [x] 已接线 | dab8168 |
