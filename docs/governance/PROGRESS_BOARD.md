@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 10:18:59`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 12:13:49`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,10 +8,10 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `3a3c34c`（相对 origin/main ahead 141） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 1949/1949 |
-| 核心测试 | `npm test` 1588/1588 |
+| HEAD | `1835f73`（相对 origin/main ahead 143） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 1952/1952 |
+| 核心测试 | `npm test` 1591/1591 |
 | sales_crm.js | 13003 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-30-phase-c-intake-whitelist.md` |
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 44 |
+| refactor(其他/通用) | 45 |
 | feat(...) | 15 |
-| docs(governance) | 40 |
+| docs(governance) | 41 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -125,7 +125,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts 列表（78e698b）与 intake 页（5e992fe）已切字段级白名单。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts 列表（78e698b）、intake 页（5e992fe）、通知页（1835f73）已切字段级白名单。
 
 ### 已完成
 
@@ -134,10 +134,11 @@
 - [x] 身份/筛选 facade 与认证中间件抽取（被 WIP 精简，调用方直连真源）（`003b527…61f8c34`）
 - [x] accounts 列表切字段级白名单（contactSafeAccountRecord 接线，blacklist≡whitelist 契约）（`78e698b`）
 - [x] intake 页切字段级白名单（contactSafeIntakeRecord 新投影，contact_* 隐藏）（`5e992fe`）
+- [x] 通知页切字段级白名单（contactSafeNotificationRecord 新投影）（`1835f73`）
 
 ### 待办
 
-- [ ] **access** 剩余 redactContactFields 路径评估收敛（通知/evaluation/db bootstrap，AI 相关除外）
+- [ ] **access** 剩余 redactContactFields 路径评估收敛（evaluation/db bootstrap，AI 相关除外）
 - [ ] **access** buildAccessContext 与列表查询范围解释器统一
 - [ ] **access** 按页面落地"权限→字段→筛选"合同测试
 
