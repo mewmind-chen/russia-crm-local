@@ -12,7 +12,7 @@
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
 | 阶段 A：后端结构化切分 | 接线恢复完成（39/42 已接入） | `lib/domains/` 42 个文件；39 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 12,966 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；聚合文件仍超 1.2 万行 |
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
-| 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交 | 白名单兼容回归已恢复；页面覆盖未完成 |
+| 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交；accounts 列表已切字段级白名单（`78e698b`，`contactSafeAccountRecord` 接线 + `is_test_data`/`test_run_id` 补键，blacklist≡whitelist 契约锁定） | 剩余黑名单路径评估（intake/通知/evaluation/db bootstrap）、`buildAccessContext` 与列表范围解释器统一、按页面补"权限→字段→筛选"合同 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
 | 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
@@ -197,5 +197,6 @@
 7. 阶段 B 边界收敛：`6b88d74` 移除 pipeline 行的 state DTO（`publicPipelineActionRow` 不再展开 `projectAccountState`），accounts/bootstrap/profile/pipeline 全部统一为"无 state DTO、前端直读裸字段"；原固定差异的 `lifecycle_state_projection` pipeline 测试更新为无 DTO 契约。全量 1936/1936 绿灯。
 8. 阶段 B 收尾：`da34bc2` 将 `assertAccountStateContract` 接入回收/恢复三个完整视图写点（reject/trash/restore 落库前校验合并目标视图），§4 强化完成。全量 1941/1941 绿灯。
 9. 阶段 B 种子收敛：`929b8c1` 让生产冒烟夹具（smoke_test_data.js）写 next_action 计划时配 `next_action_time_basis`（'utc' 建立、'' 清理、快照恢复原 basis），与 §4.3 生产语义一致。全量 1943/1943 绿灯。阶段 B 业务侧收尾完成；剩余项涉红线（AI 写点）与前端（状态解释器）。
+10. 阶段 C 首片：`78e698b` 把 accounts 列表（`listCustomerAccounts`，无 view_contacts 分支）从递归 `redactContactFields` 黑名单切到字段级白名单 `contactSafeAccountRecord`（FIELDS_CATALOG 派生 + 显式业务键，此前定义未接线），白名单补 `is_test_data`/`test_run_id` 使切换逐键等价（blacklist≡whitelist 契约 + API 行为契约）。全量 1946/1946 绿灯。续：剩余黑名单路径评估、范围解释器统一、按页面合同。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。

@@ -198,13 +198,18 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；页面覆盖未完成。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts 列表已切字段级白名单（78e698b）。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
         ['access', '身份/筛选 facade 与认证中间件抽取（被 WIP 精简，调用方直连真源）', '003b527…61f8c34', ''],
+        ['access', 'accounts 列表切字段级白名单（contactSafeAccountRecord 接线，blacklist≡whitelist 契约）', '78e698b', ''],
       ],
-      pending: [['access', '页面级覆盖与白名单回归收尾', '', '']],
+      pending: [
+        ['access', '剩余 redactContactFields 路径评估收敛（intake/通知/evaluation/db bootstrap）', '', ''],
+        ['access', 'buildAccessContext 与列表查询范围解释器统一', '', ''],
+        ['access', '按页面落地"权限→字段→筛选"合同测试', '', ''],
+      ],
     },
     {
       id: 'D',
