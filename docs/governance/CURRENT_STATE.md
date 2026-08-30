@@ -21,7 +21,7 @@
 
 ## 2. 已提交的重构进度
 
-`origin/main..HEAD` 当前 95 个业务提交 + 11 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 2 个 guard 切片，以及看板自动化：
+`origin/main..HEAD` 当前 97 个业务提交 + 11 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 3 个 guard 切片，以及看板自动化：
 
 - `13cd37a`：`rejectCrmCustomer` 的 stage/lifecycle/assignment/owner 写收敛到 `lib/domains/lifecycle/state_write` 网关，回收专属字段仍直写。
 - `06a9868`：`applyCustomerReturn` 的 assignment/owner 写经同一网关，lifecycle 保持 active、stage 不动。
@@ -50,6 +50,7 @@
 - `5c23b32`：`customer/create`（customerCreateRequestHash）、`filter/errors`（filterVersionError）、`planning/today_task`（todayTaskError/normalizeTodayTaskDate）接线（注入式错误构造的调用点注入 `{ error: httpError }`/`{ httpError }`/`{ parseBusinessDateTime }` 保持语义）。
 - `0ae90af`：阶段 B §4 强化首切片——`addQuote`/`addOrder` 内联 stage 前置校验提炼为 `lifecycle/state_write` 网关守卫 `assertQuoteTransition`/`assertFirstOrderTransition`（基于 `STAGE_INDEX` 单调推进 + `STAGE_PRECONDITION_VIOLATION`），调用点注入 `conflictError` 保持语义。
 - `9186a6d`：阶段 B §4.1/§4.2 强化——新增 `lifecycle/state_write` 网关注册 `assertAccountStateContract(state)` 守卫（recycled 不配 claimed/assigned、returned 不绑 owner）。`buildAccountStatePatch` 刻意保持 lifecycle/assignment 独立维度（pairing 由回收/返回调用点负责，既有契约 `lifecycle_state_write.test.js` 锁定），守卫作为可复用规则导出而非在 shim 内强制。
+- `cb6c6e4`：阶段 B §4.3 强化——`state_projection.projectNextAction` 增加 `next_action_time_basis` 维度：next_action 有值时，时间与 time_basis 两者都必须存在才算 `planned`，缺任一标 `degraded`（契约原文「有值必配 time_basis，否则 degraded」）；既有「有文本无时间 → degraded」语义保持。
 
 **阶段 B §1 完成门已达成**：对 `lib/` 全目录扫描，`crm_accounts` 的 `stage`/`lifecycle_status`/`assignment_status`/`owner_id`/`next_action*`/`manager_*`/`updated_at` 已无任何裸 `UPDATE crm_accounts SET ...` 直写；唯一残留在网关列之外的直写为 `last_activity_at`（活动时间戳）与回收专属字段（`recycle_*`/`previous_owner_id`/`loss_reason`/`return_reason` 等）。测试专用种子（`smoke_test_data.js`、`seedAccounts`）按契约 §2 不在收敛范围。
 
@@ -71,7 +72,7 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `9186a6d`：12,966 行。
+- 当前提交态 `cb6c6e4`：12,966 行。
 - `sales-assets/app.js` 当前仍为 14,096 行。
 - 客户完整资料仍保留 iframe 兼容路径；尚未形成完整 widget 注册表。
 
@@ -95,11 +96,11 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1557/1557` 通过。
-- `node --test`：全量 `1918/1918` 通过（含此前修复的 12 个失败场景）。
-- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
+- `npm test`：全量 core `1560/1560` 通过。
+- `node --test`：全量 `1921/1921` 通过（含此前修复的 12 个失败场景）。
+- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`state_projection_time_basis_contract` 3/3；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
 
-阶段 B 契约测试 11 文件 41 断言 + 阶段 A 接线契约 13 文件 24 断言（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
+阶段 B 契约测试 12 文件 44 断言 + 阶段 A 接线契约 13 文件 24 断言（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
@@ -111,7 +112,7 @@
 - 前端字段目录/widget 试点：已实现多个切片，但 widget 注册表和 iframe 收敛尚未完成。
 - 后端领域拆分：`lib/domains/` 42 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复 13 个切片后 39 个域模块已接线（`sales_crm.js` require 38 个 + `state_projection` 经 `business_page_filters.js`），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——42 个域模块中 39 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,966 行；仅剩 3 个模块按用户裁定不接线。
-- 阶段 B 状态真源：**§1 完成门已达成**——`lib/` 对 `crm_accounts` 的状态/计划/主管列零裸写；reject/return/quote/order/activity/claim/manager-task/overdue-lead/reassign/trash/restore 全部写点经 `state_write`/`collaboration_write` 网关。**§4 强化推进中**：`addQuote`/`addOrder` stage 前置校验已提炼为网关 `assertQuoteTransition`/`assertFirstOrderTransition` 守卫（`0ae90af`）；§4.1/§4.2 不变量已注册 `assertAccountStateContract` 守卫（`9186a6d`）。契约 §4 不变量（recycled 不配 claimed/assigned、returned 无 owner、next_action 有值必配 time_basis）均已由契约测试锁定。
+- 阶段 B 状态真源：**§1 完成门已达成**——`lib/` 对 `crm_accounts` 的状态/计划/主管列零裸写；reject/return/quote/order/activity/claim/manager-task/overdue-lead/reassign/trash/restore 全部写点经 `state_write`/`collaboration_write` 网关。**§4 强化推进中**：`addQuote`/`addOrder` stage 前置校验已提炼为网关 `assertQuoteTransition`/`assertFirstOrderTransition` 守卫（`0ae90af`）；§4.1/§4.2 不变量已注册 `assertAccountStateContract` 守卫（`9186a6d`）；§4.3 next_action time_basis 维度已纳入 `projectNextAction` 投影（`cb6c6e4`）。契约 §4 不变量均已由契约测试锁定。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 生产部署/UAT：本轮未执行，不得从本地结果推断生产状态。
 
@@ -119,7 +120,7 @@
 
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
-3. 阶段 B 收尾：继续 §4 强化（将 `assertAccountStateContract` 接入回收/恢复路径的完整视图校验、为 §4.3「next_action 有值必配 time_basis」补守卫）、AI next_action 写点与测试专用种子收敛（AI 写点受红线约束）、明确 `last_activity_at` 归属。
+3. 阶段 B 收尾：继续 §4 强化（将 `assertAccountStateContract` 接入回收/恢复路径的完整视图校验、确认 §4.4 报告/导出/告警统一消费 state_projection）、AI next_action 写点与测试专用种子收敛（AI 写点受红线约束）、明确 `last_activity_at` 归属。
 4. 收敛 pipeline 与 accounts/bootstrap/profile 之间 state DTO 的边界差异。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。
 

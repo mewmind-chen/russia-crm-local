@@ -187,7 +187,7 @@ function buildPhases(env) {
       summary: '§1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；契约测试 34 断言。',
       sliceTable: 'B',
       pending: [
-        ['B-P1', '§4 强化续：§4.3 plan 不变量守卫接入调用点（stage/recycled/returned guard 已落地 0ae90af/9186a6d）', '', ''],
+        ['B-P1', '§4 强化续：§4.4 报告/导出/告警统一消费投影（stage/recycled/returned/time-basis guard 已落地 0ae90af/9186a6d/cb6c6e4）', '', ''],
         ['B-P2', 'AI next_action 写点与测试专用种子收敛（AI 受红线约束）', '', ''],
         ['B-P3', 'pipeline 与 accounts 的 state DTO 边界差异收敛', '', ''],
       ],
