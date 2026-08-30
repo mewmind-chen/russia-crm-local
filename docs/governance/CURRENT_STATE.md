@@ -15,13 +15,13 @@
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`da34bc2`（阶段 B §4 收尾——回收/恢复路径完整视图守卫接线）
+- 当前重构提交：`929b8c1`（阶段 B 种子收敛——生产冒烟夹具补 time_basis）
 - 重构分支相对 `origin/main`：ahead 93（业务）+ 21（治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
 
-`origin/main..HEAD` 当前 98 个业务提交 + 21 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛，以及看板自动化：
+`origin/main..HEAD` 当前 99 个业务提交 + 21 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛，以及看板自动化：
 
 - `13cd37a`：`rejectCrmCustomer` 的 stage/lifecycle/assignment/owner 写收敛到 `lib/domains/lifecycle/state_write` 网关，回收专属字段仍直写。
 - `06a9868`：`applyCustomerReturn` 的 assignment/owner 写经同一网关，lifecycle 保持 active、stage 不动。
@@ -57,6 +57,7 @@
 - `aabe4d9`：阶段 B §1 收尾——`updateAccount`（profile 编辑 PATCH）的直写收敛：动态 `fields.join` 的 `UPDATE crm_accounts SET ...` 不再直写网关列，改在事务内经 `applyAccountStatePatch`（stage + ownerId/assignmentStatus）、`applyAccountPlanPatch`（next_action*/time_basis，含 stopsFollowUp 清空）、`applyManagerStatusPatch`（manager_required/status）落库；非网关列（标量/customer_type/assigned_at/return_reason/master+pool 字段）仍直写。claim/unassign 权限子流（view_all_customers + manage_intake、authorized sales 校验、unassign 原因）保持。空 payload 早退纳入网关输入判断。契约测试 `test/state_write_update_account_contract.test.js`（1 结构 + 6 行为）。
 - `6b88d74`：阶段 B 边界收敛——pipeline 行移除 state DTO：`publicPipelineActionRow` 不再展开 `projectAccountState`，与 accounts/bootstrap/profile 的"无 state DTO、前端直读裸字段"边界完全一致（此前是最后一个携带 DTO 的读路径；前端零 `.state.*` 消费、后端唯一读者是白名单 redact 且对缺字段优雅降级）。裸字段（stage/lifecycle/assignment/manager）与投影派生的 actionQueueKeys 保持。原"固定边界差异"的 `lifecycle_state_projection` pipeline 测试改为无 DTO 契约。契约测试 `test/pipeline_row_state_boundary_contract.test.js`（1 结构 + 1 行为）。
 - `da34bc2`：阶段 B §4 收尾——`assertAccountStateContract` 接入三个产生完整状态视图的写点（`rejectCrmCustomer`/`trashManualCustomer`/`restoreManualCustomer`）：落库前对**合并后的完整目标视图**（当前行 + 意图中的 lifecycle/assignment/owner）做 §4.1/§4.2 不变量校验，防未来编辑漏覆盖产生 recycled+claimed 等非法组合时快速失败（而非落库不一致状态）。守卫在今日正确 patch 上不可达；锁定 shim 刻意留给调用点的配对职责。契约测试 `test/state_write_recycle_restore_invariant_contract.test.js`（4 结构 + 1 行为）。
+- `929b8c1`：阶段 B 种子收敛——`smoke_test_data.js`（生产冒烟夹具）建立 next_action 计划时此前不写 `next_action_time_basis`，冒烟客户被 §4.3 投影判为 degraded，与生产写点（一律 `PLAN_TIME_BASIS='utc'`）发散。现：账户 INSERT 与计划 UPDATE 写 `'utc'`；legacy 清理清空 basis；快照捕获/恢复 `next_action_time_basis`（冒烟前的既有计划原样还原）。契约测试 `test/smoke_seed_plan_basis_contract.test.js`（5 结构 + 1 行为）。
 
 **阶段 B §1 完成门（经 2026-08-30 审计发现并已收尾）**：对 `lib/` 扫描确认 `crm_accounts` 的 `stage`/`lifecycle_status`/`assignment_status`/`owner_id`/`next_action*`/`manager_*`/`updated_at` **已无裸直写**。审计发现 `updateAccount`（profile 编辑）曾经动态 `fields.push` → `UPDATE crm_accounts SET ${fields.join(',')}` 直写这些列（此前"零裸写"声明不实，因为核验正则以"状态列与 UPDATE 同排"匹配、漏扫动态字段拼装），已由 `aabe4d9` 收敛到三个网关（`applyAccountStatePatch`/`applyAccountPlanPatch`/`applyManagerStatusPatch`），claim/unassign 权限子流保持。`last_activity_at`（活动时间戳）与回收专属字段（`recycle_*`/`previous_owner_id`/`loss_reason`/`return_reason`）为明确的网关列之外直写。测试专用种子（`smoke_test_data.js`、`seedAccounts`）按契约 §2 不在收敛范围。
 
@@ -102,11 +103,11 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1580/1580` 通过。
-- `node --test`：全量 `1941/1941` 通过（含此前修复的 12 个失败场景）。
-- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
+- `npm test`：全量 core `1582/1582` 通过。
+- `node --test`：全量 `1943/1943` 通过（含此前修复的 12 个失败场景）。
+- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
 
-阶段 B 契约测试 17 文件 64 断言 + 阶段 A 接线契约 13 文件 24 断言（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
+阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
@@ -118,7 +119,7 @@
 - 前端字段目录/widget 试点：已实现多个切片，但 widget 注册表和 iframe 收敛尚未完成。
 - 后端领域拆分：`lib/domains/` 42 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复 13 个切片后 39 个域模块已接线（`sales_crm.js` require 38 个 + `state_projection` 经 `business_page_filters.js`），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——42 个域模块中 39 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,984 行；仅剩 3 个模块按用户裁定不接线。
-- 阶段 B 状态真源：**§1 全部写点收敛完成门达成**——`lib/` 对 `crm_accounts` 的状态/计划/主管列零裸写（含 `updateAccount` profile 编辑，`aabe4d9`）；reject/return/quote/order/activity/claim/manager-task/overdue-lead/reassign/trash/restore/edit 全部写点经 `state_write`/`collaboration_write` 网关。**§4 强化完成**：`addQuote`/`addOrder` stage 前置校验已提炼为网关 `assertQuoteTransition`/`assertFirstOrderTransition` 守卫（`0ae90af`）；§4.1/§4.2 不变量已注册 `assertAccountStateContract` 守卫（`9186a6d`）并接入回收/恢复三个完整视图写点（`da34bc2`）；§4.3 next_action time_basis 维度已纳入 `projectNextAction` 投影（`cb6c6e4`）；§4.4 `buildAlerts` 告警路径（`754d023`）、`buildTeamReport` 报告路径（`c4bba3f`）与 `pipelineActionKeys` pipeline 动作键路径（`fe77fb4`）已收敛到投影。契约 §4 不变量均已由契约测试锁定。**边界**：pipeline 行 state DTO 已移除（`6b88d74`），accounts/bootstrap/profile/pipeline 全部一致为"无 state DTO、前端直读裸字段"。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。
+- 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 生产部署/UAT：本轮未执行，不得从本地结果推断生产状态。
 
@@ -126,8 +127,8 @@
 
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
-3. 阶段 B 收尾（§1 写点收敛 + §4 强化 + 边界收敛均已达成）：剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）与测试种子收敛受红线约束，仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
-4. 阶段 A 接线恢复后如需继续减单体，可评估已漂移模块或转阶段 C（权限/筛选/字段）。
+3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
+4. 阶段 C（权限/筛选/字段）为下一个可执行阶段：字段级白名单投影替换 `CONTACT_KEYS` 递归黑名单、统一 `buildAccessContext` 与列表查询范围解释器、按页面落地"权限→字段→筛选"合同测试。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
