@@ -26,7 +26,7 @@ function seedOverdueLead(fx) {
     WHERE id='INTAKE-OTHER'`).run(stamp(-49), stamp(-25), stamp(-1));
   fx.db.prepare(`UPDATE crm_accounts SET intake_item_id='INTAKE-OTHER',owner_id='U-OTHER',
     assignment_status='assigned',assigned_at=?,claim_due_at=?,claimed_at='',return_reason='',
-    next_action='完成首次触达',next_action_at=?,last_activity_at=?,updated_at=?
+    next_action='完成首次触达',next_action_at=?,next_action_time_basis='utc',last_activity_at=?,updated_at=?
     WHERE id='CRM-OTHER'`).run(stamp(-49), stamp(-25), stamp(24), stamp(-1), stamp(-1));
 }
 
