@@ -184,12 +184,13 @@ function buildPhases(env) {
       id: 'B',
       title: '阶段 B：状态真源',
       status: 'wip',
-      summary: '§1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；契约测试 50 断言。',
+      summary: '§1 写点收敛大部完成，但 updateAccount（profile 编辑）仍经动态字段拼装直写 stage/owner/assignment/next_action（审计纠正，待收敛）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；契约测试 50 断言。',
       sliceTable: 'B',
       pending: [
-        ['B-P1', '§4 强化续：§4.4 剩余（assertAccountStateContract 接入回收/恢复路径完整视图校验）', '', ''],
-        ['B-P2', 'AI next_action 写点与测试专用种子收敛（AI 受红线约束）', '', ''],
-        ['B-P3', 'pipeline 与 accounts 的 state DTO 边界差异收敛', '', ''],
+        ['B-P1', '收敛 updateAccount 直写（profile 编辑，经 state_write/collaboration_write，保持 claim/unassign 子流权限）', '', ''],
+        ['B-P2', '§4 强化续：§4.4 剩余（assertAccountStateContract 接入回收/恢复路径完整视图校验）', '', ''],
+        ['B-P3', 'AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源', '', ''],
+        ['B-P4', 'pipeline 与 accounts 的 state DTO 边界差异收敛', '', ''],
       ],
     },
     {
