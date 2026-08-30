@@ -209,11 +209,10 @@ function buildPhases(env) {
         ['access', 'S3 形状：timeline/auditLog 白名单（含 provenance 泄漏校验）', '38bfe7d', ''],
       ],
       pending: [
-        ['access', 'S6：db bootstrap 复合（people/recon 形状 + 泄漏校验）', '', ''],
-        ['access', 'S4：recycle-profile 复合（masterProfile 形状，依赖 S6）', '', ''],
-        ['access', 'P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）', '', ''],
-        ['access', 'buildAccessContext 与列表查询范围解释器统一', '', ''],
+        ['access', '主线：buildAccessContext 与列表查询范围解释器统一', '', ''],
         ['access', '按页面落地"权限→字段→筛选"合同测试', '', ''],
+        ['access', '可选残值：legacy customers 形状白名单（S6 审计确认其余联系形状已源头门控）', '', ''],
+        ['access', 'P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）', '', ''],
       ],
     },
     {

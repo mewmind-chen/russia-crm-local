@@ -28,6 +28,8 @@
 > **结论**：P1/P3（loadIntakeState items）**不适合作顶层白名单**——忠实转换需要按每个嵌套形状各建递归白名单，复杂度等同黑名单且无简化收益；强行顶层白名单违反"不泄漏联系方式"合规不变量。**P1/P3 不建议本设计推进**（或需另立"递归逐形状白名单"独立子项目）。其余路径（P4/P5 的 account/activity/commerce/timeline/evaluations 为扁平行）可安全白名单化。
 >
 > **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
+>
+> **S6（db bootstrap）审计结论（2026-08-30 实测）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。**`customers` 是唯一未覆盖的联系承载形状**。结论：S6 主要是 belt-and-suspenders 低价值加固（联系数据已在源头收敛），非暴露缺口；`customers` 可单独立一 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 形状片（含 leakage 校验），但不阻塞主线。
 
 | 形状 | 现有白名单 | 需新建立 | 可行性 |
 |---|---|---|---|

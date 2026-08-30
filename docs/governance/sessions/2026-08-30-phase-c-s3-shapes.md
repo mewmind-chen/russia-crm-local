@@ -35,5 +35,5 @@
 ## 下一步最小动作
 
 1. 单独提交治理文档 checkpoint（当前更新），重新生成进度看板。
-2. 阶段 C 续：S6（db bootstrap 复合：people/recon 形状 + 泄漏校验）→ S4（recycle-profile 复合：masterProfile 形状，依赖 S6）。P1/P3/S5 暂缓已记录。
-3. 统一 `buildAccessContext` 与列表查询范围解释器；按页面"权限→字段→筛选"合同。
+2. 阶段 C 主线重排（S6 审计后）：优先统一 `buildAccessContext` 与列表查询范围解释器 + 按页面"权限→字段→筛选"合同；聚合白名单化为可选残值（legacy customers 形状）。
+3. P1/P3/S5 暂缓已记录（嵌套泄漏 / users 密码哈希）。

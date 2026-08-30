@@ -133,7 +133,7 @@
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
-4. 阶段 C（权限/筛选/字段）为当前执行阶段：列表路径白名单化完成（accounts/intake/通知），S3 形状（timeline/auditLog）已落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）经两轮审计排除 P1/P3（loadIntakeState 嵌套泄漏）与 S5（export users 含 password_hash 暴露）；可行切片为 S6（db bootstrap people/recon 形状 + 复合）→ S4（recycle-profile 复合，依赖 S6 的 masterProfile 形状），每片执行前先做泄漏校验 + 等价契约。统一 `buildAccessContext` 与列表范围解释器、按页面"权限→字段→筛选"合同为其后主线。
+4. 阶段 C（权限/筛选/字段）为当前执行阶段：列表路径白名单化完成（accounts/intake/通知），S3 形状（timeline/auditLog）已落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；**S6（db bootstrap）审计确认聚合联系形状已在源头门控为空**（people/contacts/recon/pool 已门控或白名单），非暴露缺口，仅 legacy `customers` 可加形状片。**主线重排：优先统一 `buildAccessContext` 与列表查询范围解释器 + 按页面"权限→字段→筛选"合同**（真正的高价值项），聚合白名单化降为可选残值加固。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线

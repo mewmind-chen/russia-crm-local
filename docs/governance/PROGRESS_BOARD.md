@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 13:06:07`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 13:20:23`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,8 +8,8 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `474587d`（相对 origin/main ahead 150） |
-| 工作区 | 干净 |
+| HEAD | `40d0a62`（相对 origin/main ahead 151） |
+| 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 1955/1955 |
 | 核心测试 | `npm test` 1594/1594 |
 | sales_crm.js | 13003 行 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 46 |
 | feat(...) | 15 |
-| docs(governance) | 47 |
+| docs(governance) | 48 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -139,11 +139,10 @@
 
 ### 待办
 
-- [ ] **access** S6：db bootstrap 复合（people/recon 形状 + 泄漏校验）
-- [ ] **access** S4：recycle-profile 复合（masterProfile 形状，依赖 S6）
-- [ ] **access** P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）
-- [ ] **access** buildAccessContext 与列表查询范围解释器统一
+- [ ] **access** 主线：buildAccessContext 与列表查询范围解释器统一
 - [ ] **access** 按页面落地"权限→字段→筛选"合同测试
+- [ ] **access** 可选残值：legacy customers 形状白名单（S6 审计确认其余联系形状已源头门控）
+- [ ] **access** P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）
 
 ## 阶段 D：线索/任务/商业闭环
 
