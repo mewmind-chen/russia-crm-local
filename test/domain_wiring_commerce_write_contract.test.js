@@ -39,13 +39,21 @@ function buildSchema() {
   return db;
 }
 
-// 阶段 D：RFQ/quote/order 行级写入必须来自 domains/commerce/write，不得内联 SQL。
-test('commerce row writes are wired from the domain module, not inlined', () => {
-  assert.match(source, /const \{\s*insertRfqRow,\s*insertQuoteRow,\s*markRfqQuoted,\s*insertOrderRow,\s*\} = require\('\.\/domains\/commerce\/write'\);/);
+// 阶段 D：RFQ/quote/order 行级写入与 commit 服务必须来自 domains/commerce/write，
+// 不得内联；commitQuote/commitOrder 封装完整编排后，sales_crm 不再直接导入器级
+// insert/row 函数。
+test('commerce row writes and commit services are wired from the domain module, not inlined', () => {
+  assert.match(source, /const \{\s*insertRfqRow,\s*commitQuote,\s*commitOrder,\s*\} = require\('\.\/domains\/commerce\/write'\);/);
   assert.doesNotMatch(source, /^function insertRfqRow\(/m);
   assert.doesNotMatch(source, /^function insertQuoteRow\(/m);
   assert.doesNotMatch(source, /^function markRfqQuoted\(/m);
   assert.doesNotMatch(source, /^function insertOrderRow\(/m);
+  assert.doesNotMatch(source, /^function commitQuote\(/m);
+  assert.doesNotMatch(source, /^function commitOrder\(/m);
+  // sales_crm no longer imports the raw insert/row functions directly
+  assert.doesNotMatch(source, /insertQuoteRow,?\s*$/m);
+  assert.doesNotMatch(source, /markRfqQuoted,?\s*$/m);
+  assert.doesNotMatch(source, /insertOrderRow,?\s*$/m);
 });
 
 test('insertQuoteRow and markRfqQuoted persist a sent quote linked to the rfq', () => {

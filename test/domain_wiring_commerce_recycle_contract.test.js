@@ -7,14 +7,15 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
+const writeSource = fs.readFileSync(path.join(root, 'lib', 'domains', 'commerce', 'write.js'), 'utf8');
 
 // 阶段 A 接线契约（B 组函数级一致批）与被阶段 D 扩展：
-// commerce/rules 的 advanceStage/commerceActionIdempotencyKey/validateMoney/
-// validateCurrency/validateMargin 与 customer/recycle 的 manualReturnBatchId
-// 必须从域模块 import，不得内联；validateMoney/validateCurrency/validateMargin
-// 使用注入式错误构造，调用点注入 badRequest 保持原语义。
+// commerce/rules 的 advanceStage/validateMoney/validateCurrency/validateMargin 与
+// customer/recycle 的 manualReturnBatchId 必须来自域模块，不得内联；quote/order
+// 编排下沉后，校验注入调用点在 domains/commerce/write.js 的 commit 服务内，
+// sales_crm 仅保留 advanceStage。
 test('commerce idempotency and recycle batch id helpers are wired from domain modules, not inlined', () => {
-  assert.match(source, /const \{\s*advanceStage,\s*validateMoney,\s*validateCurrency,\s*validateMargin,\s*commerceActionIdempotencyKey,\s*\} = require\('\.\/domains\/commerce\/rules'\);/);
+  assert.match(source, /const \{ advanceStage \} = require\('\.\/domains\/commerce\/rules'\);/);
   assert.match(source, /const \{\s*validateRecycleReason,\s*mismatchRecordNotFound,\s*parseMismatchRecordKey,\s*assertCustomerReturnEligible,\s*manualReturnBatchId,\s*\} = require\('\.\/domains\/customer\/recycle'\);/);
   assert.doesNotMatch(source, /^function advanceStage\(/m);
   assert.doesNotMatch(source, /^function commerceActionIdempotencyKey\(/m);
@@ -22,10 +23,11 @@ test('commerce idempotency and recycle batch id helpers are wired from domain mo
   assert.doesNotMatch(source, /^function validateCurrency\(/m);
   assert.doesNotMatch(source, /^function validateMargin\(/m);
   assert.doesNotMatch(source, /^function manualReturnBatchId\(/m);
-  assert.match(source, /validateMoney\(payload\.amount, '报价金额', \{ badRequest \}\)/);
-  assert.match(source, /validateCurrency\(payload\.currency, \{ badRequest \}\)/);
-  assert.match(source, /validateMargin\(payload\.grossMargin, Boolean\(payload\.lossLeader\), \{ badRequest \}\)/);
-  assert.match(source, /validateMargin\(payload\.grossMargin, true, \{ badRequest \}\)/);
+  // 校验注入调用点已随编排下沉到 write.js commit 服务
+  assert.match(writeSource, /validateMoney\(payload\.amount, '报价金额', \{ badRequest \}\)/);
+  assert.match(writeSource, /validateCurrency\(payload\.currency, \{ badRequest \}\)/);
+  assert.match(writeSource, /validateMargin\(payload\.grossMargin, Boolean\(payload\.lossLeader\), \{ badRequest \}\)/);
+  assert.match(writeSource, /validateMargin\(payload\.grossMargin, true, \{ badRequest \}\)/);
 });
 
 // 注入式行为契约：validateMoney/validateCurrency/validateMargin 使用注入的

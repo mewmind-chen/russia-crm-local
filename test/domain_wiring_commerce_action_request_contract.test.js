@@ -15,10 +15,12 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
 
 // 阶段 D 接线契约（commerce 第一片）：quote/order 的幂等保留生命周期
-// （crm_commerce_action_requests）必须来自 domains/commerce/action_request，
-// 不得在 sales_crm.js 内联。
-test('commerce action-request reservation lifecycle is wired from the domain module, not inlined', () => {
-  assert.match(source, /reserveCommerceAction,?\s*$[\s\S]*completeCommerceAction,?\s*$[\s\S]*clearCommerceActionReservation,?\s*$\s*\} = require\('\.\/domains\/commerce\/action_request'\);/m);
+// 由 domains/commerce/action_request 提供，commitQuote/commitOrder 域服务
+// 在 write.js 内部 require 该模块；sales_crm 不再直接导入 action_request。
+test('commerce action-request lifecycle is no longer directly imported by sales_crm', () => {
+  assert.doesNotMatch(source, /reserveCommerceAction,?\s*$/m);
+  assert.doesNotMatch(source, /completeCommerceAction,?\s*$/m);
+  assert.doesNotMatch(source, /clearCommerceActionReservation,?\s*$/m);
   assert.doesNotMatch(source, /^function reserveCommerceAction\(/m);
   assert.doesNotMatch(source, /^function completeCommerceAction\(/m);
   assert.doesNotMatch(source, /^function clearCommerceActionReservation\(/m);

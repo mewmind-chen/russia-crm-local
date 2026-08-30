@@ -22,13 +22,14 @@ function functionSlice(source, functionName, nextFunctionName) {
 
 // 阶段 B §1 完成门：next_action/next_action_at/next_action_time_basis/updated_at 属于
 // collaboration_write 计划网关，不得在裸 crm_accounts UPDATE 中直写。last_activity_at 是活动时间戳，不在网关列。
+// 编排下沉后，addQuote/addOrder 为薄委托，计划网关调用改在 write.js commit 服务内。
 function assertNoPlanColumns(body, label) {
   assert.doesNotMatch(
     body,
     /UPDATE crm_accounts SET[^)]*(?:next_action\s*=|next_action_at\s*=|next_action_time_basis\s*=|(?<![a-z_])updated_at\s*=)/,
     `${label}: plan columns must be written through the collaboration_write gateway`,
   );
-  assert.match(body, /applyAccountPlanPatch\(/, `${label}: must route the plan write through the gateway`);
+  assert.doesNotMatch(body, /applyAccountPlanPatch\(/, `${label}: must not contain plan gateway call (now in write.js commit service)`);
 }
 
 test('addQuote routes its next-action write through the plan gateway', () => {

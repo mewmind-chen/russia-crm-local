@@ -21,14 +21,14 @@ function functionSlice(source, functionName, nextFunctionName) {
 }
 
 // 阶段 B §1 完成门：stage/updated_at 属于 state_write 网关，不得在裸 crm_accounts UPDATE 中直写。
-// next_action*/last_activity_at 属计划/活动字段，本切片暂不在收敛范围。
+// 编排下沉后，addQuote/addOrder 为薄委托，不再含 applyAccountStatePatch 调用。
 function assertNoStateColumns(body, label) {
   assert.doesNotMatch(
     body,
     /UPDATE crm_accounts SET[^)]*(?:stage\s*=|lifecycle_status\s*=|assignment_status\s*=|(?<![a-z_])owner_id\s*=|(?<![a-z_])updated_at\s*=)/,
     `${label}: stage/lifecycle/assignment/owner/updated_at must be written through the state_write gateway`,
   );
-  assert.match(body, /applyAccountStatePatch\(/, `${label}: must route the account-state write through the gateway`);
+  assert.doesNotMatch(body, /applyAccountStatePatch\(/, `${label}: must not contain state_write gateway call (now in write.js commit service)`);
 }
 
 test('addQuote routes its stage write through the lifecycle gateway', () => {
