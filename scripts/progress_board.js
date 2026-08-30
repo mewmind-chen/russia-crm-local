@@ -135,6 +135,7 @@ function phaseBSlices(commits) {
     ['recycle and restore account writes', 'B9', '回收/恢复写收敛'],
     ['route updateAccount (profile edit) state writes through gateways', 'B10', 'updateAccount profile 编辑写收敛'],
     ['drop the state DTO from pipeline rows to match account boundary', 'B11', 'pipeline 行 state DTO 边界收敛'],
+    ['assert state contract on merged views in recycle/restore paths', 'B12', '回收/恢复完整视图守卫接线'],
   ];
   return map.map(([match, id, title]) => {
     const found = commits.find(commit => commit.subject.includes(match));
@@ -186,11 +187,10 @@ function buildPhases(env) {
       id: 'B',
       title: '阶段 B：状态真源',
       status: 'wip',
-      summary: '§1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；state DTO 边界已收敛（pipeline 行不再附加，6b88d74）；契约测试 59 断言。',
+      summary: '§1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化完成（守卫/投影/读路径收敛，含 assertAccountStateContract 接入回收/恢复 da34bc2）；state DTO 边界已收敛（pipeline 行不再附加，6b88d74）；契约测试 64 断言。',
       sliceTable: 'B',
       pending: [
-        ['B-P1（§4 剩余）', 'assertAccountStateContract 接入回收/恢复路径完整视图校验', '', ''],
-        ['B-P2', 'AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源', '', ''],
+        ['B-P1', 'AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源', '', ''],
       ],
     },
     {

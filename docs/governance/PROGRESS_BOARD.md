@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 08:38:55`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 08:51:07`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,11 +8,11 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `3b2724e`（相对 origin/main ahead 129） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 1936/1936 |
-| 核心测试 | `npm test` 1575/1575 |
-| sales_crm.js | 12984 行 |
+| HEAD | `da34bc2`（相对 origin/main ahead 131） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 1941/1941 |
+| 核心测试 | `npm test` 1580/1580 |
+| sales_crm.js | 13002 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-30-pipeline-dto-boundary-convergence.md` |
 
@@ -20,11 +20,11 @@
 
 | 类别 | 数量 |
 |---|---|
-| refactor(state) 状态写收敛 | 9 |
+| refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 41 |
 | feat(...) | 15 |
-| docs(governance) | 32 |
+| docs(governance) | 33 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -99,7 +99,7 @@
 
 ## 阶段 B：状态真源
 
-> **进行中** — §1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；state DTO 边界已收敛（pipeline 行不再附加，6b88d74）；契约测试 59 断言。
+> **进行中** — §1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化完成（守卫/投影/读路径收敛，含 assertAccountStateContract 接入回收/恢复 da34bc2）；state DTO 边界已收敛（pipeline 行不再附加，6b88d74）；契约测试 64 断言。
 
 ### 已落地切片
 
@@ -116,11 +116,11 @@
 | 回收/恢复写收敛 | `227b3d7` | 2026-08-29 |
 | updateAccount profile 编辑写收敛 | `aabe4d9` | 2026-08-30 |
 | pipeline 行 state DTO 边界收敛 | `6b88d74` | 2026-08-30 |
+| 回收/恢复完整视图守卫接线 | `da34bc2` | 2026-08-30 |
 
 ### 待办
 
-- [ ] **B-P1（§4 剩余）** assertAccountStateContract 接入回收/恢复路径完整视图校验
-- [ ] **B-P2** AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源
+- [ ] **B-P1** AI next_action 写点（红线，仅评估）与测试种子收敛、last_activity_at 归属已明确为活动溯源
 
 ## 阶段 C：权限/筛选/字段
 
