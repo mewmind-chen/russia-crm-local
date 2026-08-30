@@ -71,34 +71,79 @@ function domainFileList() {
 }
 
 function wiredDomainModules() {
-  // 生产代码（lib/ 下非 domains、非 ai_stations）中对 lib/domains 的 require
-  const targets = new Map(); // module -> host file
+  // 生产代码（lib/ 下非 domains、非 ai_stations）中对 lib/domains 的直接 require，
+  // 再沿被已接线域模块 require 的域模块做传递闭包（域间接线，如 commerce/write
+  // 内部 require('./rules')/require('./action_request')、reporting/builders 依赖
+  // ../auth/user 与 ../lifecycle/state_projection）。
+  const LIB_DIR = path.join(ROOT, 'lib');
+  const directTargets = new Map(); // module -> { host, spec }（生产代码 require）
+  const domainEdges = new Map(); // requirerModule -> Map(requiredModule -> { host, spec })
   const scan = dir => {
     if (!fs.existsSync(dir)) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'domains' || entry.name === 'ai_stations' || entry.name === 'ai') continue;
-        scan(full);
+        if (entry.name !== 'ai_stations' && entry.name !== 'ai') scan(full);
       } else if (entry.name.endsWith('.js')) {
         const source = fs.readFileSync(full, 'utf8');
         const relative = path.relative(ROOT, full).split(path.sep).join('/');
-        for (const match of source.matchAll(/require\(\s*['"]\.\/domains\/([^'"]+)['"]\s*\)/g)) {
-          const module = match[1].replace(/\.js$/, '');
-          if (!targets.has(module)) targets.set(module, relative);
+        const modulePath = path.relative(LIB_DIR, full).split(path.sep).join('/').replace(/\.js$/, '');
+        const isDomainFile = modulePath.startsWith('domains/');
+        const key = isDomainFile ? modulePath.replace(/^domains\//, '') : '';
+        for (const match of source.matchAll(/require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
+          const spec = match[1];
+          if (!isDomainFile) {
+            const m = spec.match(/^\.\/domains\/(.+)$/);
+            if (!m) continue;
+            const required = m[1].replace(/\.js$/, '');
+            if (!directTargets.has(required)) {
+              directTargets.set(required, { host: relative, spec: `require('${spec}')` });
+            }
+          } else {
+            const resolved = path.resolve(path.dirname(full), spec);
+            let resolvedPath = resolved.endsWith('.js') ? resolved : `${resolved}.js`;
+            if (!fs.existsSync(resolvedPath) && fs.existsSync(path.join(resolved, 'index.js'))) {
+              resolvedPath = path.join(resolved, 'index.js');
+            }
+            if (!fs.existsSync(resolvedPath)) continue;
+            const fullRequired = path.relative(LIB_DIR, resolvedPath).split(path.sep).join('/').replace(/\.js$/, '');
+            if (!fullRequired.startsWith('domains/') || fullRequired === modulePath) continue;
+            const required = fullRequired.replace(/^domains\//, '');
+            if (!domainEdges.has(key)) domainEdges.set(key, new Map());
+            if (!domainEdges.get(key).has(required)) {
+              domainEdges.get(key).set(required, { host: relative, spec: `require('${spec}')` });
+            }
+          }
         }
       }
     }
   };
-  scan(path.join(ROOT, 'lib'));
-  const attribution = (module, host) => {
+  scan(LIB_DIR);
+  // 传递闭包：从生产直接接线集合出发，跟随已接线域模块的域内 require
+  const wired = new Map(directTargets); // module -> { host, spec }
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [requirer, edges] of domainEdges) {
+      if (!wired.has(requirer)) continue;
+      for (const [required, meta] of edges) {
+        if (!wired.has(required)) {
+          wired.set(required, meta);
+          grew = true;
+        }
+      }
+    }
+  }
+  // 用户裁定保持内联/精简的模块始终按"不接线"展示（即使被已接线域模块 require）
+  for (const kept of KEPT_UNWIRED) wired.delete(kept);
+  const attribution = (module, meta) => {
     const hit = git(
-      `log --format=%h -S "require('./domains/${module}')" -- ${host} | head -1`,
+      `log --format=%h -S "${meta.spec}" -- ${meta.host} | head -1`,
     ).split('\n')[0];
     return hit || '';
   };
-  return [...targets.entries()]
-    .map(([module, host]) => ({ module, host, commit: attribution(module, host) }))
+  return [...wired.entries()]
+    .map(([module, meta]) => ({ module, host: meta.host, commit: attribution(module, meta) }))
     .sort((a, b) => a.module.localeCompare(b.module));
 }
 
@@ -172,7 +217,7 @@ function buildPhases(env) {
       id: 'A',
       title: '阶段 A：后端结构化切分（sales_crm 拆域）',
       status: 'wip',
-      summary: 'lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（39/42 已接入，3 个按裁定保持内联）。',
+      summary: 'lib/domains 44 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（41/44 已接入，含 action_request 经 write.js 域间接线，3 个按裁定保持内联）。',
       done: [
         ['domains', 'lifecycle 网关接线（state_write/collaboration_write）', '13cd37a…227b3d7', ''],
         ['domains', '纯 helper 接线：json/list/audit/notifications', '0560e9c', ''],
@@ -221,14 +266,15 @@ function buildPhases(env) {
       id: 'D',
       title: '阶段 D：线索/任务/商业闭环',
       status: 'wip',
-      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；闭环边界收口未完成。',
+      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环领域边界已成（1d15546/f5c650e/24aa67e/b4cfdfc）。',
       done: [
         ['intake', 'intake/assignment/decision/query/owner 域模块接线恢复', '48ba93c…8a0ee7d', ''],
         ['planning', 'planning/alerts/risk/streak/today_task 域模块接线恢复', '7328b51…5c23b32', ''],
-        ['commerce', 'commerce/rules 域模块接线恢复', 'a853a16', ''],
+        ['commerce', 'commerce 域模块接线恢复（rules/write/action_request 级联）', 'a853a16…b4cfdfc', ''],
+        ['commerce', '商业闭环成型：action_request 事务边界 + 行级写 + 金额/币种/毛利校验 + commitQuote/commitOrder 域服务', '1d15546…b4cfdfc', ''],
       ],
       pending: [
-        ['commerce', '商业闭环（rfq→quote→order）领域边界成型', '', ''],
+        ['commerce', '独立用例（manager intervention / deferred plan）不在闭环内，后续评估', '', ''],
       ],
     },
     {

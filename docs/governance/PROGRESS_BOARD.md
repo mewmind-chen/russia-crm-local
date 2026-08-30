@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 15:46:36`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 16:37:47`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `d12d65b`（相对 origin/main ahead 169） |
+| HEAD | `b7ec871`（相对 origin/main ahead 172） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 1969/1969 |
-| 核心测试 | `npm test` 1599/1599 |
-| sales_crm.js | 13001 行 |
+| 全量测试 | `node --test` 1975/1975 |
+| 核心测试 | `npm test` 1614/1614 |
+| sales_crm.js | 12883 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-08-30-phase-d-commerce-validation.md` |
+| 最近会话 | `2026-08-30-phase-d-commerce-commit-service.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 52 |
+| refactor(其他/通用) | 53 |
 | feat(...) | 15 |
-| docs(governance) | 60 |
+| docs(governance) | 62 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -39,7 +39,7 @@
 
 ## 阶段 A：后端结构化切分（sales_crm 拆域）
 
-> **进行中** — lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（39/42 已接入，3 个按裁定保持内联）。
+> **进行中** — lib/domains 44 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（41/44 已接入，含 action_request 经 write.js 域间接线，3 个按裁定保持内联）。
 
 ### 域模块接线状态（自动扫描）
 
@@ -55,7 +55,7 @@
 | `lib/domains/auth/credentials.js` | [x] 已接线 | ad657ac |
 | `lib/domains/auth/session.js` | [x] 已接线 | ad657ac |
 | `lib/domains/auth/user.js` | [x] 已接线 | 8a0ee7d |
-| `lib/domains/commerce/action_request.js` | [x] 已接线 | 1d15546 |
+| `lib/domains/commerce/action_request.js` | [x] 已接线 | b4cfdfc |
 | `lib/domains/commerce/rules.js` | [x] 已接线 | a853a16 |
 | `lib/domains/commerce/write.js` | [x] 已接线 | f5c650e |
 | `lib/domains/customer/contacts.js` | [x] 已接线 | ad657ac |
@@ -150,17 +150,18 @@
 
 ## 阶段 D：线索/任务/商业闭环
 
-> **进行中** — intake/assignment/planning/commerce 域模块已抽取并接线；闭环边界收口未完成。
+> **进行中** — intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环领域边界已成（1d15546/f5c650e/24aa67e/b4cfdfc）。
 
 ### 已完成
 
 - [x] intake/assignment/decision/query/owner 域模块接线恢复（`48ba93c…8a0ee7d`）
 - [x] planning/alerts/risk/streak/today_task 域模块接线恢复（`7328b51…5c23b32`）
-- [x] commerce/rules 域模块接线恢复（`a853a16`）
+- [x] commerce 域模块接线恢复（rules/write/action_request 级联）（`a853a16…b4cfdfc`）
+- [x] 商业闭环成型：action_request 事务边界 + 行级写 + 金额/币种/毛利校验 + commitQuote/commitOrder 域服务（`1d15546…b4cfdfc`）
 
 ### 待办
 
-- [ ] **commerce** 商业闭环（rfq→quote→order）领域边界成型
+- [ ] **commerce** 独立用例（manager intervention / deferred plan）不在闭环内，后续评估
 
 ## 阶段 E：前端 widgets
 
