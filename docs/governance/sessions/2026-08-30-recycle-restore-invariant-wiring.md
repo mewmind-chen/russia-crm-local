@@ -32,7 +32,7 @@
 - 新契约 5/5；回收/恢复/不变量/ownerless/手工返回/退回线索/回收站 UI 回归 42/42。
 - `node --test` 全量 `1941/1941`；`npm test` core `1580/1580`。
 - `git diff --check` 通过；lint 无错误；`node -e require` 加载正常；工作区干净。
-- `sales_crm.js` 12,994 行（+10：三处守卫调用 + import）。
+- `sales_crm.js` 13,002 行（+18：三处守卫调用 + import）。
 
 ## 提交
 
