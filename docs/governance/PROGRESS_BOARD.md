@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 12:14:00`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 12:43:44`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,8 +8,8 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `0b3f3a4`（相对 origin/main ahead 144） |
-| 工作区 | 干净 |
+| HEAD | `6207b21`（相对 origin/main ahead 147） |
+| 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 1952/1952 |
 | 核心测试 | `npm test` 1591/1591 |
 | sales_crm.js | 13003 行 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 45 |
 | feat(...) | 15 |
-| docs(governance) | 42 |
+| docs(governance) | 45 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -138,7 +138,7 @@
 
 ### 待办
 
-- [ ] **access** 剩余 redactContactFields 路径评估收敛（evaluation/db bootstrap，AI 相关除外）
+- [ ] **access** 大聚合白名单化（设计已出，已排除 loadIntakeState；接 recycle-profile/export/db bootstrap，先做嵌套泄漏校验）
 - [ ] **access** buildAccessContext 与列表查询范围解释器统一
 - [ ] **access** 按页面落地"权限→字段→筛选"合同测试
 

@@ -208,7 +208,7 @@ function buildPhases(env) {
         ['access', '通知页切字段级白名单（contactSafeNotificationRecord 新投影）', '1835f73', ''],
       ],
       pending: [
-        ['access', '剩余 redactContactFields 路径评估收敛（evaluation/db bootstrap，AI 相关除外）', '', ''],
+        ['access', '大聚合白名单化（设计已出，已排除 loadIntakeState；接 recycle-profile/export/db bootstrap，先做嵌套泄漏校验）', '', ''],
         ['access', 'buildAccessContext 与列表查询范围解释器统一', '', ''],
         ['access', '按页面落地"权限→字段→筛选"合同测试', '', ''],
       ],
