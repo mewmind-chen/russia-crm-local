@@ -184,10 +184,10 @@ function buildPhases(env) {
       id: 'B',
       title: '阶段 B：状态真源',
       status: 'wip',
-      summary: '§1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；契约测试 34 断言。',
+      summary: '§1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；§4 强化含 buildAlerts 投影消费（754d023）；契约测试 47 断言。',
       sliceTable: 'B',
       pending: [
-        ['B-P1', '§4 强化续：§4.4 报告/导出/告警统一消费投影（stage/recycled/returned/time-basis guard 已落地 0ae90af/9186a6d/cb6c6e4）', '', ''],
+        ['B-P1', '§4 强化续：§4.4 剩余（报告/导出路径审计、pipelineActionKeys 裸列评估、assertAccountStateContract 接入回收路径）', '', ''],
         ['B-P2', 'AI next_action 写点与测试专用种子收敛（AI 受红线约束）', '', ''],
         ['B-P3', 'pipeline 与 accounts 的 state DTO 边界差异收敛', '', ''],
       ],
