@@ -3,7 +3,7 @@
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
 执行分支：`codex/frontend-widget-pilot@cb6c6e4`（相对基线 ahead 108，未合并）
-状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B 业务侧全部完成（§1 写点收敛零裸写 + §4 强化 + state DTO 边界收敛 + smoke 种子收敛），阶段 C 推进中（accounts/intake/通知页已切字段级白名单 + S3 timeline/audit 形状），全绿
+状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B 业务侧全部完成（§1 写点收敛零裸写 + §4 强化 + state DTO 边界收敛 + smoke 种子收敛），阶段 C 推进中（accounts/intake/通知页已切字段级白名单 + S3 timeline/audit 形状 + 范围解释器等价契约），全绿
 
 ## 当前进度快照
 
