@@ -2,8 +2,8 @@
 
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@0ae90af`（相对基线 ahead 103，未合并）
-状态：路线图执行中；阶段 B §1 完成门达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B §4 强化已起步（assert*Transition 守卫），全绿
+执行分支：`codex/frontend-widget-pilot@9186a6d`（相对基线 ahead 106，未合并）
+状态：路线图执行中；阶段 B §1 完成门达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写），阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B §4 强化推进中（assert*Transition 守卫 + 状态契约不变量守卫），全绿
 
 ## 当前进度快照
 
@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
 | 阶段 A：后端结构化切分 | 接线恢复完成（39/42 已接入） | `lib/domains/` 42 个文件；39 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 12,966 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；聚合文件仍超 1.2 万行 |
-| 阶段 B：状态真源 | §1 完成门达成 | 全部写点收敛到 state_write/collaboration_write 网关（8 切片、34 契约断言），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`） | §4 强化剩余（recycled/returned/plan 不变量守卫）、AI 写点收敛、状态解释器统一消费 |
+| 阶段 B：状态真源 | §1 完成门达成 | 全部写点收敛到 state_write/collaboration_write 网关（8 切片、34 契约断言），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）与 assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned） | §4 强化剩余（§4.3 plan 不变量守卫接入调用点）、AI 写点收敛、状态解释器统一消费 |
 | 阶段 C：权限/筛选/字段 | 进行中 | field catalog、schema 渲染、多个白名单投影已提交 | 白名单兼容回归已恢复；页面覆盖未完成 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
 | 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
