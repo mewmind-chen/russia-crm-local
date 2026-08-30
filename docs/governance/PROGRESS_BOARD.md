@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 05:09:23`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 05:10:06`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `c4bba3f`（相对 origin/main ahead 117） |
-| 工作区 | 有未提交改动 |
+| HEAD | `e00cf27`（相对 origin/main ahead 118） |
+| 工作区 | 干净 |
 | 全量测试 | `node --test` 1926/1926 |
 | 核心测试 | `npm test` 1565/1565 |
 | sales_crm.js | 12969 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
-| 最近会话 | `2026-08-29-phase-b-section4-buildAlerts-projection.md` |
+| 最近会话 | `2026-08-29-phase-b-section4-buildTeamReport-projection.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 39 |
 | feat(...) | 15 |
-| docs(governance) | 23 |
+| docs(governance) | 24 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
