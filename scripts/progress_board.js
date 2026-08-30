@@ -24,6 +24,11 @@ const GOV_DIR = path.join(ROOT, 'docs', 'governance');
 const BOARD_MD = path.join(GOV_DIR, 'PROGRESS_BOARD.md');
 const BOARD_HTML = path.join(GOV_DIR, 'progress-board.html');
 
+// 用户裁定保持内联/精简、不接线的域模块（WIP 收敛时的"内联版"边界）。
+// identity/index（facade 精简）、identity/middleware（认证逻辑内联）、
+// filter/index（调用方直连 filter_authorization）。
+const KEPT_UNWIRED = new Set(['identity/index', 'identity/middleware', 'filter/index']);
+
 function sh(command, fallback = '') {
   try {
     return execSync(command, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -163,16 +168,16 @@ function buildPhases(env) {
       id: 'A',
       title: '阶段 A：后端结构化切分（sales_crm 拆域）',
       status: 'wip',
-      summary: 'lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复进行中。',
+      summary: 'lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（39/42 已接入，3 个按裁定保持内联）。',
       done: [
         ['domains', 'lifecycle 网关接线（state_write/collaboration_write）', '13cd37a…227b3d7', ''],
         ['domains', '纯 helper 接线：json/list/audit/notifications', '0560e9c', ''],
         ['domains', 'http 接线：error/routes', 'd51596c', ''],
         ['domains', 'csv/insights 接线', '873d1b0', ''],
+        ['domains', 'activity/planning、intake/assignment、auth/customer、reporting 接线', '7328b51…13c5368', ''],
+        ['domains', 'B 组：commerce/recycle、activity/present、customer/dedupe 等接线', 'a853a16…5c23b32', ''],
       ],
-      pending: [
-        ['domains', 'customer/activity/planning/intake/commerce/auth/reporting-builders 等模块接线恢复', '', ''],
-      ],
+      pending: [],
       moduleTable: true,
     },
     {
@@ -203,10 +208,13 @@ function buildPhases(env) {
       id: 'D',
       title: '阶段 D：线索/任务/商业闭环',
       status: 'wip',
-      summary: 'intake/assignment/planning/commerce helper 已抽取（被 WIP 回退，待接线恢复）；闭环边界未完成。',
-      done: [],
+      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；闭环边界收口未完成。',
+      done: [
+        ['intake', 'intake/assignment/decision/query/owner 域模块接线恢复', '48ba93c…8a0ee7d', ''],
+        ['planning', 'planning/alerts/risk/streak/today_task 域模块接线恢复', '7328b51…5c23b32', ''],
+        ['commerce', 'commerce/rules 域模块接线恢复', 'a853a16', ''],
+      ],
       pending: [
-        ['intake', 'intake/assignment/planning/commerce 域模块接线恢复', '', ''],
         ['commerce', '商业闭环（rfq→quote→order）领域边界成型', '', ''],
       ],
     },
@@ -290,7 +298,10 @@ function renderMarkdown(env, phases, aStats) {
         lines.push(`| \`lib/domains/${item.module}.js\` | [x] 已接线 | ${item.commit || '历史抽取'} |`);
       }
       for (const module of aStats.unwired) {
-        lines.push(`| \`lib/domains/${module}.js\` | [ ] 未接线（被 WIP 回退，待恢复） | — |`);
+        const state = KEPT_UNWIRED.has(module)
+          ? '按裁定保持内联（不接线）'
+          : '未接线（被 WIP 回退，待恢复）';
+        lines.push(`| \`lib/domains/${module}.js\` | [ ] ${state} | — |`);
       }
       lines.push('');
     }
@@ -355,7 +366,10 @@ function renderHtml(env, phases, aStats) {
         body += `<div class="row"><span class="ok">[x]</span><code>${esc(item.module)}</code><span class="commit">${esc(item.commit || '历史抽取')}</span></div>`;
       }
       for (const module of aStats.unwired) {
-        body += `<div class="row"><span class="no">[ ]</span><code>${esc(module)}</code><span class="commit muted">待恢复</span></div>`;
+        const state = KEPT_UNWIRED.has(module)
+          ? `<span class="commit muted">按裁定内联</span>`
+          : `<span class="commit muted">待恢复</span>`;
+        body += `<div class="row"><span class="no">[ ]</span><code>${esc(module)}</code>${state}</div>`;
       }
       body += '</div>';
     }

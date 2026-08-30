@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-29 17:41:10`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 01:07:24`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,8 +8,8 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `21bbb34`（相对 origin/main ahead 102） |
-| 工作区 | 干净 |
+| HEAD | `64b4ff7`（相对 origin/main ahead 103） |
+| 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 1913/1913 |
 | 核心测试 | `npm test` 1552/1552 |
 | sales_crm.js | 12973 行 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 17 |
 | refactor(其他/通用) | 37 |
 | feat(...) | 15 |
-| docs(governance) | 13 |
+| docs(governance) | 14 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -39,7 +39,7 @@
 
 ## 阶段 A：后端结构化切分（sales_crm 拆域）
 
-> **进行中** — lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复进行中。
+> **进行中** — lib/domains 42 个文件；WIP 收敛曾回退全部接线，接线恢复已完成（39/42 已接入，3 个按裁定保持内联）。
 
 ### 域模块接线状态（自动扫描）
 
@@ -84,9 +84,9 @@
 | `lib/domains/planning/today_task.js` | [x] 已接线 | 5c23b32 |
 | `lib/domains/reporting/builders.js` | [x] 已接线 | 13c5368 |
 | `lib/domains/reporting/csv.js` | [x] 已接线 | 873d1b0 |
-| `lib/domains/filter/index.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/identity/index.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
-| `lib/domains/identity/middleware.js` | [ ] 未接线（被 WIP 回退，待恢复） | — |
+| `lib/domains/filter/index.js` | [ ] 按裁定保持内联（不接线） | — |
+| `lib/domains/identity/index.js` | [ ] 按裁定保持内联（不接线） | — |
+| `lib/domains/identity/middleware.js` | [ ] 按裁定保持内联（不接线） | — |
 
 ### 已完成
 
@@ -94,10 +94,8 @@
 - [x] 纯 helper 接线：json/list/audit/notifications（`0560e9c`）
 - [x] http 接线：error/routes（`d51596c`）
 - [x] csv/insights 接线（`873d1b0`）
-
-### 待办
-
-- [ ] **domains** customer/activity/planning/intake/commerce/auth/reporting-builders 等模块接线恢复
+- [x] activity/planning、intake/assignment、auth/customer、reporting 接线（`7328b51…13c5368`）
+- [x] B 组：commerce/recycle、activity/present、customer/dedupe 等接线（`a853a16…5c23b32`）
 
 ## 阶段 B：状态真源
 
@@ -139,11 +137,16 @@
 
 ## 阶段 D：线索/任务/商业闭环
 
-> **进行中** — intake/assignment/planning/commerce helper 已抽取（被 WIP 回退，待接线恢复）；闭环边界未完成。
+> **进行中** — intake/assignment/planning/commerce 域模块已抽取并接线；闭环边界收口未完成。
+
+### 已完成
+
+- [x] intake/assignment/decision/query/owner 域模块接线恢复（`48ba93c…8a0ee7d`）
+- [x] planning/alerts/risk/streak/today_task 域模块接线恢复（`7328b51…5c23b32`）
+- [x] commerce/rules 域模块接线恢复（`a853a16`）
 
 ### 待办
 
-- [ ] **intake** intake/assignment/planning/commerce 域模块接线恢复
 - [ ] **commerce** 商业闭环（rfq→quote→order）领域边界成型
 
 ## 阶段 E：前端 widgets
