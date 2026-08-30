@@ -3,7 +3,7 @@
 更新时间：2026-08-29
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
 执行分支：`codex/frontend-widget-pilot@cb6c6e4`（相对基线 ahead 108，未合并）
-状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B 业务侧全部完成（§1 写点收敛零裸写 + §4 强化 + state DTO 边界收敛 + smoke 种子收敛），阶段 C 推进中（accounts/intake/通知页已切字段级白名单），全绿
+状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B 业务侧全部完成（§1 写点收敛零裸写 + §4 强化 + state DTO 边界收敛 + smoke 种子收敛），阶段 C 推进中（accounts/intake/通知页已切字段级白名单 + S3 timeline/audit 形状），全绿
 
 ## 当前进度快照
 
@@ -12,7 +12,7 @@
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮文档更新待提交 |
 | 阶段 A：后端结构化切分 | 接线恢复完成（39/42 已接入） | `lib/domains/` 42 个文件；39 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 12,966 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；聚合文件仍超 1.2 万行 |
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
-| 阶段 C：权限/筛选/字段 | 推进中 | field catalog、schema 渲染、多个白名单投影已提交；accounts 列表已切字段级白名单（`78e698b`，`contactSafeAccountRecord` 接线 + `is_test_data`/`test_run_id` 补键，blacklist≡whitelist 契约锁定）；intake 页已切字段级白名单（`5e992fe`，`contactSafeIntakeRecord` 新投影，contact_*/decision/return 原因继续隐藏）；通知页已切字段级白名单（`1835f73`，`contactSafeNotificationRecord` 新投影，title/detail 对无 view_contacts 一并剥离） | 剩余黑名单路径评估（evaluation/db bootstrap）、`buildAccessContext` 与列表范围解释器统一、按页面补"权限→字段→筛选"合同 |
+| 阶段 C：权限/筛选/字段 | 推进中 | field catalog、schema 渲染、多个白名单投影已提交；accounts 列表已切字段级白名单（`78e698b`，`contactSafeAccountRecord` 接线 + `is_test_data`/`test_run_id` 补键，blacklist≡whitelist 契约锁定）；intake 页已切字段级白名单（`5e992fe`，`contactSafeIntakeRecord` 新投影，contact_*/decision/return 原因继续隐藏）；通知页已切字段级白名单（`1835f73`，`contactSafeNotificationRecord` 新投影，title/detail 对无 view_contacts 一并剥离）；S3 形状已建（`38bfe7d`，timeline/auditLog 白名单 + 泄漏校验） | 大聚合设计已排除 P1/P3（嵌套泄漏）与 S5（export users 密码哈希暴露）；可行 S6（db bootstrap）→ S4（recycle-profile）；`buildAccessContext` 与列表范围解释器统一、按页面补"权限→字段→筛选"合同 |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
 | 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
@@ -200,5 +200,6 @@
 10. 阶段 C 首片：`78e698b` 把 accounts 列表（`listCustomerAccounts`，无 view_contacts 分支）从递归 `redactContactFields` 黑名单切到字段级白名单 `contactSafeAccountRecord`（FIELDS_CATALOG 派生 + 显式业务键，此前定义未接线），白名单补 `is_test_data`/`test_run_id` 使切换逐键等价（blacklist≡whitelist 契约 + API 行为契约）。全量 1946/1946 绿灯。续：剩余黑名单路径评估、范围解释器统一、按页面合同。
 11. 阶段 C 次片：`5e992fe` 把 intake 页（`queryIntakeFlowPage`，intake/lead_flow）从递归黑名单切到新字段级白名单 `contactSafeIntakeRecord`（`CONTACT_SAFE_INTAKE_KEYS` 镜像黑名单保留的全部键；contact_*/evidence/report_url/decision_reason/return_reason 继续隐藏），等价 + API 行为契约锁定。全量 1949/1949 绿灯。续：通知/评估/bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
 12. 阶段 C 通知片：`1835f73` 把通知页（`listNotificationRows`）从递归黑名单切到新字段级白名单 `contactSafeNotificationRecord`（镜像黑名单保留的全部键；title/detail 属 CONTACT_KEYS，对无 view_contacts 一并剥离，忠实镜像），sales 收件人裁剪保持。全量 1952/1952 绿灯。续：evaluation/db bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
+13. 阶段 C S3 形状：`38bfe7d` 建 timeline/auditLog 字段级白名单（timeline 剥 copy 字段、provenance 泄漏校验；audit 剥 action），等价/泄漏契约 3/3，为 S4/S6 可复用形状。S5（export）审计发现 users 形状经黑名单保留 password_hash/password_salt——判定暂缓（或先修合规）。全量 1955/1955 绿灯。续：S6（db bootstrap）→ S4（recycle-profile）。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。

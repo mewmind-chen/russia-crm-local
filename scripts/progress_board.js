@@ -198,7 +198,7 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts 列表（78e698b）、intake 页（5e992fe）、通知页（1835f73）已切字段级白名单。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts 列表（78e698b）、intake 页（5e992fe）、通知页（1835f73）已切字段级白名单；S3 timeline/auditLog 形状已建（38bfe7d）。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -206,9 +206,12 @@ function buildPhases(env) {
         ['access', 'accounts 列表切字段级白名单（contactSafeAccountRecord 接线，blacklist≡whitelist 契约）', '78e698b', ''],
         ['access', 'intake 页切字段级白名单（contactSafeIntakeRecord 新投影，contact_* 隐藏）', '5e992fe', ''],
         ['access', '通知页切字段级白名单（contactSafeNotificationRecord 新投影）', '1835f73', ''],
+        ['access', 'S3 形状：timeline/auditLog 白名单（含 provenance 泄漏校验）', '38bfe7d', ''],
       ],
       pending: [
-        ['access', '大聚合白名单化（设计已出，已排除 loadIntakeState；接 recycle-profile/export/db bootstrap，先做嵌套泄漏校验）', '', ''],
+        ['access', 'S6：db bootstrap 复合（people/recon 形状 + 泄漏校验）', '', ''],
+        ['access', 'S4：recycle-profile 复合（masterProfile 形状，依赖 S6）', '', ''],
+        ['access', 'P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）', '', ''],
         ['access', 'buildAccessContext 与列表查询范围解释器统一', '', ''],
         ['access', '按页面落地"权限→字段→筛选"合同测试', '', ''],
       ],

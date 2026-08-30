@@ -26,6 +26,8 @@
 > **关键发现（2026-08-30 S1 审计）**：`loadIntakeState`（P1/P3）的 items 经 `queryIntakeFlowPage` 之外的 enrichment 带**深度嵌套内容**——`arbitration`（ruleDecision 含 `reason`、aiRecommendation、rankedCandidates、history 带 `actorName`+嵌套 aiRecommendation）、`developmentHistory`、`signals`（AI）、`customerTags`、`identityWarning`。黑名单是**递归**剥离（在每层嵌套内剥 CONTACT_KEYS，如 `arbitration.ruleDecision.reason`、`history.notes`、`developmentHistory.summary`）；字段级白名单是**保留顶层键、值原样拷贝**——会对嵌套对象内的 contact 子字段**泄漏**。
 >
 > **结论**：P1/P3（loadIntakeState items）**不适合作顶层白名单**——忠实转换需要按每个嵌套形状各建递归白名单，复杂度等同黑名单且无简化收益；强行顶层白名单违反"不泄漏联系方式"合规不变量。**P1/P3 不建议本设计推进**（或需另立"递归逐形状白名单"独立子项目）。其余路径（P4/P5 的 account/activity/commerce/timeline/evaluations 为扁平行）可安全白名单化。
+>
+> **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
 
 | 形状 | 现有白名单 | 需新建立 | 可行性 |
 |---|---|---|---|
@@ -57,17 +59,18 @@
 
 等价测试策略：对真实端点行构造"同形状对象"，断言 `复合白名单(payload) deepEqual redactContactFields(payload)`；对每个新键集先单测等价，再组合。复合投影必须以"被保留键的嵌套值不泄漏 CONTACT_KEYS 子键"为前提。
 
-## 5. 切片拆分（依赖 DAG，已排除 P1/P3）
+## 5. 切片拆分（依赖 DAG，已排除 P1/P3/P5）
 
 按"形状先于组合"原则，先建被复用的形状白名单，再建复合投影；每片执行前先用 §3 泄漏校验确认该形状嵌套安全。
 
-1. **S3 timeline + master 形状**：推导 timeline（buildCustomerTimeline 行）与 master profile 键集/白名单；泄漏校验 + 等价契约。
-2. **S4 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（account/activity/commerce/timeline/insights + S3）；接线 P4；契约 = 等价 + `GET /api/sales-crm/accounts/:id/recycle-profile` API 行为。
-3. **S5 export 复合**：`contactSafeExportPayload`（复用 account/activity/commerce/evaluation 现有白名单）；接线 P5；契约 = 等价 + `GET /api/sales-crm/export` API 行为。
-4. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。
-5. **S7 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 loadIntakeState 除外——被 §3 判定不建议转换）；范围解释器统一与按页面合约为下一主线。
+1. **S3 timeline + audit 形状（已完成 `38bfe7d`）**：`contactSafeTimelineRecord`（12 键，title/summary/next_action/outcome 属 CONTACT_KEYS 被剥，provenance 纯结构已泄漏校验）+ `contactSafeAuditLogRecord`（剥 action）+ 等价/泄漏契约 3/3。
+2. **S4 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（account/activity/commerce/timeline(S3)/insights + auditLog(S3) + recycle/profileAccess）；**被 `masterProfile`（`getCustomerProfileData` 巨型共享形状，含 people/recon）门控**——需先为 masterProfile 形状另立子设计（或复用 S6 的 people/recon 白名单）；接线 P4。
+3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。产出可被 S4 复用。
+4. **S7 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 与 S5 被 §3 判定不建议转换）；范围解释器统一与按页面合约为下一主线。
 
-依赖：S4→S3（及 account/activity/commerce/insights 现有）；S5 独立（复用现有）；S6→S4。S3/S5/S6 相对独立可并行。
+**暂缓**：P1/P3（loadIntakeState 嵌套泄漏）、S5（export 的 users 形状含 password_hash 暴露，需先修合规）。
+
+依赖：S4→S3,S6（及 account/activity/commerce/insights 现有）；S6 独立。S4 与 S6 均可作为独立切片执行，S6 无前置。
 
 每片完成定义：契约测试（结构 + 等价 + 行为）绿 → 受影响域专项 → 全量 `node --test` → core → `git diff --check` → 更新 CURRENT_STATE + session → 独立提交。
 

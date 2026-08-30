@@ -15,13 +15,13 @@
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`1835f73`（阶段 C 通知白名单切片）
+- 当前重构提交：`38bfe7d`（阶段 C S3 形状——timeline/auditLog 白名单）
 - 重构分支相对 `origin/main`：ahead 93（业务）+ 21（治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
 
-`origin/main..HEAD` 当前 102 个业务提交 + 21 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛、阶段 C accounts+intake+通知 白名单三片，以及看板自动化：
+`origin/main..HEAD` 当前 103 个业务提交 + 21 个治理提交。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛、阶段 C accounts+intake+通知 白名单三片 + S3 形状片，以及看板自动化：
 
 - `13cd37a`：`rejectCrmCustomer` 的 stage/lifecycle/assignment/owner 写收敛到 `lib/domains/lifecycle/state_write` 网关，回收专属字段仍直写。
 - `06a9868`：`applyCustomerReturn` 的 assignment/owner 写经同一网关，lifecycle 保持 active、stage 不动。
@@ -61,6 +61,7 @@
 - `78e698b`：阶段 C 首片——accounts 列表（`listCustomerAccounts`，无 view_contacts 分支）由递归 `redactContactFields` 黑名单切换到字段级白名单 `contactSafeAccountRecord`（FIELDS_CATALOG 派生 + 显式业务键，此前定义未接线）；白名单补 `is_test_data`/`test_run_id` 两键使切换逐键等价（契约以端点同款行锁定 blacklist≡whitelist）。账户页从此走显式字段 schema（阶段 C"权限→字段→筛选"）。契约测试 `test/phase_c_account_whitelist_contract.test.js`（1 结构 + 1 等价 + 1 行为）。
 - `5e992fe`：阶段 C 次片——intake 页（`queryIntakeFlowPage`，intake/lead_flow 页面）同样从递归黑名单切到新的字段级白名单 `contactSafeIntakeRecord`（`CONTACT_SAFE_INTAKE_KEYS` 镜像黑名单在 `crm_intake_items` 行保留的全部 29 键；contact_name/title/methods/level、evidence/report_url、decision_reason、return_reason 继续隐藏）。契约测试 `test/phase_c_intake_whitelist_contract.test.js`（1 结构 + 1 等价 + 1 行为，路由 `GET /api/sales-crm/lists/intake`）。
 - `1835f73`：阶段 C 通知白名单——通知页（`listNotificationRows`）从递归黑名单切到字段级白名单 `contactSafeNotificationRecord`（`CONTACT_SAFE_NOTIFICATION_KEYS` 镜像黑名单在通知行保留的全部键；title/detail 属 CONTACT_KEYS，对无 view_contacts 用户一并剥离——忠实镜像黑名单，issue325 的 title 断言仅对 view_contacts 用户成立）；sales 角色的收件人/收件名裁剪保持。契约测试 `test/phase_c_notification_whitelist_contract.test.js`（1 结构 + 1 等价 + 1 行为）。
+- `38bfe7d`：阶段 C S3 形状——timeline 与 auditLog 字段级白名单（`contactSafeTimelineRecord`/`contactSafeAuditLogRecord`）：timeline 事件保留结构键与 provenance、剥离 copy 字段（title/summary/next_action/outcome 属 CONTACT_KEYS）；provenance 纯结构键已做泄漏校验（保留值在黑名单下不变）；audit 行剥 `action`。契约测试 `test/phase_c_timeline_audit_whitelist_contract.test.js`（2 等价 + 1 泄漏校验）。为 S4/S6 复合投影的可复用形状。**S5（export）审计发现 users 形状经黑名单保留 `password_hash`/`password_salt`**——忠实镜像会将其列入白名单（合规隐患），判定暂缓（保留黑名单或先修合规）。
 
 **阶段 B §1 完成门（经 2026-08-30 审计发现并已收尾）**：对 `lib/` 扫描确认 `crm_accounts` 的 `stage`/`lifecycle_status`/`assignment_status`/`owner_id`/`next_action*`/`manager_*`/`updated_at` **已无裸直写**。审计发现 `updateAccount`（profile 编辑）曾经动态 `fields.push` → `UPDATE crm_accounts SET ${fields.join(',')}` 直写这些列（此前"零裸写"声明不实，因为核验正则以"状态列与 UPDATE 同排"匹配、漏扫动态字段拼装），已由 `aabe4d9` 收敛到三个网关（`applyAccountStatePatch`/`applyAccountPlanPatch`/`applyManagerStatusPatch`），claim/unassign 权限子流保持。`last_activity_at`（活动时间戳）与回收专属字段（`recycle_*`/`previous_owner_id`/`loss_reason`/`return_reason`）为明确的网关列之外直写。测试专用种子（`smoke_test_data.js`、`seedAccounts`）按契约 §2 不在收敛范围。
 
@@ -106,11 +107,11 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1591/1591` 通过。
-- `node --test`：全量 `1952/1952` 通过（含此前修复的 12 个失败场景）。
-- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
+- `npm test`：全量 core `1594/1594` 通过。
+- `node --test`：全量 `1955/1955` 通过（含此前修复的 12 个失败场景）。
+- 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 13 文件 24 断言全绿；报价/订单/阶段边界回归 22/22。
 
-阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 白名单契约（accounts 3 + intake 3 + 通知 3 = 9 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
+阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 白名单契约（accounts 3 + intake 3 + 通知 3 + timeline/audit 3 = 12 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
@@ -132,7 +133,7 @@
 1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
 2. 阶段 A 接线恢复：**已完成**——42 个域模块中 39 个已重新接入（13 切片、24 契约断言），仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
-4. 阶段 C（权限/筛选/字段）为当前执行阶段：`78e698b`/`5e992fe`/`1835f73` 已把 accounts 列表、intake 页、通知页切到字段级白名单。**大聚合 payload 白名单化已出设计并完成首轮审计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）：发现 `loadIntakeState`（`/api/sales-crm/intake` 与 bootstrap）items 含深度嵌套 AI/仲裁/contact 内容，顶层白名单会泄漏、**判定不建议转换（保留黑名单）**；可行切片重排为 S3 timeline/master → S4 recycle-profile → S5 export → S6 db bootstrap，每片执行前先做嵌套泄漏校验 + 等价契约。统一 `buildAccessContext` 与列表范围解释器、按页面"权限→字段→筛选"合同为其后主线。
+4. 阶段 C（权限/筛选/字段）为当前执行阶段：列表路径白名单化完成（accounts/intake/通知），S3 形状（timeline/auditLog）已落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）经两轮审计排除 P1/P3（loadIntakeState 嵌套泄漏）与 S5（export users 含 password_hash 暴露）；可行切片为 S6（db bootstrap people/recon 形状 + 复合）→ S4（recycle-profile 复合，依赖 S6 的 masterProfile 形状），每片执行前先做泄漏校验 + 等价契约。统一 `buildAccessContext` 与列表范围解释器、按页面"权限→字段→筛选"合同为其后主线。
 5. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
