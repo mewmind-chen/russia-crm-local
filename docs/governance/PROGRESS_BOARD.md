@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 05:10:06`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-30 05:19:24`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,10 +8,10 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `e00cf27`（相对 origin/main ahead 118） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 1926/1926 |
-| 核心测试 | `npm test` 1565/1565 |
+| HEAD | `fe77fb4`（相对 origin/main ahead 120） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 1927/1927 |
+| 核心测试 | `npm test` 1566/1566 |
 | sales_crm.js | 12969 行 |
 | lib/domains | 42 个文件，生产接线 39 个 |
 | 最近会话 | `2026-08-29-phase-b-section4-buildTeamReport-projection.md` |
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 8 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 39 |
+| refactor(其他/通用) | 40 |
 | feat(...) | 15 |
-| docs(governance) | 24 |
+| docs(governance) | 25 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -99,7 +99,7 @@
 
 ## 阶段 B：状态真源
 
-> **进行中** — §1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）与 buildTeamReport（c4bba3f）投影消费；契约测试 49 断言。
+> **进行中** — §1 完成门已达成（lib/ 对 crm_accounts 状态/计划/主管列零裸写）；§4 强化含 buildAlerts（754d023）、buildTeamReport（c4bba3f）、pipelineActionKeys（fe77fb4）投影消费；契约测试 50 断言。
 
 ### 已落地切片
 
@@ -117,7 +117,7 @@
 
 ### 待办
 
-- [ ] **B-P1** §4 强化续：§4.4 剩余（pipelineActionKeys 裸列评估、assertAccountStateContract 接入回收路径）
+- [ ] **B-P1** §4 强化续：§4.4 剩余（assertAccountStateContract 接入回收/恢复路径完整视图校验）
 - [ ] **B-P2** AI next_action 写点与测试专用种子收敛（AI 受红线约束）
 - [ ] **B-P3** pipeline 与 accounts 的 state DTO 边界差异收敛
 
