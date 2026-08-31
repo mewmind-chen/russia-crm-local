@@ -8,10 +8,12 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const registryPath = path.join(root, 'sales-assets', 'widget-registry.js');
 const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js');
+const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
 const factsWidget = require(factsWidgetPath);
+const drawerFactsWidget = require(drawerFactsPath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -305,4 +307,67 @@ test('profile-facts widget render mounts facts + bar into a container and binds 
   }
   assert.equal(remountCalls, 0);
   assert.ok(container.children.length >= 1);
+});
+
+test('drawer-facts widget is loaded on shell and exposes fact markup/render helpers', () => {
+  assert.match(html, /sales-assets\/drawer-facts-widget\.js/);
+  const drawerFactsIndex = html.indexOf('drawer-facts-widget.js');
+  const uiFormatIndex = html.indexOf('ui-format.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(uiFormatIndex > -1 && uiFormatIndex < drawerFactsIndex,
+    'ui-format.js must load before drawer-facts-widget.js (website markup dependency)');
+  assert.ok(drawerFactsIndex > -1 && drawerFactsIndex < appIndex && drawerFactsIndex < registryIndex,
+    'drawer-facts-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof drawerFactsWidget.renderFactsHtml, 'function');
+  assert.equal(typeof drawerFactsWidget.factMarkup, 'function');
+  assert.equal(typeof drawerFactsWidget.websiteMarkup, 'function');
+  assert.equal(typeof drawerFactsWidget.render, 'function');
+});
+
+test('drawer-facts widget renders schema facts when fieldWidget+schema present, else fallback rows', () => {
+  const schema = { fields: [{
+    key: 'companyName', label: '公司名称', sourceKey: 'company_name', kind: 'text',
+  }] };
+  const account = { company_name: 'ACME', website: 'smc.com', best_contact_level: 'A' };
+  const fieldWidget = {
+    renderFacts: opts => `<div class="fact"><span>${opts.schema.fields[0].label}</span><strong>${opts.data.company_name}</strong></div>`,
+  };
+  const htmlSchema = drawerFactsWidget.renderFactsHtml({
+    fieldWidget, schema, data: account, formatters: {}, fallback: [],
+  });
+  assert.match(htmlSchema, /公司名称/);
+  assert.match(htmlSchema, /ACME/);
+
+  const htmlFallback = drawerFactsWidget.renderFactsHtml({
+    fieldWidget: null, schema: null, data: {}, formatters: {},
+    fallback: [['官网', 'smc.com', 'website'], ['负责人', null]],
+  });
+  assert.match(htmlFallback, /官网/);
+  assert.match(htmlFallback, /href="https:\/\/smc\.com\/?"/);
+  assert.match(htmlFallback, /负责人/);
+  assert.doesNotMatch(htmlFallback, /公司名称/);
+});
+
+test('drawer-facts widget website markup blocks script/credential URLs', () => {
+  assert.match(drawerFactsWidget.websiteMarkup('smc.com'), /href="https:\/\/smc\.com\/?"/);
+  assert.match(drawerFactsWidget.websiteMarkup('javascript:alert(1)'), /暂无官网/);
+  assert.match(drawerFactsWidget.websiteMarkup('https://x@evil.com/'), /暂无官网/);
+  assert.match(drawerFactsWidget.factMarkup(['<b>', '<i>']), /&lt;b&gt;/);
+});
+
+test('app.js registers drawer-facts widget on crmDrawer page and delegates through registry', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'drawer-facts'/);
+  assert.match(register, /pages: \['crmDrawer'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.drawerFactsWidget\)/);
+  assert.match(register, /render: renderDrawerFactsWidget/);
+
+  const ctxSource = functionSource('drawerFactsContext', 'renderDrawerFactsWidget');
+  assert.match(ctxSource, /drawerFactsWidget/);
+  assert.match(ctxSource, /showTechnicalSources/);
+  assert.match(ctxSource, /\['官网', account\.website, 'website'\]/);
+
+  const renderer = functionSource('renderDrawerFactsWidget', 'mountCustomerProfileWidgets');
+  assert.match(renderer, /renderFactsHtml\(ctx\)/);
 });

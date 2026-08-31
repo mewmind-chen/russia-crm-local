@@ -65,8 +65,8 @@ test('sales intake and customer drawers suppress technical AI and source section
 
   const assistant = functionBlock(app, 'customerAiSection');
   assert.match(assistant, /!technicalAIPresentationAllowed\(\)/);
-  const drawer = functionBlock(app, 'renderDrawer');
-  assert.match(drawer, /technicalAIPresentationAllowed\(\) \? \[\['评价标签'/);
+  const drawerFacts = functionBlock(app, 'drawerFactsContext');
+  assert.match(drawerFacts, /technicalAIPresentationAllowed\(\) \? \[\['评价标签'/);
   const mismatch = functionBlock(app, 'renderMismatchRecordDrawer');
   assert.doesNotMatch(mismatch, /记录编号|valueOrEmpty\(detail\.recordKey/);
   assert.doesNotMatch(mismatch, /mismatchSafeJoin\(\[detail\.recordKey/);

@@ -3132,20 +3132,28 @@
 
   function registerProfilePageWidgets() {
     const registry = typeof window !== 'undefined' ? window.TradePulseWidgetRegistry : null;
-    if (!registry || registry.has('profile-facts')) return;
-    registry.register({
+    if (!registry) return;
+    const registerIfMissing = widget => { if (!registry.has(widget.id)) registry.register(widget); };
+    registerIfMissing({
       id: 'profile-facts',
       pages: ['customerProfile'],
       order: 10,
       when: ctx => Boolean(ctx.factsWidget && ctx.fieldWidget && ctx.profileSchema?.fields?.length),
       render: renderProfileFactsWidget,
     });
-    registry.register({
+    registerIfMissing({
       id: 'profile-contacts',
       pages: ['customerProfile'],
       order: 20,
       when: ctx => Boolean(ctx.contactsWidget),
       render: renderProfileContactsWidget,
+    });
+    registerIfMissing({
+      id: 'drawer-facts',
+      pages: ['crmDrawer'],
+      order: 10,
+      when: ctx => Boolean(ctx.drawerFactsWidget),
+      render: renderDrawerFactsWidget,
     });
   }
 
@@ -3179,6 +3187,48 @@
       customerId: ctx.customerId,
       intakeItemId: ctx.intakeItemId,
     });
+  }
+
+  // —— CRM 抽屉客户事实区 widget 的 ctx 与 render ——
+  // 与 profile 共用同一 registerProfilePageWidgets 注册表；抽屉 facts 经
+  // TradePulseDrawerFactsWidget（自包含模板回退/website 安全转义）渲染。
+  function drawerFactsContext(account, showTechnicalSources) {
+    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+    const drawerFactsWidget = typeof window !== 'undefined' ? window.TradePulseDrawerFactsWidget : null;
+    return {
+      drawerFactsWidget,
+      fieldWidget,
+      schema: state.fieldSchemas?.crm_drawer,
+      data: account,
+      formatters: {
+        text: (item, field) => item?.[field.sourceKey],
+        textOrDash: (item, field) => item?.[field.sourceKey] || field.defaultValue || '—',
+        creator: item => creatorDisplayName(item),
+        relative: (item, field) => relative(item?.[field.sourceKey]),
+        aiLabels: item => technicalAIPresentationAllowed()
+          ? (labelsForAccount(item.id).join('、') || '暂无AI标签') : '',
+        managerStatus: item => item.manager_status
+          || (item.manager_required ? '待介入' : '暂不需要'),
+        website: item => websiteMarkup(item?.website),
+      },
+      fallback: [
+        ['负责人', account.owner_name || '未分配'], ['创建人', creatorDisplayName(account)],
+        ['优先级', account.priority],
+        ...(showTechnicalSources ? [['客户来源', account.source]] : []),
+        ['成立年份', account.established_year || '未填写'],
+        ...(technicalAIPresentationAllowed() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
+        ['最近动作', relative(account.last_activity_at)],
+        ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
+        ['官网', account.website, 'website'],
+        ['联系人质量', account.best_contact_level],
+      ],
+    };
+  }
+
+  function renderDrawerFactsWidget(container, ctx) {
+    if (!ctx.drawerFactsWidget || !container) return [];
+    container.innerHTML = ctx.drawerFactsWidget.renderFactsHtml(ctx);
+    return [{ id: 'drawer-facts', status: 'mounted' }];
   }
 
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
@@ -9906,42 +9956,30 @@
     const timeline = (state.data.timeline || []).filter(item => item.customer_id === account.id);
     const alert = alertFor(account.id);
     const showTechnicalSources = !isSalesRepresentative();
-    const accountFacts = [
-      ['负责人', account.owner_name || '未分配'], ['创建人', creatorDisplayName(account)],
-      ['优先级', account.priority],
-      ...(showTechnicalSources ? [['客户来源', account.source]] : []),
-      ['成立年份', account.established_year || '未填写'],
-      ...(technicalAIPresentationAllowed() ? [['评价标签', labelsForAccount(account.id).join('、') || '暂无AI标签']] : []),
-      ['最近动作', relative(account.last_activity_at)],
-      ['管理介入', account.manager_status || (account.manager_required ? '待介入' : '暂不需要')],
-      ['官网', account.website, 'website'],
-      ['联系人质量', account.best_contact_level],
-    ];
-    // 字段目录试点：schema 就绪时按服务端字段 schema 渲染事实区（见 lib/field_catalog.js），
-    // 否则回退到 accountFacts 硬编码渲染。window.TradePulseFieldWidget 缺失时同样回退。
+    // 字段目录试点：schema 就绪时按服务端字段 schema 渲染事实区，否则回退到
+    // fallback 硬编码行。经 TradePulseDrawerFactsWidget（自包含安全转义）渲染，
+    // 缺 widget 时回退到 fieldWidget.renderFacts/accountFacts 硬编码（行为不变）。
+    registerProfilePageWidgets();
+    const drawerFacts = drawerFactsContext(account, showTechnicalSources);
     let factsHtml = '';
-    const schemaFacts = state.fieldSchemas?.crm_drawer;
-    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
-    if (schemaFacts?.fields?.length && fieldWidget) {
-      try {
-        factsHtml = window.TradePulseFieldWidget.renderFacts({
-          schema: schemaFacts,
-          data: account,
-          formatters: {
-            text: (item, field) => item?.[field.sourceKey],
-            textOrDash: (item, field) => item?.[field.sourceKey] || field.defaultValue || '—',
-            creator: item => creatorDisplayName(item),
-            relative: (item, field) => relative(item?.[field.sourceKey]),
-            aiLabels: item => technicalAIPresentationAllowed()
-              ? (labelsForAccount(item.id).join('、') || '暂无AI标签') : '',
-            managerStatus: item => item.manager_status
-              || (item.manager_required ? '待介入' : '暂不需要'),
-            website: item => websiteMarkup(item?.website),
-          },
-        });
-      } catch (_error) {
-        factsHtml = '';
+    if (drawerFacts.drawerFactsWidget) {
+      factsHtml = drawerFacts.drawerFactsWidget.renderFactsHtml(drawerFacts);
+      factsHtml = factsHtml || drawerFacts.fallback.map(drawerFactMarkup).join('');
+    } else {
+      const schemaFacts = state.fieldSchemas?.crm_drawer;
+      const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+      if (schemaFacts?.fields?.length && fieldWidget) {
+        try {
+          factsHtml = window.TradePulseFieldWidget.renderFacts({
+            schema: schemaFacts,
+            data: account,
+            formatters: drawerFacts.formatters,
+          });
+        } catch (_error) {
+          factsHtml = '';
+        }
       }
+      factsHtml = factsHtml || drawerFacts.fallback.map(drawerFactMarkup).join('');
     }
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
@@ -9950,7 +9988,7 @@
       <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div>${nextActionTimeMarkup(account)}</div>
       ${sourceTagMarkup(account)}
       <div class="account-facts">
-        ${factsHtml || accountFacts.map(drawerFactMarkup).join('')}
+        ${factsHtml}
       </div>
       <section class="master-profile">
         <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>

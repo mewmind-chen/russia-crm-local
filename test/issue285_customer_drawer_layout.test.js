@@ -84,7 +84,9 @@ test('CRM drawer keeps business cards for sales and adds the technical source ca
   assert.ok(grid.children.slice(1).every(card => !card.classes.includes('drawer-master-card-wide')));
   assert.match(drawer, /\$\{showTechnicalSources \? `<div><span>背调与来源<\/span>/);
 
-  assert.match(drawer, /\['官网', account\.website, 'website'\]/, '#286 website rendering must remain');
+  // #286 website 事实渲染保留：官网 website 链接行在 drawer-facts-widget 的 fallback（drawerFactsContext）
+  assert.match(appSource, /\['官网', account\.website, 'website'\]/, '#286 website rendering must remain');
+  assert.match(appSource, /drawerFactsContext\(account, showTechnicalSources\)/);
   assert.doesNotMatch(section, /行业与客户类型/, '#286 duplicate card must remain removed');
 });
 

@@ -78,8 +78,12 @@ test('drawer text facts escape labels and values instead of accepting raw HTML',
 test('CRM drawer uses website fact rendering and removes the repeated master-data card', () => {
   const drawer = appSource.match(/  function renderDrawer\(\)[\s\S]*?\n  function openModal\(/)?.[0] || '';
   const master = drawer.match(/<section class="master-profile">[\s\S]*?<\/section>/)?.[0] || '';
-  assert.match(drawer, /\['官网', account\.website, 'website'\]/);
-  assert.match(drawer, /accountFacts\.map\(drawerFactMarkup\)/);
+  const factsCtx = functionSource('drawerFactsContext', 'renderDrawerFactsWidget');
+  // 事实区经 drawer-facts-widget 渲染：fallback 行含官网 website 链接，行为保持
+  assert.match(drawer, /drawerFactsContext\(account, showTechnicalSources\)/);
+  assert.match(drawer, /renderFactsHtml\(drawerFacts\)/);
+  assert.match(factsCtx, /\['官网', account\.website, 'website'\]/);
+  assert.match(drawer, /factsHtml \|\| drawerFacts\.fallback\.map\(drawerFactMarkup\)/);
   assert.doesNotMatch(master, /行业与客户类型/);
   assert.match(master, /企业简介/);
   assert.match(master, /产品与潜在需求/);
