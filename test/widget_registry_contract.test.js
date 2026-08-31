@@ -787,3 +787,18 @@ test('app.js registers profile-timeline widget and delegates to the shared timel
   assert.match(renderer, /timelineItemsHtml\(events/);
   assert.match(renderer, /data-customer-history/);
 });
+
+test('app.js registers profile-insight widget and delegates to the shared insight shell', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'profile-insight'/);
+  assert.match(register, /pages: \['customerProfile'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.account\)/);
+  assert.match(register, /render: renderProfileInsightWidget/);
+
+  const renderer = functionSource('renderProfileInsightWidget', 'drawerFactsContext');
+  assert.match(renderer, /state\.data\?\.insights\?\.evaluations \|\| \[\]/);
+  assert.match(renderer, /item\.customerId === account\.id/);
+  assert.match(renderer, /insightSectionHtml\(\{/);
+  assert.match(renderer, /eyebrow: 'MANAGER INSIGHT'/);
+  assert.match(renderer, /客户经营复盘历史/);
+});

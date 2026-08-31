@@ -3167,6 +3167,13 @@
       render: renderProfileTimelineWidget,
     });
     registerIfMissing({
+      id: 'profile-insight',
+      pages: ['customerProfile'],
+      order: 28,
+      when: ctx => Boolean(ctx.account),
+      render: renderProfileInsightWidget,
+    });
+    registerIfMissing({
       id: 'customer-ai-station',
       pages: ['customerProfile'],
       order: 30,
@@ -3254,6 +3261,22 @@
       bodyHtml: timelineItemsHtml(events, { emptyText: '暂无跟进记录' }),
     });
     return [{ id: 'profile-timeline', status: 'mounted' }];
+  }
+
+  // —— customerProfile 完整资料页洞察区 widget ——
+  // 复用 insightSectionHtml（与回收抽屉共用同一洞察壳），展示客户经营复盘历史。
+  function renderProfileInsightWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const account = ctx.account;
+    const evaluations = (state.data?.insights?.evaluations || [])
+      .filter(item => item.customerId === account.id);
+    container.innerHTML = insightSectionHtml({
+      eyebrow: 'MANAGER INSIGHT',
+      title: '客户经营复盘历史',
+      note: `${evaluations.length} 条`,
+      bodyHtml: evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '客户经营复盘')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无客户经营复盘</div>',
+    });
+    return [{ id: 'profile-insight', status: 'mounted' }];
   }
 
   // —— CRM 抽屉客户事实区 widget 的 ctx 与 render ——
