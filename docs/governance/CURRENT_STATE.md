@@ -15,8 +15,8 @@
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`93b5dbb`（阶段 E 续片：时间线条目列表统一 timeline widget）
-- 重构分支相对 `origin/main`：ahead 177（113 业务 + 64 治理），未合并；本地未配置发布或生产动作。
+- 当前重构提交：`28fb124`（AI 边界门禁：customer dedupe 白名单为既有耦合隔离点）
+- 重构分支相对 `origin/main`：ahead 198（业务+治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
@@ -113,8 +113,8 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1649/1649` 通过。
-- `node --test`：全量 `2010/2010` 通过。
+- `npm test`：全量 core `1658/1658` 通过。
+- `node --test`：全量 `2019/2019` 通过。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
@@ -167,8 +167,16 @@ title/detail 转义、metaHtml 宿主组装；app.js 新增 `alertStepHtml`/`ale
 自持 `.timeline` 列表模板与 title/summary/下一步/actor/date 转义+空态，
 `timelineItemsHtml` 辅助 widget 优先/内联回退；recycle 用 nextAction: true、
 intake 无下一步行；CRM 复杂活动时间线含校正交互保留内联待评估）。本轮契约 +3、
-专项 62/62、全量 2010/2010 全绿。剩余：其余 widget 化（身份/业务画像/洞察/
-商务/回收状态的具体 body——主档、insight 壳、AI 站、facts、next-step、告警条、
+专项 62/62、全量 2010/2010 全绿。`2e1210c` 再把 CRM 抽屉 FULL TIMELINE 区块壳
+（panel-head 风格）抽入 timeline-widget（新增 `renderSectionHtml`，`timelineSectionHtml`
+辅助 widget 优先/内联回退，活动时间线条目含校正交互仍保留内联）。`8e0d187`/`96733f6`
+治理收口：2026-07-25 计划对冻结归档为审计证据，新增 `check-governance-authority`
+门禁，活跃文档只引用实时远端/生产 release/after 的 Git 代码测试。`28fb124` 修 AI
+边界门禁：`lib/domains/customer/dedupe.js` 白名单为既有耦合的单一隔离点（before
+sales_crm 本就 require 同一 AI 指纹工具，抽域收敛而来、AI 模块零改动、白名单不
+扩大耦合面），契约测试锁定隔离点；`check:ai-boundary` OK、`check:governance-authority`
+OK。本轮 core 1658/1658、全量 2019/2019 全绿。剩余：其余 widget 化（身份/业务画像/
+洞察/商务/回收状态的具体 body——主档、insight 壳、AI 站、facts、next-step、告警条、
 时间线已就位；CRM 活动时间线评估下沉）、`/development-workbench` profile 模式
 收敛为只读/兼容入口。
 7. 未全绿前不叠加下一阶段新功能或拆分范围。

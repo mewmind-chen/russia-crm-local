@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-31 16:52:39`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-31 17:53:12`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `93b5dbb`（相对 origin/main ahead 193） |
+| HEAD | `28fb124`（相对 origin/main ahead 198） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2010/2010 |
-| 核心测试 | `npm test` 1649/1649 |
+| 全量测试 | `node --test` 2019/2019 |
+| 核心测试 | `npm test` 1658/1658 |
 | sales_crm.js | 12883 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-08-31-phase-e-alert-step-widget.md` |
+| 最近会话 | `2026-08-31-phase-e-timeline-widget.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -23,9 +23,9 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 53 |
-| feat(...) | 26 |
-| docs(governance) | 72 |
-| 其他 | 12 |
+| feat(...) | 27 |
+| docs(governance) | 75 |
+| 其他 | 13 |
 
 ## 阶段 0：治理基础
 
@@ -165,19 +165,25 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — widget 注册表已落地（2d98eea）；profile-facts 已抽为自包含 UMD widget（41a722e，自持模板/偏好状态/区段显隐事件）。
+> **进行中** — widget 注册表已落地（2d98eea）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，customerProfile 注册表化组装，三源抽屉 facts/主档/状态条/时间线共用。
 
 ### 已完成
 
 - [x] 字段目录/widget 试点提交（`7a26074…077c88c`）
 - [x] widget 注册表落地 + customerProfile 注册表化组装（`2d98eea`）
 - [x] profile-facts 抽为自包含 UMD widget（模板/偏好/事件下沉）（`41a722e`）
+- [x] drawer-facts 抽为自包含 UMD widget（三源 facts 统一）（`7c76fb3…8135ac2`）
+- [x] drawer-ai 抽为自包含 UMD widget（AI 问答区，AI 零改动）（`64b9418`）
+- [x] customer-ai-station 登记为 widget（现有开关决定挂载）（`39990be`）
+- [x] master-profile 抽为共用 UMD widget（三源主档统一）（`3e84f63`）
+- [x] insight-section 抽为共用壳 widget（洞察/商务/审计/时间线壳）（`6aa9353`）
+- [x] next-step 抽为共用 widget（三源状态条 + 告警条/异常明细）（`f8e67c9…e920f7b`）
+- [x] timeline 抽为共用 widget（开发历史/完整时间线条目）（`93b5dbb`）
 
 ### 待办
 
-- [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/时间线/商务/下一步/回收/AI 区域
-- [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合
-- [ ] **frontend** AI 区域登记为 widget（现有开关决定挂载，AI 零改动）
+- [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body
+- [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂活动时间线评估下沉）
 - [ ] **frontend** /development-workbench profile 模式收敛为只读/兼容入口
 
 ## 阶段 F：AI 零动作
