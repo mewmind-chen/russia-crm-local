@@ -3127,6 +3127,7 @@
       factsWidget: typeof window !== 'undefined' ? window.TradePulseProfileFactsWidget : null,
       profileSchema: state.fieldSchemas?.customer_profile,
       preferencesKey: profilePreferencesKey(),
+      customerAiEnabled: customerAIEnabled(),
     };
   }
 
@@ -3147,6 +3148,13 @@
       order: 20,
       when: ctx => Boolean(ctx.contactsWidget),
       render: renderProfileContactsWidget,
+    });
+    registerIfMissing({
+      id: 'customer-ai-station',
+      pages: ['customerProfile'],
+      order: 30,
+      when: ctx => Boolean(ctx.customerAiEnabled),
+      render: renderCustomerAiStationWidget,
     });
     registerIfMissing({
       id: 'drawer-facts',
@@ -3756,6 +3764,14 @@
       if (input && !input.readOnly) validateFutureDateTime(input);
     });
     return markup;
+  }
+
+  function renderCustomerAiStationWidget(container, ctx) {
+    // AI 完整资料站登记为 widget：由现有开关（customerAIEnabled）决定挂载，
+    // 渲染委托既有 renderCustomerAI（评分/资料包/补全），AI 内部零改动。
+    if (!ctx?.customerAiEnabled) return [];
+    renderCustomerAI();
+    return [{ id: 'customer-ai-station', status: 'mounted' }];
   }
 
   function renderCustomerAI() {

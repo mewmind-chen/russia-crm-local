@@ -190,14 +190,35 @@ test('app.js registers profile-facts and profile-contacts widgets for customerPr
   assert.match(source, /when: ctx => Boolean\(ctx\.contactsWidget\)/);
   assert.match(source, /when: ctx => Boolean\(ctx\.factsWidget && ctx\.fieldWidget && ctx\.profileSchema\?\.fields\?\.length\)/);
 
+  // AI 完整资料站登记为 widget：由现有 customerAIEnabled 开关决定挂载，委托既有 renderCustomerAI
+  assert.match(source, /id: 'customer-ai-station'/);
+  assert.match(source, /when: ctx => Boolean\(ctx\.customerAiEnabled\)/);
+  assert.match(source, /render: renderCustomerAiStationWidget/);
+  assert.match(source, /customerAiEnabled: customerAIEnabled\(\)/);
+
   // 装配委托注册表：renderPage 负责挂载，权限/开关从 ctx.permissions/ctx.features 注入
   assert.match(source, /registerProfilePageWidgets\(\)/);
   assert.match(source, /window\.TradePulseWidgetRegistry\.renderPage\(/);
   assert.match(source, /permissions: state\.data\?\.user\?\.permissions \|\| \{\}/);
   assert.match(source, /features: state\.data\?\.features \|\| \{\}/);
 
-  // 布局顺序：facts 先于 contacts（order 10 < 20），facts 事件响应后整页重挂载
+  // 布局顺序：facts 先于 contacts 先于 AI 站（order 10 < 20 < 30）
   assert.ok(source.indexOf('order: 10') < source.indexOf('order: 20'));
+  assert.ok(source.indexOf('order: 20') < source.indexOf('order: 30'));
+});
+
+test('app.js customer-ai-station widget delegates to existing render gated by the switch', () => {
+  const renderer = functionSource('renderCustomerAiStationWidget', 'renderCustomerAI');
+  assert.match(renderer, /if \(!ctx\?\.customerAiEnabled\) return \[\]/);
+  assert.match(renderer, /renderCustomerAI\(\)/);
+  assert.match(renderer, /status: 'mounted'/);
+
+  // 既有 renderCustomerAI 仍保持 AI 内部零改动：门槛与数据加载路径不因登记而变化
+  const renderAI = functionSource('renderCustomerAI', 'scheduleCustomerAIPoll');
+  assert.match(renderAI, /if \(!technicalAIPresentationAllowed\(\)\) return;/);
+  assert.match(renderAI, /state\.customerAi\b/);
+  const loadAI = functionSource('loadCustomerAI', 'retryCustomerEnrichment');
+  assert.match(loadAI, /\/api\/sales-crm\/ai\/customers\//);
 });
 
 test('app.js profile-facts widget delegates rendering and event to the facts widget', () => {
