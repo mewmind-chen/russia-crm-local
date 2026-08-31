@@ -11,6 +11,7 @@ const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js
 const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js');
 const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
 const masterProfilePath = path.join(root, 'sales-assets', 'master-profile-widget.js');
+const insightSectionPath = path.join(root, 'sales-assets', 'insight-section-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
@@ -18,6 +19,7 @@ const factsWidget = require(factsWidgetPath);
 const drawerFactsWidget = require(drawerFactsPath);
 const drawerAiWidget = require(drawerAiPath);
 const masterProfileWidget = require(masterProfilePath);
+const insightSectionWidget = require(insightSectionPath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -489,4 +491,66 @@ test('app.js masterProfileSectionHtml delegates to widget and three drawer sourc
   assert.match(recycle, /masterProfileSectionHtml\(\{/);
   assert.match(recycle, /\['行业与客户类型', esc\(\[master\.industry \|\| account\.industry/);
   assert.match(recycle, /title: '客户主档'/);
+});
+
+test('insight-section widget is loaded on shell before app.js and exposes section helpers', () => {
+  assert.match(html, /sales-assets\/insight-section-widget\.js/);
+  const insightIndex = html.indexOf('insight-section-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(insightIndex > -1 && insightIndex < appIndex && insightIndex < registryIndex,
+    'insight-section-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof insightSectionWidget.renderSectionHtml, 'function');
+  assert.equal(typeof insightSectionWidget.render, 'function');
+  assert.equal(typeof insightSectionWidget.escapeHtml, 'function');
+});
+
+test('insight-section widget renders the shared shell with escaped eyebrow/title/note and safe body html', () => {
+  const htmlOut = insightSectionWidget.renderSectionHtml({
+    eyebrow: '<b>CONTACT HISTORY</b>',
+    title: '联系人历史',
+    note: '3 人',
+    actionHtml: '<button class="text-button" data-open-timeline-modal>展开完整时间线</button>',
+    bodyHtml: '<div class="empty">暂无记录</div>',
+  });
+  assert.match(htmlOut, /<section class="insight-section">/);
+  assert.match(htmlOut, /&lt;b&gt;CONTACT HISTORY&lt;\/b&gt;/);
+  assert.match(htmlOut, /<h3>联系人历史<\/h3>/);
+  assert.match(htmlOut, /panel-note/);
+  assert.match(htmlOut, /3 人/);
+  assert.match(htmlOut, /data-open-timeline-modal/);
+  assert.match(htmlOut, /class="insight-body"/);
+  assert.match(htmlOut, /<div class="empty">暂无记录<\/div>/);
+
+  const timeline = insightSectionWidget.renderSectionHtml({
+    eyebrow: 'FULL TIMELINE',
+    title: '完整客户时间线',
+    note: '2 条',
+    bodyClass: 'timeline',
+    bodyHtml: '<div class="timeline-item"><h4>领取客户</h4></div>',
+  });
+  assert.match(timeline, /class="timeline"/);
+  assert.match(timeline, /FULL TIMELINE/);
+
+  const bare = insightSectionWidget.renderSectionHtml({ title: '客户审计历史' });
+  assert.match(bare, /<section class="insight-section">/);
+  assert.match(bare, /<h3>客户审计历史<\/h3>/);
+  assert.doesNotMatch(bare, /panel-note/);
+  assert.doesNotMatch(bare, /eyebrow/);
+});
+
+test('app.js insightSectionHtml delegates to widget and recycle drawer composes five sections', () => {
+  const helper = functionSource('insightSectionHtml', 'mountCustomerProfileWidgets');
+  assert.match(helper, /TradePulseInsightSectionWidget/);
+  assert.match(helper, /renderSectionHtml\(/);
+  assert.match(helper, /<section class="insight-section">/);
+
+  const recycle = functionSource('renderRecycleDrawer', 'correctionActivityId');
+  assert.match(recycle, /insightSectionHtml\(\{/);
+  assert.match(recycle, /eyebrow: 'CONTACT HISTORY'/);
+  assert.match(recycle, /eyebrow: 'MANAGER INSIGHT'/);
+  assert.match(recycle, /eyebrow: 'FULL TIMELINE'/);
+  assert.match(recycle, /eyebrow: 'AUDIT TRAIL'/);
+  assert.match(recycle, /bodyClass: 'timeline'/);
+  assert.doesNotMatch(recycle, /<section class="insight-section">/);
 });

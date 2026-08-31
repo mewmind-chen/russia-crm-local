@@ -3285,6 +3285,22 @@
     </section>`;
   }
 
+  // 洞察区块 HTML（widget 优先，缺 widget 时内联回退到逐字节一致模板）。
+  // ctx：{ eyebrow, title, note, actionHtml, bodyClass, bodyHtml }，
+  // bodyHtml/actionHtml 为调用方已过滤的安全 HTML。
+  function insightSectionHtml({ eyebrow, title, note = '', actionHtml = '', bodyClass = 'insight-body', bodyHtml = '' } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseInsightSectionWidget : null;
+    if (widget && typeof widget.renderSectionHtml === 'function') {
+      return widget.renderSectionHtml({ eyebrow, title, note, actionHtml, bodyClass, bodyHtml });
+    }
+    const eyebrowHtml = eyebrow ? `<p class="eyebrow">${esc(eyebrow)}</p>` : '';
+    const noteHtml = note ? `<span class="panel-note">${esc(note)}${actionHtml}</span>` : '';
+    return `<section class="insight-section">
+      <div class="insight-head"><div>${eyebrowHtml}<h3>${esc(title || '')}</h3></div>${noteHtml}</div>
+      <div class="${esc(bodyClass)}">${bodyHtml}</div>
+    </section>`;
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -9054,27 +9070,41 @@
       <div class="commerce-strip recycle-commerce-strip">
         <div class="commerce-card"><span>跟进</span><strong>${activities.length}</strong></div>
       </div>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">CONTACT HISTORY</p><h3>联系人历史</h3></div><span class="panel-note">${contacts.length} 人</span></div>
-        <div class="insight-body">${contacts.length ? contacts.map(contact => `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name || '未命名联系人')}</strong><span>${esc([contact.title, contact.department, contact.contactLevel].filter(Boolean).join(' · ') || '职位未标注')}</span></div></div><p>${esc([contact.email, contact.phone, contact.social].filter(Boolean).join(' · ') || '联系方式受权限保护或未记录')}</p></article>`).join('') : '<div class="empty">暂无联系人历史</div>'}</div>
-      </section>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">MANAGER INSIGHT</p><h3>客户经营复盘历史</h3></div><span class="panel-note">${evaluations.length} 条</span></div>
-        <div class="insight-body">${evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '客户经营复盘')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无客户经营复盘</div>'}</div>
-      </section>
-      ${commerceGroups.map(([label, rows, describe]) => `<section class="insight-section"><div class="insight-head"><div><h3>${label}</h3></div><span class="panel-note">${rows.length} 条</span></div><div class="insight-body">${rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>'}</div></section>`).join('')}
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">FULL TIMELINE</p><h3>完整客户时间线</h3></div><span class="panel-note">${history.length} 条<button class="text-button" data-open-timeline-modal>展开完整时间线</button></span></div>
-        <div class="timeline">${history.map(event => {
+      ${insightSectionHtml({
+        eyebrow: 'CONTACT HISTORY',
+        title: '联系人历史',
+        note: `${contacts.length} 人`,
+        bodyHtml: contacts.length ? contacts.map(contact => `<article class="contact-insight"><div class="contact-insight-head"><div><strong>${esc(contact.name || '未命名联系人')}</strong><span>${esc([contact.title, contact.department, contact.contactLevel].filter(Boolean).join(' · ') || '职位未标注')}</span></div></div><p>${esc([contact.email, contact.phone, contact.social].filter(Boolean).join(' · ') || '联系方式受权限保护或未记录')}</p></article>`).join('') : '<div class="empty">暂无联系人历史</div>',
+      })}
+      ${insightSectionHtml({
+        eyebrow: 'MANAGER INSIGHT',
+        title: '客户经营复盘历史',
+        note: `${evaluations.length} 条`,
+        bodyHtml: evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '客户经营复盘')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无客户经营复盘</div>',
+      })}
+      ${commerceGroups.map(([label, rows, describe]) => insightSectionHtml({
+        title: label,
+        note: `${rows.length} 条`,
+        bodyHtml: rows.length ? rows.map(item => `<div class="audit-line"><strong>${esc(describe(item))}</strong></div>`).join('') : '<div class="empty">暂无记录</div>',
+      })).join('')}
+      ${insightSectionHtml({
+        eyebrow: 'FULL TIMELINE',
+        title: '完整客户时间线',
+        note: `${history.length} 条`,
+        actionHtml: '<button class="text-button" data-open-timeline-modal>展开完整时间线</button>',
+        bodyClass: 'timeline',
+        bodyHtml: history.map(event => {
           const title = timelineEventTitle(event);
           const summary = timelineEventSummary(event);
           return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}${event.no_plan ? '<br><strong>下一步：</strong>暂无计划' : (event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '')}</p>` : ''}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
-        }).join('') || '<div class="empty">暂无历史记录</div>'}</div>
-      </section>
-      <section class="insight-section">
-        <div class="insight-head"><div><p class="eyebrow">AUDIT TRAIL</p><h3>客户审计历史</h3></div><span class="panel-note">${auditLog.length} 条</span></div>
-        <div class="insight-body">${auditLog.length ? auditLog.map(item => `<div class="audit-line"><strong>${esc(item.action || '客户操作')}</strong><span>${esc(item.userName || item.actorName || item.user_id || '')}</span><time>${shortDate(item.createdAt || item.created_at, true)}</time></div>`).join('') : '<div class="empty">暂无审计记录</div>'}</div>
-      </section>
+        }).join('') || '<div class="empty">暂无历史记录</div>',
+      })}
+      ${insightSectionHtml({
+        eyebrow: 'AUDIT TRAIL',
+        title: '客户审计历史',
+        note: `${auditLog.length} 条`,
+        bodyHtml: auditLog.length ? auditLog.map(item => `<div class="audit-line"><strong>${esc(item.action || '客户操作')}</strong><span>${esc(item.userName || item.actorName || item.user_id || '')}</span><time>${shortDate(item.createdAt || item.created_at, true)}</time></div>`).join('') : '<div class="empty">暂无审计记录</div>',
+      })}
       <div class="form-actions">${recycleAction}</div>`;
   }
 
