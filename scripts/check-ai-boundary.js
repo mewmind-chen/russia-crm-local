@@ -35,12 +35,18 @@ const AI_TARGETS = [
 
 // Callers that are allowed to require AI modules. This is the current
 // coupling surface that predates the isolation work; it must not grow.
+// `lib/domains/customer/dedupe.js` is the deliberate single isolation point
+// for the duplicate-fingerprint helpers that sales_crm.js always sourced from
+// ai_stations/enrichment/dedupe (pre-refactor). Extracting them into a domain
+// module moved the existing coupling, not added a new one; AI modules remain
+// untouched and sales_crm.js no longer imports those helpers directly.
 const ALLOWLIST = [
   'server.js',
   'lib/smoke_test_data.js',
   'lib/db.js',
   'lib/business_page_filters.js',
   'lib/sales_crm.js',
+  'lib/domains/customer/dedupe.js',
   'scripts/ai-station-worker.js',
   'scripts/qwen-batch-worker.js',
 ];
