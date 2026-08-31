@@ -11,11 +11,11 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@6aa9353`，干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@39990be`，干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`6aa9353`（阶段 E 续片：共享洞察 section 壳抽为 UMD widget）
+- 当前重构提交：`39990be`（阶段 E 续片：AI 完整资料站登记为 widget）
 - 重构分支相对 `origin/main`：ahead 177（113 业务 + 64 治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
@@ -142,7 +142,15 @@
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
 4. 阶段 C（权限/筛选/字段）：**主体完成**——列表路径白名单化（accounts/intake/通知）、S3 形状（timeline/auditLog）、范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`，含空 WHERE 修复）、按页面"权限→字段→筛选"合同（`45e0c05`）均落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；S6（db bootstrap）联系形状源头门控、低价值。剩余仅：可选残值（legacy customers 形状白名单，S6 审计确认其余联系形状已源头门控，低价值可暂缓）。
 5. 阶段 D（线索/任务/商业闭环）：**商业闭环成型**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、addQuote/addOrder 完整编排下沉（`b4cfdfc`，commitQuote/commitOrder place 级域服务）均已显式化。剩余为独立用例（manager intervention / deferred plan），后续评估。
-6. **阶段 E（前端 widgets）为当前执行阶段**：`2d98eea` widget 注册表（`sales-assets/widget-registry.js`，UMD，register/renderPage/widgetsForPage + permission/feature/when 门槛 + order 排序 + 逐 widget 错误隔离）并把 customerProfile 页面改为注册表组装；`41a722e` 再把 profile-facts（字段事实 + hiddenSections 偏好）抽为自包含 UMD widget（`sales-assets/profile-facts-widget.js`，自持模板/状态/事件），app.js 只注入 ctx 并委托 render（净 -55 行）。行为与既有 facts+偏好条逐字节一致；契约测试 12 断言 + 既有 profile_widgets 12 断言 + 前端专项 57/57 全绿。`7c76fb3` 把 CRM 抽屉客户事实区抽为自包含 UMD widget（`sales-assets/drawer-facts-widget.js`，自持 schema 优先/fallback 回退/website 安全转义，`drawerFactsContext` 集中 ctx，`registerIfMissing` 幂等注册 `drawer-facts`@crmDrawer）；`64b9418` 把抽屉 AI 问答区抽为自包含 UMD widget（`sales-assets/drawer-ai-widget.js`，自持模板/转义，`drawerAiContext` 集中 `technicalAIPresentationAllowed && can('use_ai_assistant')` 门槛，注册 `drawer-ai`@crmDrawer，drawerAiForm 提交仍由 app 级委托、AI 内部零改动）；`3e84f63` 把抽屉客户主档区块（`CUSTOMER MASTER DATA`）抽为共用 UMD widget（`sales-assets/master-profile-widget.js`，自持 master-profile 模板与 label/cardClass 转义，`masterProfileSectionHtml` 辅助 widget 优先/内联回退，renderDrawer/openIntakeProfile/renderRecycleDrawer 三源组装 rows 共用同一模板，兑现"customerDrawer 共用同一 widget 集合"）。`3a42f1c` 记录该片。本轮 `6aa9353` 再把客户/回收抽屉重复的 `insight-section` 宿主壳抽为自包含 UMD widget（`sales-assets/insight-section-widget.js`，自持 insight-head + panel-note + body 容器模板与 eyebrow/title/note 转义，`insightSectionHtml` 辅助 widget 优先/内联回退；renderRecycleDrawer 的 5 个重复区块——CONTACT HISTORY/MANAGER INSIGHT/商务分组/FULL TIMELINE/AUDIT TRAIL——改为只组装 bodyHtml/actionHtml，时间线用 `bodyClass: 'timeline'` 并保留 `data-open-timeline-modal`）。本轮契约 +3、专项 78/78、全量 2000/2000 全绿。剩余：其余 widget 化（身份/业务画像/洞察/时间线/商务/下一步/回收状态中的具体 body——主档与 insight 壳已就位）、AI 完整资料站（`customerAiStation` 评分/资料包/补全渲染）评估纳入注册表、`/development-workbench` profile 模式收敛为只读/兼容入口。
+6. **阶段 E（前端 widgets）为当前执行阶段**：`2d98eea` widget 注册表（`sales-assets/widget-registry.js`，UMD，register/renderPage/widgetsForPage + permission/feature/when 门槛 + order 排序 + 逐 widget 错误隔离）并把 customerProfile 页面改为注册表组装；`41a722e` 再把 profile-facts（字段事实 + hiddenSections 偏好）抽为自包含 UMD widget（`sales-assets/profile-facts-widget.js`，自持模板/状态/事件），app.js 只注入 ctx 并委托 render（净 -55 行）。行为与既有 facts+偏好条逐字节一致；契约测试 12 断言 + 既有 profile_widgets 12 断言 + 前端专项 57/57 全绿。`7c76fb3` 把 CRM 抽屉客户事实区抽为自包含 UMD widget（`sales-assets/drawer-facts-widget.js`，自持 schema 优先/fallback 回退/website 安全转义，`drawerFactsContext` 集中 ctx，`registerIfMissing` 幂等注册 `drawer-facts`@crmDrawer）；`64b9418` 把抽屉 AI 问答区抽为自包含 UMD widget（`sales-assets/drawer-ai-widget.js`，自持模板/转义，`drawerAiContext` 集中 `technicalAIPresentationAllowed && can('use_ai_assistant')` 门槛，注册 `drawer-ai`@crmDrawer，drawerAiForm 提交仍由 app 级委托、AI 内部零改动）；`3e84f63` 把抽屉客户主档区块（`CUSTOMER MASTER DATA`）抽为共用 UMD widget（`sales-assets/master-profile-widget.js`，自持 master-profile 模板与 label/cardClass 转义，`masterProfileSectionHtml` 辅助 widget 优先/内联回退，renderDrawer/openIntakeProfile/renderRecycleDrawer 三源组装 rows 共用同一模板，兑现"customerDrawer 共用同一 widget 集合"）。`3a42f1c` 记录该片。本轮 `6aa9353` 再把客户/回收抽屉重复的 `insight-section` 宿主壳抽为自包含 UMD widget（`sales-assets/insight-section-widget.js`，自持 insight-head + panel-note + body 容器模板与 eyebrow/title/note 转义，`insightSectionHtml` 辅助 widget 优先/内联回退；renderRecycleDrawer 的 5 个重复区块——CONTACT HISTORY/MANAGER INSIGHT/商务分组/FULL TIMELINE/AUDIT TRAIL——改为只组装 bodyHtml/actionHtml，时间线用 `bodyClass: 'timeline'` 并保留 `data-open-timeline-modal`）。本轮契约 +3、专项 78/78、全量 2000/2000 全绿。`39990be` 再把完整资料页 AI 站登记为
+widget（profileWidgetContext 注入 `customerAiEnabled`（复用 customerAIEnabled 开关）；
+registerProfilePageWidgets 注册 `customer-ai-station`（pages: ['customerProfile']，
+when 门槛 = ctx.customerAiEnabled）；`renderCustomerAiStationWidget` 委托既有
+`renderCustomerAI`（评分/资料包/补全渲染零改动，与 drawer-ai 同范式，兑现路线图
+关键动作 4"AI 区域登记为 widget，由现有开关决定挂载"）。本轮契约 +2、AI/注册表
+专项 48/48、全量 2000/2000 全绿。剩余：其余 widget 化（身份/业务画像/洞察/时间线/
+商务/下一步/回收状态中的具体 body——主档、insight 壳、AI 站已就位）、
+`/development-workbench` profile 模式收敛为只读/兼容入口。
 7. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
