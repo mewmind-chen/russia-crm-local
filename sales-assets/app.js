@@ -3140,52 +3140,99 @@
     if (widgets) widgets.classList.remove('hidden');
   }
 
+  // —— 客户完整资料页 widget 装配 ——
+  // 经 TradePulseWidgetRegistry 配置化组装：注册表按页面过滤 + 权限/开关门槛 +
+  // order 排序逐个挂载（见 sales-assets/widget-registry.js）。新增/隐藏区块只改
+  // 注册表配置或对应 widget render，不再动本函数。
+  function profileWidgetContext(externalCustomerId, intakeItemId = '') {
+    return {
+      customerId: externalCustomerId,
+      intakeItemId,
+      permissions: state.data?.user?.permissions || {},
+      features: state.data?.features || {},
+      fieldWidget: typeof window !== 'undefined' ? window.TradePulseFieldWidget : null,
+      contactsWidget: typeof window !== 'undefined' ? window.TradePulseProfileWidgets : null,
+      profileSchema: state.fieldSchemas?.customer_profile,
+      profilePreferences: loadProfilePreferences(),
+    };
+  }
+
+  function registerProfilePageWidgets() {
+    const registry = typeof window !== 'undefined' ? window.TradePulseWidgetRegistry : null;
+    if (!registry || registry.has('profile-facts')) return;
+    registry.register({
+      id: 'profile-facts',
+      pages: ['customerProfile'],
+      order: 10,
+      when: ctx => Boolean(ctx.fieldWidget && ctx.profileSchema?.fields?.length),
+      render: renderProfileFactsWidget,
+    });
+    registry.register({
+      id: 'profile-contacts',
+      pages: ['customerProfile'],
+      order: 20,
+      when: ctx => Boolean(ctx.contactsWidget),
+      render: renderProfileContactsWidget,
+    });
+  }
+
+  async function renderProfileFactsWidget(container, ctx) {
+    const fieldWidget = ctx.fieldWidget;
+    const profileSchema = ctx.profileSchema;
+    const profilePreferences = ctx.profilePreferences;
+    const account = state.data?.accounts?.find(item => item.external_customer_id === ctx.customerId);
+    let poolRecord = null;
+    try {
+      const endpoint = ctx.intakeItemId
+        ? `/api/sales-crm/intake/${encodeURIComponent(ctx.intakeItemId)}/profile`
+        : `/api/sales-crm/profile/${encodeURIComponent(ctx.customerId)}`;
+      const profile = await api(endpoint);
+      poolRecord = profile.customerPool?.[0] || null;
+    } catch (_e) {
+      poolRecord = state.data?.customerPool?.find(item => item.customer_id === ctx.customerId) || null;
+    }
+    if (!poolRecord) poolRecord = state.data?.customerPool?.find(item => item.customer_id === ctx.customerId) || null;
+    const facts = fieldWidget.renderProfileFacts({
+      schema: profileSchema,
+      data: profileFactsData(account, poolRecord),
+      formatters: profileFactsFormatters(),
+      preferences: profilePreferences,
+    });
+    if (facts) {
+      const host = document.createElement('div');
+      host.className = 'profile-widget-facts';
+      host.innerHTML = facts;
+      container.appendChild(host);
+    }
+    const preferenceBar = document.createElement('div');
+    preferenceBar.className = 'profile-widget-preferences';
+    preferenceBar.innerHTML = `<div class="profile-widget-preference-head"><strong>字段显示偏好</strong><span class="subtle">仅隐藏当前视图区块，不影响权限或数据下发</span></div><div class="profile-widget-preference-actions">${fieldWidget.profileSections(profileSchema, profilePreferences).map(section => {
+      const hidden = profilePreferences.hiddenSections.includes(section.section);
+      return `<button class="button secondary tiny" type="button" data-profile-section-toggle="${esc(section.section)}">${hidden ? '显示' : '隐藏'} ${esc(section.label)}</button>`;
+    }).join('')}</div>`;
+    container.appendChild(preferenceBar);
+  }
+
+  function renderProfileContactsWidget(container, ctx) {
+    ctx.contactsWidget.mountContacts(container, {
+      customerId: ctx.customerId,
+      intakeItemId: ctx.intakeItemId,
+    });
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
     widgetRoot.replaceChildren();
     if (typeof window.TradePulseProfileWidgets === 'undefined') return;
-    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
-    const profileSchema = state.fieldSchemas?.customer_profile;
-    const profilePreferences = loadProfilePreferences();
-    if (fieldWidget && profileSchema?.fields?.length) {
-      const account = state.data?.accounts?.find(item => item.external_customer_id === externalCustomerId);
-      let poolRecord = null;
-      try {
-        const endpoint = intakeItemId
-          ? `/api/sales-crm/intake/${encodeURIComponent(intakeItemId)}/profile`
-          : `/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}`;
-        const profile = await api(endpoint);
-        poolRecord = profile.customerPool?.[0] || null;
-      } catch (_e) {
-        poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId) || null;
-      }
-      if (!poolRecord) poolRecord = state.data?.customerPool?.find(item => item.customer_id === externalCustomerId) || null;
-      const facts = fieldWidget.renderProfileFacts({
-        schema: profileSchema,
-        data: profileFactsData(account, poolRecord),
-        formatters: profileFactsFormatters(),
-        preferences: profilePreferences,
-      });
-      if (facts) {
-        const host = document.createElement('div');
-        host.className = 'profile-widget-facts';
-        host.innerHTML = facts;
-        widgetRoot.appendChild(host);
-      }
-      const preferenceBar = document.createElement('div');
-      preferenceBar.className = 'profile-widget-preferences';
-      preferenceBar.innerHTML = `<div class="profile-widget-preference-head"><strong>字段显示偏好</strong><span class="subtle">仅隐藏当前视图区块，不影响权限或数据下发</span></div><div class="profile-widget-preference-actions">${fieldWidget.profileSections(profileSchema, profilePreferences).map(section => {
-        const hidden = profilePreferences.hiddenSections.includes(section.section);
-        return `<button class="button secondary tiny" type="button" data-profile-section-toggle="${esc(section.section)}">${hidden ? '显示' : '隐藏'} ${esc(section.label)}</button>`;
-      }).join('')}</div>`;
-      widgetRoot.appendChild(preferenceBar);
-    }
+    if (typeof window.TradePulseWidgetRegistry === 'undefined') return;
+    registerProfilePageWidgets();
+    await window.TradePulseWidgetRegistry.renderPage(
+      'customerProfile',
+      widgetRoot,
+      profileWidgetContext(externalCustomerId, intakeItemId),
+    );
     applyProfileViewMode();
-    window.TradePulseProfileWidgets.mountContacts(widgetRoot, {
-      customerId: externalCustomerId,
-      intakeItemId,
-    });
   }
 
   // 把列表/主档两路数据源合并为 customer_profile 目录期望的 camelCase 结构。
