@@ -1,6 +1,8 @@
 # A1-09 Customer Enrichment Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Use `superpowers:test-driven-development` for every behavior change and `superpowers:verification-before-completion` before each commit, PR, and completion claim. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **历史资料（已冻结）**：本文记录 2026-07-24 的实现计划，不是当前进度、基线或执行指令。当前判断以 `docs/governance/README.md` 为准。
+
+> **历史原文提示：** 本文当时包含面向执行器的技能与逐项执行要求；这些要求现已失效，不得继续执行。下方复选框只作为历史记录保留。
 
 **Goal:** Let an authorized user create a minimal CRM customer from a company name or website and immediately return, then use the A1-08 control plane to durably orchestrate evidence-backed identity, Recon, contact, fit, completeness, proposal, and review work without changing ownership or bypassing permissions.
 
@@ -794,9 +796,7 @@ git status --short
   - no deployment performed.
 - [ ] Write the final A1-09.5 evidence artifact with focused count, full count, real-smoke result, GitHub CI, production read-only state, and rollback boundary.
 - [ ] Push and merge the A1-09.5 code PR.
-- [ ] Create and merge a separate docs PR updating:
-  - `docs/planning/tradepulse-execution-plan.md`
-  - `docs/planning/tradepulse-unified-master-plan.md`
+- [ ] 历史步骤（不得执行）：当时拟创建单独的文档 PR 更新现已冻结的两份旧计划。
 - [ ] Mark A1-09 complete only after CI and both PR merges.
 - [ ] Report final integration SHA, total progress, production state, and A2-01 as the next task.
 

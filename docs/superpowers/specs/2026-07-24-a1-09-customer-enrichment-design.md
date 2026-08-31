@@ -1,12 +1,14 @@
 # A1-09 新客户自动补全闭环设计
 
+> **历史资料（已冻结）**：本文记录 2026-07-24 的设计上下文，不是当前进度、基线或执行指令。当前判断以 `docs/governance/README.md` 为准。
+
 **日期：** 2026-07-24
 
 **状态：** 已确认，待规格审阅
 
 **基础分支：** `codex/ai-integration` @ `1230c2bbfe8aafbbf939b0151999b8d27397f9f7`
 
-**关联计划：** `docs/planning/tradepulse-execution-plan.md` A1-09、`docs/planning/tradepulse-unified-master-plan.md`
+**关联计划：** `docs/archive/planning-2026-07-25/tradepulse-execution-plan.md` A1-09、`docs/archive/planning-2026-07-25/tradepulse-unified-master-plan.md`
 
 ## 1. 背景
 

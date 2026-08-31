@@ -1,5 +1,7 @@
 # Development Environment
 
+> **当前重构工作区提示：** 下文的 `tradepulse-development`/`runtime` 布局仅保留为历史或通用隔离示例，不能据此选择当前基线。当前目录、权威入口和工作规则以 `docs/governance/README.md` 为准。
+
 TradePulse development must run from an external Git worktree with its own runtime. It must never reuse the production database, `.env`, logs, reports, sessions, credentials, or outbound channels.
 
 ## Directory Layout

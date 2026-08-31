@@ -9,7 +9,7 @@
 **状态：** 35/38 个任务已完成；A4-04 已完成开发、CI 和生产发布；下一项 R5-01
 **版本：** v2.0
 **日期：** 2026-07-25
-**上位文档：** `docs/planning/tradepulse-unified-master-plan.md`
+**上位文档：** [同目录统一主计划](tradepulse-unified-master-plan.md)
 **正式产品仓库：** `https://github.com/mewmind-chen/russia-crm-local`
 **生产根目录：** `/Users/ylf/Desktop/projects/tradepulse-production`
 **目标开发根目录：** `/Users/ylf/Desktop/projects/tradepulse-development`
