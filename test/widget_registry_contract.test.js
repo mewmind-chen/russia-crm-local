@@ -399,6 +399,24 @@ test('app.js registers drawer-facts widget on crmDrawer page and delegates throu
   assert.match(renderer, /renderFactsHtml\(ctx\)/);
 });
 
+test('app.js drawerFactsFallbackHtml lets intake and recycle drawers share the drawer-facts widget', () => {
+  const fallback = functionSource('drawerFactsFallbackHtml', 'drawerAiContext');
+  assert.match(fallback, /TradePulseDrawerFactsWidget/);
+  assert.match(fallback, /renderFactsHtml\(\{ fallback: rows \}\)/);
+  assert.match(fallback, /rows\.map\(drawerFactMarkup\)/);
+
+  const intake = functionSource('openIntakeProfile', 'closeDrawer');
+  assert.match(intake, /drawerFactsFallbackHtml\(intakeFacts\)/);
+  assert.match(intake, /'联系人等级', item\.contact_level/);
+  assert.match(intake, /'成立年份', item\.established_year/);
+
+  const recycle = functionSource('renderRecycleDrawer', 'correctionActivityId');
+  assert.match(recycle, /drawerFactsFallbackHtml\(\[/);
+  assert.match(recycle, /'原负责人', recycle\.previousOwnerName/);
+  assert.match(recycle, /'回收原因', recycle\.reason/);
+  assert.doesNotMatch(recycle, /\.map\(\(\[label, value\]\) => `<div class="fact">/);
+});
+
 test('drawer-ai widget is loaded on shell before app.js and exposes section markup helpers', () => {
   assert.match(html, /sales-assets\/drawer-ai-widget\.js/);
   const drawerAiIndex = html.indexOf('drawer-ai-widget.js');

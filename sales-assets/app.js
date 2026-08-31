@@ -3246,6 +3246,16 @@
     return [{ id: 'drawer-facts', status: 'mounted' }];
   }
 
+  // 抽屉 facts 区 HTML（widget 优先，缺 widget 时内联回退到逐字节一致模板）。
+  // rows：[[label, value, kind?]]，与 drawer-facts-widget 的 fallback 一致。
+  function drawerFactsFallbackHtml(rows = []) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseDrawerFactsWidget : null;
+    if (widget && typeof widget.renderFactsHtml === 'function') {
+      return widget.renderFactsHtml({ fallback: rows });
+    }
+    return rows.map(drawerFactMarkup).join('');
+  }
+
   // —— CRM 抽屉 AI 问答区 widget ——
   // 与 drawer-facts 同范式：TradePulseDrawerAiWidget 自持模板，app 只注入上下文。
   function drawerAiContext(context) {
@@ -8928,7 +8938,7 @@
       <div class="next-step"><div><span class="eyebrow">LEAD PROFILE</span><p>${esc(item.reviewVagueHint || '查看企业背景、需求依据和完整开发历史。')}</p></div><div class="assignment-actions"><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span>${assignmentAction}</div></div>
       ${customerTags.length ? `<div class="customer-tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag.name || tag)}</span>`).join('')}</div>` : ''}
       <div class="account-facts">
-        ${intakeFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ${drawerFactsFallbackHtml(intakeFacts)}
       </div>
       ${masterProfileSectionHtml({
         title: '企业背景与开发依据',
@@ -9063,7 +9073,7 @@
         <span class="pill amber">${esc(recycleKindLabel)}</span>
       </div>
       <div class="account-facts">
-        ${[
+        ${drawerFactsFallbackHtml([
           ['当前状态', '回收站客户'], ['回收类型', recycleKindLabel],
           ['原负责人', recycle.previousOwnerName || '未分配'],
           ['回收操作人', recycle.recycledByName || recycle.recycledBy || '—'],
@@ -9071,7 +9081,7 @@
           ['回收原因', recycle.reason || '—'],
           ['原阶段', stageLabel(account.stage)], ['CRM 客户编号', customerId],
           ['客户主档编号', account.external_customer_id || master.customerId || '—'],
-        ].map(([label, value]) => `<div class="fact"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
+        ])}
       </div>
       ${masterProfileSectionHtml({
         title: '客户主档',
