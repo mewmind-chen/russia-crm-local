@@ -59,9 +59,22 @@
     container.innerHTML = renderItemsHtml(events, ctx);
   }
 
+  // —— CRM 抽屉完整客户时间线区块壳（panel-head 风格）——
+  // ctx：{ eyebrow, title, note, actionHtml, bodyClass, bodyHtml }，
+  // eyebrow/title/note 内部转义，actionHtml/bodyHtml 为宿主安全 HTML。
+  function renderSectionHtml(ctx = {}) {
+    const note = ctx.note ? `<span class="panel-note">${escapeHtml(ctx.note)}</span>` : '';
+    const title = escapeHtml(ctx.title || '');
+    const eyebrow = ctx.eyebrow ? `<p class="eyebrow">${escapeHtml(ctx.eyebrow)}</p>` : '';
+    const bodyClass = ctx.bodyClass || 'timeline';
+    return `<div><div class="panel-head" style="padding-left:0;padding-right:0"><div>${eyebrow}<h2>${title}</h2></div>${note}${ctx.actionHtml || ''}</div>
+      <div class="${escapeHtml(bodyClass)}">${ctx.bodyHtml === undefined ? '' : ctx.bodyHtml}</div></div>`;
+  }
+
   return Object.freeze({
     escapeHtml,
     renderItemsHtml,
+    renderSectionHtml,
     render,
   });
 }));

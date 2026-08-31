@@ -3388,6 +3388,18 @@
     }).join('');
   }
 
+  // // CRM 抽屉完整客户时间线区块壳（panel-head 风格，widget 优先/内联回退逐字节一致）。
+  function timelineSectionHtml({ eyebrow = 'FULL TIMELINE', title, note = '', actionHtml = '', bodyHtml = '' } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseTimelineWidget : null;
+    if (widget && typeof widget.renderSectionHtml === 'function') {
+      return widget.renderSectionHtml({ eyebrow, title, note, actionHtml, bodyHtml });
+    }
+    const noteHtml = note ? `<span class="panel-note">${esc(note)}</span>` : '';
+    const eyebrowHtml = eyebrow ? `<p class="eyebrow">${esc(eyebrow)}</p>` : '';
+    return `<div><div class="panel-head" style="padding-left:0;padding-right:0"><div>${eyebrowHtml}<h2>${esc(title || '')}</h2></div>${noteHtml}${actionHtml}</div>
+      <div class="timeline">${bodyHtml}</div></div>`;
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -10192,8 +10204,12 @@
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
           ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
       </div>
-      <div><div class="panel-head" style="padding-left:0;padding-right:0"><div><p class="eyebrow">FULL TIMELINE</p><h2>完整客户时间线</h2></div><span class="panel-note">${timeline.length} 条记录</span><button class="text-button" data-customer-history>查看客户历史</button></div>
-      <div class="timeline">${timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>'}</div></div>`;
+      ${timelineSectionHtml({
+        title: '完整客户时间线',
+        note: `${timeline.length} 条记录`,
+        actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
+        bodyHtml: timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
+      })}`;
     startDrawerNextActionTimer();
   }
 
