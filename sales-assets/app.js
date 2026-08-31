@@ -3160,6 +3160,13 @@
       render: renderProfileMasterWidget,
     });
     registerIfMissing({
+      id: 'profile-timeline',
+      pages: ['customerProfile'],
+      order: 27,
+      when: ctx => Boolean(ctx.account),
+      render: renderProfileTimelineWidget,
+    });
+    registerIfMissing({
       id: 'customer-ai-station',
       pages: ['customerProfile'],
       order: 30,
@@ -3231,6 +3238,22 @@
       ],
     });
     return [{ id: 'profile-master', status: 'mounted' }];
+  }
+
+  // —— customerProfile 完整资料页时间线区 widget ——
+  // 复用 timelineSectionHtml/timelineItemsHtml（与 CRM/回收抽屉共用同一时间线
+  // 模板），让完整资料 widget 视图与 drawer 对齐。
+  function renderProfileTimelineWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const account = ctx.account;
+    const events = (state.data?.timeline || []).filter(item => item.customer_id === account.id);
+    container.innerHTML = timelineSectionHtml({
+      title: '完整客户时间线',
+      note: `${events.length} 条记录`,
+      actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
+      bodyHtml: timelineItemsHtml(events, { emptyText: '暂无跟进记录' }),
+    });
+    return [{ id: 'profile-timeline', status: 'mounted' }];
   }
 
   // —— CRM 抽屉客户事实区 widget 的 ctx 与 render ——

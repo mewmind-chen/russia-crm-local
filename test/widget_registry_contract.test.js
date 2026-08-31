@@ -191,6 +191,8 @@ test('app.js registers profile-facts and profile-contacts widgets for customerPr
   assert.match(source, /order: 20/);
   assert.match(source, /id: 'profile-master'/);
   assert.match(source, /order: 25/);
+  assert.match(source, /id: 'profile-timeline'/);
+  assert.match(source, /order: 27/);
 
   // 权限/开关门槛：contacts 以 contactsWidget 存在为 when，facts 以 factsWidget+schema 存在为 when
   assert.match(source, /when: ctx => Boolean\(ctx\.contactsWidget\)/);
@@ -769,4 +771,19 @@ test('app.js registers profile-master widget and delegates to masterProfileSecti
   assert.match(renderer, /isSalesRepresentative\(\)/);
   assert.match(renderer, /master_description/);
   assert.match(renderer, /背调与来源/);
+});
+
+test('app.js registers profile-timeline widget and delegates to the shared timeline templates', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'profile-timeline'/);
+  assert.match(register, /pages: \['customerProfile'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.account\)/);
+  assert.match(register, /render: renderProfileTimelineWidget/);
+
+  const renderer = functionSource('renderProfileTimelineWidget', 'drawerFactsContext');
+  assert.match(renderer, /state\.data\?\.timeline \|\| \[\]/);
+  assert.match(renderer, /item\.customer_id === account\.id/);
+  assert.match(renderer, /timelineSectionHtml\(\{/);
+  assert.match(renderer, /timelineItemsHtml\(events/);
+  assert.match(renderer, /data-customer-history/);
 });
