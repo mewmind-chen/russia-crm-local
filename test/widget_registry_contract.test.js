@@ -189,10 +189,16 @@ test('app.js registers profile-facts and profile-contacts widgets for customerPr
   assert.match(source, /order: 10/);
   assert.match(source, /id: 'profile-contacts'/);
   assert.match(source, /order: 20/);
+  assert.match(source, /id: 'profile-master'/);
+  assert.match(source, /order: 25/);
 
   // 权限/开关门槛：contacts 以 contactsWidget 存在为 when，facts 以 factsWidget+schema 存在为 when
   assert.match(source, /when: ctx => Boolean\(ctx\.contactsWidget\)/);
   assert.match(source, /when: ctx => Boolean\(ctx\.factsWidget && ctx\.fieldWidget && ctx\.profileSchema\?\.fields\?\.length\)/);
+  // profile-master 以 ctx.account 存在为 when（完整资料与 drawer 共用主档模板）
+  assert.match(source, /when: ctx => Boolean\(ctx\.account\)/);
+  assert.match(source, /render: renderProfileMasterWidget/);
+  assert.match(source, /account,/);
 
   // AI 完整资料站登记为 widget：由现有 customerAIEnabled 开关决定挂载，委托既有 renderCustomerAI
   assert.match(source, /id: 'customer-ai-station'/);
@@ -744,4 +750,23 @@ test('app.js timelineItemsHtml delegates to widget and recycle plus intake drawe
   const intake = functionSource('openIntakeProfile', 'closeDrawer');
   assert.match(intake, /timelineItemsHtml\(developmentTimeline, \{ emptyText: '暂无开发历史' \}\)/);
   assert.doesNotMatch(intake, /developmentTimeline\.map\(event/);
+});
+
+test('app.js registers profile-master widget and delegates to masterProfileSectionHtml', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'profile-master'/);
+  assert.match(register, /pages: \['customerProfile'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.account\)/);
+  assert.match(register, /render: renderProfileMasterWidget/);
+
+  const context = functionSource('profileWidgetContext', 'registerProfilePageWidgets');
+  assert.match(context, /account,/);
+  assert.match(context, /find\(item => item\.external_customer_id === externalCustomerId\)/);
+
+  const renderer = functionSource('renderProfileMasterWidget', 'drawerFactsContext');
+  assert.match(renderer, /masterProfileSectionHtml\(/);
+  assert.match(renderer, /企业背景与开发依据/);
+  assert.match(renderer, /isSalesRepresentative\(\)/);
+  assert.match(renderer, /master_description/);
+  assert.match(renderer, /背调与来源/);
 });

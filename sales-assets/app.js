@@ -3117,9 +3117,12 @@
   // order 排序逐个挂载（见 sales-assets/widget-registry.js）。新增/隐藏区块只改
   // 注册表配置或对应 widget render，不再动本函数。
   function profileWidgetContext(externalCustomerId, intakeItemId = '') {
+    const account = (state.data?.accounts || [])
+      .find(item => item.external_customer_id === externalCustomerId) || null;
     return {
       customerId: externalCustomerId,
       intakeItemId,
+      account,
       permissions: state.data?.user?.permissions || {},
       features: state.data?.features || {},
       fieldWidget: typeof window !== 'undefined' ? window.TradePulseFieldWidget : null,
@@ -3148,6 +3151,13 @@
       order: 20,
       when: ctx => Boolean(ctx.contactsWidget),
       render: renderProfileContactsWidget,
+    });
+    registerIfMissing({
+      id: 'profile-master',
+      pages: ['customerProfile'],
+      order: 25,
+      when: ctx => Boolean(ctx.account),
+      render: renderProfileMasterWidget,
     });
     registerIfMissing({
       id: 'customer-ai-station',
@@ -3202,6 +3212,25 @@
       customerId: ctx.customerId,
       intakeItemId: ctx.intakeItemId,
     });
+  }
+
+  // —— customerProfile 完整资料页主档区 widget ——
+  // 复用 masterProfileSectionHtml（与 CRM/回收抽屉共用同一 master-profile 模板），
+  // 让完整资料 widget 视图与 drawer 共用同一业务画像区块。
+  function renderProfileMasterWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const account = ctx.account;
+    const showTechnicalSources = !isSalesRepresentative();
+    container.innerHTML = masterProfileSectionHtml({
+      title: '企业背景与开发依据',
+      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      rows: [
+        ['企业简介', esc(account.master_description || '暂无企业简介')],
+        ['产品与潜在需求', esc(account.product_focus || '未标注')],
+        ...(showTechnicalSources ? [['背调与来源', esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')]] : []),
+      ],
+    });
+    return [{ id: 'profile-master', status: 'mounted' }];
   }
 
   // —— CRM 抽屉客户事实区 widget 的 ctx 与 render ——
