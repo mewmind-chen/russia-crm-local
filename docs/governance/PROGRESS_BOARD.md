@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-08-30 16:37:47`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-08-31 01:35:21`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `b7ec871`（相对 origin/main ahead 172） |
+| HEAD | `2d98eea`（相对 origin/main ahead 174） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 1975/1975 |
-| 核心测试 | `npm test` 1614/1614 |
+| 全量测试 | `node --test` 1983/1983 |
+| 核心测试 | `npm test` 1622/1622 |
 | sales_crm.js | 12883 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-08-30-phase-d-commerce-commit-service.md` |
+| 最近会话 | `2026-08-31-progress-board-closure-wiring.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -23,8 +23,8 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 53 |
-| feat(...) | 15 |
-| docs(governance) | 62 |
+| feat(...) | 16 |
+| docs(governance) | 63 |
 | 其他 | 12 |
 
 ## 阶段 0：治理基础
@@ -165,16 +165,19 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — profile widgets、字段分组、用户偏好已试点；注册表与 iframe 收敛未完成。
+> **进行中** — widget 注册表已落地（2d98eea，UMD + register/renderPage + permission/feature/when 门槛 + 错误隔离）；customerProfile 已改注册表组装（profile-facts/profile-contacts）。
 
 ### 已完成
 
 - [x] 字段目录/widget 试点提交（`7a26074…077c88c`）
+- [x] widget 注册表落地 + customerProfile 注册表化组装（`2d98eea`）
 
 ### 待办
 
-- [ ] **frontend** widget 注册表落地
-- [ ] **frontend** 客户完整资料 iframe 收敛为统一壳
+- [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/时间线/商务/下一步/回收/AI 区域
+- [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合
+- [ ] **frontend** AI 区域登记为 widget（现有开关决定挂载，AI 零改动）
+- [ ] **frontend** /development-workbench profile 模式收敛为只读/兼容入口
 
 ## 阶段 F：AI 零动作
 

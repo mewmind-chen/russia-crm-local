@@ -281,11 +281,16 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'profile widgets、字段分组、用户偏好已试点；注册表与 iframe 收敛未完成。',
-      done: [['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', '']],
+      summary: 'widget 注册表已落地（2d98eea，UMD + register/renderPage + permission/feature/when 门槛 + 错误隔离）；customerProfile 已改注册表组装（profile-facts/profile-contacts）。',
+      done: [
+        ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
+        ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
+      ],
       pending: [
-        ['frontend', 'widget 注册表落地', '', ''],
-        ['frontend', '客户完整资料 iframe 收敛为统一壳', '', ''],
+        ['frontend', '其余 widget 化：身份/业务画像/洞察/时间线/商务/下一步/回收/AI 区域', '', ''],
+        ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合', '', ''],
+        ['frontend', 'AI 区域登记为 widget（现有开关决定挂载，AI 零改动）', '', ''],
+        ['frontend', '/development-workbench profile 模式收敛为只读/兼容入口', '', ''],
       ],
     },
     {

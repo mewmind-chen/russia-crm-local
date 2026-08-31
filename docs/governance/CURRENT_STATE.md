@@ -11,12 +11,12 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@0ae90af`，干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@2d98eea`，干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`b4cfdfc`（阶段 D addQuote/addOrder 编排下沉为 commitQuote/commitOrder 域服务）
-- 重构分支相对 `origin/main`：ahead 171（110 业务 + 61 治理），未合并；本地未配置发布或生产动作。
+- 当前重构提交：`2d98eea`（阶段 E 首片：widget 注册表落地，customerProfile 经注册表组装）
+- 重构分支相对 `origin/main`：ahead 175（112 业务 + 63 治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
@@ -113,8 +113,8 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1614/1614` 通过。
-- `node --test`：全量 `1975/1975` 通过。
+- `npm test`：全量 core `1622/1622` 通过。
+- `node --test`：全量 `1983/1983` 通过。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
@@ -141,8 +141,9 @@
 2. 阶段 A 接线恢复：**已完成**——44 个域模块中 41 个已重新接入，仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
 4. 阶段 C（权限/筛选/字段）：**主体完成**——列表路径白名单化（accounts/intake/通知）、S3 形状（timeline/auditLog）、范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`，含空 WHERE 修复）、按页面"权限→字段→筛选"合同（`45e0c05`）均落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；S6（db bootstrap）联系形状源头门控、低价值。剩余仅：可选残值（legacy customers 形状白名单，S6 审计确认其余联系形状已源头门控，低价值可暂缓）。
-5. 阶段 D（线索/任务/商业闭环）为当前执行阶段：intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、addQuote/addOrder 完整编排下沉（`b4cfdfc`，commitQuote/commitOrder place 级域服务）均已显式化——**RFQ→quote→order 商业闭环领域边界成型**。剩余为独立用例（manager intervention / deferred plan）与前端的阶段 E/G。可评估进入阶段 E（前端 widget 注册表 / iframe 收敛）的准备动作。
-6. 未全绿前不叠加下一阶段新功能或拆分范围。
+5. 阶段 D（线索/任务/商业闭环）：**商业闭环成型**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、addQuote/addOrder 完整编排下沉（`b4cfdfc`，commitQuote/commitOrder place 级域服务）均已显式化。剩余为独立用例（manager intervention / deferred plan），后续评估。
+6. **阶段 E（前端 widgets）为当前执行阶段**：首片 `2d98eea` 落地 widget 注册表（`sales-assets/widget-registry.js`，UMD，register/renderPage/widgetsForPage + permission/feature/when 门槛 + order 排序 + 逐 widget 错误隔离），并把 customerProfile 页面改为注册表组装（注册 profile-facts/profile-contacts，`mountCustomerProfileWidgets` 委托 `renderPage`，ctx 携带 permissions/features）。行为与既有 facts+偏好条+联系人逐字节一致；契约测试 8 断言 + 既有 profile_widgets 12 断言全绿。剩余：其余 widget 化（身份/业务画像/洞察/时间线/商务/下一步/回收/AI 区域）、customerDrawer 与完整资料共用同一集合、AI 区域按开关登记、`/development-workbench` profile 模式收敛为只读/兼容入口。
+7. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
 
