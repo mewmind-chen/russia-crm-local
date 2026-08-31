@@ -3330,6 +3330,37 @@
     return `<div class="next-step${cls}"><div><span class="eyebrow">${esc(eyebrow || '')}</span><p>${esc(text || '')}</p></div>${actionHtml}</div>`;
   }
 
+  // —— CRM 抽屉告警条/异常明细（widget 优先，缺 widget 时内联回退逐字节一致模板）——
+  function alertStepHtml(alert) {
+    if (!hasMeaningfulAlertCopy(alert)) return '';
+    const widget = typeof window !== 'undefined' ? window.TradePulseNextStepWidget : null;
+    if (widget && typeof widget.renderAlertStepHtml === 'function') {
+      return widget.renderAlertStepHtml({
+        severity: alert.severity,
+        title: alert.title,
+        detail: alert.detail,
+        action: alert.action,
+      });
+    }
+    const critical = alert.severity === 'critical';
+    return `<div class="next-step" style="border-color:${critical ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title || '')}</strong><p>${esc(alert.detail || '')}</p></div><span class="pill ${critical ? 'red' : 'amber'}">${esc(alert.action || '')}</span></div>`;
+  }
+
+  function alertDetailsHtml(alert) {
+    const reasons = alertReasons(alert);
+    if (!alert || reasons.length <= 1) return '';
+    const rows = reasons.map(reason => ({
+      title: reason.title,
+      detail: reason.detail,
+      metaHtml: `${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}`,
+    }));
+    const widget = typeof window !== 'undefined' ? window.TradePulseNextStepWidget : null;
+    if (widget && typeof widget.renderAlertDetailsHtml === 'function') {
+      return widget.renderAlertDetailsHtml({ rows });
+    }
+    return `<div class="alert-details"><span class="eyebrow">异常明细</span>${rows.map(row => `<div class="alert-detail-row"><strong>${esc(row.title || '')}</strong><p>${esc(row.detail || '')}</p><span>${row.metaHtml || ''}</span></div>`).join('')}</div>`;
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -10105,8 +10136,8 @@
     }
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
-      ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
-      ${alert && alertReasons(alert).length > 1 ? `<div class="alert-details"><span class="eyebrow">异常明细</span>${alertReasons(alert).map(reason => `<div class="alert-detail-row"><strong>${esc(reason.title)}</strong><p>${esc(reason.detail)}</p><span>${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}</span></div>`).join('')}</div>` : ''}
+      ${alertStepHtml(alert)}
+      ${alertDetailsHtml(alert)}
       ${nextStepHtml({
         eyebrow: 'NEXT ACTION',
         text: account.next_action || '尚未填写下一步',

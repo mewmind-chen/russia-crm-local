@@ -648,3 +648,49 @@ test('app.js nextStepHtml delegates to widget and three drawer sources compose s
   assert.match(recycle, /eyebrow: 'RECYCLED CUSTOMER · READ ONLY'/);
   assert.doesNotMatch(recycle, /<div class="next-step">/);
 });
+
+test('next-step widget alert variants escape severity title/detail and keep pill tone', () => {
+  const critical = nextStepWidget.renderAlertStepHtml({
+    severity: 'critical', title: '<b>超期</b>', detail: '已超时', action: '立即处理',
+  });
+  assert.match(critical, /border-color:#e0a09c/);
+  assert.match(critical, /pill red/);
+  assert.match(critical, /&lt;b&gt;超期&lt;\/b&gt;/);
+  assert.match(critical, /已超时/);
+  assert.match(critical, /立即处理/);
+
+  const warning = nextStepWidget.renderAlertStepHtml({
+    severity: 'warning', title: '需关注', detail: '待介入', action: '处理',
+  });
+  assert.match(warning, /border-color:#e5c27c/);
+  assert.match(warning, /pill amber/);
+
+  const details = nextStepWidget.renderAlertDetailsHtml({
+    rows: [{ title: '<i>超期</i>', detail: 'd', metaHtml: '<span>计划时间：x</span>' }],
+  });
+  assert.match(details, /alert-details/);
+  assert.match(details, /alert-detail-row/);
+  assert.match(details, /&lt;i&gt;超期&lt;\/i&gt;/);
+  assert.match(details, /计划时间：x/);
+});
+
+test('app.js alertStepHtml/alertDetailsHtml delegate to widget with gated render', () => {
+  const step = functionSource('alertStepHtml', 'alertDetailsHtml');
+  assert.match(step, /hasMeaningfulAlertCopy\(alert\)/);
+  assert.match(step, /TradePulseNextStepWidget/);
+  assert.match(step, /renderAlertStepHtml\(/);
+  assert.match(step, /alert\.severity === 'critical'/);
+
+  const details = functionSource('alertDetailsHtml', 'mountCustomerProfileWidgets');
+  assert.match(details, /alertReasons\(alert\);/);
+  assert.match(details, /reasons\.length <= 1/);
+  assert.match(details, /renderAlertDetailsHtml\(\{ rows \}\)/);
+  assert.match(details, /overdueHours/);
+  assert.match(details, /reason\.dueAt/);
+
+  const renderDrawer = functionSource('renderDrawer', 'stopDrawerNextActionTimer');
+  assert.match(renderDrawer, /alertStepHtml\(alert\)/);
+  assert.match(renderDrawer, /alertDetailsHtml\(alert\)/);
+  assert.doesNotMatch(renderDrawer, /<div class="alert-details">/);
+  assert.doesNotMatch(renderDrawer, /<div class="next-step" style="border-color/);
+});

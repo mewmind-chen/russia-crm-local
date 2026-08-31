@@ -31,6 +31,24 @@
     return `<div class="next-step${cls}"><div><span class="eyebrow">${escapeHtml(ctx.eyebrow || '')}</span><p>${escapeHtml(ctx.text || '')}</p></div>${ctx.actionHtml || ''}</div>`;
   }
 
+  // —— CRM 抽屉告警条（next-step 变体：strong 标题 + 详情 + 严重度 pill）——
+  // ctx：{ severity, title, detail, action }；severity 仅区分 critical/其他，
+  // 对应红色/琥珀色边框与 pill，模板与转义在 widget 内自持。
+  function renderAlertStepHtml(ctx = {}) {
+    const critical = ctx.severity === 'critical';
+    const border = critical ? '#e0a09c' : '#e5c27c';
+    const tone = critical ? 'red' : 'amber';
+    return `<div class="next-step" style="border-color:${escapeHtml(border)}"><div><strong>${escapeHtml(ctx.title || '')}</strong><p>${escapeHtml(ctx.detail || '')}</p></div><span class="pill ${tone}">${escapeHtml(ctx.action || '')}</span></div>`;
+  }
+
+  // —— CRM 抽屉异常明细列表 ——
+  // rows：[{ title, detail, metaHtml }]，title/detail 内部转义，metaHtml 为宿主
+  // 组装的安全 HTML（计划时间/超时时长/动作）。
+  function renderAlertDetailsHtml(ctx = {}) {
+    const rows = Array.isArray(ctx.rows) ? ctx.rows : [];
+    return `<div class="alert-details"><span class="eyebrow">异常明细</span>${rows.map(row => `<div class="alert-detail-row"><strong>${escapeHtml(row.title || '')}</strong><p>${escapeHtml(row.detail || '')}</p><span>${row.metaHtml || ''}</span></div>`).join('')}</div>`;
+  }
+
   function render(container, ctx = {}) {
     if (!container) return;
     container.innerHTML = renderStepHtml(ctx);
@@ -39,6 +57,8 @@
   return Object.freeze({
     escapeHtml,
     renderStepHtml,
+    renderAlertStepHtml,
+    renderAlertDetailsHtml,
     render,
   });
 }));

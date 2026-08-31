@@ -48,7 +48,8 @@ test('bootstrap keeps complete alert text without exposing contacts', async t =>
 test('drawer renders one guarded customer-history action with modal states', () => {
   const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
   const drawer = app.match(/function renderDrawer\(\)([\s\S]*?)\n  function openModal/)?.[1] || '';
-  assert.match(drawer, /hasMeaningfulAlertCopy\(alert\)/);
+  assert.match(drawer, /alertStepHtml\(alert\)/);
+  assert.match(drawer, /alertDetailsHtml\(alert\)/);
   assert.equal((drawer.match(/data-customer-history/g) || []).length, 1);
   assert.doesNotMatch(drawer, /customerHistoryList|data-open-timeline-modal/);
   assert.match(app, /async function openCustomerHistoryModal/);

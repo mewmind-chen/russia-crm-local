@@ -71,10 +71,12 @@ test('Issue 265 lifecycle actions live only in the actions column', () => {
 
 test('Issue 265 drawer lists alert details with time and overdue hours', () => {
   const drawer = functionBlock(app, 'renderDrawer');
-  assert.match(drawer, /alert-details/);
-  assert.match(drawer, /alertReasons\(alert\)\.length > 1/);
-  assert.match(drawer, /overdueHours/);
-  assert.match(drawer, /reason\.dueAt/);
+  assert.match(drawer, /alertDetailsHtml\(alert\)/);
+  const details = functionBlock(app, 'alertDetailsHtml');
+  assert.match(details, /alertReasons\(alert\);/);
+  assert.match(details, /reasons\.length <= 1/);
+  assert.match(details, /overdueHours/);
+  assert.match(details, /reason\.dueAt/);
   assert.match(css, /\.alert-details\{/);
   assert.match(css, /\.alert-detail-row\{/);
 });

@@ -182,7 +182,7 @@ function executableDrawerLifecycle() {
     'drawerFactMarkup', 'customerAiSection', 'can', 'canReturnCustomer',
     'canRejectCustomer', 'renderActivityTimelineItem', 'nextActionTimeMarkup',
     'accountStageOf', 'managerStateDisplay', 'registerProfilePageWidgets', 'drawerFactsContext',
-    'masterProfileSectionHtml', 'nextStepHtml',
+    'masterProfileSectionHtml', 'nextStepHtml', 'alertStepHtml', 'alertDetailsHtml',
   ];
   const identity = value => String(value || '');
   const dependencyValues = [
@@ -194,6 +194,8 @@ function executableDrawerLifecycle() {
     account => account?.stage || account?.state?.stage?.key || '',
     () => {},
     () => ({ drawerFactsWidget: null, fieldWidget: null, schema: null, data: {}, formatters: {}, fallback: [] }),
+    () => '',
+    () => '',
     () => '',
     () => '',
   ];
