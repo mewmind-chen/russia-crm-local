@@ -11,11 +11,11 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@8135ac2`，干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@f8e67c9`，干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`8135ac2`（阶段 E 续片：三源抽屉事实区统一经 drawer-facts widget）
+- 当前重构提交：`f8e67c9`（阶段 E 续片：三源抽屉下一步/状态条统一 next-step widget）
 - 重构分支相对 `origin/main`：ahead 177（113 业务 + 64 治理），未合并；本地未配置发布或生产动作。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
@@ -113,8 +113,8 @@
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1641/1641` 通过。
-- `node --test`：全量 `2002/2002` 通过。
+- `npm test`：全量 core `1644/1644` 通过。
+- `node --test`：全量 `2005/2005` 通过。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
@@ -152,10 +152,14 @@ when 门槛 = ctx.customerAiEnabled）；`renderCustomerAiStationWidget` 委托�
 drawer-facts-widget 渲染（新增 `drawerFactsFallbackHtml(rows)` 辅助 widget 优先/
 内联回退，openIntakeProfile 与 renderRecycleDrawer 的 account-facts 内联 map 改为
 委托，与 renderDrawer 共用同一 fallback 路径，兑现"customerDrawer 共用同一 widget
-集合"的 facts 收敛）。本轮契约 +1、抽屉专项 82/82、全量 2002/2002 全绿。剩余：其余
-widget 化（身份/业务画像/洞察/时间线/商务/下一步/回收状态中的具体 body——主档、
-insight 壳、AI 站、facts 已就位）、
-`/development-workbench` profile 模式收敛为只读/兼容入口。
+集合"的 facts 收敛）。本轮契约 +1、抽屉专项 82/82、全量 2002/2002 全绿。`f8e67c9` 再把 CRM/线索/回收三处抽屉重复的
+`.next-step` 状态条壳抽为自包含 UMD widget（`sales-assets/next-step-widget.js`，
+自持 eyebrow/主文本/尾部 actionHtml/可选 className 模板与转义，`nextStepHtml`
+辅助 widget 优先/内联回退；renderDrawer NEXT ACTION、openIntakeProfile
+LEAD PROFILE、renderRecycleDrawer RECYCLED CUSTOMER 三处委托）。
+本轮契约 +3、专项 56/56、全量 2005/2005 全绿。剩余：其余 widget 化（身份/
+业务画像/洞察/时间线/商务/回收状态的具体 body——主档、insight 壳、AI 站、facts、
+next-step 已就位）、`/development-workbench` profile 模式收敛为只读/兼容入口。
 7. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
