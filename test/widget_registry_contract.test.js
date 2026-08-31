@@ -13,6 +13,7 @@ const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
 const masterProfilePath = path.join(root, 'sales-assets', 'master-profile-widget.js');
 const insightSectionPath = path.join(root, 'sales-assets', 'insight-section-widget.js');
 const nextStepPath = path.join(root, 'sales-assets', 'next-step-widget.js');
+const timelinePath = path.join(root, 'sales-assets', 'timeline-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
@@ -22,6 +23,7 @@ const drawerAiWidget = require(drawerAiPath);
 const masterProfileWidget = require(masterProfilePath);
 const insightSectionWidget = require(insightSectionPath);
 const nextStepWidget = require(nextStepPath);
+const timelineWidget = require(timelinePath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -693,4 +695,53 @@ test('app.js alertStepHtml/alertDetailsHtml delegate to widget with gated render
   assert.match(renderDrawer, /alertDetailsHtml\(alert\)/);
   assert.doesNotMatch(renderDrawer, /<div class="alert-details">/);
   assert.doesNotMatch(renderDrawer, /<div class="next-step" style="border-color/);
+});
+
+test('timeline widget is loaded on shell before app.js and exposes item rendering helpers', () => {
+  assert.match(html, /sales-assets\/timeline-widget\.js/);
+  const timelineIndex = html.indexOf('timeline-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(timelineIndex > -1 && timelineIndex < appIndex && timelineIndex < registryIndex,
+    'timeline-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof timelineWidget.renderItemsHtml, 'function');
+  assert.equal(typeof timelineWidget.render, 'function');
+  assert.equal(typeof timelineWidget.escapeHtml, 'function');
+});
+
+test('timeline widget renders items with escaped fields, optional next action and empty state', () => {
+  const list = timelineWidget.renderItemsHtml([
+    { title: '领取客户', summary: '领取了该线索', actor_name: 'Ada', occurred_at: '2026-08-04 08:00:00', next_action: '跟进' },
+    { title: '<b>回复</b>', summary: '<script>alert(1)</script>', actor_name: 'Ada', occurred_at: '2026-08-05 09:00:00' },
+  ], {
+    titleOf: event => event.title,
+    summaryOf: event => event.summary,
+    actorOf: event => event.actor_name,
+    dateOf: event => event.occurred_at,
+    nextActionOf: event => event.next_action || '',
+  });
+  assert.match(list, /timeline-item/);
+  assert.match(list, /<h4>领取客户<\/h4>/);
+  assert.match(list, /&lt;b&gt;回复&lt;\/b&gt;/);
+  assert.match(list, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(list, /下一步：<\/strong>跟进/);
+  assert.match(list, /Ada · 2026-08-04/);
+
+  assert.equal(timelineWidget.renderItemsHtml([], { emptyText: '暂无历史记录' }), '<div class="empty">暂无历史记录</div>');
+});
+
+test('app.js timelineItemsHtml delegates to widget and recycle plus intake drawers compose item lists', () => {
+  const helper = functionSource('timelineItemsHtml', 'mountCustomerProfileWidgets');
+  assert.match(helper, /TradePulseTimelineWidget/);
+  assert.match(helper, /renderItemsHtml\(/);
+  assert.match(helper, /timelineEventTitle/);
+  assert.match(helper, /timelineEventSummary/);
+
+  const recycle = functionSource('renderRecycleDrawer', 'correctionActivityId');
+  assert.match(recycle, /timelineItemsHtml\(history, \{ emptyText: '暂无历史记录', nextAction: true \}\)/);
+  assert.doesNotMatch(recycle, /history\.map\(event =>/);
+
+  const intake = functionSource('openIntakeProfile', 'closeDrawer');
+  assert.match(intake, /timelineItemsHtml\(developmentTimeline, \{ emptyText: '暂无开发历史' \}\)/);
+  assert.doesNotMatch(intake, /developmentTimeline\.map\(event/);
 });

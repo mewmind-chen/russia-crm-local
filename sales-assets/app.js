@@ -3361,6 +3361,33 @@
     return `<div class="alert-details"><span class="eyebrow">异常明细</span>${rows.map(row => `<div class="alert-detail-row"><strong>${esc(row.title || '')}</strong><p>${esc(row.detail || '')}</p><span>${row.metaHtml || ''}</span></div>`).join('')}</div>`;
   }
 
+  // —— CRM 抽屉时间线列表 HTML（widget 优先，缺 widget 时内联回退逐字节一致模板）——
+  function timelineItemsHtml(events = [], { emptyText = '', nextAction = false } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseTimelineWidget : null;
+    if (widget && typeof widget.renderItemsHtml === 'function') {
+      return widget.renderItemsHtml(events, {
+        titleOf: timelineEventTitle,
+        summaryOf: timelineEventSummary,
+        actorOf: event => event?.actor_name || event?.actorName,
+        dateOf: event => shortDate(event?.occurred_at || event?.occurredAt, true),
+        nextActionOf: nextAction ? event => (event?.no_plan ? '暂无计划' : (event?.next_action && event?.next_action !== timelineEventSummary(event) ? event.next_action : '')) : () => '',
+        emptyText,
+      });
+    }
+    if (!events.length) return `<div class="empty">${esc(emptyText)}</div>`;
+    return events.map(event => {
+      const title = timelineEventTitle(event);
+      const summary = timelineEventSummary(event);
+      const actor = event?.actor_name || event?.actorName || '';
+      const date = shortDate(event?.occurred_at || event?.occurredAt, true);
+      const nextLine = nextAction && event?.no_plan
+        ? '<br><strong>下一步：</strong>暂无计划'
+        : (nextAction && event?.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '');
+      const summaryHtml = summary ? `<p>${esc(summary)}${nextLine}</p>` : '';
+      return `<div class="timeline-item"><h4>${esc(title)}</h4>${summaryHtml}<time>${esc(actor)}${actor ? ' · ' : ''}${esc(date)}</time></div>`;
+    }).join('');
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -8999,7 +9026,7 @@
       })}
       <section class="development-history">
         <div class="insight-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div>${item.developmentHistory ? `<span class="pill ${item.developmentHistory.recycled ? 'amber' : ''}">${item.developmentHistory.recycled ? '曾退回线索池' : '历史已延续'}</span>` : ''}</div>
-        <div class="timeline">${developmentTimeline.length ? developmentTimeline.map(event => `<div class="timeline-item"><h4>${esc(timelineEventTitle(event))}</h4>${event.summary ? `<p>${esc(event.summary)}</p>` : ''}<time>${esc(event.actor_name || event.actorName || '')}${event.actor_name || event.actorName ? ' · ' : ''}${shortDate(event.occurred_at || event.occurredAt, true)}</time></div>`).join('') : '<div class="empty">暂无开发历史</div>'}</div>
+        <div class="timeline">${timelineItemsHtml(developmentTimeline, { emptyText: '暂无开发历史' })}</div>
       </section>
       ${showAssignmentDecisions ? `<section class="decision-review">
         <div class="insight-head"><div><p class="eyebrow">ASSIGNMENT ARBITRATION</p><h3>${showAI ? '分配三层裁决' : '分配裁决'}</h3></div>${showAI ? `<span class="pill ${item.arbitration?.candidateSnapshotId ? '' : 'gray'}">${item.arbitration?.candidateSnapshotId ? '已绑定候选快照' : '无可用快照'}</span>` : ''}</div>
@@ -9166,11 +9193,7 @@
         note: `${history.length} 条`,
         actionHtml: '<button class="text-button" data-open-timeline-modal>展开完整时间线</button>',
         bodyClass: 'timeline',
-        bodyHtml: history.map(event => {
-          const title = timelineEventTitle(event);
-          const summary = timelineEventSummary(event);
-          return `<div class="timeline-item"><h4>${esc(title)}</h4>${summary ? `<p>${esc(summary)}${event.no_plan ? '<br><strong>下一步：</strong>暂无计划' : (event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '')}</p>` : ''}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
-        }).join('') || '<div class="empty">暂无历史记录</div>',
+        bodyHtml: timelineItemsHtml(history, { emptyText: '暂无历史记录', nextAction: true }),
       })}
       ${insightSectionHtml({
         eyebrow: 'AUDIT TRAIL',
