@@ -7,9 +7,11 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const registryPath = path.join(root, 'sales-assets', 'widget-registry.js');
+const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
+const factsWidget = require(factsWidgetPath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -38,12 +40,16 @@ function makeContainer() {
   };
 }
 
-test('registry script is loaded on the sales shell before app.js', () => {
+test('registry script and facts widget are loaded on the sales shell before app.js', () => {
   assert.match(html, /sales-assets\/widget-registry\.js/);
-  const scriptIndex = html.indexOf('widget-registry.js');
+  assert.match(html, /sales-assets\/profile-facts-widget\.js/);
+  const factsIndex = html.indexOf('profile-facts-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
   const appIndex = html.indexOf('sales-assets/app.js');
-  assert.ok(scriptIndex > -1 && appIndex > -1 && scriptIndex < appIndex,
-    'widget-registry.js must be loaded before app.js');
+  assert.ok(factsIndex > -1 && appIndex > -1 && factsIndex < appIndex,
+    'profile-facts-widget.js and widget-registry.js must be loaded before app.js');
+  assert.ok(registryIndex > -1 && registryIndex > factsIndex,
+    'widget-registry.js must load before app.js');
 });
 
 test('registry UMD exposes register/unregister/has/list/clear/widgetsForPage/renderPage', () => {
@@ -172,23 +178,131 @@ test('app.js registers profile-facts and profile-contacts widgets for customerPr
   assert.match(source, /id: 'profile-contacts'/);
   assert.match(source, /order: 20/);
 
-  // 权限/开关门槛：contacts 以 contactsWidget 存在为 when，facts 以 schema 存在为 when
+  // 权限/开关门槛：contacts 以 contactsWidget 存在为 when，facts 以 factsWidget+schema 存在为 when
   assert.match(source, /when: ctx => Boolean\(ctx\.contactsWidget\)/);
-  assert.match(source, /when: ctx => Boolean\(ctx\.fieldWidget && ctx\.profileSchema\?\.fields\?\.length\)/);
+  assert.match(source, /when: ctx => Boolean\(ctx\.factsWidget && ctx\.fieldWidget && ctx\.profileSchema\?\.fields\?\.length\)/);
 
   // 装配委托注册表：renderPage 负责挂载，权限/开关从 ctx.permissions/ctx.features 注入
   assert.match(source, /registerProfilePageWidgets\(\)/);
   assert.match(source, /window\.TradePulseWidgetRegistry\.renderPage\(/);
   assert.match(source, /permissions: state\.data\?\.user\?\.permissions \|\| \{\}/);
   assert.match(source, /features: state\.data\?\.features \|\| \{\}/);
+
+  // 布局顺序：facts 先于 contacts（order 10 < 20），facts 事件响应后整页重挂载
+  assert.ok(source.indexOf('order: 10') < source.indexOf('order: 20'));
 });
 
-test('app.js keeps the profile-widgets UMD contract as widget render source', () => {
+test('app.js profile-facts widget delegates rendering and event to the facts widget', () => {
   const source = functionSource('renderProfileFactsWidget', 'renderProfileContactsWidget');
-  assert.match(source, /renderProfileFacts\(/);
-  assert.match(source, /data-profile-section-toggle/);
-  const contacts = functionSource('renderProfileContactsWidget', 'mountCustomerProfileWidgets');
-  assert.match(contacts, /mountContacts\(/);
-  assert.match(contacts, /customerId: ctx\.customerId/);
-  assert.match(contacts, /intakeItemId: ctx\.intakeItemId/);
+  // 模板/状态/事件下沉到 profile-facts-widget，app.js 只注入 ctx
+  assert.match(source, /ctx\.factsWidget\.render\(container/);
+  assert.match(source, /getAccount: \(\) => state\.data\?\.accounts\?\.find/);
+  assert.match(source, /fetchProfile: async \(\) =>/);
+  assert.match(source, /api\/sales-crm\/profile/);
+  assert.match(source, /fallbackPool: \(\) =>/);
+  assert.match(source, /buildFactsData: \(account, poolRecord\) => profileFactsData\(account, poolRecord\)/);
+  assert.match(source, /formatters: \(\) => profileFactsFormatters\(\)/);
+  assert.match(source, /onSectionsChanged/);
+  assert.match(source, /storageKey: ctx\.preferencesKey/);
+  assert.doesNotMatch(source, /data-profile-section-toggle/);
+  assert.doesNotMatch(source, /renderProfileFacts\(/);
+});
+
+test('app.js profile-contacts widget delegates contacts mounting to the contacts widget', () => {
+  const source = functionSource('renderProfileContactsWidget', 'mountCustomerProfileWidgets');
+  assert.match(source, /mountContacts\(/);
+  assert.match(source, /customerId: ctx\.customerId/);
+  assert.match(source, /intakeItemId: ctx\.intakeItemId/);
+});
+
+test('profile-facts widget owns preference state (load/save/toggle) with a storage shim', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, String(value)),
+  };
+  assert.deepEqual(factsWidget.defaultPreferences(), { hiddenSections: [] });
+  assert.deepEqual(factsWidget.loadPreferences('k', storage), { hiddenSections: [] });
+  const next = factsWidget.toggleSection('k', 'business_profile', storage);
+  assert.deepEqual(next, { hiddenSections: ['business_profile'] });
+  assert.deepEqual(factsWidget.loadPreferences('k', storage), { hiddenSections: ['business_profile'] });
+  const back = factsWidget.toggleSection('k', 'business_profile', storage);
+  assert.deepEqual(back, { hiddenSections: [] });
+  assert.deepEqual(factsWidget.loadPreferences('k', storage), { hiddenSections: [] });
+});
+
+test('profile-facts widget renders facts html and preference bar honoring hidden sections', () => {
+  const schema = {
+    fields: [
+      { key: 'customerId', label: '客户ID', section: 'identity_region', sourceKey: 'customerId', kind: 'text' },
+      { key: 'companyName', label: '公司名称', section: 'identity_region', sourceKey: 'companyName', kind: 'text' },
+      { key: 'email', label: '邮箱', section: 'contact_channels', sourceKey: 'email', kind: 'text' },
+    ],
+  };
+  const bareFieldWidget = {
+    renderProfileFacts: opts => {
+      const hidden = new Set(opts.preferences?.hiddenSections || []);
+      const visible = (opts.schema.fields || []).filter(f => !hidden.has(f.section || 'other'));
+      return `<facts>${visible.map(f => f.label).join('|')}</facts>`;
+    },
+    profileSections: (schema, preferences) => (schema.fields || [])
+      .reduce((acc, f) => {
+        const section = f.section || 'other';
+        if (preferences?.hiddenSections?.includes(section)) return acc;
+        if (!acc.find(g => g.section === section)) acc.push({ section, label: section, fields: [] });
+        acc.find(g => g.section === section).fields.push(f);
+        return acc;
+      }, []),
+  };
+  const preferences = { hiddenSections: ['contact_channels'] };
+  const factsHtml = factsWidget.renderFactsHtml({
+    fieldWidget: bareFieldWidget, schema, data: {}, preferences,
+  });
+  assert.equal(factsHtml, '<facts>客户ID|公司名称</facts>');
+
+  const barHtml = factsWidget.renderPreferenceBarHtml({
+    fieldWidget: bareFieldWidget, schema, preferences,
+  });
+  assert.match(barHtml, /identity_region/);
+  assert.match(barHtml, /隐藏 identity_region/);
+  assert.doesNotMatch(barHtml, /contact_channels/);
+});
+
+test('profile-facts widget render mounts facts + bar into a container and binds toggle re-render', async () => {
+  const schema = {
+    fields: [
+      { key: 'name', label: '名称', section: 'identity_region', sourceKey: 'name', kind: 'text' },
+    ],
+  };
+  const bareFieldWidget = {
+    renderProfileFacts: opts => opts.preferences?.hiddenSections?.length ? '' : '<facts></facts>',
+    profileSections: opts => opts.preferences?.hiddenSections?.length ? [] : [{ section: 'identity_region', label: '身份与地区', fields: [] }],
+  };
+  let remountCalls = 0;
+  const container = makeContainer();
+  // document/document.createElement 由 node 环境找不到：用最小 DOM 垫片
+  const documentShim = {
+    createElement() {
+      return { className: '', innerHTML: '', children: [], addEventListener() {} };
+    },
+  };
+  const originalDocument = globalThis.document;
+  globalThis.document = documentShim;
+  try {
+    await factsWidget.render(container, {
+      fieldWidget: bareFieldWidget,
+      schema,
+      storageKey: 'k',
+      getAccount: () => null,
+      fetchProfile: null,
+      fallbackPool: () => null,
+      buildFactsData: () => ({}),
+      formatters: () => ({}),
+      onSectionsChanged: () => { remountCalls += 1; },
+    });
+  } finally {
+    if (originalDocument) globalThis.document = originalDocument; else delete globalThis.document;
+  }
+  assert.equal(remountCalls, 0);
+  assert.ok(container.children.length >= 1);
 });
