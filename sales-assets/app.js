@@ -3319,6 +3319,17 @@
     </section>`;
   }
 
+  // 下一步/状态条 HTML（widget 优先，缺 widget 时内联回退到逐字节一致模板）。
+  // ctx：{ eyebrow, text, actionHtml, className }。
+  function nextStepHtml({ eyebrow, text, actionHtml = '', className = '' } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseNextStepWidget : null;
+    if (widget && typeof widget.renderStepHtml === 'function') {
+      return widget.renderStepHtml({ eyebrow, text, actionHtml, className });
+    }
+    const cls = className ? ` ${esc(className)}` : '';
+    return `<div class="next-step${cls}"><div><span class="eyebrow">${esc(eyebrow || '')}</span><p>${esc(text || '')}</p></div>${actionHtml}</div>`;
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -8935,7 +8946,11 @@
       ...(showTechnicalSources ? [['推荐结论', recommendation]] : []),
     ];
     $('#drawerContent').innerHTML = `
-      <div class="next-step"><div><span class="eyebrow">LEAD PROFILE</span><p>${esc(item.reviewVagueHint || '查看企业背景、需求依据和完整开发历史。')}</p></div><div class="assignment-actions"><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span>${assignmentAction}</div></div>
+      ${nextStepHtml({
+        eyebrow: 'LEAD PROFILE',
+        text: item.reviewVagueHint || '查看企业背景、需求依据和完整开发历史。',
+        actionHtml: `<div class="assignment-actions"><span class="pill amber">${esc(intakeStatusLabel(item.status))}</span>${assignmentAction}</div>`,
+      })}
       ${customerTags.length ? `<div class="customer-tag-row">${customerTags.map(tag => `<span class="pill gray">${esc(tag.name || tag)}</span>`).join('')}</div>` : ''}
       <div class="account-facts">
         ${drawerFactsFallbackHtml(intakeFacts)}
@@ -9068,10 +9083,11 @@
       readOnly: true,
     });
     $('#drawerContent').innerHTML = `
-      <div class="next-step">
-        <div><span class="eyebrow">RECYCLED CUSTOMER · READ ONLY</span><p>${esc(recycle.reason || '未填写回收原因')}</p></div>
-        <span class="pill amber">${esc(recycleKindLabel)}</span>
-      </div>
+      ${nextStepHtml({
+        eyebrow: 'RECYCLED CUSTOMER · READ ONLY',
+        text: recycle.reason || '未填写回收原因',
+        actionHtml: `<span class="pill amber">${esc(recycleKindLabel)}</span>`,
+      })}
       <div class="account-facts">
         ${drawerFactsFallbackHtml([
           ['当前状态', '回收站客户'], ['回收类型', recycleKindLabel],
@@ -10091,7 +10107,11 @@
     $('#drawerContent').innerHTML = `
       ${hasMeaningfulAlertCopy(alert) ? `<div class="next-step" style="border-color:${alert.severity === 'critical' ? '#e0a09c' : '#e5c27c'}"><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div><span class="pill ${alert.severity === 'critical' ? 'red' : 'amber'}">${esc(alert.action)}</span></div>` : ''}
       ${alert && alertReasons(alert).length > 1 ? `<div class="alert-details"><span class="eyebrow">异常明细</span>${alertReasons(alert).map(reason => `<div class="alert-detail-row"><strong>${esc(reason.title)}</strong><p>${esc(reason.detail)}</p><span>${reason.dueAt ? `计划时间：${esc(shortDate(reason.dueAt, true))}` : ''}${Number(reason.overdueHours) > 0 ? ` · 已超时 ${Math.floor(Number(reason.overdueHours))} 小时` : ''}${reason.action ? ` · ${esc(reason.action)}` : ''}</span></div>`).join('')}</div>` : ''}
-      <div class="next-step"><div><span class="eyebrow">NEXT ACTION</span><p>${esc(account.next_action || '尚未填写下一步')}</p></div>${nextActionTimeMarkup(account)}</div>
+      ${nextStepHtml({
+        eyebrow: 'NEXT ACTION',
+        text: account.next_action || '尚未填写下一步',
+        actionHtml: nextActionTimeMarkup(account),
+      })}
       ${sourceTagMarkup(account)}
       <div class="account-facts">
         ${factsHtml}

@@ -70,7 +70,7 @@ test('ordinary CRM drawer keeps exact plan time beside a relative countdown', ()
   assert.match(appSource, /nextActionTime\?\.describeNextActionTime/);
   assert.match(appSource, /data-next-action-time/);
   assert.match(appSource, /<time>\$\{esc\(accurate\)\}<\/time>/);
-  assert.match(appSource, /\$\{nextActionTimeMarkup\(account\)\}/);
+  assert.match(appSource, /nextActionTimeMarkup\(account\)/);
 });
 
 test('drawer timer refreshes only each minute and follows drawer and page visibility', () => {
@@ -182,7 +182,7 @@ function executableDrawerLifecycle() {
     'drawerFactMarkup', 'customerAiSection', 'can', 'canReturnCustomer',
     'canRejectCustomer', 'renderActivityTimelineItem', 'nextActionTimeMarkup',
     'accountStageOf', 'managerStateDisplay', 'registerProfilePageWidgets', 'drawerFactsContext',
-    'masterProfileSectionHtml',
+    'masterProfileSectionHtml', 'nextStepHtml',
   ];
   const identity = value => String(value || '');
   const dependencyValues = [
@@ -194,6 +194,7 @@ function executableDrawerLifecycle() {
     account => account?.stage || account?.state?.stage?.key || '',
     () => {},
     () => ({ drawerFactsWidget: null, fieldWidget: null, schema: null, data: {}, formatters: {}, fallback: [] }),
+    () => '',
     () => '',
   ];
   const compile = Function(

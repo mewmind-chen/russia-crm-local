@@ -12,6 +12,7 @@ const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js'
 const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
 const masterProfilePath = path.join(root, 'sales-assets', 'master-profile-widget.js');
 const insightSectionPath = path.join(root, 'sales-assets', 'insight-section-widget.js');
+const nextStepPath = path.join(root, 'sales-assets', 'next-step-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
@@ -20,6 +21,7 @@ const drawerFactsWidget = require(drawerFactsPath);
 const drawerAiWidget = require(drawerAiPath);
 const masterProfileWidget = require(masterProfilePath);
 const insightSectionWidget = require(insightSectionPath);
+const nextStepWidget = require(nextStepPath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -592,4 +594,57 @@ test('app.js insightSectionHtml delegates to widget and recycle drawer composes 
   assert.match(recycle, /eyebrow: 'AUDIT TRAIL'/);
   assert.match(recycle, /bodyClass: 'timeline'/);
   assert.doesNotMatch(recycle, /<section class="insight-section">/);
+});
+
+test('next-step widget is loaded on shell before app.js and exposes step markup helpers', () => {
+  assert.match(html, /sales-assets\/next-step-widget\.js/);
+  const nextStepIndex = html.indexOf('next-step-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(nextStepIndex > -1 && nextStepIndex < appIndex && nextStepIndex < registryIndex,
+    'next-step-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof nextStepWidget.renderStepHtml, 'function');
+  assert.equal(typeof nextStepWidget.render, 'function');
+  assert.equal(typeof nextStepWidget.escapeHtml, 'function');
+});
+
+test('next-step widget renders the shared step shell with escaped eyebrow/text and safe action html', () => {
+  const htmlOut = nextStepWidget.renderStepHtml({
+    eyebrow: '<b>NEXT ACTION</b>',
+    text: 'Follow up',
+    actionHtml: '<span class="pill amber">待跟进</span>',
+    className: 'bordered',
+  });
+  assert.match(htmlOut, /class="next-step bordered"/);
+  assert.match(htmlOut, /&lt;b&gt;NEXT ACTION&lt;\/b&gt;/);
+  assert.match(htmlOut, /<p>Follow up<\/p>/);
+  assert.match(htmlOut, /<span class="pill amber">待跟进<\/span>/);
+
+  const bare = nextStepWidget.renderStepHtml({ eyebrow: 'LEAD PROFILE', text: '' });
+  assert.match(bare, /class="next-step"/);
+  assert.doesNotMatch(bare, /class="next-step /);
+  assert.match(bare, /LEAD PROFILE/);
+  assert.doesNotMatch(bare, /<span class="pill/);
+});
+
+test('app.js nextStepHtml delegates to widget and three drawer sources compose steps', () => {
+  const helper = functionSource('nextStepHtml', 'mountCustomerProfileWidgets');
+  assert.match(helper, /TradePulseNextStepWidget/);
+  assert.match(helper, /renderStepHtml\(/);
+  assert.match(helper, /<div class="next-step/);
+
+  const renderDrawer = functionSource('renderDrawer', 'stopDrawerNextActionTimer');
+  assert.match(renderDrawer, /nextStepHtml\(\{/);
+  assert.match(renderDrawer, /eyebrow: 'NEXT ACTION'/);
+  assert.match(renderDrawer, /nextActionTimeMarkup\(account\)/);
+  assert.doesNotMatch(renderDrawer, /<div class="next-step">/);
+
+  const intake = functionSource('openIntakeProfile', 'closeDrawer');
+  assert.match(intake, /nextStepHtml\(\{/);
+  assert.match(intake, /eyebrow: 'LEAD PROFILE'/);
+
+  const recycle = functionSource('renderRecycleDrawer', 'correctionActivityId');
+  assert.match(recycle, /nextStepHtml\(\{/);
+  assert.match(recycle, /eyebrow: 'RECYCLED CUSTOMER · READ ONLY'/);
+  assert.doesNotMatch(recycle, /<div class="next-step">/);
 });
