@@ -3174,6 +3174,13 @@
       render: renderProfileInsightWidget,
     });
     registerIfMissing({
+      id: 'profile-next-step',
+      pages: ['customerProfile'],
+      order: 29,
+      when: ctx => Boolean(ctx.account),
+      render: renderProfileNextStepWidget,
+    });
+    registerIfMissing({
       id: 'customer-ai-station',
       pages: ['customerProfile'],
       order: 30,
@@ -3277,6 +3284,19 @@
       bodyHtml: evaluations.length ? evaluations.map(item => `<article class="evaluation-card manager-note"><div class="evaluation-meta"><span>${esc(item.subjectName || item.authorName || '客户经营复盘')}</span><time>${shortDate(item.createdAt, true)}</time></div><div class="evaluation-text">${esc(item.evaluationText || '—')}</div></article>`).join('') : '<div class="empty">暂无客户经营复盘</div>',
     });
     return [{ id: 'profile-insight', status: 'mounted' }];
+  }
+
+  // —— customerProfile 完整资料页下一步/状态条 widget ——
+  // 复用 nextStepHtml（与 CRM/线索/回收抽屉共用同一状态条模板）。
+  function renderProfileNextStepWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const account = ctx.account;
+    container.innerHTML = nextStepHtml({
+      eyebrow: 'NEXT ACTION',
+      text: account.next_action || '尚未填写下一步',
+      actionHtml: nextActionTimeMarkup(account),
+    });
+    return [{ id: 'profile-next-step', status: 'mounted' }];
   }
 
   // —— CRM 抽屉客户事实区 widget 的 ctx 与 render ——

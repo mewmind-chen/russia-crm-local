@@ -802,3 +802,17 @@ test('app.js registers profile-insight widget and delegates to the shared insigh
   assert.match(renderer, /eyebrow: 'MANAGER INSIGHT'/);
   assert.match(renderer, /客户经营复盘历史/);
 });
+
+test('app.js registers profile-next-step widget and delegates to the shared next-step bar', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'profile-next-step'/);
+  assert.match(register, /pages: \['customerProfile'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.account\)/);
+  assert.match(register, /render: renderProfileNextStepWidget/);
+
+  const renderer = functionSource('renderProfileNextStepWidget', 'drawerFactsContext');
+  assert.match(renderer, /nextStepHtml\(\{/);
+  assert.match(renderer, /eyebrow: 'NEXT ACTION'/);
+  assert.match(renderer, /next_action \|\| '尚未填写下一步'/);
+  assert.match(renderer, /nextActionTimeMarkup\(account\)/);
+});
