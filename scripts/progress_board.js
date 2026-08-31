@@ -281,10 +281,11 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'widget 注册表已落地（2d98eea，UMD + register/renderPage + permission/feature/when 门槛 + 错误隔离）；customerProfile 已改注册表组装（profile-facts/profile-contacts）。',
+      summary: 'widget 注册表已落地（2d98eea）；profile-facts 已抽为自包含 UMD widget（41a722e，自持模板/偏好状态/区段显隐事件）。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
+        ['frontend', 'profile-facts 抽为自包含 UMD widget（模板/偏好/事件下沉）', '41a722e', ''],
       ],
       pending: [
         ['frontend', '其余 widget 化：身份/业务画像/洞察/时间线/商务/下一步/回收/AI 区域', '', ''],
