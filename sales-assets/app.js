@@ -3256,6 +3256,35 @@
     return [{ id: 'drawer-ai', status: 'mounted' }];
   }
 
+  function masterProfileContext(kind, payload = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseMasterProfileWidget : null;
+    return { masterProfileWidget: widget, kind, ...payload };
+  }
+
+  function renderMasterProfileSection(container, ctx) {
+    if (!ctx.masterProfileWidget || !container) return [];
+    container.innerHTML = ctx.masterProfileWidget.renderMasterSectionHtml(ctx);
+    return [{ id: `master-profile:${ctx.kind || 'unknown'}`, status: 'mounted' }];
+  }
+
+  // 客户主档区 HTML（widget 优先，缺 widget 时内联回退到逐字节一致模板）。
+  // ctx：{ eyebrow, title, actions, gridClass, rows }，rows 为
+  // [[label, valueHtml, cardClass]]，valueHtml 为调用方已过滤的安全 HTML。
+  function masterProfileSectionHtml({ eyebrow, title, actions = '', gridClass = '', rows = [] } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseMasterProfileWidget : null;
+    if (widget && typeof widget.renderMasterSectionHtml === 'function') {
+      return widget.renderMasterSectionHtml({ eyebrow, title, actions, gridClass, rows });
+    }
+    const cards = rows.map(([label, value, cardClass = '']) => {
+      const cls = cardClass ? ` class="${esc(cardClass)}"` : '';
+      return `<div${cls}><span>${esc(label)}</span><p>${value || '<span class="tp-empty-value">—</span>'}</p></div>`;
+    }).join('');
+    return `<section class="master-profile">
+      <div class="insight-head"><div><p class="eyebrow">${esc(eyebrow || 'CUSTOMER MASTER DATA')}</p><h3>${esc(title || '')}</h3></div>${actions}</div>
+      <div class="master-profile-grid${gridClass ? ` ${esc(gridClass)}` : ''}">${cards}</div>
+    </section>`;
+  }
+
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
     const widgetRoot = $('#profileWidgetRoot');
     if (!widgetRoot) return;
@@ -8869,16 +8898,17 @@
       <div class="account-facts">
         ${intakeFacts.map(([label, value]) => `<div class="fact"><span>${label}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
-      <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${showTechnicalSources && item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div></div>
-        <div class="master-profile-grid">
-          <div class="wide"><span>企业背景</span><p>${esc(item.master_description || '暂无企业简介')}</p></div>
-          <div><span>主营产品</span><p>${esc(item.master_products || item.product_focus || '暂无产品信息')}</p></div>
-          <div><span>潜在需求</span><p>${esc(item.product_focus || item.master_products || '待进一步确认')}</p></div>
-          ${item.status === 'returned' ? `<div class="wide"><span>退回原因</span><p>${esc(item.return_reason || '未填写')}</p></div>` : ''}
-          ${showTechnicalSources ? `<div class="wide"><span>研究与来源证据</span><p>${evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : esc(item.source_file || item.batch_source || '暂无关联证据')}</p></div>` : ''}
-        </div>
-      </section>
+      ${masterProfileSectionHtml({
+        title: '企业背景与开发依据',
+        actions: `<div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${showTechnicalSources && item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div>`,
+        rows: [
+          ['企业背景', esc(item.master_description || '暂无企业简介'), 'wide'],
+          ['主营产品', esc(item.master_products || item.product_focus || '暂无产品信息')],
+          ['潜在需求', esc(item.product_focus || item.master_products || '待进一步确认')],
+          ...(item.status === 'returned' ? [['退回原因', esc(item.return_reason || '未填写'), 'wide']] : []),
+          ...(showTechnicalSources ? [['研究与来源证据', evidence.length ? evidence.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`).join('<br>') : esc(item.source_file || item.batch_source || '暂无关联证据'), 'wide']] : []),
+        ],
+      })}
       <section class="development-history">
         <div class="insight-head"><div><p class="eyebrow">DEVELOPMENT HISTORY</p><h3>开发历史</h3></div>${item.developmentHistory ? `<span class="pill ${item.developmentHistory.recycled ? 'amber' : ''}">${item.developmentHistory.recycled ? '曾退回线索池' : '历史已延续'}</span>` : ''}</div>
         <div class="timeline">${developmentTimeline.length ? developmentTimeline.map(event => `<div class="timeline-item"><h4>${esc(timelineEventTitle(event))}</h4>${event.summary ? `<p>${esc(event.summary)}</p>` : ''}<time>${esc(event.actor_name || event.actorName || '')}${event.actor_name || event.actorName ? ' · ' : ''}${shortDate(event.occurred_at || event.occurredAt, true)}</time></div>`).join('') : '<div class="empty">暂无开发历史</div>'}</div>
@@ -9011,15 +9041,16 @@
           ['客户主档编号', account.external_customer_id || master.customerId || '—'],
         ].map(([label, value]) => `<div class="fact"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`).join('')}
       </div>
-      <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>客户主档</h3></div><span class="pill gray">只读</span></div>
-        <div class="master-profile-grid">
-          <div><span>企业简介</span><p>${esc(master.description || account.master_description || '暂无企业简介')}</p></div>
-          <div><span>行业与客户类型</span><p>${esc([master.industry || account.industry, master.customerType || account.customer_type].filter(Boolean).join(' · ') || '未标注')}</p></div>
-          <div><span>产品与潜在需求</span><p>${esc(master.products || account.product_focus || '未标注')}</p></div>
-          <div><span>官网与地区</span><p>${esc([master.website || account.website, master.country || account.country, master.city || account.city].filter(Boolean).join(' · ') || '未标注')}</p></div>
-        </div>
-      </section>
+      ${masterProfileSectionHtml({
+        title: '客户主档',
+        actions: '<span class="pill gray">只读</span>',
+        rows: [
+          ['企业简介', esc(master.description || account.master_description || '暂无企业简介')],
+          ['行业与客户类型', esc([master.industry || account.industry, master.customerType || account.customer_type].filter(Boolean).join(' · ') || '未标注')],
+          ['产品与潜在需求', esc(master.products || account.product_focus || '未标注')],
+          ['官网与地区', esc([master.website || account.website, master.country || account.country, master.city || account.city].filter(Boolean).join(' · ') || '未标注')],
+        ],
+      })}
       <div class="commerce-strip recycle-commerce-strip">
         <div class="commerce-card"><span>跟进</span><strong>${activities.length}</strong></div>
       </div>
@@ -10009,14 +10040,16 @@
       <div class="account-facts">
         ${factsHtml}
       </div>
-      <section class="master-profile">
-        <div class="insight-head"><div><p class="eyebrow">CUSTOMER MASTER DATA</p><h3>企业背景与开发依据</h3></div><button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button></div>
-        <div class="master-profile-grid drawer-master-grid">
-          <div class="drawer-master-card-wide"><span>企业简介</span><p>${esc(account.master_description || '暂无企业简介')}</p></div>
-          <div><span>产品与潜在需求</span><p>${esc(account.product_focus || '未标注')}</p></div>
-          ${showTechnicalSources ? `<div><span>背调与来源</span><p>${esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')}</p></div>` : ''}
-        </div>
-      </section>
+      ${masterProfileSectionHtml({
+        title: '企业背景与开发依据',
+        actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+        gridClass: 'drawer-master-grid',
+        rows: [
+          ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
+          ['产品与潜在需求', esc(account.product_focus || '未标注')],
+          ...(showTechnicalSources ? [['背调与来源', esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')]] : []),
+        ],
+      })}
       ${customerAiSection(state.drawerAiContext)}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}

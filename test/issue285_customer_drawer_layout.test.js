@@ -8,6 +8,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'sales-assets/app.js'), 'utf8');
 const cssSource = fs.readFileSync(path.join(root, 'sales-assets/app.css'), 'utf8');
+const masterProfileWidget = require('../sales-assets/master-profile-widget');
 
 function functionSource(name, nextName) {
   const start = appSource.indexOf(`  function ${name}(`);
@@ -69,10 +70,24 @@ function cssBlock(prefix) {
 
 test('CRM drawer keeps business cards for sales and adds the technical source card for managers', () => {
   const drawer = functionSource('renderDrawer', 'openModal');
-  const section = drawer.match(/<section class="master-profile">[\s\S]*?<\/section>/)?.[0] || '';
-  const tree = parseMarkup(section.replace(/\$\{[\s\S]*?\}/g, '__VALUE__'));
-  const grid = findByClass(tree, 'drawer-master-grid');
+  const master = drawer.match(/masterProfileSectionHtml\(\{[\s\S]*?\n      \}\)\}/)?.[0] || '';
+  // 主档区块经 masterProfileSectionHtml 委托渲染：gridClass 与业务卡片在调用处组装
+  assert.match(master, /gridClass: 'drawer-master-grid'/);
+  assert.match(master, /\[企业简介|'企业简介'/);
+  assert.match(master, /\[产品与潜在需求|'产品与潜在需求'/);
+  assert.match(master, /showTechnicalSources \? \[\['背调与来源'/);
+  assert.doesNotMatch(master, /行业与客户类型/, '#286 duplicate card must remain removed');
 
+  // 模板保真：drawer-master-grid 网格、master-profile-grid 基类、首卡 drawer-master-card-wide
+  const section = masterProfileWidget.renderMasterSectionHtml({
+    gridClass: 'drawer-master-grid',
+    rows: [
+      ['企业简介', '__intro__', 'drawer-master-card-wide'],
+      ['产品与潜在需求', '__focus__'],
+    ],
+  });
+  const tree = parseMarkup(section);
+  const grid = findByClass(tree, 'drawer-master-grid');
   assert.ok(grid, 'CRM drawer must use its drawer-specific grid class');
   assert.ok(grid.classes.includes('master-profile-grid'), 'existing master-profile styling must remain');
   assert.equal(grid.children.length, 2);
@@ -82,12 +97,10 @@ test('CRM drawer keeps business cards for sales and adds the technical source ca
   );
   assert.ok(grid.children[0].classes.includes('drawer-master-card-wide'));
   assert.ok(grid.children.slice(1).every(card => !card.classes.includes('drawer-master-card-wide')));
-  assert.match(drawer, /\$\{showTechnicalSources \? `<div><span>背调与来源<\/span>/);
 
   // #286 website 事实渲染保留：官网 website 链接行在 drawer-facts-widget 的 fallback（drawerFactsContext）
   assert.match(appSource, /\['官网', account\.website, 'website'\]/, '#286 website rendering must remain');
   assert.match(appSource, /drawerFactsContext\(account, showTechnicalSources\)/);
-  assert.doesNotMatch(section, /行业与客户类型/, '#286 duplicate card must remain removed');
 });
 
 test('drawer-specific CSS creates a responsive two-column layout without fixed card heights', () => {
@@ -113,6 +126,9 @@ test('drawer-specific CSS creates a responsive two-column layout without fixed c
 test('drawer layout classes do not leak into other master profile grids', () => {
   const drawer = functionSource('renderDrawer', 'openModal');
   const outsideDrawer = appSource.replace(drawer, '');
+  // drawer 专属网格类只在 renderDrawer 的 masterProfileSectionHtml 调用中作为参数出现
   assert.doesNotMatch(outsideDrawer, /drawer-master-(?:grid|card-wide)/);
-  assert.ok((outsideDrawer.match(/class="master-profile-grid"/g) || []).length >= 2);
+  // 其他主档区块（intake/recycle）经同一 masterProfileSectionHtml 渲染，不附加 drawer 专属类
+  assert.match(appSource, /masterProfileSectionHtml\(\{/);
+  assert.match(outsideDrawer, /masterProfileSectionHtml\(\{/);
 });

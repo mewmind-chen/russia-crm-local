@@ -26,7 +26,7 @@ test('activity modal converts stored plans into the business timezone', () => {
 test('lead drawer follows the accepted master-data and history structure', () => {
   const drawer = section(app, 'function openIntakeProfile', 'function closeDrawer');
   assert.match(drawer, /分配客户/);
-  assert.match(drawer, /CUSTOMER MASTER DATA/);
+  assert.match(drawer, /masterProfileSectionHtml\(\{/);
   assert.match(drawer, /企业背景与开发依据/);
   assert.match(drawer, /潜在需求/);
   assert.match(drawer, /开发历史/);

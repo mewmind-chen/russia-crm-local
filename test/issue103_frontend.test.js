@@ -65,6 +65,6 @@ test('Issue #103 preserves the AI gate and applies one return eligibility rule e
 });
 
 test('Issue #103 shows returned reasons in list and lead details', () => {
-  assert.match(js, /item\.status === 'returned' \? `<div class="wide"><span>退回原因<\/span><p>\$\{esc\(item\.return_reason \|\| '未填写'\)\}/);
+  assert.match(js, /item\.status === 'returned' \? \[\['退回原因', esc\(item\.return_reason \|\| '未填写'\), 'wide'\]\]/);
   assert.match(js, /esc\(item\.return_reason \|\| ''\)/);
 });

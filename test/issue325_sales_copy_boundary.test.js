@@ -61,7 +61,7 @@ test('sales intake and customer drawers suppress technical AI and source section
   assert.match(intake, /showTechnicalSources/);
   assert.match(intake, /\.\.\.\(showTechnicalSources \? \[\['推荐结论'/);
   assert.match(intake, /showTechnicalSources && item\.report_url/);
-  assert.match(intake, /showTechnicalSources \? `<div class="wide"><span>研究与来源证据/);
+  assert.match(intake, /showTechnicalSources \? \[\['研究与来源证据'/);
 
   const assistant = functionBlock(app, 'customerAiSection');
   assert.match(assistant, /drawerAiContext\(context\)/);

@@ -10,12 +10,14 @@ const registryPath = path.join(root, 'sales-assets', 'widget-registry.js');
 const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js');
 const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js');
 const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
+const masterProfilePath = path.join(root, 'sales-assets', 'master-profile-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
 const factsWidget = require(factsWidgetPath);
 const drawerFactsWidget = require(drawerFactsPath);
 const drawerAiWidget = require(drawerAiPath);
+const masterProfileWidget = require(masterProfilePath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -426,4 +428,65 @@ test('app.js registers drawer-ai widget on crmDrawer page and customerAiSection 
   assert.match(section, /drawerAiContext\(context\)/);
   assert.match(section, /renderCustomerAiSectionHtml\(drawerAi\)/);
   assert.doesNotMatch(section, /<section class="customer-ai">/);
+});
+
+test('master-profile widget is loaded on shell before app.js and exposes section helpers', () => {
+  assert.match(html, /sales-assets\/master-profile-widget\.js/);
+  const masterIndex = html.indexOf('master-profile-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(masterIndex > -1 && masterIndex < appIndex && masterIndex < registryIndex,
+    'master-profile-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof masterProfileWidget.renderMasterSectionHtml, 'function');
+  assert.equal(typeof masterProfileWidget.render, 'function');
+  assert.equal(typeof masterProfileWidget.cardMarkup, 'function');
+  assert.equal(typeof masterProfileWidget.escapeHtml, 'function');
+});
+
+test('master-profile widget renders section with escaped labels, safe value html and optional classes', () => {
+  const htmlOut = masterProfileWidget.renderMasterSectionHtml({
+    title: '<b>企业背景</b>',
+    actions: '<button class="button secondary tiny" type="button">查看完整资料</button>',
+    gridClass: 'drawer-master-grid',
+    rows: [
+      ['企业简介', '__intro__', 'drawer-master-card-wide'],
+      ['产品与潜在需求', '__focus__'],
+      ['背调与来源', '<a href="https://safe.example/x">证据</a>'],
+    ],
+  });
+  assert.match(htmlOut, /<section class="master-profile">/);
+  assert.match(htmlOut, /&lt;b&gt;企业背景&lt;\/b&gt;/);
+  assert.match(htmlOut, /class="master-profile-grid drawer-master-grid"/);
+  assert.match(htmlOut, /class="drawer-master-card-wide"/);
+  assert.match(htmlOut, /<span>企业简介<\/span>/);
+  assert.match(htmlOut, /<a href="https:\/\/safe\.example\/x">证据<\/a>/);
+  assert.match(htmlOut, /<button class="button secondary tiny"/);
+
+  const empty = masterProfileWidget.renderMasterSectionHtml({});
+  assert.match(empty, /<section class="master-profile">/);
+  assert.match(empty, /class="master-profile-grid"/);
+  assert.doesNotMatch(empty, /class="master-profile-grid /);
+  assert.doesNotMatch(empty, /<div class="tp-/);
+});
+
+test('app.js masterProfileSectionHtml delegates to widget and three drawer sources compose rows', () => {
+  const helper = functionSource('masterProfileSectionHtml', 'mountCustomerProfileWidgets');
+  assert.match(helper, /TradePulseMasterProfileWidget/);
+  assert.match(helper, /renderMasterSectionHtml\(/);
+  assert.match(helper, /<section class="master-profile">/);
+
+  const renderDrawer = functionSource('renderDrawer', 'stopDrawerNextActionTimer');
+  assert.match(renderDrawer, /masterProfileSectionHtml\(\{/);
+  assert.match(renderDrawer, /gridClass: 'drawer-master-grid'/);
+  assert.match(renderDrawer, /drawer-master-card-wide/);
+
+  const intake = functionSource('openIntakeProfile', 'closeDrawer');
+  assert.match(intake, /masterProfileSectionHtml\(\{/);
+  assert.match(intake, /\['企业背景', esc\(item\.master_description/);
+  assert.match(intake, /\['潜在需求', esc\(item\.product_focus/);
+
+  const recycle = functionSource('renderRecycleDrawer', 'correctionActivityId');
+  assert.match(recycle, /masterProfileSectionHtml\(\{/);
+  assert.match(recycle, /\['行业与客户类型', esc\(\[master\.industry \|\| account\.industry/);
+  assert.match(recycle, /title: '客户主档'/);
 });
