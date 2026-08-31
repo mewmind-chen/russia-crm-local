@@ -9,11 +9,13 @@ const root = path.join(__dirname, '..');
 const registryPath = path.join(root, 'sales-assets', 'widget-registry.js');
 const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js');
 const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js');
+const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const registry = require(registryPath);
 const factsWidget = require(factsWidgetPath);
 const drawerFactsWidget = require(drawerFactsPath);
+const drawerAiWidget = require(drawerAiPath);
 
 function functionSource(name, nextName) {
   const start = Math.max(
@@ -370,4 +372,58 @@ test('app.js registers drawer-facts widget on crmDrawer page and delegates throu
 
   const renderer = functionSource('renderDrawerFactsWidget', 'mountCustomerProfileWidgets');
   assert.match(renderer, /renderFactsHtml\(ctx\)/);
+});
+
+test('drawer-ai widget is loaded on shell before app.js and exposes section markup helpers', () => {
+  assert.match(html, /sales-assets\/drawer-ai-widget\.js/);
+  const drawerAiIndex = html.indexOf('drawer-ai-widget.js');
+  const registryIndex = html.indexOf('widget-registry.js');
+  const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(drawerAiIndex > -1 && drawerAiIndex < appIndex && drawerAiIndex < registryIndex,
+    'drawer-ai-widget.js must load before widget-registry.js and app.js');
+  assert.equal(typeof drawerAiWidget.renderCustomerAiSectionHtml, 'function');
+  assert.equal(typeof drawerAiWidget.render, 'function');
+  assert.equal(typeof drawerAiWidget.escapeHtml, 'function');
+});
+
+test('drawer-ai widget renders AI Q&A section only when enabled + canUseAi, escaping company name', () => {
+  const htmlEnabled = drawerAiWidget.renderCustomerAiSectionHtml({
+    enabled: true, canUseAi: true, companyName: 'ACME',
+  });
+  assert.match(htmlEnabled, /class="customer-ai"/);
+  assert.match(htmlEnabled, /id="drawerAiForm"/);
+  assert.match(htmlEnabled, /ACME/);
+  assert.match(htmlEnabled, /drawerAiAnswer|可以直接询问/);
+
+  const htmlXss = drawerAiWidget.renderCustomerAiSectionHtml({
+    enabled: true, canUseAi: true, companyName: '<b>ACME</b>',
+  });
+  assert.match(htmlXss, /&lt;b&gt;ACME&lt;\/b&gt;/);
+
+  assert.equal(drawerAiWidget.renderCustomerAiSectionHtml({
+    enabled: false, canUseAi: true, companyName: 'ACME',
+  }), '');
+  assert.equal(drawerAiWidget.renderCustomerAiSectionHtml({
+    enabled: true, canUseAi: false, companyName: 'ACME',
+  }), '');
+  assert.equal(drawerAiWidget.renderCustomerAiSectionHtml({}), '');
+});
+
+test('app.js registers drawer-ai widget on crmDrawer page and customerAiSection delegates to it', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  assert.match(register, /id: 'drawer-ai'/);
+  assert.match(register, /pages: \['crmDrawer'\]/);
+  assert.match(register, /when: ctx => Boolean\(ctx\.drawerAiWidget\)/);
+
+  const ctxSource = functionSource('drawerAiContext', 'renderDrawerAiWidget');
+  assert.match(ctxSource, /drawerAiWidget/);
+  assert.match(ctxSource, /enabled: technicalAIPresentationAllowed\(\) && can\('use_ai_assistant'\)/);
+
+  const renderer = functionSource('renderDrawerAiWidget', 'mountCustomerProfileWidgets');
+  assert.match(renderer, /renderCustomerAiSectionHtml\(ctx\)/);
+
+  const section = functionSource('customerAiSection', 'openIntakeProfile');
+  assert.match(section, /drawerAiContext\(context\)/);
+  assert.match(section, /renderCustomerAiSectionHtml\(drawerAi\)/);
+  assert.doesNotMatch(section, /<section class="customer-ai">/);
 });

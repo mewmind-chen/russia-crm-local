@@ -3155,6 +3155,13 @@
       when: ctx => Boolean(ctx.drawerFactsWidget),
       render: renderDrawerFactsWidget,
     });
+    registerIfMissing({
+      id: 'drawer-ai',
+      pages: ['crmDrawer'],
+      order: 30,
+      when: ctx => Boolean(ctx.drawerAiWidget),
+      render: renderDrawerAiWidget,
+    });
   }
 
   async function renderProfileFactsWidget(container, ctx) {
@@ -3229,6 +3236,24 @@
     if (!ctx.drawerFactsWidget || !container) return [];
     container.innerHTML = ctx.drawerFactsWidget.renderFactsHtml(ctx);
     return [{ id: 'drawer-facts', status: 'mounted' }];
+  }
+
+  // —— CRM 抽屉 AI 问答区 widget ——
+  // 与 drawer-facts 同范式：TradePulseDrawerAiWidget 自持模板，app 只注入上下文。
+  function drawerAiContext(context) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseDrawerAiWidget : null;
+    return {
+      drawerAiWidget: widget,
+      enabled: technicalAIPresentationAllowed() && can('use_ai_assistant'),
+      canUseAi: technicalAIPresentationAllowed() && can('use_ai_assistant'),
+      companyName: context?.companyName || '',
+    };
+  }
+
+  function renderDrawerAiWidget(container, ctx) {
+    if (!ctx.drawerAiWidget || !container) return [];
+    container.innerHTML = ctx.drawerAiWidget.renderCustomerAiSectionHtml(ctx);
+    return [{ id: 'drawer-ai', status: 'mounted' }];
   }
 
   async function mountCustomerProfileWidgets(externalCustomerId, intakeItemId = '') {
@@ -8769,17 +8794,11 @@
   }
 
   function customerAiSection(context) {
-    if (!technicalAIPresentationAllowed() || !can('use_ai_assistant')) return '';
-    return `<section class="customer-ai">
-      <div class="insight-head"><div><p class="eyebrow">CUSTOMER AI</p><h3>AI 问答</h3></div><span class="ai-badge">当前客户 · ${esc(context.companyName || '未命名客户')}</span></div>
-      <div class="customer-ai-body">
-        <div id="drawerAiAnswer" class="customer-ai-answer">可以直接询问客户价值、风险、联系人、开发切入点和下一步动作。</div>
-        <form id="drawerAiForm" class="customer-ai-form">
-          <textarea name="message" rows="2" placeholder="围绕这个客户提问，例如：下一步最值得做什么？" required></textarea>
-          <button class="button primary" type="submit">发送</button>
-        </form>
-      </div>
-    </section>`;
+    // AI 问答区经 drawer-ai-widget 渲染（自包含模板/安全转义）；drawerAiForm 提交与
+    // AI 问答由 app 级委托处理。权限/开关门槛由 ctx 携带（enabled/canUseAi）。
+    const drawerAi = drawerAiContext(context);
+    if (!drawerAi.drawerAiWidget || !drawerAi.enabled) return '';
+    return drawerAi.drawerAiWidget.renderCustomerAiSectionHtml(drawerAi);
   }
 
   function openIntakeProfile(itemId) {

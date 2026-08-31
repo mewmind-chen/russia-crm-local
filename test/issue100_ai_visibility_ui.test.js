@@ -12,7 +12,8 @@ const legacy = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8')
 
 test('one effective AI station gate controls every business AI surface', () => {
   assert.match(app, /function customerAIEnabled\(\) \{\s*return Boolean\(state\.data\?\.features\?\.aiStations\)/);
-  assert.match(app, /function customerAiSection\(context\) \{\s*if \(!technicalAIPresentationAllowed\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
+  assert.match(app, /function customerAiSection\(context\) \{[\s\S]*?drawerAiContext\(context\)/);
+  assert.match(app, /function drawerAiContext\(context\) \{[\s\S]*?enabled: technicalAIPresentationAllowed\(\) && can\('use_ai_assistant'\)/);
   assert.match(app, /function canViewManagerAnomalies\(\) \{\s*return customerAIEnabled\(\)/);
   assert.match(app, /function canViewSalesCoaching\(\) \{\s*return customerAIEnabled\(\)/);
   assert.match(app, /function canGovernAI\(\) \{\s*return customerAIEnabled\(\)/);

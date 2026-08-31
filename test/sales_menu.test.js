@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'sales-crm.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+const drawerAiWidgetJs = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'drawer-ai-widget.js'), 'utf8');
 const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
 const workbenchHtml = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8');
 const appCss = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
@@ -80,8 +81,10 @@ test('customer filters are server-authorized and do not expose a static evaluati
 
 test('customer profiles contain contextual AI Q&A', () => {
   assert.match(appJs, /function customerAiSection\(context\)/);
-  assert.match(appJs, /if \(!technicalAIPresentationAllowed\(\) \|\| !can\('use_ai_assistant'\)\) return '';/);
-  assert.match(appJs, /id="drawerAiForm"/);
+  assert.match(appJs, /drawerAiContext\(context\)/);
+  assert.match(appJs, /renderCustomerAiSectionHtml\(drawerAi\)/);
+  assert.match(appJs, /if \(!drawerAi\.drawerAiWidget \|\| !drawerAi\.enabled\) return '';/);
+  assert.match(drawerAiWidgetJs, /id="drawerAiForm"/);
   assert.match(appJs, /\/api\/assistant\/chat/);
 });
 
