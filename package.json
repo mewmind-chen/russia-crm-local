@@ -6,6 +6,7 @@
     "test": "node scripts/run-core-tests.js",
     "test:ai-legacy": "node scripts/run-core-tests.js --ai",
     "check:ai-boundary": "node scripts/check-ai-boundary.js",
+    "check:governance-authority": "node scripts/check-governance-authority.js",
     "board": "node scripts/progress_board.js",
     "board:watch": "node scripts/progress_board.js --watch",
     "start": "node server.js",

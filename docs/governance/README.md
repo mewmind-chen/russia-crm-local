@@ -6,11 +6,12 @@
 
 ## 权威性顺序
 
-1. 当前 Git、代码与测试的可复现实证。
-2. `CURRENT_STATE.md` 中最近一次核验结果。
-3. `PROJECT_CHARTER.md`、`GOAL_PROMPT.md` 与 `WORK_PROTOCOL.md` 的长期边界。
-4. 其余专题设计文档。
-5. `sessions/` 中的历史 checkpoint。
+1. 实时远端 `main` 与生产 `current`/release state 的可复现实证。
+2. `after/` 当前 Git、代码与测试的可复现实证。
+3. `CURRENT_STATE.md` 中最近一次核验结果。
+4. `PROJECT_CHARTER.md`、`GOAL_PROMPT.md` 与 `WORK_PROTOCOL.md` 的长期边界。
+5. 其余专题设计文档。
+6. `sessions/` 中的历史 checkpoint。
 
 发生冲突时，先停止实现并重新核验，不按较旧文档继续执行。
 
@@ -41,6 +42,10 @@
 - `DECISION_LOG.md`：已经作出的关键决策，不覆盖旧决策。
 - `RISK_REGISTER.md`：仍需管理的风险与动作。
 - `sessions/`：一次工作过程的不可变证据；历史路径按当时事实保留。
+
+## 冻结归档规则
+
+`docs/archive/**` 永远是历史证据，不是当前事实、进度、代码/生产基线或下一步的依据。2026-07-25 的旧规划已冻结在 `docs/archive/planning-2026-07-25/`；引用它们时必须明确标记为历史，并同时核验上述权威顺序。
 
 ## 历史记录规则
 

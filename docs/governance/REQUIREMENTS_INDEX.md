@@ -2,7 +2,7 @@
 
 更新时间：2026-08-27
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`（已 `git fetch origin --prune`）
-状态：条目级索引 v1；以最新代码、测试、可重复验证为准，`docs/planning` v2.0 仅作历史背景（见 `PLANNING_SUPPLEMENT.md`）
+状态：条目级索引 v1；以实时远端 `main`、生产 `current`/release state、`after/` 代码/测试和治理文档为准；`docs/archive/**` 仅作历史背景，永不作为当前事实或进度依据（见 `PLANNING_SUPPLEMENT.md`）
 
 ## 需求来源优先级
 
