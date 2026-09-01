@@ -27,6 +27,7 @@ const {
 const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
+const { registerLegacyEntrypoints } = require('./lib/legacy_entrypoints');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
 const {
@@ -70,12 +71,7 @@ app.use((req, res, next) => {
 });
 registerReleaseHealth(app);
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
-if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
-  app.get('/legacy', (_req, res) => res.sendFile(path.join(__dirname, 'Index.html')));
-}
-if (String(process.env.CRM_ENABLE_LEGACY || '').toLowerCase() === 'true') {
-  app.get('/tradelead-v2.html', (_req, res) => res.sendFile(path.join(__dirname, 'tradelead-v2.html')));
-}
+registerLegacyEntrypoints(app, { enabled: process.env.CRM_ENABLE_LEGACY, rootDir: __dirname });
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
 app.get('/profile-contacts.js', requireUnifiedUser, (_req, res) => {
   res.type('application/javascript').sendFile(path.join(__dirname, 'profile-contacts.js'));
