@@ -18,10 +18,10 @@
 - `node --check scripts/phase-e-browser-preview.js`：通过。
 - `node --test test/phase_e_browser_preview_contract.test.js test/server_factory.test.js`：8/8 通过。
 - 使用本机全局 `playwright-core 1.59.1` 连接系统 Chrome `152.0.7977.65` 做临时真实浏览器检查：manager/sales 均通过 root/profile HTTP 200、5 个 widget host、无 legacy iframe、profile-only 无保存动作、无 page error。
+- 通过 Codex 隔离浏览器打开同一 loopback fixture 做只读界面核验：manager 客户列表可打开“列设置”，隐藏“国家 / 行业”并下移“客户”后刷新，active customer table 仍保持用户布局（列设置不回退）；仅使用合成 fixture 账号，不触碰生产数据。
 - 官方 `npm run phase:e:browser-preview -- --run` 仍按设计 fail-closed：项目 `package.json` 未声明精确锁定的 Playwright/Puppeteer，未安装依赖，不将全局模块证据写成项目可复现验收。
 - `npm run check:governance-authority`、`npm run check:ai-boundary`、`git diff --check`：本轮收口后复跑。
 
 ## 当前判断与下一步
 
 Phase E 的浏览器核心断言已经具备；但项目完成门仍未通过。下一步只有在用户授权并具备项目内精确锁定的浏览器驱动及浏览器二进制后，运行官方 harness 完成 sales/manager 双角色验收；在此之前不删除旧入口、不进行生产动作、不触碰 AI 代码。
-
