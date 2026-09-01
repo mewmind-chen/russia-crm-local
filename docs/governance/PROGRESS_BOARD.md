@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 06:27:31`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 06:40:57`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `c06f4cb`（相对 origin/main ahead 248） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 2048/2048 |
-| 核心测试 | `npm test` 1687/1687 |
-| sales_crm.js | 12928 行 |
+| HEAD | `93a7fd7`（相对 origin/main ahead 251） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 2050/2050 |
+| 核心测试 | `npm test` 1689/1689 |
+| sales_crm.js | 12936 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-01-list-widget-alerts-pilot.md` |
+| 最近会话 | `2026-09-01-list-widget-notifications.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -23,8 +23,8 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
-| feat(...) | 38 |
-| docs(governance) | 108 |
+| feat(...) | 39 |
+| docs(governance) | 110 |
 | 其他 | 18 |
 
 ## 阶段 0：治理基础
@@ -164,7 +164,7 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 customers、Research People、不对口记录、Pipeline、Intake/lead_flow 与 Alerts/今日待办列表（dfe5937），其余列表继续按页面推进。
+> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 customers、Research People、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（302454f），其余列表继续按页面推进。
 
 ### 已完成
 
@@ -188,6 +188,7 @@
 - [x] Pipeline 推进动作台列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`eb73388`）
 - [x] Intake/lead_flow 线索列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`fffde40`）
 - [x] Alerts/今日待办列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`dfe5937`）
+- [x] 通知中心列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`302454f`）
 
 ### 待办
 
