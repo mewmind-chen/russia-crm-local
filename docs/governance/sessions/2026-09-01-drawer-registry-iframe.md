@@ -28,7 +28,7 @@
 - `node --test`：全量 `2078/2078`。
 - `node --check sales-assets/app.js scripts/progress_board.js test/issue286_customer_drawer_summary.test.js`：通过。
 - `git diff --check`：通过。
-- `npm run check:governance-authority`、`npm run check:ai-boundary`：将在本 checkpoint 文档生成并提交后复跑。
+- `npm run check:governance-authority`、`npm run check:ai-boundary`：已复跑通过（194 files / 2 frozen plans + 8 active documents）。
 - `npm run phase:e:browser-preview`：当前环境无锁定可用 Playwright/Puppeteer，按设计 fail-closed 退出 78；未伪造浏览器通过。
 
 ## 当前判断与下一步

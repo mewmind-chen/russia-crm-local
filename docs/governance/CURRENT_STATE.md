@@ -17,7 +17,7 @@
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
 - 当前重构提交：`6bfa5f0`（`79036e5` 在 `8d1bb05` 列表迁移基础上，将 CRM 抽屉的非 AI 状态条、事实、主档和时间线区块纳入 `crmDrawer` 注册表同步装配；保留动作区、权限门控与逐区块回退模板；同时将默认 profile widget 模式的兼容 iframe 加载严格限制为显式 `profileView=legacy`，不改 bootstrap 查询、后端写入或 AI 行为；`6bfa5f0` 对应架构调整后的抽屉摘要契约对齐）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，widget/抽屉/iframe 定向 `105/105`，`npm test` core `1716/1716`，`node --test` `2078/2078`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁将在本轮治理文档更新后复跑。
+- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，widget/抽屉/iframe 定向 `105/105`，`npm test` core `1716/1716`，`node --test` `2078/2078`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁已复跑通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
