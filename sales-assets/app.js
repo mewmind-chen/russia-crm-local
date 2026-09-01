@@ -106,6 +106,7 @@
     customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -268,7 +269,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -307,6 +308,9 @@
       }
       if (state.data && state.view === 'recycleBin') {
         renderRecycleBin();
+      }
+      if (state.data && state.view === 'pipeline') {
+        renderPipeline();
       }
     });
   }
@@ -1029,6 +1033,95 @@
     state.recycleBinListLayout = { ...state.recycleBinListLayout, visibleColumns: [...current] };
     saveRecycleBinListLayout();
     renderRecycleBin();
+  }
+  function pipelineColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'stage', label: '当前阶段·停留', className: 'col-stage', sortKey: 'stage' },
+      { key: 'next_action', label: '下一步·计划', className: 'col-next', sortKey: 'next_action_at' },
+      { key: 'owner', label: '负责人·星标', className: 'col-owner', sortKey: 'owner_name' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.pipeline?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => field.key));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function pipelineListLayoutStorageKey() {
+    return `tradepulse.listLayout.pipeline.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultPipelineListLayout() {
+    const columns = pipelineColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'pending_action' };
+  }
+  function restorePipelineListLayout() {
+    const columns = pipelineColumnDefinitions();
+    state.pipelineListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(pipelineListLayoutStorageKey(), undefined, columns)
+      : defaultPipelineListLayout();
+    const allowedSorts = ['pending_action', 'recent_activity', 'stage_asc', 'company_asc'];
+    if (!allowedSorts.includes(state.pipelineListLayout.sortPreset)) {
+      state.pipelineListLayout = { ...state.pipelineListLayout, sortPreset: 'pending_action' };
+    }
+    if ($('#pipelineSort')) $('#pipelineSort').value = state.pipelineListLayout.sortPreset;
+    renderPipelineColumnSettings();
+  }
+  function savePipelineListLayout() {
+    const columns = pipelineColumnDefinitions();
+    state.pipelineListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(pipelineListLayoutStorageKey(), state.pipelineListLayout, undefined, columns)
+      : state.pipelineListLayout;
+    renderPipelineColumnSettings();
+  }
+  function renderPipelineColumnSettings() {
+    const host = $('#pipelineColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '推进列表列设置',
+      columns: pipelineColumnDefinitions(),
+      preferences: state.pipelineListLayout,
+    });
+  }
+  function closePipelineColumnSettings() {
+    $('#pipelineColumnSettingsPanel')?.classList.add('hidden');
+    $('#pipelineColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openPipelineColumnSettings() {
+    renderPipelineColumnSettings();
+    $('#pipelineColumnSettingsPanel')?.classList.remove('hidden');
+    $('#pipelineColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetPipelineListLayout() {
+    state.pipelineListLayout = { ...defaultPipelineListLayout(), sortPreset: 'pending_action' };
+    savePipelineListLayout();
+    if ($('#pipelineSort')) $('#pipelineSort').value = 'pending_action';
+    renderPipeline();
+    void loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
+  }
+  function movePipelineListColumn(key, direction) {
+    const columns = pipelineColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.pipelineListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.pipelineListLayout = { ...state.pipelineListLayout, columnOrder: order };
+    savePipelineListLayout();
+    renderPipeline();
+  }
+  function togglePipelineListColumn(key, visible) {
+    const columns = pipelineColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.pipelineListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.pipelineListLayout = { ...state.pipelineListLayout, visibleColumns: [...current] };
+    savePipelineListLayout();
+    renderPipeline();
   }
   function selectedValues(select) {
     return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
@@ -1773,6 +1866,9 @@
       if (pageKey === 'recycle_bin') {
         params.set('sort', state.recycleBinListLayout.sortPreset || 'recycled_desc');
       }
+      if (pageKey === 'pipeline') {
+        params.set('sort', state.pipelineListLayout.sortPreset || 'pending_action');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -1934,6 +2030,7 @@
       restoreCustomerListLayout();
       restoreResearchPeopleListLayout();
       restoreRecycleBinListLayout();
+      restorePipelineListLayout();
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -5579,7 +5676,7 @@
     const activeLabel = selected === 'need_decision' ? '需要判断'
       : selected === 'worth_deepening' ? '值得深挖'
         : queueItems.find(item => item[0] === selected)?.[1] || '全部当前行动';
-    const detailMarkup = rows.length ? `<table class="pipeline-grid"><thead><tr class="pipeline-list-head"><th>客户</th><th>当前阶段·停留</th><th>下一步·计划</th><th>负责人·星标</th><th>操作</th></tr></thead><tbody>${rows.map(account => {
+    const pipelineRows = rows.map(account => {
       const next = account.next_action || '暂未确定下一步';
       const stay = pipelineStayMarkup(account);
       const primaryActions = [
@@ -5590,14 +5687,27 @@
         can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : '',
         can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : '',
       ];
-      return `<tr class="pipeline-action-row">
-        <td>${listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)])}</td>
-        <td>${esc(account.stageLabel || stageLabel(account.stage))}${stay}</td>
-        <td>${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div></td>
-        <td>${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}</td>
-        <td>${rowActionCluster(primaryActions, moreActions)}</td>
-      </tr>`;
-    }).join('')}</tbody></table>` : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
+      return {
+        company: listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)]),
+        stage: `${esc(account.stageLabel || stageLabel(account.stage))}${stay}`,
+        next_action: `${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div>`,
+        owner: `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
+        actions: rowActionCluster(primaryActions, moreActions),
+        _attrs: 'class="pipeline-action-row"',
+      };
+    });
+    const pipelineColumns = pipelineColumnDefinitions();
+    const detailMarkup = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: pipelineColumns,
+        rows: pipelineRows,
+        preferences: state.pipelineListLayout,
+        attrs: 'class="pipeline-grid" data-list-page="pipeline"',
+        emptyText: `当前没有${activeLabel}客户`,
+      })
+      : rows.length
+        ? table(pipelineColumns.map(column => column.label), pipelineRows.map(row => pipelineColumns.map(column => row[column.key])), 'class="pipeline-grid"')
+        : `<div class="empty">当前没有${esc(activeLabel)}客户</div>`;
     $('#pipelineBoard').innerHTML = `
       <section class="pipeline-overview-grid">${topMarkup}</section>
       <section class="pipeline-queue-grid">${queueMarkup}</section>
@@ -5608,6 +5718,7 @@
           <button class="text-button" type="button" data-pipeline-queue="">返回全部行动</button></div>` : ''}
         ${detailMarkup}
       </section>`;
+    applyTableColumnClasses($('#pipelineBoard'), pipelineColumns.map(column => column.className || ''));
   }
 
   function pipelineStayMarkup(account) {
@@ -13370,12 +13481,19 @@
       else closeRecycleBinColumnSettings();
       return;
     }
+    if (event.target.closest('#pipelineColumnSettings')) {
+      if ($('#pipelineColumnSettingsPanel')?.classList.contains('hidden')) openPipelineColumnSettings();
+      else closePipelineColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
         moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#recycleColumnSettingsPanel')) {
         moveRecycleBinListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#pipelineColumnSettingsPanel')) {
+        movePipelineListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -13384,12 +13502,14 @@
     if (event.target.closest('[data-list-layout-reset]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
+      else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
       else resetCustomerListLayout();
       return;
     }
     if (event.target.closest('[data-list-layout-close]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
+      else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -14377,6 +14497,7 @@
         restoreCustomerListLayout();
       }
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
+      if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -14509,6 +14630,8 @@
         toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#recycleColumnSettingsPanel')) {
         toggleRecycleBinListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#pipelineColumnSettingsPanel')) {
+        togglePipelineListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
@@ -14576,6 +14699,14 @@
       };
       saveRecycleBinListLayout();
       void loadRecycleBin({ reset: true });
+    }
+    if (event.target.id === 'pipelineSort') {
+      state.pipelineListLayout = {
+        ...state.pipelineListLayout,
+        sortPreset: event.target.value || 'pending_action',
+      };
+      savePipelineListLayout();
+      void loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();

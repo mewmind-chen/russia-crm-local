@@ -355,7 +355,17 @@
           <div><h2>推进动作台</h2><p>按客户当前有效状态安排今天的推进动作。</p></div>
         </div>
         <div id="pipelineAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <div class="toolbar"><span id="pipelineAuthorizedResultCount" class="toolbar-count"></span></div>
+        <div class="toolbar pipeline-list-toolbar">
+          <label class="list-sort-control">排序<select id="pipelineSort" aria-label="推进列表排序">
+            <option value="pending_action">下一步优先</option>
+            <option value="recent_activity">最近动作</option>
+            <option value="stage_asc">当前阶段</option>
+            <option value="company_asc">客户名称</option>
+          </select></label>
+          <button id="pipelineColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="pipelineColumnSettingsPanel">列设置</button>
+          <span id="pipelineAuthorizedResultCount" class="toolbar-count"></span>
+        </div>
+        <div id="pipelineColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="推进列表列设置"></div>
         <div id="pipelineBoard" class="pipeline-command"></div>
         <div id="pipelineAuthorizedPagination" class="shared-pagination" data-pagination="pipeline"></div>
       </section>

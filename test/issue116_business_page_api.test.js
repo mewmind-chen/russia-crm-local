@@ -114,3 +114,25 @@ test('recycle list accepts only authorized server-side sort presets', async t =>
   assert.equal(invalid.status, 403);
   assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
 });
+
+test('pipeline list accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Zeta Fixture', 'RU-9001');
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Alpha Fixture', 'RU-9002');
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Mid Fixture', 'RU-9003');
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/pipeline', {
+    cookie: fx.adminCookie,
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/lists/pipeline?sort=company_asc&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.deepEqual(sorted.rows.map(row => row.id), ['CRM-OWN', 'CRM-OTHER', 'CRM-WU']);
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/pipeline?sort=contact_email&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

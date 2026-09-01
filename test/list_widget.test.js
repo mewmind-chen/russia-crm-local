@@ -142,3 +142,22 @@ test('recycle list uses the shared widget with per-user layout and server sortin
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="recycle_bin"/);
   assert.match(app, /params\.set\('sort', state\.recycleBinListLayout\.sortPreset/);
 });
+
+test('pipeline list uses the shared widget with per-user layout and server sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'pipeline',
+    user: { role: 'sales' },
+    permissions: { view_pipeline: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'stage', 'next_action', 'owner',
+  ]);
+  assert.match(html, /id="pipelineSort"/);
+  assert.match(html, /id="pipelineColumnSettings"/);
+  assert.match(html, /id="pipelineColumnSettingsPanel"/);
+  assert.match(app, /pipelineListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.pipeline/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="pipeline"/);
+  assert.match(app, /params\.set\('sort', state\.pipelineListLayout\.sortPreset/);
+});
