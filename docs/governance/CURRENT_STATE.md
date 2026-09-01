@@ -11,19 +11,22 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@8a86425`，业务提交态；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@3adc1d1`，业务提交态；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`8a86425`（阶段 E：隔离 widget 注册表挂载宿主；包含 `e59bf22` profile-only 只读兼容契约）
-- 当前验证（2026-09-01）：前端专项 `98/98`、最终 widget registry 契约 `42/42`、core `npm test` `1665/1665`、全量 `node --test` `2026/2026`；`check:ai-boundary`、`check:governance-authority`、`git diff --check` 均通过。
+- 当前重构提交：`3adc1d1`（阶段 E：抽取 identity/source tags UMD widget；前置 `8a86425` 已完成 widget 宿主隔离，`e59bf22` 已锁定 profile-only 只读兼容契约）
+- 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
+- 当前验证（2026-09-01）：目标前端/标签专项 `106/106`、core `npm test` `1670/1670`、全量 `node --test` `2031/2031`；`node --check`、`check:ai-boundary`、`check:governance-authority`、`git diff --check` 均通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 
 ## 2. 已提交的重构进度
 
-`origin/main..HEAD` 已累积业务与治理两类提交；精确提交分布以自动生成的 `PROGRESS_BOARD.md` 为准。相对 `76b7b56`（62 提交）已追加：`92c3879`（WIP 收敛）、`09ef77e`（治理文档）、阶段 B 的 8 个状态写切片、阶段 A 接线恢复的 13 个切片（首批 3 + 批 1-13）、阶段 B §4 强化的 7 个 guard/投影切片、updateAccount 网关收敛、pipeline state DTO 边界收敛、smoke 种子收敛、阶段 C accounts+intake+通知 白名单三片 + S3 形状片 + 范围等价契约、阶段 D commerce 幂等保留 + 行级写下沉 + 金额/币种/毛利校验下沉，以及看板自动化：
+`origin/main..HEAD` 已累积业务与治理两类提交；精确提交分布以自动生成的 `PROGRESS_BOARD.md` 为准。相对既有治理基线已追加阶段 E 的 widget 组合切片与看板校准：
 
+- `3adc1d1`：抽取 `sales-assets/source-tags-widget.js` identity/source tags UMD widget；`sales-assets/app.js` 的 wrappers 改为委托，`sales-crm.html` 在 registry/app 之前加载该资产。保留只读 `customerTags` 投影、归一化/去重保序/空名过滤、默认 5 项与 `+N` 溢出；UMD 负责 source/category/name 转义，`app.js` 注入 AI 开关的 `includeReadOnly`，identity warning 仍由 `app.js` 以 `esc` 转义并追加。`Index.html` 编辑/postMessage、API 与 AI internals 未改。
+- `4941b7e`：校准进度看板，使阶段 E 显示 profile-only 只读契约、默认 widget 视图、独立 host 隔离与 source tags UMD 的真实状态；该提交仅为治理看板校准。
 - `e59bf22`：为 `/development-workbench` 的 profile-only 只读兼容门槛补契约，锁定 `profileAccess.readOnly` 与现有只读分支；运行时无写入口仍列入浏览器验收。
 - `8a86425`：修正 WidgetRegistry 挂载隔离：此前多个 widget 共用一个 root，后渲染区块会覆盖先前区块；现每次 `renderPage` 清空 root，并为每个 eligible widget 创建独立 `data-widget-id` host。重跑只保留本轮 eligible host，widget 与 host 创建异常均按 widget 隔离，不阻断后续挂载。
 
@@ -93,8 +96,8 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `b4cfdfc`：12,883 行。
-- `sales-assets/app.js` 当前仍为 14,096 行。
+- 当前提交态 `3adc1d1`：12,883 行。
+- `sales-assets/app.js` 当前为 14,418 行。
 - 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
 
 因此当前结论是：重构已经实质推进，但仍处于渐进迁移中，不能描述为“拆分完成”或“可合并”。
@@ -110,16 +113,16 @@
 
 注意：pipeline 行仍由 `business_page_filters.js` 附加 state DTO（未内联），与 accounts/bootstrap/profile 的“无 state DTO”存在边界差异，已通过测试确认前端不依赖该差异。
 
-`after/` 工作区干净：5 个迁移 WIP 业务文件已提交为 `92c3879`；仅剩 `docs/governance/` 治理文档待提交。
+`after/` 当前业务提交 `3adc1d1` 已落地；本治理 checkpoint（`CURRENT_STATE.md`、`REFACTOR_ROADMAP.md` 与本次 session 记录）待提交。生产目录保持只读。
 
 ## 4. 最近验证结果
 
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1665/1665` 通过。
-- `node --test`：全量 `2026/2026` 通过。
-- 本轮 `8a86425`：前端专项 `98/98`、最终 widget registry 契约 `42/42`；`check:ai-boundary`、`check:governance-authority`、`git diff --check` 均通过。未执行浏览器双角色、生产或部署验证。
+- `npm test`：全量 core `1670/1670` 通过。
+- `node --test`：全量 `2031/2031` 通过。
+- 本轮 `3adc1d1`：目标前端/标签专项 `106/106`；`node --check`、`check:ai-boundary`、`check:governance-authority`、`git diff --check` 均通过。未执行浏览器双角色、生产或部署验证。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
@@ -131,7 +134,7 @@
 ## 5. 当前阶段判断
 
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
-- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口。阶段 E 仍未完成，浏览器双角色验收待做。
+- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget。阶段 E 仍未完成，浏览器双角色验收待做。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,883 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
@@ -184,10 +187,16 @@ OK。本轮 core 1658/1658、全量 2019/2019 全绿。`3c9369d` 再让完整资
 抽屉共用同一主档模板（profileWidgetContext 注入 `ctx.account`；注册 `profile-master`
 @customerProfile order 25；`renderProfileMasterWidget` 复用 `masterProfileSectionHtml`
 组装 企业背景/产品需求/背调来源 行，业务画像区块进入统一 widget 集合）。
-本轮 core 1659/1659、全量 2020/2020 全绿。剩余：其余 widget 化（身份/业务画像/
-洞察/商务/回收状态的具体 body——主档、insight 壳、AI 站、facts、next-step、告警条、
-时间线已就位；CRM 活动时间线评估下沉）、`/development-workbench` profile 模式
-收敛为只读/兼容入口。
+本轮 core 1659/1659、全量 2020/2020 全绿。随后阶段 E 继续落地：`e59bf22` 锁定
+`/development-workbench` profile-only 只读兼容契约，`8a86425` 修复注册表独立
+widget host 隔离，`3adc1d1` 将 identity/source tags 抽为 `source-tags-widget.js`
+UMD；本次目标前端/标签专项 `106/106`、core `1670/1670`、全量 `2031/2031`。
+阶段 E 仍进行中：尚余 sales/manager 浏览器双角色验收、其余复杂 widget body 与
+CRM 活动时间线评估下沉。当前没有隔离 preview/mock runtime；浏览器验收不得写成
+已通过。
+下一动作固定为：先建立独立临时 SQLite、绑定 `127.0.0.1`、禁用 AI provider/monitor
+的 Phase E browser-preview harness，再做 sales/manager 验收；其后才处理剩余复杂
+主体/activity timeline。
 7. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
