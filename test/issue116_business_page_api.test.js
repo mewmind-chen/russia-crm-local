@@ -216,3 +216,37 @@ test('notifications list accepts only authorized server-side sort presets', asyn
   assert.equal(invalid.status, 403);
   assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
 });
+
+test('insights list accepts only authorized manual-evaluation sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO crm_manager_evaluations
+    (id,customer_id,subject_type,evaluation_text,author_id,author_name,created_at,updated_at)
+    VALUES ('EVAL-SORT-WU','CRM-WU','company','Wu judgement','USR-ADMIN','Admin',?,?),
+           ('EVAL-SORT-OWN','CRM-OWN','company','Own judgement','USR-ADMIN','Admin',?,?)`).run(
+    '2026-08-01 08:00:00', '2026-08-01 08:00:00',
+    '2026-08-03 08:00:00', '2026-08-03 08:00:00',
+  );
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Zeta Insight', 'RU-9001');
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Alpha Insight', 'RU-9002');
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/insights', {
+    cookie: fx.adminCookie,
+  });
+  const statusFirst = await fx.requestJson(
+    `/api/sales-crm/lists/insights?sort=evaluation_status_priority&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(statusFirst.rows[0].evaluationStatus, 'not_evaluated');
+  const companySorted = await fx.requestJson(
+    `/api/sales-crm/lists/insights?sort=company_asc&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  const names = companySorted.rows.map(row => row.companyName);
+  assert.deepEqual(names, [...names].sort((left, right) => String(left).localeCompare(String(right), 'zh-CN')));
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/insights?sort=ai_summary&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

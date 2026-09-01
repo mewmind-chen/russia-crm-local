@@ -585,8 +585,7 @@
       <section id="insightsView" class="view">
         <div id="insightSummary" class="metric-grid"></div>
         <div class="section-intro">
-          <div><p class="eyebrow">客户经营复盘</p><h2>客户经营复盘中心</h2><p>集中维护企业判断和对接人评价。<span data-ai-business>AI 标注用于辅助整理历史评价。</span></p></div>
-          <div class="method-note" data-ai-business><strong>人工与AI分离</strong><span>经理原文是管理判断；紫色内容均为AI自动标注。</span></div>
+          <div><p class="eyebrow">客户经营复盘</p><h2>客户经营复盘中心</h2><p>集中维护企业判断和对接人评价，所有内容均以人工记录为准。</p></div>
         </div>
         <div id="insightsAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
         <article class="panel">
@@ -595,7 +594,21 @@
             <select id="insightCoverageFilter"><option value="">全部客户</option><option value="none">尚未评价</option><option value="company">已有企业评价</option><option value="contact">已有联系人评价</option></select>
             <span id="insightResultCount" class="toolbar-count"></span>
           </div>
-          <div class="toolbar"><span id="insightsAuthorizedResultCount" class="toolbar-count"></span></div>
+          <div class="toolbar insights-list-toolbar">
+            <label class="sr-only" for="insightsSort">客户经营复盘排序</label>
+            <select id="insightsSort" aria-label="客户经营复盘排序">
+              <option value="evaluation_updated_desc">最近评价优先</option>
+              <option value="evaluation_updated_asc">最早评价优先</option>
+              <option value="evaluation_status_priority">待评价优先</option>
+              <option value="evaluation_count_desc">评价数优先</option>
+              <option value="company_asc">客户名称</option>
+              <option value="owner_asc">负责人</option>
+              <option value="stage_asc">阶段</option>
+            </select>
+            <button id="insightsColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="insightsColumnSettingsPanel">列设置</button>
+            <div id="insightsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="客户经营复盘列设置"></div>
+            <span id="insightsAuthorizedResultCount" class="toolbar-count"></span>
+          </div>
           <div id="insightCompanyList" class="insight-hub-list"></div>
           <div id="insightsAuthorizedPagination" class="shared-pagination" data-pagination="insights"></div>
         </article>

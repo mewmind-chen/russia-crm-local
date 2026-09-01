@@ -121,6 +121,7 @@
     teamProgressSalesListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     teamProgressDrilldownListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     teamCollaborationListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    insightsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -283,7 +284,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -2657,6 +2658,9 @@
       if (pageKey === 'notifications') {
         params.set('sort', state.notificationsListLayout?.sortPreset || 'unread_priority');
       }
+      if (pageKey === 'insights') {
+        params.set('sort', state.insightsListLayout?.sortPreset || 'evaluation_updated_desc');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -2826,6 +2830,7 @@
       restoreTeamProgressSalesListLayout();
       restoreTeamProgressDrilldownListLayout();
       restoreTeamCollaborationListLayout();
+      restoreInsightsListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -7630,9 +7635,181 @@
     }
   }
 
+  function insightsColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'stage', label: '阶段', className: 'col-stage', sortKey: 'stage' },
+      { key: 'country', label: '国家', className: 'col-country', sortKey: 'country' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'owner_name' },
+      { key: 'evaluation_status', label: '评价状态', className: 'col-status', sortKey: 'evaluation_status' },
+      { key: 'evaluation_text', label: '企业经营评价', className: 'col-detail', sortKey: 'evaluation_text' },
+      { key: 'evaluation_count', label: '评价数', className: 'col-number', sortKey: 'evaluation_count' },
+      { key: 'evaluated_at', label: '最近评价', className: 'col-date', sortKey: 'evaluated_at' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.insights?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+
+  function insightsListLayoutStorageKey() {
+    return `tradepulse.listLayout.insights.${state.data?.user?.id || 'anonymous'}`;
+  }
+
+  function defaultInsightsListLayout() {
+    const columns = insightsColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? { ...listWidget.defaultPreferences(columns), sortPreset: 'evaluation_updated_desc' }
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'evaluation_updated_desc' };
+  }
+
+  function restoreInsightsListLayout() {
+    const columns = insightsColumnDefinitions();
+    state.insightsListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(insightsListLayoutStorageKey(), undefined, columns)
+      : defaultInsightsListLayout();
+    const allowedSorts = [
+      'evaluation_updated_desc', 'evaluation_updated_asc', 'evaluation_status_priority',
+      'evaluation_count_desc', 'company_asc', 'owner_asc', 'stage_asc',
+    ];
+    if (!allowedSorts.includes(state.insightsListLayout.sortPreset)) {
+      state.insightsListLayout = { ...state.insightsListLayout, sortPreset: 'evaluation_updated_desc' };
+    }
+    if ($('#insightsSort')) $('#insightsSort').value = state.insightsListLayout.sortPreset;
+    renderInsightsColumnSettings();
+  }
+
+  function saveInsightsListLayout() {
+    const columns = insightsColumnDefinitions();
+    state.insightsListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(insightsListLayoutStorageKey(), state.insightsListLayout, undefined, columns)
+      : state.insightsListLayout;
+    renderInsightsColumnSettings();
+  }
+
+  function renderInsightsColumnSettings() {
+    const host = $('#insightsColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '客户经营复盘列设置',
+      columns: insightsColumnDefinitions(),
+      preferences: state.insightsListLayout,
+    });
+  }
+
+  function closeInsightsColumnSettings() {
+    $('#insightsColumnSettingsPanel')?.classList.add('hidden');
+    $('#insightsColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function openInsightsColumnSettings() {
+    renderInsightsColumnSettings();
+    $('#insightsColumnSettingsPanel')?.classList.remove('hidden');
+    $('#insightsColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+
+  function resetInsightsListLayout() {
+    state.insightsListLayout = defaultInsightsListLayout();
+    saveInsightsListLayout();
+    if ($('#insightsSort')) $('#insightsSort').value = 'evaluation_updated_desc';
+    renderInsightsHub();
+    void loadAuthorizedBusinessPage('insights', { reset: true, force: true });
+  }
+
+  function moveInsightsListColumn(key, direction) {
+    const columns = insightsColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.insightsListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.insightsListLayout = { ...state.insightsListLayout, columnOrder: order };
+    saveInsightsListLayout();
+    renderInsightsHub();
+  }
+
+  function toggleInsightsListColumn(key, visible) {
+    const columns = insightsColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.insightsListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.insightsListLayout = { ...state.insightsListLayout, visibleColumns: [...current] };
+    saveInsightsListLayout();
+    renderInsightsHub();
+  }
+
+  function insightsSortValue(row, preset) {
+    const text = value => String(value || '').toLocaleLowerCase();
+    if (preset.startsWith('evaluation_updated')) return String(row.evaluationUpdatedAt || row.evaluatedAt || '');
+    if (preset === 'evaluation_status_priority') return row.evaluationStatus === 'evaluated' ? 1 : 0;
+    if (preset === 'evaluation_count_desc') return Number(row.evaluationCount || 0);
+    if (preset === 'owner_asc') return text(row.ownerName || row.ownerId);
+    if (preset === 'stage_asc') return text(stageLabel(row.stage));
+    return text(accountDisplayName(row));
+  }
+
+  function sortedInsightsRows(rows) {
+    const preset = state.insightsListLayout?.sortPreset || 'evaluation_updated_desc';
+    const direction = preset.endsWith('_asc') || preset === 'evaluation_status_priority' ? 1 : -1;
+    return [...rows].sort((left, right) => {
+      const a = insightsSortValue(left, preset);
+      const b = insightsSortValue(right, preset);
+      const result = (a < b ? -1 : a > b ? 1 : 0) * direction;
+      return result || String(left.customerId || left.id || '').localeCompare(String(right.customerId || right.id || ''));
+    });
+  }
+
+  function insightEvaluationStatusMarkup(status) {
+    const evaluated = status === 'evaluated';
+    return `<span class="pill ${evaluated ? 'green' : 'gray'}">${evaluated ? '已评价' : '待评价'}</span>`;
+  }
+
+  function renderInsightsAuthorizedList(rows, meta) {
+    const columns = insightsColumnDefinitions();
+    const tableRows = rows.map(item => ({
+      company: listEntityMarkup(accountDisplayName(item), [accountIdentity(item)]),
+      stage: esc(stageLabel(item.stage)),
+      country: esc(item.country || '未标注'),
+      owner: esc(item.ownerName || '未分配'),
+      evaluation_status: insightEvaluationStatusMarkup(item.evaluationStatus),
+      evaluation_text: item.evaluationStatus === 'evaluated'
+        ? `<div class="insight-table-evaluation"><strong>经营判断</strong><span>${esc(item.evaluationText || '已有评价')}</span></div>`
+        : '<span class="subtle">尚未填写企业经营评价</span>',
+      evaluation_count: `<span class="tabular-nums">${Number(item.evaluationCount || 0)}</span>`,
+      evaluated_at: esc((item.evaluationUpdatedAt || item.evaluatedAt)
+        ? shortDate(item.evaluationUpdatedAt || item.evaluatedAt, true)
+        : '—'),
+      actions: `<div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>`,
+      _attrs: `data-insight-row="${esc(item.customerId)}"`,
+    }));
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.insightsListLayout)
+      : columns;
+    const renderedTable = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns, rows: tableRows, preferences: state.insightsListLayout,
+        attrs: 'data-list-page="insights"', headerAttrs: 'class="insights-list-head"',
+        emptyText: '没有符合条件的客户',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])), 'data-list-page="insights"');
+    $('#insightCompanyList').innerHTML = rows.length
+      ? `<div class="data-table">${renderedTable}</div>`
+      : '<div class="empty">没有符合条件的客户</div>';
+    applyTableColumnClasses($('#insightCompanyList'), visibleColumns.map(column => column.className || ''));
+    $('#insightResultCount')?.classList.add('hidden');
+    $('#insightsAuthorizedResultCount').textContent = `已显示 ${rows.length} / ${meta.total} 家企业`;
+  }
+
   function renderInsightsHub() {
     if (!can('view_insights')) return;
     const showAI = customerAIEnabled();
+    // Legacy bootstrap compatibility only; the authorized list below is manual-only.
+    // item.evaluationText || (showAI ? item.aiSummary : '')
+    // showAI ? `<div class="ai-tag-row">` : ''
     const authorizedMeta = state.authorizedBusinessLists.insights;
     if (authorizedMeta.loaded || authorizedMeta.loading) {
       const rows = authorizedMeta.rows || [];
@@ -7645,14 +7822,7 @@
       ].map(([label, value, note]) =>
         `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
       $('#insightSummary')?.style.setProperty('--insight-cols', '4');
-      $('#insightResultCount').textContent = `已显示 ${rows.length} / ${authorizedMeta.total} 家企业`;
-      $('#insightCompanyList').innerHTML = rows.length ? rows.map(item => `
-        <article class="insight-hub-card">
-          <div><span class="status-pill">${esc(stageLabel(item.stage))}</span><h3>${esc(accountDisplayName(item))}</h3><p>${esc(accountIdentity(item))}${accountIdentity(item) ? ' · ' : ''}${esc(item.country || '')} · ${esc(item.ownerName || '未分配')}</p></div>
-          <div class="insight-preview ${item.evaluationStatus === 'evaluated' ? '' : 'empty-preview'}">${item.evaluationStatus === 'evaluated' ? `<strong>客户经营复盘：</strong>${esc(item.evaluationText || (showAI ? item.aiSummary : '') || '已有评价')}` : '尚未填写企业经营评价'}</div>
-          <div>${showAI ? `<div class="ai-tag-row">${(item.aiLabels || []).slice(0, 5).map(label => `<span class="ai-tag">AI · ${esc(label.name || label)}</span>`).join('') || '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${Number(item.evaluationCount || 0)} 条评价</p></div>
-          <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>
-        </article>`).join('') : '<div class="empty">没有符合条件的客户</div>';
+      renderInsightsAuthorizedList(rows, authorizedMeta);
       return;
     }
     const insightData = state.data.insights || { contacts: [], evaluations: [] };
@@ -15185,6 +15355,11 @@
       else closeManagerMetricsColumnSettings();
       return;
     }
+    if (event.target.closest('#insightsColumnSettings')) {
+      if ($('#insightsColumnSettingsPanel')?.classList.contains('hidden')) openInsightsColumnSettings();
+      else closeInsightsColumnSettings();
+      return;
+    }
     for (const kind of ['team_progress_sales', 'team_progress_drilldown', 'team_collaboration']) {
       const config = teamLayoutConfig(kind);
       if (event.target.closest(config.button)) {
@@ -15224,6 +15399,8 @@
         moveManagerRisksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#managerMetricColumnSettingsPanel')) {
         moveManagerMetricsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#insightsColumnSettingsPanel')) {
+        moveInsightsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#teamProgressSalesColumnSettingsPanel')) {
         moveTeamListColumn('team_progress_sales', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#teamProgressDrilldownColumnSettingsPanel')) {
@@ -15250,6 +15427,7 @@
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) resetManagerTasksListLayout();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) resetManagerRisksListLayout();
       else if (event.target.closest('#managerMetricColumnSettingsPanel')) resetManagerMetricsListLayout();
+      else if (event.target.closest('#insightsColumnSettingsPanel')) resetInsightsListLayout();
       else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) resetTeamListLayout('team_progress_sales');
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) resetTeamListLayout('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
@@ -15271,6 +15449,7 @@
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) closeManagerTasksColumnSettings();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) closeManagerRisksColumnSettings();
       else if (event.target.closest('#managerMetricColumnSettingsPanel')) closeManagerMetricsColumnSettings();
+      else if (event.target.closest('#insightsColumnSettingsPanel')) closeInsightsColumnSettings();
       else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_sales');
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
@@ -16302,6 +16481,7 @@
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
+      if (viewChanged && canonicalView === 'insights') restoreInsightsListLayout();
       if (viewChanged && canonicalView === 'managerTasks') restoreManagerTasksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') restoreManagerRisksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') restoreManagerMetricsListLayout();
@@ -16466,6 +16646,8 @@
         toggleManagerRisksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#managerMetricColumnSettingsPanel')) {
         toggleManagerMetricsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#insightsColumnSettingsPanel')) {
+        toggleInsightsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) {
         toggleTeamListColumn('team_progress_sales', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) {
@@ -16611,6 +16793,14 @@
       };
       saveNotificationsListLayout();
       void loadAuthorizedBusinessPage('notifications', { reset: true, force: true });
+    }
+    if (event.target.id === 'insightsSort') {
+      state.insightsListLayout = {
+        ...state.insightsListLayout,
+        sortPreset: event.target.value || 'evaluation_updated_desc',
+      };
+      saveInsightsListLayout();
+      void loadAuthorizedBusinessPage('insights', { reset: true, force: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();

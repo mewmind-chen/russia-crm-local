@@ -265,6 +265,34 @@ test('team collaboration schema exposes collaboration facts and the page action 
   assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
 });
 
+test('insights schema exposes ordered manual evaluation fields without AI or action columns', () => {
+  assert.ok(fieldCatalog.listFieldPages().includes('insights'));
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'insights',
+    user: { role: 'manager' },
+    permissions: { view_insights: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'stage', 'country', 'owner', 'evaluation_status', 'evaluation_text',
+    'evaluation_count', 'evaluated_at',
+  ]);
+  assert.deepEqual(schema.fields.map(field => field.sortOrder), [10, 20, 30, 40, 50, 60, 70, 80]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+  assert.equal(schema.fields.some(field => field.key === 'actions'), false);
+});
+
+test('insights list uses the shared widget with per-user layout and server sorting', () => {
+  assert.match(html, /id="insightsSort"/);
+  assert.match(html, /id="insightsColumnSettings"/);
+  assert.match(html, /id="insightsColumnSettingsPanel"/);
+  assert.match(app, /insightsListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.insights/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="insights"/);
+  assert.match(app, /params\.set\('sort', state\.insightsListLayout\?\.sortPreset/);
+  assert.doesNotMatch(app, /insightsColumnDefinitions[\s\S]{0,2500}ai_/i);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',
