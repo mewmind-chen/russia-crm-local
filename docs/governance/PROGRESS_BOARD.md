@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 03:21:58`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 03:51:59`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `f544554`（相对 origin/main ahead 216） |
-| 工作区 | 干净 |
+| HEAD | `bd75fb3`（相对 origin/main ahead 218） |
+| 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 2031/2031 |
 | 核心测试 | `npm test` 1670/1670 |
 | sales_crm.js | 12883 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-01-phase-e-source-tags-widget.md` |
+| 最近会话 | `2026-09-01-all-list-pages-personal-layout-target.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
 | feat(...) | 32 |
-| docs(governance) | 85 |
+| docs(governance) | 87 |
 | 其他 | 15 |
 
 ## 阶段 0：治理基础
@@ -186,6 +186,7 @@
 ### 待办
 
 - [ ] **frontend** 销售/经理页面浏览器验证：先建立临时 SQLite + 127.0.0.1 + 禁用 AI provider/monitor 的 Phase E preview harness，再验证默认 customerProfile 与 profile-only 兼容入口（尚未运行）
+- [ ] **frontend** 统一所有业务列表页 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序
 - [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body
 - [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）
 
