@@ -6,6 +6,37 @@
   const uiFormat = window.TradePulseUIFormat;
   const nextActionTime = window.TradePulseNextActionTime;
   const listWidget = window.TradePulseListWidget;
+  function normalizedListSort(layout, columns) {
+    return listWidget?.normalizeSort
+      ? listWidget.normalizeSort(layout?.sort, columns)
+      : [];
+  }
+  function listSortRequestValue(layout, columns, fallback = '') {
+    const configured = normalizedListSort(layout, columns);
+    if (configured.length) {
+      return JSON.stringify(configured.map(item => ({
+        field: item.sortKey || item.key,
+        direction: item.direction,
+      })));
+    }
+    return fallback;
+  }
+  function listColumnsForPage(pageKey) {
+    switch (pageKey) {
+      case 'customers': return customerListColumnDefinitions();
+      case 'intake':
+      case 'lead_flow': return intakeColumnDefinitions();
+      case 'pipeline': return pipelineColumnDefinitions();
+      case 'alerts': return alertsColumnDefinitions();
+      case 'insights': return insightsColumnDefinitions();
+      case 'recycle_bin': return recycleBinColumnDefinitions();
+      case 'manager_tasks': return managerTasksColumnDefinitions();
+      case 'manager_risks': return managerRisksColumnDefinitions();
+      case 'manager_metrics': return managerMetricsColumnDefinitions();
+      case 'notifications': return notificationsColumnDefinitions();
+      default: return [];
+    }
+  }
   // source-tags-widget.js 是 shell 必需资产；缺失时兼容 wrapper fail-closed 为空标签。
   function sourceTagsWidgetApi() {
     return typeof window !== 'undefined' ? window.TradePulseSourceTagsWidget : null;
@@ -842,7 +873,7 @@
       ? listWidget.loadPreferences(dashboardCountryListLayoutStorageKey(), undefined, columns)
       : defaultDashboardCountryListLayout();
     const allowedSorts = ['value_per_account_desc', 'accounts_desc', 'reply_rate_desc', 'rfq_rate_desc', 'order_rate_desc', 'country_asc'];
-    if (!allowedSorts.includes(state.dashboardCountryListLayout.sortPreset)) {
+    if (!state.dashboardCountryListLayout.sort?.length && !allowedSorts.includes(state.dashboardCountryListLayout.sortPreset)) {
       state.dashboardCountryListLayout = {
         ...state.dashboardCountryListLayout,
         sortPreset: 'value_per_account_desc',
@@ -939,7 +970,7 @@
       ? listWidget.loadPreferences(marketsCountryListLayoutStorageKey(), undefined, columns)
       : defaultMarketsCountryListLayout();
     const allowedSorts = ['value_per_account_desc', 'revenue_desc', 'accounts_desc', 'reply_rate_desc', 'order_rate_desc', 'country_asc'];
-    if (!allowedSorts.includes(state.marketsCountryListLayout.sortPreset)) {
+    if (!state.marketsCountryListLayout.sort?.length && !allowedSorts.includes(state.marketsCountryListLayout.sortPreset)) {
       state.marketsCountryListLayout = { ...state.marketsCountryListLayout, sortPreset: 'value_per_account_desc' };
     }
     if ($('#marketCountrySort')) $('#marketCountrySort').value = state.marketsCountryListLayout.sortPreset;
@@ -1030,7 +1061,7 @@
       ? listWidget.loadPreferences(marketsCohortListLayoutStorageKey(), undefined, columns)
       : defaultMarketsCohortListLayout();
     const allowedSorts = ['cohort_desc', 'revenue_desc', 'assigned_desc', 'reply_rate_desc', 'order_rate_desc'];
-    if (!allowedSorts.includes(state.marketsCohortListLayout.sortPreset)) {
+    if (!state.marketsCohortListLayout.sort?.length && !allowedSorts.includes(state.marketsCohortListLayout.sortPreset)) {
       state.marketsCohortListLayout = { ...state.marketsCohortListLayout, sortPreset: 'cohort_desc' };
     }
     if ($('#marketCohortSort')) $('#marketCohortSort').value = state.marketsCohortListLayout.sortPreset;
@@ -1118,7 +1149,7 @@
       ? listWidget.loadPreferences(marketsSegmentsListLayoutStorageKey(), undefined, columns)
       : defaultMarketsSegmentsListLayout();
     const allowedSorts = ['order_rate_desc', 'rfq_rate_desc', 'reply_rate_desc', 'accounts_desc', 'name_asc'];
-    if (!allowedSorts.includes(state.marketsSegmentsListLayout.sortPreset)) {
+    if (!state.marketsSegmentsListLayout.sort?.length && !allowedSorts.includes(state.marketsSegmentsListLayout.sortPreset)) {
       state.marketsSegmentsListLayout = { ...state.marketsSegmentsListLayout, sortPreset: 'order_rate_desc' };
     }
     if ($('#marketSegmentsSort')) $('#marketSegmentsSort').value = state.marketsSegmentsListLayout.sortPreset;
@@ -1296,7 +1327,7 @@
       ? listWidget.loadPreferences(researchPeopleListLayoutStorageKey(), undefined, columns)
       : defaultResearchPeopleListLayout();
     const allowedSorts = ['sales_ready', 'contact_level', 'updated_desc', 'company_asc'];
-    if (!allowedSorts.includes(state.researchPeopleListLayout.sortPreset)) {
+    if (!state.researchPeopleListLayout.sort?.length && !allowedSorts.includes(state.researchPeopleListLayout.sortPreset)) {
       state.researchPeopleListLayout = {
         ...state.researchPeopleListLayout,
         sortPreset: 'sales_ready',
@@ -1393,7 +1424,7 @@
       ? listWidget.loadPreferences(reconListLayoutStorageKey(), undefined, columns)
       : defaultReconListLayout();
     const allowedSorts = ['updated_desc', 'score_desc', 'company_asc'];
-    if (!allowedSorts.includes(state.reconListLayout.sortPreset)) {
+    if (!state.reconListLayout.sort?.length && !allowedSorts.includes(state.reconListLayout.sortPreset)) {
       state.reconListLayout = { ...state.reconListLayout, sortPreset: 'updated_desc' };
     }
     if ($('#reconSort')) $('#reconSort').value = state.reconListLayout.sortPreset;
@@ -1482,7 +1513,7 @@
       ? listWidget.loadPreferences(recycleBinListLayoutStorageKey(), undefined, columns)
       : defaultRecycleBinListLayout();
     const allowedSorts = ['recycled_desc', 'recycled_asc', 'company_asc', 'reason_asc'];
-    if (!allowedSorts.includes(state.recycleBinListLayout.sortPreset)) {
+    if (!state.recycleBinListLayout.sort?.length && !allowedSorts.includes(state.recycleBinListLayout.sortPreset)) {
       state.recycleBinListLayout = { ...state.recycleBinListLayout, sortPreset: 'recycled_desc' };
     }
     if ($('#recycleSort')) $('#recycleSort').value = state.recycleBinListLayout.sortPreset;
@@ -1584,7 +1615,7 @@
       ? listWidget.loadPreferences(intakeListLayoutStorageKey(), undefined, columns)
       : defaultIntakeListLayout();
     const allowedSorts = ['status_priority', 'recent_update', 'company_asc', 'claim_due_asc'];
-    if (!allowedSorts.includes(state.intakeListLayout.sortPreset)) {
+    if (!state.intakeListLayout.sort?.length && !allowedSorts.includes(state.intakeListLayout.sortPreset)) {
       state.intakeListLayout = { ...state.intakeListLayout, sortPreset: 'status_priority' };
     }
     if ($('#intakeSort')) $('#intakeSort').value = state.intakeListLayout.sortPreset;
@@ -1734,7 +1765,7 @@
       ? listWidget.loadPreferences(alertsListLayoutStorageKey(), undefined, columns)
       : defaultAlertsListLayout();
     const allowedSorts = ['urgency_priority', 'due_at_asc', 'recent_update', 'company_asc'];
-    if (!allowedSorts.includes(state.alertsListLayout.sortPreset)) {
+    if (!state.alertsListLayout.sort?.length && !allowedSorts.includes(state.alertsListLayout.sortPreset)) {
       state.alertsListLayout = { ...state.alertsListLayout, sortPreset: 'urgency_priority' };
     }
     if ($('#alertsSort')) $('#alertsSort').value = state.alertsListLayout.sortPreset;
@@ -1825,7 +1856,7 @@
       ? listWidget.loadPreferences(notificationsListLayoutStorageKey(), undefined, columns)
       : defaultNotificationsListLayout();
     const allowedSorts = ['unread_priority', 'recent_update', 'severity_priority', 'title_asc'];
-    if (!allowedSorts.includes(state.notificationsListLayout.sortPreset)) {
+    if (!state.notificationsListLayout.sort?.length && !allowedSorts.includes(state.notificationsListLayout.sortPreset)) {
       state.notificationsListLayout = { ...state.notificationsListLayout, sortPreset: 'unread_priority' };
     }
     if ($('#notificationsSort')) $('#notificationsSort').value = state.notificationsListLayout.sortPreset;
@@ -1914,7 +1945,7 @@
       ? listWidget.loadPreferences(pipelineListLayoutStorageKey(), undefined, columns)
       : defaultPipelineListLayout();
     const allowedSorts = ['pending_action', 'recent_activity', 'stage_asc', 'company_asc'];
-    if (!allowedSorts.includes(state.pipelineListLayout.sortPreset)) {
+    if (!state.pipelineListLayout.sort?.length && !allowedSorts.includes(state.pipelineListLayout.sortPreset)) {
       state.pipelineListLayout = { ...state.pipelineListLayout, sortPreset: 'pending_action' };
     }
     if ($('#pipelineSort')) $('#pipelineSort').value = state.pipelineListLayout.sortPreset;
@@ -2445,7 +2476,11 @@
         pageSize: String(state.customerList.pageSize),
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
-        sort: $('#customerSort')?.value || 'pending_priority',
+        sort: listSortRequestValue(
+          state.customerListLayout,
+          customerListColumnDefinitions(),
+          $('#customerSort')?.value || 'pending_priority',
+        ),
         starView: state.customerStarView,
       });
       const result = await api(`/accounts?${params}`);
@@ -2682,6 +2717,19 @@
     const config = authorizedBusinessConfig[pageKey];
     const meta = state.authorizedBusinessLists[pageKey];
     if (!config || !meta?.filterController || (meta.loading && !reset && !force)) return;
+    // Keep this loader self-contained: a few stale-response contract tests extract
+    // the function body in isolation, so sort serialization cannot rely on the
+    // surrounding page registry or column-definition helpers.
+    const listSortRequestValue = (layout, _columns, fallback) => {
+      const sort = Array.isArray(layout?.sort) ? layout.sort : [];
+      return sort.length
+        ? JSON.stringify(sort.map(item => ({
+          field: item.sortKey || item.key,
+          direction: item.direction === 'desc' ? 'desc' : 'asc',
+        })))
+        : fallback;
+    };
+    const listColumnsForPage = () => [];
     if (reset) {
       Object.assign(meta, {
         page: 1,
@@ -2716,22 +2764,31 @@
       }
       if (pageKey === 'pipeline') params.set('starView', state.pipelineStarView);
       if (pageKey === 'recycle_bin') {
-        params.set('sort', state.recycleBinListLayout.sortPreset || 'recycled_desc');
+        params.set('sort', listSortRequestValue(state.recycleBinListLayout, listColumnsForPage(pageKey), state.recycleBinListLayout.sortPreset || 'recycled_desc'));
       }
       if (pageKey === 'pipeline') {
-        params.set('sort', state.pipelineListLayout.sortPreset || 'pending_action');
+        params.set('sort', listSortRequestValue(state.pipelineListLayout, listColumnsForPage(pageKey), state.pipelineListLayout.sortPreset || 'pending_action'));
       }
       if (pageKey === 'intake') {
-        params.set('sort', state.intakeListLayout.sortPreset || 'status_priority');
+        params.set('sort', listSortRequestValue(state.intakeListLayout, listColumnsForPage(pageKey), state.intakeListLayout.sortPreset || 'status_priority'));
       }
       if (pageKey === 'alerts') {
-        params.set('sort', state.alertsListLayout?.sortPreset || 'urgency_priority');
+        params.set('sort', listSortRequestValue(state.alertsListLayout, listColumnsForPage(pageKey), state.alertsListLayout?.sortPreset || 'urgency_priority'));
       }
       if (pageKey === 'notifications') {
-        params.set('sort', state.notificationsListLayout?.sortPreset || 'unread_priority');
+        params.set('sort', listSortRequestValue(state.notificationsListLayout, listColumnsForPage(pageKey), state.notificationsListLayout?.sortPreset || 'unread_priority'));
       }
       if (pageKey === 'insights') {
-        params.set('sort', state.insightsListLayout?.sortPreset || 'evaluation_updated_desc');
+        params.set('sort', listSortRequestValue(state.insightsListLayout, listColumnsForPage(pageKey), state.insightsListLayout?.sortPreset || 'evaluation_updated_desc'));
+      }
+      if (pageKey === 'manager_tasks') {
+        params.set('sort', listSortRequestValue(state.managerTasksListLayout, listColumnsForPage(pageKey), state.managerTasksListLayout?.sortPreset || 'due_at_asc'));
+      }
+      if (pageKey === 'manager_risks') {
+        params.set('sort', listSortRequestValue(state.managerRisksListLayout, listColumnsForPage(pageKey), state.managerRisksListLayout?.sortPreset || 'due_at_asc'));
+      }
+      if (pageKey === 'manager_metrics') {
+        params.set('sort', listSortRequestValue(state.managerMetricsListLayout, listColumnsForPage(pageKey), state.managerMetricsListLayout?.sortPreset || 'actor_asc'));
       }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
@@ -3360,6 +3417,11 @@
       rfq_rate: ratePill(row.rfqRate),
       order_rate: ratePill(row.orderRate),
       value_per_account: money(row.valuePerAccount),
+      _sort: {
+        country: row.country || '', accounts: Number(row.accounts || 0),
+        replyRate: Number(row.replyRate || 0), rfqRate: Number(row.rfqRate || 0),
+        orderRate: Number(row.orderRate || 0), valuePerAccount: Number(row.valuePerAccount || 0),
+      },
     }));
     root.innerHTML = listWidget?.renderTable
       ? listWidget.renderTable({
@@ -3517,10 +3579,18 @@
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
       if (kind === 'contacts') {
-        params.set('sort', state.researchPeopleListLayout.sortPreset || 'sales_ready');
+        params.set('sort', listSortRequestValue(
+          state.researchPeopleListLayout,
+          researchPeopleColumnDefinitions(),
+          state.researchPeopleListLayout.sortPreset || 'sales_ready',
+        ));
       }
       if (kind === 'recon') {
-        params.set('sort', state.reconListLayout?.sortPreset || 'updated_desc');
+        params.set('sort', listSortRequestValue(
+          state.reconListLayout,
+          reconColumnDefinitions(),
+          state.reconListLayout?.sortPreset || 'updated_desc',
+        ));
       }
       const result = await api(
         `/api/sales-crm/research/${config.endpointKind}?${params}`,
@@ -3665,6 +3735,12 @@
       level: `<span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>`,
       methods: esc(item.methods_summary || '未找到直接联系方式'),
       status: item.sales_ready ? '<span class="good-text">可交付销售</span>' : '<span class="subtle">仍需验证</span>',
+      _sort: {
+        company_name: item.company_name || item.customer_id || '',
+        full_name: item.name || item.full_name || item.full_name_local || '',
+        title: item.title || '', contact_level: item.contact_level || '',
+        methods_summary: item.methods_summary || '', sales_ready: item.sales_ready ? 1 : 0,
+      },
       _attrs: `data-person-candidate="${esc(item.person_id || '')}"`,
     }));
     root.innerHTML = listWidget?.renderTable
@@ -3698,6 +3774,12 @@
       report: item.job_id && can('view_recon') && can('view_contacts')
         ? `<a class="text-button" href="/api/report?job_id=${encodeURIComponent(item.job_id)}" target="_blank">查看报告</a>`
         : '<span class="subtle">已关联档案</span>',
+      _sort: {
+        company_name: item.company_name || item.customer_id || '', score: item.score || '',
+        customer_type: item.customer_type || item.industry || '',
+        opportunity_summary: item.opportunity_summary || item.next_action || '',
+        contacts_summary: item.contacts_summary || item.contact_name || '',
+      },
     }));
     root.innerHTML = listWidget?.renderTable
       ? listWidget.renderTable({
@@ -4401,6 +4483,12 @@
             : '';
         }
         record._attrs = row._attrs;
+        record._sort = {
+          company_name: accountDisplayName(item), fit_score: Number(signals.fitScore || 0),
+          suggested_owner_name: item.suggested_owner_name || item.suggestedOwnerName || '',
+          contact_level: item.contact_level || '', assigned_owner_name: item.assigned_owner_name || '',
+          status: item.status || '',
+        };
         return record;
       });
     const visibleColumns = listWidget?.resolveColumns
@@ -4448,7 +4536,6 @@
       const result = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'zh-CN', { numeric: true });
       return result * direction;
     });
-    batchRows.forEach(row => delete row._sort);
     $('#intakeBatchTable').innerHTML = listWidget.renderTable({ columns: batchColumns, rows: batchRows, preferences: batchPrefs, attrs: 'data-list-page="intake_batches"', emptyText: '暂无入库批次' });
   }
 
@@ -6187,13 +6274,23 @@
           ? `<span class="good-text">${esc(primaryStatus.label)}</span>`
           : `<span class="pill ${primaryStatus.tone}">${esc(primaryStatus.label)}</span>`,
         actions: `${lifecycleActions.length ? `<div class="assignment-actions">${rowActionCluster(lifecycleActions.slice(0, 2), lifecycleActions.slice(2))}</div>` : ''}`,
+        _sort: {
+          company: accountDisplayName(account), country: account.country || '', stage: account.stage || '',
+          owner: account.owner_name || '', last_activity: account.last_activity_at || '',
+          next_action: account.next_action || '', priority: account.priority || '',
+          status: account.lifecycle_status || account.assignment_status || primaryStatus.label || '',
+        },
       };
     });
     rows.forEach((row, index) => {
       row._id = accounts[index].id;
       row._attrs = `data-customer="${esc(accounts[index].id)}"`;
     });
-    const tablePreferences = { visibleColumns: renderColumns.map(column => column.key), columnOrder: renderColumns.map(column => column.key) };
+    const tablePreferences = {
+      ...state.customerListLayout,
+      visibleColumns: state.customerListLayout?.visibleColumns || renderColumns.map(column => column.key),
+      columnOrder: state.customerListLayout?.columnOrder || renderColumns.map(column => column.key),
+    };
     $('#customerTable').innerHTML = listWidget?.renderTable
       ? listWidget.renderTable({ columns: renderColumns, rows, preferences: tablePreferences, attrs: 'data-list-page="customers"' })
       : table(renderColumns.map(column => column.header || column.label), rows.map(row => renderColumns.map(column => row[column.key])));
@@ -6324,6 +6421,10 @@
           reason: esc(row.reason || '—'),
           recycled_at: shortDate(row.recycledAt, true),
           actions: actionCell,
+          _sort: {
+            company_name: accountDisplayName(row), previous_owner_name: row.previousOwnerName || '',
+            reason: row.reason || '', recycled_at: row.recycledAt || '',
+          },
           _attrs: `data-recycle-record="${esc(row.recordKey)}"`,
         };
       });
@@ -6709,6 +6810,10 @@
         next_action: `${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div>`,
         owner: `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
         actions: rowActionCluster(primaryActions, moreActions),
+        _sort: {
+          company_name: accountDisplayName(account), stage: account.stage || '',
+          next_action_at: account.next_action_at || '', owner_name: account.owner_name || '',
+        },
         _attrs: 'class="pipeline-action-row"',
       };
     });
@@ -6940,6 +7045,12 @@
         due_at: esc(todayTaskDueText(item)),
         owner: esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
         actions: todayTaskActionMarkup(item),
+        _sort: {
+          urgency: item.urgency === 'immediate' ? 0 : item.urgency === 'today' ? 1 : 2,
+          companyName: accountDisplayName(account || item),
+          reasonCount: Number(item.reasonCount || 1), dueAt: item.dueAt || item.due_at || '',
+          ownerName: item.ownerName || account?.owner_name || userById(item.ownerId)?.name || '',
+        },
         _attrs: item.intakeItemId
           ? `data-intake-profile="${esc(item.intakeItemId)}"`
           : `data-customer="${esc(item.customerId)}"`,
@@ -7038,7 +7149,7 @@
       ? listWidget.loadPreferences(managerTasksListLayoutStorageKey(), undefined, columns)
       : defaultManagerTasksListLayout();
     const allowedSorts = ['due_at_asc', 'due_at_desc', 'status_asc', 'status_desc', 'owner_asc', 'reason_asc', 'company_asc'];
-    if (!allowedSorts.includes(state.managerTasksListLayout.sortPreset)) {
+    if (!state.managerTasksListLayout.sort?.length && !allowedSorts.includes(state.managerTasksListLayout.sortPreset)) {
       state.managerTasksListLayout = { ...state.managerTasksListLayout, sortPreset: 'due_at_asc' };
     }
     if ($('#managerTaskSort')) $('#managerTaskSort').value = state.managerTasksListLayout.sortPreset;
@@ -7128,7 +7239,7 @@
       ? listWidget.loadPreferences(managerRisksListLayoutStorageKey(), undefined, columns)
       : defaultManagerRisksListLayout();
     const allowedSorts = ['due_at_asc', 'due_at_desc', 'status_asc', 'status_desc', 'owner_asc', 'reason_asc', 'company_asc'];
-    if (!allowedSorts.includes(state.managerRisksListLayout.sortPreset)) {
+    if (!state.managerRisksListLayout.sort?.length && !allowedSorts.includes(state.managerRisksListLayout.sortPreset)) {
       state.managerRisksListLayout = { ...state.managerRisksListLayout, sortPreset: 'due_at_asc' };
     }
     if ($('#managerRiskSort')) $('#managerRiskSort').value = state.managerRisksListLayout.sortPreset;
@@ -7228,7 +7339,7 @@
       ? listWidget.loadPreferences(managerMetricsListLayoutStorageKey(), undefined, columns)
       : defaultManagerMetricsListLayout();
     const allowedSorts = ['actor_asc', 'actor_desc', 'active_desc', 'deferred_desc', 'threshold_desc', 'plan_rate_desc', 'on_time_rate_desc', 'review_first'];
-    if (!allowedSorts.includes(state.managerMetricsListLayout.sortPreset)) {
+    if (!state.managerMetricsListLayout.sort?.length && !allowedSorts.includes(state.managerMetricsListLayout.sortPreset)) {
       state.managerMetricsListLayout = { ...state.managerMetricsListLayout, sortPreset: 'actor_asc' };
     }
     if ($('#managerMetricSort')) $('#managerMetricSort').value = state.managerMetricsListLayout.sortPreset;
@@ -7349,6 +7460,11 @@
       due_at: `<strong>${esc(shortDate(task.dueAt, true))}</strong>`,
       triggered_at: esc(shortDate(task.triggeredAt, true)),
       actions: managerTaskButton(task),
+      _sort: {
+        companyName: managerTaskName(task), customerId: task.customerId || '', status: task.status || '',
+        ownerName: task.ownerName || userById(task.ownerId)?.name || task.ownerId || '',
+        reason: task.reason || '', dueAt: task.dueAt || '', triggeredAt: task.triggeredAt || '',
+      },
     }));
     const visibleColumns = listWidget?.resolveColumns
       ? listWidget.resolveColumns(columns, state.managerTasksListLayout)
@@ -7416,6 +7532,11 @@
       due_at: `<strong>${esc(shortDate(task.dueAt, true))}</strong>`,
       triggered_at: esc(shortDate(task.triggeredAt, true)),
       actions: managerTaskButton(task, '查看历史'),
+      _sort: {
+        companyName: managerTaskName(task), customerId: task.customerId || '', status: task.status || '',
+        ownerName: task.ownerName || userById(task.ownerId)?.name || task.ownerId || '',
+        reason: task.reason || '', dueAt: task.dueAt || '', triggeredAt: task.triggeredAt || '',
+      },
     }));
     const visibleColumns = listWidget?.resolveColumns
       ? listWidget.resolveColumns(columns, state.managerRisksListLayout)
@@ -7542,6 +7663,14 @@
       review_status: row.needsManagerReview
         ? `<span class="pill amber">需要主管复盘</span><small class="subtle">${esc(managerMetricAvailabilityCopy(row))}</small>`
         : `<span class="pill gray">暂不判断整体风险</span><small class="subtle">${esc(managerMetricAvailabilityCopy(row))}</small>`,
+      _sort: {
+        actorName: row.actorName || row.actorId || '', rangeDays: Number(row.rangeDays || 0),
+        activeCustomers: Number(row.counts?.activeCustomers || 0), deferredCustomers: Number(row.counts?.deferredCustomers || 0),
+        thresholdCustomers: Number(row.counts?.thresholdCustomers || 0), plannedAfterDeferredCustomers: Number(row.counts?.plannedAfterDeferredCustomers || 0),
+        onTimeActionCustomers: Number(row.counts?.onTimeActionCustomers || 0), firstTouchSilentCustomers: Number(row.counts?.firstTouchSilentCustomers || 0),
+        unimprovedAfterInterventionCustomers: Number(row.counts?.unimprovedAfterInterventionCustomers || 0),
+        needsManagerReview: row.needsManagerReview ? 1 : 0,
+      },
     }));
     const visibleColumns = listWidget?.resolveColumns
       ? listWidget.resolveColumns(columns, state.managerMetricsListLayout)
@@ -7641,6 +7770,10 @@
           created_at: `${esc(shortDate(item.createdAt, true))}<small class="subtle">${esc(recipient)}</small>`,
           delivery: channelFailed ? '<span class="pill amber">企微失败</span>' : '<span class="pill gray">网页正常</span>',
           actions: `${action}${readAction}`,
+          _sort: {
+            status: item.status === 'unread' ? 0 : 1, title: item.title || '', customerName: accountDisplayName(account),
+            detail: item.detail || '', createdAt: item.createdAt || '', deliveryStatus: channelFailed ? 'failed' : 'delivered',
+          },
           _attrs: `data-notification-row="${esc(item.id)}"`,
         },
       };
@@ -7826,7 +7959,7 @@
       'evaluation_updated_desc', 'evaluation_updated_asc', 'evaluation_status_priority',
       'evaluation_count_desc', 'company_asc', 'owner_asc', 'stage_asc',
     ];
-    if (!allowedSorts.includes(state.insightsListLayout.sortPreset)) {
+    if (!state.insightsListLayout.sort?.length && !allowedSorts.includes(state.insightsListLayout.sortPreset)) {
       state.insightsListLayout = { ...state.insightsListLayout, sortPreset: 'evaluation_updated_desc' };
     }
     if ($('#insightsSort')) $('#insightsSort').value = state.insightsListLayout.sortPreset;
@@ -7937,6 +8070,12 @@
         ? shortDate(item.evaluationUpdatedAt || item.evaluatedAt, true)
         : '—'),
       actions: `<div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>`,
+      _sort: {
+        company_name: accountDisplayName(item), stage: item.stage || '', country: item.country || '',
+        owner_name: item.ownerName || '', evaluation_status: item.evaluationStatus === 'evaluated' ? 1 : 0,
+        evaluation_text: item.evaluationText || '', evaluation_count: Number(item.evaluationCount || 0),
+        evaluated_at: item.evaluationUpdatedAt || item.evaluatedAt || '',
+      },
       _attrs: `data-insight-row="${esc(item.customerId)}"`,
     }));
     const visibleColumns = listWidget?.resolveColumns
@@ -8350,6 +8489,17 @@
         actions_after_plan_customers: Number(row.counts?.actionsAfterPlanCustomers || 0),
         overdue_manager_tasks: Number(row.counts?.overdueManagerTasks || 0),
         escalated_manager_tasks: Number(row.counts?.escalatedManagerTasks || 0),
+        _sort: {
+          ownerName: user?.name || row.salesUserId || '', sampleSize: Number(row.sample?.size || 0),
+          progressRate: Number(row.ratios?.progressRate || 0),
+          progressedCustomers: Number(row.counts?.progressedCustomers || 0),
+          silentCustomers: Number(row.counts?.silentCustomers || 0),
+          repeatedDeferredCustomers: Number(row.counts?.repeatedDeferredCustomers || 0),
+          plansFormedCustomers: Number(row.counts?.plansFormedCustomers || 0),
+          actionsAfterPlanCustomers: Number(row.counts?.actionsAfterPlanCustomers || 0),
+          overdueManagerTasks: Number(row.counts?.overdueManagerTasks || 0),
+          escalatedManagerTasks: Number(row.counts?.escalatedManagerTasks || 0),
+        },
         _attrs: `data-team-sales-row="${esc(row.salesUserId)}"`,
       };
     });
@@ -8385,6 +8535,11 @@
           owner: esc(userById(row.ownerId)?.name || row.ownerId || '未分配'),
           country: esc(row.country || '—'), stage: esc(row.stage || '—'),
           facts: facts.length ? facts.map(label => `<span class="pill gray">${esc(label)}</span>`).join(' ') : '<span class="pill gray">持续沉默</span>',
+          _sort: {
+            companyName: row.companyName || row.customerId || '', customerId: row.customerId || '',
+            ownerName: userById(row.ownerId)?.name || row.ownerId || '', country: row.country || '',
+            stage: row.stage || '', facts: facts.join(' '),
+          },
           _attrs: `data-team-drilldown-row="${esc(row.accountId)}"`,
         };
       }
@@ -8395,6 +8550,11 @@
           owner: esc(userById(row.salesUserId)?.name || row.salesUserId || '未分配'),
           status: `<span class="pill ${row.status === 'overdue' || row.status === 'escalated' ? 'red' : 'gray'}">${esc(managerTaskStatusLabels[row.status] || row.status || '—')}</span>`,
           occurred_at: esc(shortDate(row.occurredAt, true)),
+          _sort: {
+            customerId: row.customerId || '', reason: row.reason || '',
+            ownerName: userById(row.salesUserId)?.name || row.salesUserId || '',
+            status: row.status || '', occurredAt: row.occurredAt || '',
+          },
           _attrs: `data-team-drilldown-row="${esc(row.taskId)}"`,
         };
       }
@@ -8403,6 +8563,11 @@
         kind: esc(kindLabels[row.kind] || row.kind || '事实'), customer_id: esc(row.customerId),
         owner: esc(userById(row.salesUserId)?.name || row.salesUserId || '未分配'),
         detail: esc(row.detail || '—'), occurred_at: esc(shortDate(row.occurredAt, true)),
+        _sort: {
+          kind: row.kind || '', customerId: row.customerId || '',
+          ownerName: userById(row.salesUserId)?.name || row.salesUserId || '',
+          detail: row.detail || '', occurredAt: row.occurredAt || '',
+        },
         _attrs: `data-team-drilldown-row="${esc(row.eventId)}"`,
       };
     });
@@ -8483,6 +8648,12 @@
         outcome: esc(item.outcome || '—'), next_step: esc(item.nextStep || '—'),
         created_at: esc(shortDate(item.createdAt, true)),
         actions: `${actionable ? `<button class="text-button" type="button" data-collaboration-supplement="${esc(item.eventId)}">补充</button><button class="text-button" type="button" data-collaboration-correct="${esc(item.eventId)}">更正</button><button class="text-button danger" type="button" data-collaboration-revoke="${esc(item.eventId)}">撤销</button>` : '<span class="subtle">—</span>'}`,
+        _sort: {
+          salesUserName: actorLabel, customerId: item.customerId || '', status: item.status || '',
+          source: item.source || '', relationType: item.relationType || '', problem: item.problem || '',
+          suggestion: item.suggestion || '', outcome: item.outcome || '', nextStep: item.nextStep || '',
+          createdAt: item.createdAt || '',
+        },
         _attrs: `class="${item.effective === false ? 'superseded' : ''}" data-collaboration-row="${esc(item.eventId)}"`,
       };
     });
@@ -8908,6 +9079,13 @@
         revenue: money(row.revenue),
         value_per_account: money(row.valuePerAccount),
         judgement: `<span class="pill ${judgement.includes('减少') ? 'red' : judgement.includes('积累') ? 'gray' : ''}">${judgement}</span>`,
+        _sort: {
+          country: row.country || '', accounts: Number(row.accounts || 0), contactRate: Number(row.contactRate || 0),
+          replyRate: Number(row.replyRate || 0), meetingRate: Number(row.meetingRate || 0),
+          rfqRate: Number(row.rfqRate || 0), orderRate: Number(row.orderRate || 0),
+          repeatRate: Number(row.repeatRate || 0), revenue: Number(row.revenue || 0),
+          valuePerAccount: Number(row.valuePerAccount || 0), judgement,
+        },
       };
     });
     $('#marketTable').innerHTML = listWidget?.renderTable
@@ -8939,6 +9117,11 @@
       rfq_rate: `${row.rfqRate.toFixed(1)}%`,
       order_rate: `${row.orderRate.toFixed(1)}%`,
       revenue: money(row.revenue),
+      _sort: {
+        cohort: row.cohort || '', assigned: Number(row.assigned || 0), contactRate: Number(row.contactRate || 0),
+        replyRate: Number(row.replyRate || 0), meetingRate: Number(row.meetingRate || 0),
+        rfqRate: Number(row.rfqRate || 0), orderRate: Number(row.orderRate || 0), revenue: Number(row.revenue || 0),
+      },
     }));
     $('#cohortTable').innerHTML = listWidget?.renderTable
       ? listWidget.renderTable({ columns: cohortColumns, rows: cohortTableRows, preferences: state.marketsCohortListLayout, attrs: 'data-list-page="markets_cohort"' })
@@ -8995,6 +9178,10 @@
         reply_rate: `${row.replyRate.toFixed(1)}%`,
         rfq_rate: `${row.rfqRate.toFixed(1)}%`,
         order_rate: ratePill(row.orderRate),
+        _sort: {
+          name: row.name || '', accounts: Number(row.accounts || 0),
+          replyRate: Number(row.replyRate || 0), rfqRate: Number(row.rfqRate || 0), orderRate: Number(row.orderRate || 0),
+        },
       }));
       const tableHtml = listWidget?.renderTable
         ? listWidget.renderTable({ columns, rows: tableRows, preferences: state.marketsSegmentsListLayout, attrs: 'data-list-page="markets_segments"' })
@@ -9036,7 +9223,12 @@
     if (!meta) return;
     const columns = accessListColumns(page);
     const preferences = listWidget.loadPreferences(accessListStorageKey(page), undefined, columns);
-    state[meta.stateKey] = { ...preferences, sortPreset: meta.sorts[preferences.sortPreset] ? preferences.sortPreset : meta.defaultSort };
+    state[meta.stateKey] = {
+      ...preferences,
+      sortPreset: preferences.sort?.length || meta.sorts[preferences.sortPreset]
+        ? preferences.sort?.length ? 'custom' : preferences.sortPreset
+        : meta.defaultSort,
+    };
     const select = $(`#${meta.sortId}`);
     if (select) select.value = state[meta.stateKey].sortPreset;
     const host = $(`#${meta.panel}`);
@@ -9151,11 +9343,11 @@
 
   function auditColumns() { const columns = [{ key: 'created_at', label: '时间', required: true, sortKey: 'createdAt' }, { key: 'operator', label: '操作人' }, { key: 'action', label: '动作', required: true }, { key: 'object', label: '对象' }, { key: 'detail', label: '详情' }]; const fields = state.fieldSchemas?.audit?.fields; if (!Array.isArray(fields) || !fields.length) return columns; const allowed = new Set(fields.map(field => String(field.key || '').trim())); return columns.filter(column => column.required || allowed.has(column.key)); }
   function auditStorageKey() { return `tradepulse.listLayout.audit.${state.data?.user?.id || 'anonymous'}`; }
-  function restoreAuditListLayout() { const columns = auditColumns(); state.auditListLayout = listWidget.loadPreferences(auditStorageKey(), undefined, columns); if (!['created_desc','created_asc','action_asc','operator_asc'].includes(state.auditListLayout.sortPreset)) state.auditListLayout = { ...state.auditListLayout, sortPreset: 'created_desc' }; if ($('#auditSort')) $('#auditSort').value = state.auditListLayout.sortPreset; const host = $('#auditColumnSettingsPanel'); if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.auditListLayout, title: '审计列设置' }); }
+  function restoreAuditListLayout() { const columns = auditColumns(); state.auditListLayout = listWidget.loadPreferences(auditStorageKey(), undefined, columns); if (!state.auditListLayout.sort?.length && !['created_desc','created_asc','action_asc','operator_asc'].includes(state.auditListLayout.sortPreset)) state.auditListLayout = { ...state.auditListLayout, sortPreset: 'created_desc' }; if ($('#auditSort')) $('#auditSort').value = state.auditListLayout.sortPreset; const host = $('#auditColumnSettingsPanel'); if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.auditListLayout, title: '审计列设置' }); }
   function moveAuditListColumn(key, move) { const columns = auditColumns(); const prefs = listWidget.normalizePreferences(state.auditListLayout, columns); const order = [...prefs.columnOrder]; const index = order.indexOf(key); const next = index + (move === 'up' ? -1 : 1); if (index < 0 || next < 0 || next >= order.length) return; [order[index], order[next]] = [order[next], order[index]]; state.auditListLayout = listWidget.savePreferences(auditStorageKey(), { ...prefs, columnOrder: order }, undefined, columns); restoreAuditListLayout(); renderAuditList(); }
   function resetAuditListLayout() { const columns = auditColumns(); state.auditListLayout = listWidget.savePreferences(auditStorageKey(), listWidget.defaultPreferences(columns), undefined, columns); restoreAuditListLayout(); renderAuditList(); }
   function closeAuditColumnSettings() { $('#auditColumnSettingsPanel')?.classList.add('hidden'); $('#auditColumnSettings')?.setAttribute('aria-expanded', 'false'); }
-  function renderAuditList() { const root = $('#auditTable'); if (!root || !can('view_users')) return; const columns = auditColumns(); const prefs = state.auditListLayout || listWidget.defaultPreferences(columns); const rows = (state.data.auditLog || []).map(row => ({ created_at: esc(shortDate(row.created_at, true)), operator: esc(auditOperator(row)), action: `<strong>${esc(row.action)}</strong>`, object: `${esc(row.entity_type)} · ${esc(row.entity_id || '—')}`, detail: `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`, _sort: { created: String(row.created_at || ''), action: String(row.action || ''), operator: String(auditOperator(row) || '') } })); const key = prefs.sortPreset?.startsWith('action') ? 'action' : prefs.sortPreset?.startsWith('operator') ? 'operator' : 'created'; const dir = prefs.sortPreset === 'created_asc' ? 1 : (prefs.sortPreset === 'created_desc' ? -1 : 1); rows.sort((a,b) => (a._sort[key] < b._sort[key] ? -1 : a._sort[key] > b._sort[key] ? 1 : 0) * dir); rows.forEach(row => delete row._sort); root.innerHTML = listWidget.renderTable({ columns, rows, preferences: prefs, attrs: 'data-list-page="audit"', emptyText: '暂无审计记录' }); }
+  function renderAuditList() { const root = $('#auditTable'); if (!root || !can('view_users')) return; const columns = auditColumns(); const prefs = state.auditListLayout || listWidget.defaultPreferences(columns); const rows = (state.data.auditLog || []).map(row => ({ created_at: esc(shortDate(row.created_at, true)), operator: esc(auditOperator(row)), action: `<strong>${esc(row.action)}</strong>`, object: `${esc(row.entity_type)} · ${esc(row.entity_id || '—')}`, detail: `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`, _sort: { createdAt: String(row.created_at || ''), action: String(row.action || ''), operator: String(auditOperator(row) || '') } })); const key = prefs.sortPreset?.startsWith('action') ? 'action' : prefs.sortPreset?.startsWith('operator') ? 'operator' : 'createdAt'; const dir = prefs.sortPreset === 'created_asc' ? 1 : (prefs.sortPreset === 'created_desc' ? -1 : 1); rows.sort((a,b) => (a._sort[key] < b._sort[key] ? -1 : a._sort[key] > b._sort[key] ? 1 : 0) * dir); root.innerHTML = listWidget.renderTable({ columns, rows, preferences: prefs, attrs: 'data-list-page="audit"', emptyText: '暂无审计记录' }); }
 
   function renderManagerTaskSettings() {
     const panel = $('#managerTaskSettingsPanel');
@@ -9663,7 +9855,12 @@
     }
     const columns = protectedCustomerColumns();
     root.innerHTML = listWidget?.renderTable ? listWidget.renderTable({ columns, preferences: model.listLayout || {}, rows: model.items.map(item => ({
-      external_customer_id: esc(item.externalCustomerId || '—'), alpha_nickname: `<div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div>`, crm_nickname: esc(item.crmNickname || '—'), company_name: esc(item.companyName || '—'), country: esc(item.country || '—'), city: esc(item.city || '—'), website: esc(item.website || '—'), industry: esc(item.industry || '—'), customer_type: esc(item.customerType || '—'), product_focus: esc(item.productFocus || '—'), status: protectedStatusMarkup(item.status), batch_id: esc(item.batchId || '—'), created_at: esc(shortDate(item.createdAt, true)), activated_at: esc(item.activatedAt ? shortDate(item.activatedAt, true) : '—'), updated_at: esc(shortDate(item.updatedAt, true)), actions: `<div class="protected-row-actions"><button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}</div>`
+      external_customer_id: esc(item.externalCustomerId || '—'), alpha_nickname: `<div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div>`, crm_nickname: esc(item.crmNickname || '—'), company_name: esc(item.companyName || '—'), country: esc(item.country || '—'), city: esc(item.city || '—'), website: esc(item.website || '—'), industry: esc(item.industry || '—'), customer_type: esc(item.customerType || '—'), product_focus: esc(item.productFocus || '—'), status: protectedStatusMarkup(item.status), batch_id: esc(item.batchId || '—'), created_at: esc(shortDate(item.createdAt, true)), activated_at: esc(item.activatedAt ? shortDate(item.activatedAt, true) : '—'), updated_at: esc(shortDate(item.updatedAt, true)), actions: `<div class="protected-row-actions"><button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}</div>`,
+      _sort: {
+        external_customer_id: item.externalCustomerId || '', alpha_nickname: item.alphaNickname || '',
+        company_name: item.companyName || '', country: item.country || '', status: item.status || '',
+        batch_id: item.batchId || '', created_at: item.createdAt || '', activated_at: item.activatedAt || '', updated_at: item.updatedAt || '',
+      },
     })) , attrs: 'class="protected-list-table"' }) : `<table><tbody>${model.items.map(item => `<tr>
       <td data-label="客户"><div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div></td>
       <td data-label="正式公司名称">${esc(item.companyName || '—')}</td>
@@ -10726,7 +10923,7 @@
       const targetPage = reset ? 1 : Math.max(1, Number(page || model.page || 1));
       const params = new URLSearchParams({
         status: model.status, query: model.query,
-        sort: model.sort || 'created_desc',
+        sort: listSortRequestValue(model.listLayout, protectedCustomerColumns(), model.sort || 'created_desc'),
         page: String(targetPage), pageSize: String(model.pageSize),
       });
       const result = await api(`/api/sales-crm/protected-customers?${params}`);
@@ -11036,7 +11233,6 @@
     const direction = preset.endsWith('_asc') ? 1 : -1;
     const key = preset.startsWith('created') ? 'createdAt' : preset.startsWith('operator') ? 'operator' : preset.startsWith('status') ? 'status' : 'target';
     rows.sort((a, b) => (a._sort[key] < b._sort[key] ? -1 : a._sort[key] > b._sort[key] ? 1 : 0) * direction);
-    rows.forEach(row => { delete row._sort; });
     const preferences = state.maintenanceRunsListLayout || (listWidget?.defaultPreferences ? listWidget.defaultPreferences(columns) : {});
     root.innerHTML = listWidget?.renderTable ? listWidget.renderTable({ columns, rows, preferences, attrs: 'data-list-page="maintenance_runs"', emptyText: '暂无维护记录' }) : table(columns.map(column => column.label), rows.map(row => columns.map(column => row[column.key])));
   }
@@ -11058,7 +11254,7 @@
   function restoreMaintenanceRunsListLayout() {
     const columns = maintenanceRunsColumns();
     state.maintenanceRunsListLayout = listWidget?.loadPreferences ? listWidget.loadPreferences(maintenanceRunsListStorageKey(), undefined, columns) : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sortPreset: 'created_desc' };
-    if (!['created_desc', 'created_asc', 'status_asc', 'operator_asc', 'target_desc'].includes(state.maintenanceRunsListLayout.sortPreset)) state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: 'created_desc' };
+    if (!state.maintenanceRunsListLayout.sort?.length && !['created_desc', 'created_asc', 'status_asc', 'operator_asc', 'target_desc'].includes(state.maintenanceRunsListLayout.sortPreset)) state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: 'created_desc' };
     if ($('#maintenanceRunsSort')) $('#maintenanceRunsSort').value = state.maintenanceRunsListLayout.sortPreset;
     const host = $('#maintenanceRunsColumnSettingsPanel');
     if (host && listWidget?.renderColumnSettingsHtml) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.maintenanceRunsListLayout, title: '维护记录列设置' });
@@ -12726,13 +12922,19 @@
       status: esc(statusLabels[row.status] || row.status || '已完成'),
       operator: esc(row.actorId || row.reviewerId || '系统'),
       created_at: esc(shortDate(row.createdAt, true)),
+      _sort: {
+        source: correctionProposalCustomer(row, 'source'), target: correctionProposalCustomer(row, 'target'),
+        milestone: row.milestoneType || row.originalActivityId || '', reason: row.reason || '',
+        status: statusLabels[row.status] || row.status || '已完成', operator: row.actorId || row.reviewerId || '系统',
+        createdAt: row.createdAt || '',
+      },
     }));
     return listWidget.renderTable({ columns, rows: data, preferences: prefs, attrs: 'data-list-page="correction_history"', emptyText: '当前筛选下没有更正历史' });
   }
   function restoreCorrectionHistoryListLayout() {
     const columns = correctionHistoryColumns();
     state.correctionHistoryListLayout = listWidget.loadPreferences(correctionHistoryStorageKey(), undefined, columns);
-    if (!['created_desc', 'created_asc'].includes(state.correctionHistoryListLayout.sortPreset)) {
+    if (!state.correctionHistoryListLayout.sort?.length && !['created_desc', 'created_asc'].includes(state.correctionHistoryListLayout.sortPreset)) {
       state.correctionHistoryListLayout = { ...state.correctionHistoryListLayout, sortPreset: 'created_desc' };
     }
     if ($('#correctionHistorySort')) $('#correctionHistorySort').value = state.correctionHistoryListLayout.sortPreset;
@@ -16854,6 +17056,7 @@
   });
 
   document.addEventListener('change', event => {
+    clearConfiguredListSortForPreset(event.target);
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
     if (event.target.id === 'managerTaskSort') {
       state.managerTasksListLayout = { ...state.managerTasksListLayout, sortPreset: event.target.value };
@@ -17204,7 +17407,135 @@
     }
     if (event.target.id === 'activitySummary') resizeActivitySummary(event.target);
   });
+
+  function listSortSettingsContext(panel) {
+    const id = panel?.id || '';
+    const contexts = {
+      dashboardCountryColumnSettingsPanel: { stateKey: 'dashboardCountryListLayout', columns: dashboardCountryColumnDefinitions, save: saveDashboardCountryListLayout, refresh: renderDashboard },
+      marketCountryColumnSettingsPanel: { stateKey: 'marketsCountryListLayout', columns: marketsCountryColumnDefinitions, save: saveMarketsCountryListLayout, refresh: renderMarkets },
+      marketCohortColumnSettingsPanel: { stateKey: 'marketsCohortListLayout', columns: marketsCohortColumnDefinitions, save: saveMarketsCohortListLayout, refresh: renderMarkets },
+      marketSegmentsColumnSettingsPanel: { stateKey: 'marketsSegmentsListLayout', columns: marketsSegmentsColumnDefinitions, save: saveMarketsSegmentsListLayout, refresh: renderMarkets },
+      customerColumnSettingsPanel: { stateKey: 'customerListLayout', columns: customerListColumnDefinitions, save: saveCustomerListLayout, refresh: () => void loadCustomerPage({ reset: true, force: true }) },
+      peopleColumnSettingsPanel: { stateKey: 'researchPeopleListLayout', columns: researchPeopleColumnDefinitions, save: saveResearchPeopleListLayout, refresh: () => void loadResearch('contacts', { reset: true }) },
+      reconColumnSettingsPanel: { stateKey: 'reconListLayout', columns: reconColumnDefinitions, save: saveReconListLayout, refresh: () => void loadResearch('recon', { reset: true }) },
+      recycleColumnSettingsPanel: { stateKey: 'recycleBinListLayout', columns: recycleBinColumnDefinitions, save: saveRecycleBinListLayout, refresh: () => void loadRecycleBin({ reset: true }) },
+      intakeColumnSettingsPanel: { stateKey: 'intakeListLayout', columns: intakeColumnDefinitions, save: saveIntakeListLayout, refresh: () => void loadAuthorizedBusinessPage('intake', { reset: true, force: true }) },
+      intakeBatchColumnSettingsPanel: { stateKey: 'intakeBatchListLayout', columns: intakeBatchColumns, save: () => saveIntakeBatchListLayout(state.intakeBatchListLayout), refresh: renderIntake },
+      alertsColumnSettingsPanel: { stateKey: 'alertsListLayout', columns: alertsColumnDefinitions, save: saveAlertsListLayout, refresh: () => void loadAuthorizedBusinessPage('alerts', { reset: true, force: true }) },
+      notificationsColumnSettingsPanel: { stateKey: 'notificationsListLayout', columns: notificationsColumnDefinitions, save: saveNotificationsListLayout, refresh: () => void loadAuthorizedBusinessPage('notifications', { reset: true, force: true }) },
+      pipelineColumnSettingsPanel: { stateKey: 'pipelineListLayout', columns: pipelineColumnDefinitions, save: savePipelineListLayout, refresh: () => void loadAuthorizedBusinessPage('pipeline', { reset: true, force: true }) },
+      managerTaskColumnSettingsPanel: { stateKey: 'managerTasksListLayout', columns: managerTasksColumnDefinitions, save: saveManagerTasksListLayout, refresh: () => void loadAuthorizedBusinessPage('manager_tasks', { reset: true, force: true }) },
+      managerRiskColumnSettingsPanel: { stateKey: 'managerRisksListLayout', columns: managerRisksColumnDefinitions, save: saveManagerRisksListLayout, refresh: () => void loadAuthorizedBusinessPage('manager_risks', { reset: true, force: true }) },
+      managerMetricColumnSettingsPanel: { stateKey: 'managerMetricsListLayout', columns: managerMetricsColumnDefinitions, save: saveManagerMetricsListLayout, refresh: () => void loadAuthorizedBusinessPage('manager_metrics', { reset: true, force: true }) },
+      insightsColumnSettingsPanel: { stateKey: 'insightsListLayout', columns: insightsColumnDefinitions, save: saveInsightsListLayout, refresh: () => void loadAuthorizedBusinessPage('insights', { reset: true, force: true }) },
+      teamProgressSalesColumnSettingsPanel: { kind: 'team', page: 'team_progress_sales' },
+      teamProgressDrilldownColumnSettingsPanel: { kind: 'team', page: 'team_progress_drilldown' },
+      teamCollaborationColumnSettingsPanel: { kind: 'team', page: 'team_collaboration' },
+      protectedColumnSettingsPanel: { stateKey: 'protectedCustomers', columns: protectedCustomerColumns, save: () => { state.protectedCustomers.listLayout = listWidget.savePreferences(protectedListLayoutKey(), { ...state.protectedCustomers.listLayout }, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); }, refresh: renderProtectedCustomers, nested: true },
+      maintenanceRunsColumnSettingsPanel: { stateKey: 'maintenanceRunsListLayout', columns: maintenanceRunsColumns, save: () => { listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns()); restoreMaintenanceRunsListLayout(); }, refresh: renderMaintenanceRuns },
+      correctionHistoryColumnSettingsPanel: { stateKey: 'correctionHistoryListLayout', columns: correctionHistoryColumns, save: () => { state.correctionHistoryListLayout = listWidget.savePreferences(correctionHistoryStorageKey(), state.correctionHistoryListLayout, undefined, correctionHistoryColumns()); renderCorrectionHistoryColumnSettings(); }, refresh: renderActivityCorrectionHistoryRows },
+      auditColumnSettingsPanel: { stateKey: 'auditListLayout', columns: auditColumns, save: () => { state.auditListLayout = listWidget.savePreferences(auditStorageKey(), state.auditListLayout, undefined, auditColumns()); restoreAuditListLayout(); }, refresh: renderAuditList },
+    }[id];
+    if (contexts) return contexts;
+    for (const page of ['users', 'archived_users', 'migration_review', 'permission_groups']) {
+      const meta = accessListLayoutMeta[page];
+      if (meta?.panel === id) return { kind: 'access', page };
+    }
+    return null;
+  }
+
+  function applyListSortSettings(panel) {
+    const context = listSortSettingsContext(panel);
+    if (!context) return false;
+    if (context.kind === 'team') {
+      const config = teamLayoutConfig(context.page);
+      const columns = config.columns();
+      const prefs = listWidget.normalizePreferences(state[config.stateKey], columns);
+      const sort = listWidget.readSortSettings(panel, columns);
+      state[config.stateKey] = { ...prefs, sort, sortPreset: sort.length ? 'custom' : config.defaults };
+      saveTeamListLayout(context.page);
+      renderTeam();
+      return true;
+    }
+    if (context.kind === 'access') {
+      const columns = accessListColumns(context.page);
+      const prefs = listWidget.normalizePreferences(accessListPreferences(context.page), columns);
+      const sort = listWidget.readSortSettings(panel, columns);
+      saveAccessListLayout(context.page, { ...prefs, sort, sortPreset: sort.length ? 'custom' : accessListLayoutMeta[context.page].defaultSort });
+      renderUsers();
+      return true;
+    }
+    const columns = context.columns();
+    const current = context.stateKey === 'protectedCustomers'
+      ? state.protectedCustomers.listLayout
+      : state[context.stateKey];
+    const prefs = listWidget.normalizePreferences(current, columns);
+    const sort = listWidget.readSortSettings(panel, columns);
+    const defaultSort = {
+      dashboardCountryListLayout: 'value_per_account_desc',
+      marketsCountryListLayout: 'value_per_account_desc',
+      marketsCohortListLayout: 'cohort_desc',
+      marketsSegmentsListLayout: 'order_rate_desc',
+      customerListLayout: 'pending_priority',
+      researchPeopleListLayout: 'sales_ready',
+      reconListLayout: 'updated_desc',
+      recycleBinListLayout: 'recycled_desc',
+      intakeListLayout: 'status_priority',
+      intakeBatchListLayout: 'batch_date_desc',
+      alertsListLayout: 'urgency_priority',
+      notificationsListLayout: 'unread_priority',
+      pipelineListLayout: 'pending_action',
+      managerTasksListLayout: 'due_at_asc',
+      managerRisksListLayout: 'due_at_asc',
+      managerMetricsListLayout: 'actor_asc',
+      insightsListLayout: 'evaluation_updated_desc',
+      maintenanceRunsListLayout: 'created_desc',
+      correctionHistoryListLayout: 'created_desc',
+      auditListLayout: 'created_desc',
+      protectedCustomers: 'created_desc',
+    }[context.stateKey] || '';
+    const next = {
+      ...prefs,
+      sort,
+      sortPreset: sort.length
+        ? 'custom'
+        : (prefs.sortPreset === 'custom' ? defaultSort : (prefs.sortPreset || defaultSort)),
+    };
+    if (context.stateKey === 'protectedCustomers') state.protectedCustomers.listLayout = next;
+    else state[context.stateKey] = next;
+    context.save?.();
+    context.refresh?.();
+    return true;
+  }
+
+  function clearConfiguredListSortForPreset(target) {
+    const stateKeys = {
+      customerSort: 'customerListLayout', dashboardCountrySort: 'dashboardCountryListLayout',
+      marketCountrySort: 'marketsCountryListLayout', marketCohortSort: 'marketsCohortListLayout',
+      marketSegmentsSort: 'marketsSegmentsListLayout', peopleSort: 'researchPeopleListLayout',
+      reconSort: 'reconListLayout', recycleSort: 'recycleBinListLayout', intakeSort: 'intakeListLayout',
+      alertsSort: 'alertsListLayout', notificationsSort: 'notificationsListLayout',
+      pipelineSort: 'pipelineListLayout', insightsSort: 'insightsListLayout',
+      managerTaskSort: 'managerTasksListLayout', managerRiskSort: 'managerRisksListLayout',
+      managerMetricSort: 'managerMetricsListLayout', teamProgressSalesSort: 'teamProgressSalesListLayout',
+      teamProgressDrilldownSort: 'teamProgressDrilldownListLayout', teamCollaborationSort: 'teamCollaborationListLayout',
+      auditSort: 'auditListLayout', maintenanceRunsSort: 'maintenanceRunsListLayout',
+      correctionHistorySort: 'correctionHistoryListLayout', intakeBatchSort: 'intakeBatchListLayout',
+    };
+    const key = stateKeys[target?.id || ''];
+    if (key) state[key] = { ...state[key], sort: [] };
+    if (target?.id === 'protectedSort') {
+      state.protectedCustomers.listLayout = { ...state.protectedCustomers.listLayout, sort: [] };
+    }
+  }
+
   document.addEventListener('change', event => {
+    clearConfiguredListSortForPreset(event.target);
+    const sortControl = event.target.closest?.('[data-list-sort-rank],[data-list-sort-direction]');
+    if (sortControl) {
+      applyListSortSettings(sortControl.closest('[data-list-column-settings-panel]') || sortControl.closest('.list-column-settings'));
+      return;
+    }
     if (event.target.matches('[data-list-column-toggle]')) {
       if (event.target.closest('#dashboardCountryColumnSettingsPanel')) {
         toggleDashboardCountryListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);

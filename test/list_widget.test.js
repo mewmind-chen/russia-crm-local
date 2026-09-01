@@ -131,6 +131,24 @@ test('column settings markup exposes visibility, order, reset, and close control
   assert.match(markup, /data-list-layout-reset/);
   assert.match(markup, /data-list-layout-close/);
   assert.match(markup, /data-list-column-toggle="company" checked disabled/);
+  assert.match(markup, /data-list-sort-rank="owner"/);
+  assert.match(markup, /data-list-sort-direction="owner"/);
+  assert.match(markup, /可为多个字段设置优先级/);
+});
+
+test('list widget executes multi-level sort with direction and stable tie-breaker', () => {
+  const rows = [
+    { id: 'b', owner: 'Zed', stage: 'open' },
+    { id: 'a', owner: 'Zed', stage: 'open' },
+    { id: 'c', owner: 'Amy', stage: 'open' },
+    { id: 'd', owner: 'Zed', stage: 'closed' },
+  ];
+  const sorted = widget.sortRows(rows, [
+    { key: 'owner', direction: 'asc', rank: 1 },
+    { key: 'stage', direction: 'desc', rank: 2 },
+  ], columns);
+  assert.deepEqual(sorted.map(row => row.id), ['c', 'a', 'b', 'd']);
+  assert.deepEqual(rows.map(row => row.id), ['b', 'a', 'c', 'd']);
 });
 
 test('descriptor table renderer keeps raw cell actions and row attributes', () => {
@@ -355,7 +373,7 @@ test('insights list uses the shared widget with per-user layout and server sorti
   assert.match(app, /insightsListLayout/);
   assert.match(app, /tradepulse\.listLayout\.insights/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="insights"/);
-  assert.match(app, /params\.set\('sort', state\.insightsListLayout\?\.sortPreset/);
+  assert.match(app, /listSortRequestValue\([\s\S]*state\.insightsListLayout/);
   assert.doesNotMatch(app, /insightsColumnDefinitions[\s\S]{0,2500}ai_/i);
 });
 
@@ -380,7 +398,7 @@ test('protected customer directory exposes only manual fields and shared list co
   assert.match(app, /team_collaboration', 'insights', 'protected_customers', 'recycle_bin'/);
   assert.match(app, /tradepulse\.listLayout\.protected_customers/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*protected-list-table/);
-  assert.match(app, /sort: model\.sort \|\| 'created_desc'/);
+  assert.match(app, /listSortRequestValue\(model\.listLayout/);
   assert.doesNotMatch(app, /protectedCustomerColumns[\s\S]{0,2400}ai_/i);
 });
 
@@ -400,7 +418,7 @@ test('research people list uses the shared widget with per-user layout and autho
   assert.match(app, /researchPeopleListLayout/);
   assert.match(app, /tradepulse\.listLayout\.contacts/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="contacts"/);
-  assert.match(app, /params\.set\('sort', state\.researchPeopleListLayout\??\.sortPreset/);
+  assert.match(app, /listSortRequestValue\([\s\S]*state\.researchPeopleListLayout/);
 });
 
 test('research recon list uses the shared widget with per-user layout and authorized columns', () => {
@@ -420,7 +438,7 @@ test('research recon list uses the shared widget with per-user layout and author
   assert.match(app, /reconListLayout/);
   assert.match(app, /tradepulse\.listLayout\.recon/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="recon"/);
-  assert.match(app, /params\.set\('sort', state\.reconListLayout\?\.sortPreset/);
+  assert.match(app, /listSortRequestValue\([\s\S]*state\.reconListLayout/);
 });
 
 test('recycle list uses the shared widget with per-user layout and server sorting', () => {
@@ -439,7 +457,7 @@ test('recycle list uses the shared widget with per-user layout and server sortin
   assert.match(app, /recycleBinListLayout/);
   assert.match(app, /tradepulse\.listLayout\.recycle_bin/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="recycle_bin"/);
-  assert.match(app, /params\.set\('sort', state\.recycleBinListLayout\.sortPreset/);
+  assert.match(app, /listSortRequestValue\(state\.recycleBinListLayout/);
 });
 
 test('pipeline list uses the shared widget with per-user layout and server sorting', () => {
@@ -458,7 +476,7 @@ test('pipeline list uses the shared widget with per-user layout and server sorti
   assert.match(app, /pipelineListLayout/);
   assert.match(app, /tradepulse\.listLayout\.pipeline/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="pipeline"/);
-  assert.match(app, /params\.set\('sort', state\.pipelineListLayout\.sortPreset/);
+  assert.match(app, /listSortRequestValue\(state\.pipelineListLayout/);
 });
 
 test('intake list uses the shared widget with per-user layout and server sorting', () => {
@@ -475,7 +493,7 @@ test('intake list uses the shared widget with per-user layout and server sorting
   assert.match(app, /intakeListLayout/);
   assert.match(app, /tradepulse\.listLayout\.intake/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="intake"/);
-  assert.match(app, /params\.set\('sort', state\.intakeListLayout\.sortPreset/);
+  assert.match(app, /listSortRequestValue\(state\.intakeListLayout/);
 });
 
 test('alerts list uses the shared widget with per-user layout and server sorting', () => {
@@ -494,7 +512,7 @@ test('alerts list uses the shared widget with per-user layout and server sorting
   assert.match(app, /alertsListLayout/);
   assert.match(app, /tradepulse\.listLayout\.alerts/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="alerts"/);
-  assert.match(app, /params\.set\('sort', state\.alertsListLayout\?\.sortPreset/);
+  assert.match(app, /listSortRequestValue\(state\.alertsListLayout/);
 });
 
 test('notifications list uses the shared widget with per-user layout and server sorting', () => {
@@ -513,7 +531,7 @@ test('notifications list uses the shared widget with per-user layout and server 
   assert.match(app, /notificationsListLayout/);
   assert.match(app, /tradepulse\.listLayout\.notifications/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*notification-grid/);
-  assert.match(app, /params\.set\('sort', state\.notificationsListLayout\?\.sortPreset/);
+  assert.match(app, /listSortRequestValue\(state\.notificationsListLayout/);
 });
 
 test('access administration lists and import batches use independent user layouts', () => {

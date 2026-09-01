@@ -64,18 +64,94 @@
     const source = Array.isArray(sort) ? sort : (sort ? [sort] : []);
     const result = [];
     const seen = new Set();
-    source.forEach(item => {
+    source.forEach((item, sourceIndex) => {
       const descriptor = item && typeof item === 'object' ? item : { key: item };
       const rawKey = String(descriptor.key || descriptor.sortKey || descriptor.field || '').trim();
       const column = byKey.get(rawKey) || bySortKey.get(rawKey);
       if (!column || !column.sortable || seen.has(column.sortKey)) return;
       const direction = String(descriptor.direction || descriptor.order || 'asc').toLowerCase() === 'desc'
         ? 'desc' : 'asc';
-      result.push(Object.freeze({ key: column.key, sortKey: column.sortKey, direction }));
+      const rawRank = Number(descriptor.rank ?? descriptor.priority ?? descriptor.level);
+      const rank = Number.isFinite(rawRank) && rawRank > 0 ? Math.floor(rawRank) : null;
+      result.push({
+        key: column.key,
+        sortKey: column.sortKey,
+        direction,
+        rank,
+        sourceIndex,
+      });
       seen.add(column.sortKey);
     });
-    if (result.length || !Array.isArray(fallback) || !fallback.length) return result;
+    if (result.length) {
+      const hasRank = result.some(item => item.rank != null);
+      result.sort((left, right) => {
+        if (!hasRank) return left.sourceIndex - right.sourceIndex;
+        const leftRank = left.rank == null ? Number.MAX_SAFE_INTEGER : left.rank;
+        const rightRank = right.rank == null ? Number.MAX_SAFE_INTEGER : right.rank;
+        return leftRank - rightRank || left.sourceIndex - right.sourceIndex;
+      });
+      return result.map(({ rank, sourceIndex, ...item }) => Object.freeze(item));
+    }
+    if (!Array.isArray(fallback) || !fallback.length) return result;
     return normalizeSort(fallback, normalized, []);
+  }
+
+  function compareSortValues(left, right) {
+    const leftEmpty = left == null || String(left).trim() === '';
+    const rightEmpty = right == null || String(right).trim() === '';
+    if (leftEmpty || rightEmpty) {
+      if (leftEmpty && rightEmpty) return 0;
+      return leftEmpty ? 1 : -1;
+    }
+    const leftNumber = typeof left === 'number' ? left : Number(left);
+    const rightNumber = typeof right === 'number' ? right : Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+      && /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(String(left).trim())
+      && /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(String(right).trim())) {
+      return leftNumber - rightNumber;
+    }
+    return String(left).localeCompare(String(right), 'zh-CN', { numeric: true, sensitivity: 'base' });
+  }
+
+  function sortRows(rows, sort, columns = [], options = {}) {
+    const records = Array.isArray(rows) ? rows : [];
+    const normalized = normalizeColumns(columns);
+    const descriptors = normalizeSort(sort, normalized);
+    if (!descriptors.length || records.length < 2) return [...records];
+    const byKey = new Map(normalized.map(column => [column.key, column]));
+    const getValue = typeof options.getValue === 'function'
+      ? options.getValue
+      : (record, column) => record?.[column.key] ?? record?.[column.sortKey];
+    const getTieBreaker = typeof options.tieBreaker === 'function'
+      ? options.tieBreaker
+      : record => record?.id ?? record?.key ?? record?.external_customer_id ?? '';
+    return records.map((record, index) => ({ record, index })).sort((left, right) => {
+      for (const descriptor of descriptors) {
+        const column = byKey.get(descriptor.key);
+        if (!column) continue;
+        const compared = compareSortValues(
+          getValue(left.record, column, descriptor),
+          getValue(right.record, column, descriptor),
+        );
+        if (compared) return descriptor.direction === 'desc' ? -compared : compared;
+      }
+      const tied = compareSortValues(getTieBreaker(left.record), getTieBreaker(right.record));
+      return tied || left.index - right.index;
+    }).map(item => item.record);
+  }
+
+  function readSortSettings(root, columns = []) {
+    const descriptors = [];
+    if (!root?.querySelectorAll) return [];
+    root.querySelectorAll('[data-list-sort-rank]').forEach(rankControl => {
+      const rank = Number(rankControl.value);
+      if (!Number.isFinite(rank) || rank < 1) return;
+      const row = rankControl.closest('[data-list-column-row]');
+      const key = String(rankControl.dataset.listSortRank || row?.dataset.listColumnRow || '').trim();
+      const directionControl = row?.querySelector('[data-list-sort-direction]');
+      descriptors.push({ key, rank, direction: directionControl?.value || 'asc' });
+    });
+    return normalizeSort(descriptors, columns);
   }
 
   function normalizePreferences(preferences = {}, columns = []) {
@@ -131,17 +207,33 @@
     const visible = new Set(resolved.map(column => column.key));
     const order = new Set(resolved.map(column => column.key));
     const ordered = [...resolved, ...normalized.filter(column => !order.has(column.key))];
+    const sort = normalizeSort(preferences.sort, normalized);
+    const sortByKey = new Map(sort.map((item, index) => [item.key, { ...item, rank: index + 1 }]));
+    const sortableCount = normalized.filter(column => column.sortable).length;
+    const rankOptions = rank => [
+      '<option value="">不排序</option>',
+      ...Array.from({ length: sortableCount }, (_value, index) => {
+        const value = index + 1;
+        return `<option value="${value}"${rank === value ? ' selected' : ''}>第${value}优先</option>`;
+      }),
+    ].join('');
     return `<div class="list-column-settings-head"><strong>${escapeHtml(title)}</strong><span class="subtle">只影响当前用户的列表显示</span></div>`
       + `<div class="list-column-settings-list">${ordered.map((column, index) => {
         const checked = visible.has(column.key) || column.required;
         const disabled = column.required ? ' disabled' : '';
         const upDisabled = index === 0 ? ' disabled' : '';
         const downDisabled = index === ordered.length - 1 ? ' disabled' : '';
+        const selectedSort = sortByKey.get(column.key);
+        const sortControls = column.sortable
+          ? `<span class="list-column-setting-sort"><label>优先级<select data-list-sort-rank="${escapeHtml(column.key)}" aria-label="${escapeHtml(column.label)}排序优先级">${rankOptions(selectedSort?.rank || 0)}</select></label><label>方向<select data-list-sort-direction="${escapeHtml(column.key)}" aria-label="${escapeHtml(column.label)}排序方向"><option value="asc"${selectedSort?.direction !== 'desc' ? ' selected' : ''}>升序</option><option value="desc"${selectedSort?.direction === 'desc' ? ' selected' : ''}>降序</option></select></label></span>`
+          : '<span class="list-column-setting-sort list-column-setting-sort-disabled">不可排序</span>';
         return `<div class="list-column-setting" data-list-column-row="${escapeHtml(column.key)}">`
           + `<label><input type="checkbox" data-list-column-toggle="${escapeHtml(column.key)}"${checked ? ' checked' : ''}${disabled}> <span>${escapeHtml(column.label)}</span></label>`
+          + sortControls
           + `<span class="list-column-setting-actions"><button type="button" class="text-button" data-list-column-move="up" data-list-column-key="${escapeHtml(column.key)}"${upDisabled} aria-label="上移 ${escapeHtml(column.label)}">↑</button><button type="button" class="text-button" data-list-column-move="down" data-list-column-key="${escapeHtml(column.key)}"${downDisabled} aria-label="下移 ${escapeHtml(column.label)}">↓</button></span>`
           + '</div>';
       }).join('')}</div>`
+      + '<div class="list-column-settings-help">可为多个字段设置优先级；未设置的字段不参与排序。相同值按稳定主键保持顺序。</div>'
       + '<div class="list-column-settings-footer"><button type="button" class="text-button" data-list-layout-reset>恢复默认</button><button type="button" class="button primary tiny" data-list-layout-close>完成</button></div>';
   }
 
@@ -154,15 +246,23 @@
     }
     const options = input || {};
     const columns = resolveColumns(options.columns || [], options.preferences || {});
+    const preferences = normalizePreferences(options.preferences || {}, options.columns || []);
     const records = Array.isArray(options.rows) ? options.rows : [];
-    if (!records.length) return `<div class="empty">${escapeHtml(options.emptyText || '暂无符合条件的数据')}</div>`;
+    const sortedRecords = preferences.sort.length
+      ? sortRows(records, preferences.sort, options.columns || [], {
+        getValue: (record, column) => (record?._sort || record?.__sort)?.[column.sortKey]
+          ?? record?.[column.key]
+          ?? record?.[column.sortKey],
+      })
+      : records;
+    if (!sortedRecords.length) return `<div class="empty">${escapeHtml(options.emptyText || '暂无符合条件的数据')}</div>`;
     const headers = columns.map(column => column.header || escapeHtml(column.label));
-    const cells = records.map((record, index) => columns.map(column => {
+    const cells = sortedRecords.map((record, index) => columns.map(column => {
       if (column.render) return column.render(record, index);
       return record?.[column.key] ?? '';
     }));
     return renderTable(headers, cells.map((row, index) => {
-      const source = records[index];
+      const source = sortedRecords[index];
       if (source?._attrs) row._attrs = source._attrs;
       return row;
     }), options.attrs || '', options.headerAttrs || '');
@@ -176,6 +276,9 @@
     defaultPreferences,
     normalizeSort,
     normalizePreferences,
+    compareSortValues,
+    sortRows,
+    readSortSettings,
     resolveColumns,
     loadPreferences,
     savePreferences,
