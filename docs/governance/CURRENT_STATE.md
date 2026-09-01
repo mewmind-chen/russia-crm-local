@@ -1,7 +1,7 @@
 # TradePulse 当前状态
 
-更新时间：2026-09-01
-最近核验：2026-09-01，Asia/Shanghai
+更新时间：2026-09-02
+最近核验：2026-09-02，Asia/Shanghai
 
 > 本文档是重构进度的滚动真源。远端基线以 `git fetch origin --prune` 后的 `origin/main` 为准；重构实现状态以 `after/` 的 Git、工作区和测试结果为准。
 
@@ -11,14 +11,14 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@583f314`，所有纳入本轮范围的业务列表已迁移到 List widget；CRM 抽屉非 AI 区块与复杂 activity timeline 条目已纳入 widget 组合；旧入口兼容边界已锁定；Phase E browser acceptance 已在项目锁定 Playwright 后通过 sales/manager 双角色验证；权限配置矩阵、事务预览/审核工作区与 AI 专用列表按专用边界冻结；工作区当前干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@75f727b`，实现切片已提交；工作区仅保留治理文档更新与未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`583f314`（在 `062f31a` 锁定 Playwright `1.62.1` 基础上，补齐 Phase E 浏览器验收输出与 AI/source-tag 宿主断言；所有既有 List widget 多级排序与 AI 冻结行为保持不变）
-- 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：列表/排序/访问控制/API 定向 `67/67`，逐页面 JSON 排序字段烟测全部返回 200；Phase E browser acceptance（Playwright `1.62.1`，manager/sales）通过；`npm test`：core `1726/1726`，`node --test`：全量 `2088/2088`；本轮业务切片已通过全量 `node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁。
-- 重构分支未合并；阶段 E 完成门已通过，生产验证或部署未执行；Playwright 浏览器缓存仅用于本地验收，未写入生产目录。
+- 当前重构提交：`75f727b`（统一客户池字段、列表布局设置与 customerProfile 非 AI 资料页）。线索池/客户全景现在可配置 `customer_pool` 中 41 个非内部字段（内部 `is_test_data`/`test_run_id` 继续排除，联系人相关字段仍按 `view_contacts` 门控）；列表列设置支持分组、搜索、“仅核心/显示全部”、用户级显隐/顺序/多级排序；统一资料页继续保留原有跟进、联系人、Recon、标签语义。涉及 accounts/intake 投影、字段目录、访问控制、列表组件与资料页组装；已提交、未部署。
+- 双基线已核验且保持一致：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`。生产目录仍只读；本次未执行生产验证或部署。
+- 当前验证摘要（2026-09-02）：`node --test`：全量 `2090/2090`；`npm test`：core `1728/1728`；`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
+- 已提交的 Phase E browser acceptance（`583f314`）与本次隔离预览回归共同作为证据：客户全景 83 个授权列、线索池 47 个当前角色可见列，列设置分组/搜索/预设可用；customerProfile 挂载 9 个非 AI widget、五个页签可切换且默认不加载 legacy iframe。AI runtime、`lib/ai_stations/**`、`crm_ai_*` 和 `CRM_AI_*` 保持冻结；生产只读。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
 
@@ -121,7 +121,7 @@
 
 历史注意：pipeline 行曾由 `business_page_filters.js` 附加 state DTO；该边界差异已在 `6b88d74` 收敛，当前行仅保留裸状态字段与业务派生行动队列。
 
-`after/` 当前业务提交 `092d8a0`（`79036e5` 在 `8d1bb05` 列表迁移基础上完成 CRM 抽屉非 AI 注册表组合与 profile iframe 兼容边界，`6bfa5f0` 对齐摘要契约，`092d8a0` 下沉复杂 activity timeline 展示层；审计只读列表及其他前序列表为先前业务提交）与前置治理提交已落地；本治理 checkpoint（`CURRENT_STATE.md`、路线图、看板生成器、生成看板与本次 session 记录）随独立治理提交落地。生产目录保持只读。
+`after/` 当前已提交业务提交为 `dc48953`（`79036e5` 在 `8d1bb05` 列表迁移基础上完成 CRM 抽屉非 AI 注册表组合与 profile iframe 兼容边界，`6bfa5f0` 对齐摘要契约，`092d8a0` 下沉复杂 activity timeline 展示层，后续 `549fdfd` 收口 List widget 多级排序与 `dc48953` 修复列设置 overlay 锚点；审计只读列表及其他前序列表为先前业务提交）；其后 10 个实现文件仍处于未提交 WIP，治理文档也在本次校准中。生产目录保持只读。
 
 ## 4. 最近验证结果
 
@@ -137,10 +137,11 @@
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
-当前测试结论是“绿灯”。本轮列表 widget/访问控制/API 定向 `62/62`，widget/抽屉/iframe 定向 `105/105`，core `1716/1716`、全量 `2078/2078`。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
+当前测试结论是“绿灯”。本轮列表 widget/访问控制/API 定向与受影响 profile 专项均通过，core `npm test` `1728/1728`、全量 `node --test` `2090/2090`；治理权威、AI 边界、语法与差异门禁均通过。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
 
 ## 5. 当前阶段判断
 
+- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `75f727b`；本轮“客户池 41 个非内部字段统一 + 列布局默认值修复 + customerProfile 非 AI 路由统一 + 列设置分组/搜索/预设”已形成独立提交并完成隔离浏览器回归。当前仅待治理文档提交后的看板核对；不恢复、不新增或迁移 AI 功能，不触碰生产。
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
 - 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、主管任务/风险/指标、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。CRM 抽屉复杂 activity timeline 条目已由 `timeline-widget.js` 渲染，权限/溯源判断留在 app.js。权限配置矩阵与事务预览/审核工作区为专用组件；AI 功能弃用冻结。阶段 E 仍未完成，浏览器双角色验收待做。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
@@ -153,7 +154,9 @@
 
 ## 6. 下一步允许动作
 
-1. 单独提交治理文档 checkpoint（当前更新），与业务提交分离。
+1. 提交治理文档与重新生成的看板，确保 HEAD、测试计数、最近会话与当前工作区一致。
+2. 下一执行阶段评估阶段 G 兼容层收尾（仅在用户明确继续后），保持旧入口兼容边界和 AI 冻结不变。
+3. 不 push、不 merge、不部署，生产继续只读。
 2. 阶段 A 接线恢复：**已完成**——44 个域模块中 41 个已重新接入，仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
 4. 阶段 C（权限/筛选/字段）：**主体完成**——列表路径白名单化（accounts/intake/通知）、S3 形状（timeline/auditLog）、范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`，含空 WHERE 修复）、按页面"权限→字段→筛选"合同（`45e0c05`）均落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；S6（db bootstrap）联系形状源头门控、低价值。剩余仅：可选残值（legacy customers 形状白名单，S6 审计确认其余联系形状已源头门控，低价值可暂缓）。
