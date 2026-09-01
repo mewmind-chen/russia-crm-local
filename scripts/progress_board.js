@@ -150,7 +150,7 @@ function wiredDomainModules() {
 function parseTestCounts() {
   const source = fs.readFileSync(path.join(GOV_DIR, 'CURRENT_STATE.md'), 'utf8');
   const full = source.match(/`node --test`：全量 `(\d+)\/(\d+)`/);
-  const core = source.match(/`npm test`：全量 core `(\d+)\/(\d+)`/);
+  const core = source.match(/`npm test`：(?:全量 )?core `(\d+)\/(\d+)`/);
   return {
     full: full ? `${full[1]}/${full[2]}` : '—',
     core: core ? `${core[1]}/${core[2]}` : '—',
@@ -280,7 +280,7 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、customers、Research People、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（cd9f198），其余列表继续按页面推进。',
+      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、customers、Research People、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（b1fa1cc），其余列表继续按页面推进。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
@@ -306,11 +306,12 @@ function buildPhases(env) {
         ['frontend', '通知中心列表迁移（授权列 schema、用户布局偏好、四种服务端排序）', '302454f', ''],
         ['frontend', 'Dashboard 国家转化与价值快照迁移（授权列 schema、用户级布局偏好、六种本地排序）', 'ebf0dbe', ''],
         ['frontend', 'Markets 国家矩阵、分配批次与细分报表迁移（授权列 schema、用户级布局偏好、本地排序预设）', 'cd9f198', ''],
+        ['frontend', '主管任务列表迁移（授权列 schema、用户级布局偏好、期限/状态/负责人排序，保留任务动作）', 'b1fa1cc', ''],
         ['frontend', 'Phase E 隔离浏览器预览 harness（临时 SQLite/loopback/随机端口/AI 关闭/fail-closed）', 'dd650ba', ''],
       ],
       pending: [
         ['frontend', '销售/经理页面真实浏览器验证：运行已建立的 Phase E preview harness，验证默认 customerProfile 与 profile-only 兼容入口（当前依赖缺失时 fail-closed）', '', ''],
-        ['frontend', '其余业务列表页迁移到 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序', '', ''],
+        ['frontend', 'manager_risks/manager_metrics 与其余业务列表页迁移到 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序', '', ''],
         ['frontend', '其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body', '', ''],
         ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）', '', ''],
       ],

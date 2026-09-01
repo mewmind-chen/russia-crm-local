@@ -2,8 +2,8 @@
 
 更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@cd9f198`（未合并）
-状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 已覆盖 Dashboard、Markets、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
+执行分支：`codex/frontend-widget-pilot@b1fa1cc`（未合并）
+状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 已覆盖 Dashboard、Markets、manager_tasks、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
 
@@ -14,7 +14,7 @@
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中（主体完成） | field catalog、schema 渲染、列表/形状白名单；范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`）；按页面权限→字段→筛选合同（`45e0c05`） | P1/P3 嵌套聚合与 S5 export 因泄漏风险暂缓；S6 bootstrap 审计为低价值；仅余可选 legacy customers 形状白名单 |
 | 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |
-| 阶段 E：前端 widgets | 注册表、默认视图、多页面 List widget 与隔离 preview harness 已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` List widget 覆盖 Dashboard、Markets、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心；`dd650ba` Phase E harness（显式 opt-in、临时 SQLite、loopback、AI 关闭、依赖缺失 fail-closed） | 在具备锁定浏览器依赖的环境运行 harness，完成 sales/manager 浏览器双角色验收；其余业务列表页迁移与 widget body/兼容层继续收敛；CRM 复杂 activity timeline 评估；`app.js` 当前 16,062 行 |
+| 阶段 E：前端 widgets | 注册表、默认视图、多页面 List widget 与隔离 preview harness 已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` Markets 等多列表迁移；`b1fa1cc` manager_tasks 列表迁移；`dd650ba` Phase E harness（显式 opt-in、临时 SQLite、loopback、AI 关闭、依赖缺失 fail-closed） | 在具备锁定浏览器依赖的环境运行 harness，完成 sales/manager 浏览器双角色验收；manager_risks/manager_metrics 与其余业务列表页迁移及 widget body/兼容层继续收敛；CRM 复杂 activity timeline 评估；`app.js` 当前约 16,200 行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
 | 阶段 G：兼容层收尾 | 未开始 | - | 等前述阶段稳定后执行 |
 

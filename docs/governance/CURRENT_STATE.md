@@ -11,16 +11,16 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@dd650ba`，Markets 列表迁移与 Phase E 隔离预览 harness 均已提交；工作区干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@b1fa1cc`，Markets、主管任务列表迁移与 Phase E 隔离预览 harness 均已提交；工作区干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`dd650ba`（阶段 E：Markets 国家矩阵、分配批次与细分报表已迁移到 List widget；并建立隔离 preview harness，显式 opt-in、临时 SQLite/loopback/随机端口、AI provider/monitor 关闭、浏览器依赖缺失 fail-closed；前置 Dashboard、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心样板已完成）
+- 当前重构提交：`b1fa1cc`（阶段 E：Markets 国家矩阵、分配批次、细分报表与主管任务列表已迁移到 List widget；并建立隔离 preview harness，显式 opt-in、临时 SQLite/loopback/随机端口、AI provider/monitor 关闭、浏览器依赖缺失 fail-closed；前置 Dashboard、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心样板已完成）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：Markets/List widget 定向 `34/34`，影响面权限回归 `100/100`，Phase E harness 契约 `4/4`，core `npm test` `1697/1697`、全量 `node --test` `2058/2058`；`node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁均通过。
+- 当前验证（2026-09-01）：manager_tasks/List/field-schema/回归定向 `40/40`，影响面权限回归 `100/100`，Phase E harness 契约 `4/4`，`npm test`：全量 core `1698/1698`、`node --test`：全量 `2059/2059`；`node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁均通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
-- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表迁移；其余业务列表页仍按页面逐步迁移。
+- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表迁移；其余业务列表页仍按页面逐步迁移。
 
 ## 2. 已提交的重构进度
 
