@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 04:19:17`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 04:22:35`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,7 +8,7 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `12e9d83`（相对 origin/main ahead 225） |
+| HEAD | `f076a66`（相对 origin/main ahead 227） |
 | 工作区 | 干净 |
 | 全量测试 | `node --test` 2038/2038 |
 | 核心测试 | `npm test` 1677/1677 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
 | feat(...) | 33 |
-| docs(governance) | 92 |
+| docs(governance) | 94 |
 | 其他 | 16 |
 
 ## 阶段 0：治理基础
