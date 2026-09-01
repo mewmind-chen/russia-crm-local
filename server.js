@@ -28,6 +28,10 @@ const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
 const { registerLegacyEntrypoints } = require('./lib/legacy_entrypoints');
+const {
+  registerProfileAssets,
+  registerDevelopmentWorkbench,
+} = require('./lib/profile_entrypoints');
 const { databasePath, runtimePaths } = require('./lib/runtime_paths');
 const { resolveAIStationsEnabled } = require('./lib/ai_stations/routes');
 const {
@@ -73,12 +77,7 @@ registerReleaseHealth(app);
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
 registerLegacyEntrypoints(app, { enabled: process.env.CRM_ENABLE_LEGACY, rootDir: __dirname });
 app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
-app.get('/profile-contacts.js', requireUnifiedUser, (_req, res) => {
-  res.type('application/javascript').sendFile(path.join(__dirname, 'profile-contacts.js'));
-});
-app.get('/profile-insights.js', requireUnifiedUser, (_req, res) => {
-  res.type('application/javascript').sendFile(path.join(__dirname, 'profile-insights.js'));
-});
+registerProfileAssets(app, { rootDir: __dirname, requireUnifiedUser });
 registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
   const permissions = req.accessContext.permissions;
@@ -106,18 +105,10 @@ app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
     impersonation: req.impersonation ? { active: true } : null,
   });
 });
-app.get('/development-workbench', requireUnifiedUser, (req, res) => {
-  const profileMode = String(req.query.profile || '') === '1';
-  const intakeProfileMode = profileMode && Boolean(String(req.query.intake || '').trim());
-  const permission = profileMode ? (intakeProfileMode ? 'view_intake' : 'view_customers') : 'view_development';
-  if (!hasPermission(req.salesUser, permission)) {
-    const message = intakeProfileMode
-      ? '当前账号没有线索主档权限'
-      : profileMode ? '当前账号没有客户资料权限' : '当前账号没有客户开发工作台权限';
-    return res.status(403).send(message);
-  }
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.sendFile(path.join(__dirname, 'Index.html'));
+registerDevelopmentWorkbench(app, {
+  rootDir: __dirname,
+  requireUnifiedUser,
+  hasPermission,
 });
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/sales-auth/') || req.path.startsWith('/sales-crm/')
