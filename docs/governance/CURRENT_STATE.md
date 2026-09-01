@@ -11,16 +11,16 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@ebf0dbe`，Dashboard 国家快照列表提交与前置治理记录均已提交；工作区干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@dd650ba`，Markets 列表迁移与 Phase E 隔离预览 harness 均已提交；工作区干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`ebf0dbe`（阶段 E：Dashboard 国家转化与价值快照已迁移到 List widget，支持授权列 schema、用户级布局偏好和六种本地排序；前置 customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心样板已完成）
+- 当前重构提交：`dd650ba`（阶段 E：Markets 国家矩阵、分配批次与细分报表已迁移到 List widget；并建立隔离 preview harness，显式 opt-in、临时 SQLite/loopback/随机端口、AI provider/monitor 关闭、浏览器依赖缺失 fail-closed；前置 Dashboard、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心样板已完成）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：Dashboard/List widget 定向 `33/33`，core `npm test` `1692/1692`、全量 `node --test` `2053/2053`；`node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁均通过。
+- 当前验证（2026-09-01）：Markets/List widget 定向 `34/34`，影响面权限回归 `100/100`，Phase E harness 契约 `4/4`，core `npm test` `1697/1697`、全量 `node --test` `2058/2058`；`node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁均通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
-- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表迁移；其余业务列表页仍按页面逐步迁移。
+- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表迁移；其余业务列表页仍按页面逐步迁移。
 
 ## 2. 已提交的重构进度
 
@@ -97,8 +97,8 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `bb02d03`：12,936 行。
-- `sales-assets/app.js` 当前为 15,650 行。
+- 当前提交态 `cd9f198`：12,936 行。
+- `sales-assets/app.js` 当前为 16,062 行。
 - 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
 
 因此当前结论是：重构已经实质推进，但仍处于渐进迁移中，不能描述为“拆分完成”或“可合并”。
@@ -114,28 +114,28 @@
 
 历史注意：pipeline 行曾由 `business_page_filters.js` 附加 state DTO；该边界差异已在 `6b88d74` 收敛，当前行仅保留裸状态字段与业务派生行动队列。
 
-`after/` 当前业务提交 `ebf0dbe`（Dashboard 国家快照列表迁移）与前置治理提交已落地；本治理 checkpoint（`CURRENT_STATE.md`、看板生成器、生成看板与本次 session 记录）随独立治理提交落地。生产目录保持只读。
+`after/` 当前业务提交 `dd650ba`（Phase E 隔离 preview harness；Markets 列表迁移为前一业务提交 `cd9f198`）与前置治理提交已落地；本治理 checkpoint（`CURRENT_STATE.md`、看板生成器、生成看板与本次 session 记录）随独立治理提交落地。生产目录保持只读。
 
 ## 4. 最近验证结果
 
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1692/1692` 通过。
-- `node --test`：全量 `2053/2053` 通过。
-- 本轮 `ebf0dbe`：Dashboard/List widget 定向 `33/33`；`node --check`、`git diff --check`、`npm run check:governance-authority`、`npm run check:ai-boundary` 均通过。未执行浏览器双角色、生产或部署验证。
+- `npm test`：全量 core `1697/1697` 通过。
+- `node --test`：全量 `2058/2058` 通过。
+- 本轮 `cd9f198`：Markets/List widget 定向 `34/34`，影响面权限回归 `100/100`；新增 Phase E harness 契约 `4/4`；core `1697/1697`，全量 `2058/2058`；`node --check`、`git diff --check`、`npm run check:governance-authority`、`npm run check:ai-boundary` 均通过。真实浏览器双角色验收未执行（依赖未锁定时入口 fail-closed），生产或部署验证未执行。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
-当前测试结论是“绿灯”。本轮 Dashboard/List widget 定向 `33/33`，core `1692/1692`，全量 `2053/2053`；旧文档中的 1353/1353、1361/1364、1677/1677、1678/1678、2038/2038、2039/2039、2044/2044、2046/2046、2048/2048 或 2050/2050 只属于历史 checkpoint，不能作为当前完成证据。
+当前测试结论是“绿灯”。本轮 Markets/List widget 定向 `34/34`，影响面权限回归 `100/100`，Phase E harness 契约 `4/4`，core `1697/1697`，全量 `2058/2058`；旧文档中的 1353/1353、1361/1364、1677/1677、1678/1678、2038/2038、2039/2039、2044/2044、2046/2046、2048/2048、2050/2050、2053/2053 或 2054/2054 只属于历史 checkpoint，不能作为当前完成证据。
 
 ## 5. 当前阶段判断
 
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
-- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。阶段 E 仍未完成，其他列表页迁移和浏览器双角色验收待做。
+- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。阶段 E 仍未完成，其他列表页迁移和浏览器双角色验收待做。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,936 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
@@ -193,18 +193,18 @@ OK。本轮 core 1658/1658、全量 2019/2019 全绿。`3c9369d` 再让完整资
 widget host 隔离，`3adc1d1` 将 identity/source tags 抽为 `source-tags-widget.js`
 UMD；本次目标前端/标签专项 `106/106`、core `1670/1670`、全量 `2031/2031`。
 阶段 E 仍进行中：尚余 sales/manager 浏览器双角色验收、其余复杂 widget body 与
-CRM 活动时间线评估下沉。当前没有隔离 preview/mock runtime；浏览器验收不得写成
-已通过。
-下一动作固定为：先建立独立临时 SQLite、绑定 `127.0.0.1`、禁用 AI provider/monitor
-的 Phase E browser-preview harness，再做 sales/manager 验收；其后才处理剩余复杂
-主体/activity timeline。
+CRM 活动时间线评估下沉。隔离 preview/mock runtime 已建立为显式 opt-in harness；当前
+环境缺少锁定浏览器依赖，浏览器入口 fail-closed，真实浏览器验收不得写成已通过。
+下一动作固定为：在具备锁定浏览器依赖的环境运行该 harness，完成 sales/manager 验收；其后
+才处理剩余复杂主体/activity timeline。
 本轮已先落地可独立验证的 List widget 基础切片：`sales-assets/list-widget.js` 提供
 列 schema、必选列、显隐/顺序编辑、排序描述、偏好读写和 descriptor table 渲染；
 `customers` 字段目录由 `/api/sales-crm/field-schema/customers` 提供，客户列表接入
 用户级列设置和既有服务端排序预设；随后 Research People、不对口记录、Pipeline、
-Intake/lead_flow、Alerts/今日待办、通知中心、Research Recon 与 Dashboard 国家快照
+Intake/lead_flow、Alerts/今日待办、通知中心、Research Recon、Dashboard 国家快照与 Markets
+国家矩阵/分配批次/细分报表
 列表已接入同一协议，均由服务端授权字段目录约束；仍不触碰 AI。其余业务列表页尚未迁移，
-下一代码切片继续评估下一套只读授权列表。
+下一代码切片继续评估下一套只读授权列表；Phase E 浏览器预览 harness 已建立（显式 opt-in、临时 SQLite、`127.0.0.1`、随机端口、AI provider/monitor 关闭、缺失浏览器依赖 fail-closed），真实浏览器验收尚未运行。
 7. 未全绿前不叠加下一阶段新功能或拆分范围。
 
 ## 7. 红线
