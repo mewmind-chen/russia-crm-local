@@ -22,7 +22,7 @@
 
 - 定向：列表 widget/访问控制/API `62/62`。
 - `npm test`：core `1713/1713`。
-- `node --test`：`2074/2074` 通过；并行全量运行时另有一次与本切片无关的 `mountContacts` 异步时序抖动，单独 `test/profile_widgets.test.js` `12/12` 通过，需在最终门禁再复跑一次全量。
+- `node --test`：最终全量复跑 `2075/2075` 通过；此前一次并行运行出现与本切片无关的 `mountContacts` 异步时序抖动，单独 `test/profile_widgets.test.js` `12/12` 通过。
 - `node --check sales-assets/app.js lib/field_catalog.js`：通过。
 - `git diff --check`：通过。
 - 真实浏览器双角色验收未执行；当前环境 Playwright/Puppeteer 均未声明、锁定或安装，`phase:e:browser-preview` 按设计退出 78（fail-closed），不得伪造通过。

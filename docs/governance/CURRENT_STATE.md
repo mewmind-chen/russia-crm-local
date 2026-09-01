@@ -17,7 +17,7 @@
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
 - 当前重构提交：`8d1bb05`（阶段 E：账号、归档用户、权限组、迁移复核与入库批次列表接入 List widget，使用人工字段目录、按用户隔离的列显隐/顺序/布局偏好和本地排序；保留 `view_users`/`manage_users`、身份检查、密码重置、归档/恢复/删除、迁移确认等既有动作门控，不改 bootstrap 查询、后端写入或高风险语义；权限配置矩阵、事务预览/审核工作区与 AI 专用列表保持专用/弃用冻结；隔离 preview harness 保持显式 opt-in、临时 SQLite/loopback/随机端口、AI provider/monitor 关闭、浏览器依赖缺失 fail-closed）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，`npm test`：全量 core `1713/1713`，`node --test`：全量 `2074/2074`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁在本轮治理文档更新后复跑。
+- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，`npm test`：全量 core `1713/1713`，`node --test`：全量 `2075/2075`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁在本轮治理文档更新后复跑。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
@@ -122,15 +122,15 @@
 
 - `npm ci`：成功安装；审计报告未升级依赖。
 - `npm test`：全量 core `1713/1713` 通过。
-- `node --test`：全量 `2074/2074` 通过。
-- 本轮 `8d1bb05`：列表 widget/访问控制/API 定向 `62/62`；core `1713/1713`、全量 `node --test` `2074/2074`；`node --check`、`git diff --check` 已通过，治理/AI 门禁随本 checkpoint 复跑。真实浏览器双角色验收未执行（依赖未锁定时入口 fail-closed），生产或部署验证未执行。
+- `node --test`：全量 `2075/2075` 通过。
+- 本轮 `8d1bb05`：列表 widget/访问控制/API 定向 `62/62`；core `1713/1713`、全量 `node --test` `2075/2075`；`node --check`、`git diff --check` 已通过，治理/AI 门禁随本 checkpoint 复跑。真实浏览器双角色验收未执行（依赖未锁定时入口 fail-closed），生产或部署验证未执行。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
-当前测试结论是“绿灯”。本轮列表 widget/访问控制/API 定向 `62/62`，core `1713/1713`、全量 `2074/2074`。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
+当前测试结论是“绿灯”。本轮列表 widget/访问控制/API 定向 `62/62`，core `1713/1713`、全量 `2075/2075`。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
 
 ## 5. 当前阶段判断
 
