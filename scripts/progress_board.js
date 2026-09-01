@@ -280,7 +280,7 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（a52e42b），其余列表继续按页面推进。',
+      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办、通知中心与 Insights 人工评价列表（75a30b7），剩余受保护客户目录及后台/运维列表继续按页面推进。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
@@ -310,11 +310,12 @@ function buildPhases(env) {
         ['frontend', '主管风险明细列表迁移（授权列 schema、独立用户布局偏好、期限/状态/负责人排序，保留查看历史动作）', '807b56c', ''],
         ['frontend', '主管指标列表迁移（聚合字段 schema、独立用户布局偏好、销售/指标排序，保留数字钻取动作）', 'ed40d76', ''],
         ['frontend', 'Team 进度/协作列表迁移（三套非 AI 字段 schema、独立用户布局偏好、排序与原有钻取/追加动作）', 'a52e42b', ''],
+        ['frontend', 'Insights 人工评价列表迁移（非 AI 字段 schema、独立用户布局偏好、服务端排序与人工评价动作）', '75a30b7', ''],
         ['frontend', 'Phase E 隔离浏览器预览 harness（临时 SQLite/loopback/随机端口/AI 关闭/fail-closed）', 'dd650ba', ''],
       ],
       pending: [
         ['frontend', '销售/经理页面真实浏览器验证：运行已建立的 Phase E preview harness，验证默认 customerProfile 与 profile-only 兼容入口（当前依赖缺失时 fail-closed）', '', ''],
-        ['frontend', 'Insights 人工评价、受保护客户目录及后台/运维列表迁移到 List widget；明确排除 AI 字段', '', ''],
+        ['frontend', '受保护客户目录及后台/运维列表迁移到 List widget；明确排除 AI 字段，保留既有导入/批次/冲突核验/行操作契约', '', ''],
         ['frontend', '其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body', '', ''],
         ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）', '', ''],
       ],
