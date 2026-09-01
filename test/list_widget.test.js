@@ -20,6 +20,22 @@ const columns = [
   { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
 ];
 
+test('maintenance runs list uses shared widget with non-AI fields and per-user layout', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({ pageKey: 'maintenance_runs', user: { role: 'admin' }, permissions: { manage_data_maintenance: true }, features: {} });
+  assert.deepEqual(schema.fields.map(field => field.key), ['created_at', 'operator', 'status', 'target', 'backup']);
+  assert.match(html, /id="maintenanceRunsSort"/);
+  assert.match(html, /id="maintenanceRunsColumnSettings"/);
+  assert.match(app, /maintenanceRunsListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.maintenance_runs/);
+  assert.match(app, /data-list-page="maintenance_runs"/);
+  assert.match(app, /maintenanceRunsColumnSettingsPanel/);
+  assert.match(app, /maintenanceRunsListStorageKey\(\)/);
+  assert.match(app, /columnMove\.closest\('#maintenanceRunsColumnSettingsPanel'\)/);
+  assert.match(app, /data-list-layout-reset/);
+  assert.match(app, /maintenanceRunsSort/);
+  assert.doesNotMatch(app, /maintenanceRunsColumns[\s\S]{0,1800}ai_/i);
+});
+
 test('list widget exposes a browser-safe UMD contract', () => {
   const browserGlobal = {};
   vm.runInNewContext(source, browserGlobal);

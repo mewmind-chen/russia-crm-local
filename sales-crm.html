@@ -974,7 +974,7 @@
         </article>
         <article id="maintenancePreviewPanel" class="panel maintenance-preview hidden"></article>
         <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">MAINTENANCE HISTORY</p><h2>最近维护记录</h2></div><button id="maintenanceRefreshRuns" class="text-button" type="button">刷新</button></div>
+          <div class="panel-head"><div><p class="eyebrow">MAINTENANCE HISTORY</p><h2>最近维护记录</h2></div><div class="toolbar"><label class="sr-only" for="maintenanceRunsSort">维护记录排序</label><select id="maintenanceRunsSort" aria-label="维护记录排序"><option value="created_desc">最近优先</option><option value="created_asc">最早优先</option><option value="status_asc">状态正序</option><option value="operator_asc">操作人正序</option><option value="target_desc">目标数量多到少</option></select><button id="maintenanceRunsColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="maintenanceRunsColumnSettingsPanel">列设置</button><div id="maintenanceRunsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="维护记录列设置"></div><button id="maintenanceRefreshRuns" class="text-button" type="button">刷新</button></div></div>
           <div id="maintenanceRunsTable" class="data-table compact"><div class="empty">打开页面后加载维护记录</div></div>
         </article>
       </section>

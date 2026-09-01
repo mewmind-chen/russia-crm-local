@@ -235,6 +235,7 @@
     impersonationRecovery: false,
     maintenancePreview: null,
     maintenanceRuns: [],
+    maintenanceRunsListLayout: null,
     protectedCustomers: {
       items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
       page: 1, pageSize: 50, totalPages: 0, hasMore: false,
@@ -285,7 +286,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -10795,12 +10796,45 @@
   function renderMaintenanceRuns() {
     const root = $('#maintenanceRunsTable');
     if (!root || !can('manage_data_maintenance')) return;
-    root.innerHTML = table(['时间', '操作人', '状态', '目标', '备份'], (state.maintenanceRuns || []).map(run => [
-      esc(shortDate(run.createdAt, true)), esc(userById(run.realUserId)?.name || run.realUserId || '系统'),
-      `<span class="pill ${run.status === 'completed' ? '' : run.status === 'failed' ? 'red' : 'amber'}">${esc(run.status)}</span>`,
-      `${Number(run.resultCounts?.resetIntakeItems ?? run.previewCounts?.intakeItems ?? 0)} 条分配`,
-      run.backupFile ? `<span class="subtle">${esc(run.backupFile)}</span>` : '<span class="subtle">—</span>',
-    ]));
+    const columns = maintenanceRunsColumns();
+    const rows = (state.maintenanceRuns || []).map(run => ({
+      created_at: esc(shortDate(run.createdAt, true)),
+      operator: esc(userById(run.realUserId)?.name || run.realUserId || '系统'),
+      status: `<span class="pill ${run.status === 'completed' ? '' : run.status === 'failed' ? 'red' : 'amber'}">${esc(run.status)}</span>`,
+      target: `${Number(run.resultCounts?.resetIntakeItems ?? run.previewCounts?.intakeItems ?? 0)} 条分配`,
+      backup: run.backupFile ? `<span class="subtle">${esc(run.backupFile)}</span>` : '<span class="subtle">—</span>',
+      _sort: { createdAt: String(run.createdAt || ''), operator: String(userById(run.realUserId)?.name || run.realUserId || '系统'), status: String(run.status || ''), target: Number(run.resultCounts?.resetIntakeItems ?? run.previewCounts?.intakeItems ?? 0), backup: String(run.backupFile || '') },
+    }));
+    const preset = state.maintenanceRunsListLayout?.sortPreset || 'created_desc';
+    const direction = preset.endsWith('_asc') ? 1 : -1;
+    const key = preset.startsWith('created') ? 'createdAt' : preset.startsWith('operator') ? 'operator' : preset.startsWith('status') ? 'status' : 'target';
+    rows.sort((a, b) => (a._sort[key] < b._sort[key] ? -1 : a._sort[key] > b._sort[key] ? 1 : 0) * direction);
+    rows.forEach(row => { delete row._sort; });
+    const preferences = state.maintenanceRunsListLayout || (listWidget?.defaultPreferences ? listWidget.defaultPreferences(columns) : {});
+    root.innerHTML = listWidget?.renderTable ? listWidget.renderTable({ columns, rows, preferences, attrs: 'data-list-page="maintenance_runs"', emptyText: '暂无维护记录' }) : table(columns.map(column => column.label), rows.map(row => columns.map(column => row[column.key])));
+  }
+
+  function maintenanceRunsListStorageKey() { return `tradepulse.listLayout.maintenance_runs.${state.data?.user?.id || 'anonymous'}`; }
+  function maintenanceRunsColumns() {
+    const columns = [
+      { key: 'created_at', label: '时间', required: true, sortKey: 'createdAt' },
+      { key: 'operator', label: '操作人', sortKey: 'operator' },
+      { key: 'status', label: '状态', sortKey: 'status' },
+      { key: 'target', label: '目标', sortKey: 'target' },
+      { key: 'backup', label: '备份', sortKey: 'backup' },
+    ];
+    const schemaFields = state.fieldSchemas?.maintenance_runs?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function restoreMaintenanceRunsListLayout() {
+    const columns = maintenanceRunsColumns();
+    state.maintenanceRunsListLayout = listWidget?.loadPreferences ? listWidget.loadPreferences(maintenanceRunsListStorageKey(), undefined, columns) : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sortPreset: 'created_desc' };
+    if (!['created_desc', 'created_asc', 'status_asc', 'operator_asc', 'target_desc'].includes(state.maintenanceRunsListLayout.sortPreset)) state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: 'created_desc' };
+    if ($('#maintenanceRunsSort')) $('#maintenanceRunsSort').value = state.maintenanceRunsListLayout.sortPreset;
+    const host = $('#maintenanceRunsColumnSettingsPanel');
+    if (host && listWidget?.renderColumnSettingsHtml) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.maintenanceRunsListLayout, title: '维护记录列设置' });
   }
 
   async function loadMaintenanceRuns() {
@@ -15375,6 +15409,10 @@
       else closeManagerRisksColumnSettings();
       return;
     }
+    if (event.target.closest('#maintenanceRunsColumnSettings')) {
+      const panel = $('#maintenanceRunsColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreMaintenanceRunsListLayout();
+      return;
+    }
     if (event.target.closest('#managerMetricColumnSettings')) {
       if ($('#managerMetricColumnSettingsPanel')?.classList.contains('hidden')) openManagerMetricsColumnSettings();
       else closeManagerMetricsColumnSettings();
@@ -15437,6 +15475,18 @@
         const index = order.indexOf(columnMove.dataset.listColumnKey || '');
         const next = index + (columnMove.dataset.listColumnMove === 'up' ? -1 : 1);
         if (index >= 0 && next >= 0 && next < order.length) { [order[index], order[next]] = [order[next], order[index]]; state.protectedCustomers.listLayout = listWidget.savePreferences(protectedListLayoutKey(), { ...state.protectedCustomers.listLayout, columnOrder: order }, undefined, protectedCustomerColumns()); renderProtectedCustomers(); renderProtectedColumnSettings(); }
+      } else if (columnMove.closest('#maintenanceRunsColumnSettingsPanel')) {
+        const columns = maintenanceRunsColumns();
+        const prefs = listWidget.normalizePreferences(state.maintenanceRunsListLayout, columns);
+        const order = [...prefs.columnOrder];
+        const index = order.indexOf(columnMove.dataset.listColumnKey || '');
+        const next = index + (columnMove.dataset.listColumnMove === 'up' ? -1 : 1);
+        if (index >= 0 && next >= 0 && next < order.length) {
+          [order[index], order[next]] = [order[next], order[index]];
+          state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), { ...prefs, columnOrder: order }, undefined, columns);
+          renderMaintenanceRuns();
+          restoreMaintenanceRunsListLayout();
+        }
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -15462,6 +15512,7 @@
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) resetTeamListLayout('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { state.protectedCustomers.listLayout = listWidget.defaultPreferences(protectedCustomerColumns()); listWidget.savePreferences(protectedListLayoutKey(), state.protectedCustomers.listLayout, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); renderProtectedCustomers(); }
+      else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { state.maintenanceRunsListLayout = listWidget.defaultPreferences(maintenanceRunsColumns()); listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns()); restoreMaintenanceRunsListLayout(); renderMaintenanceRuns(); }
       else resetCustomerListLayout();
       return;
     }
@@ -15485,6 +15536,7 @@
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { $('#protectedColumnSettingsPanel')?.classList.add('hidden'); $('#protectedColumnSettings')?.setAttribute('aria-expanded', 'false'); }
+      else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { $('#maintenanceRunsColumnSettingsPanel')?.classList.add('hidden'); $('#maintenanceRunsColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else closeCustomerColumnSettings();
       return;
     }
@@ -16351,6 +16403,11 @@
       saveManagerMetricsListLayout();
       renderManagerMetrics();
     }
+    if (event.target.id === 'maintenanceRunsSort') {
+      state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: event.target.value };
+      if (listWidget?.savePreferences) state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns());
+      renderMaintenanceRuns();
+    }
     if (event.target.id === 'teamProgressSalesSort') {
       state.teamProgressSalesListLayout = { ...state.teamProgressSalesListLayout, sortPreset: event.target.value };
       saveTeamProgressSalesListLayout();
@@ -16591,7 +16648,7 @@
         void initializeActivityCorrectionHistoryFilters({ force: viewChanged });
         void initializeActivityCorrectionProposalFilters({ force: viewChanged });
     }
-    if (canonicalView === 'maintenance') void loadMaintenanceRuns().catch(error => toast(error.message));
+    if (canonicalView === 'maintenance') { restoreMaintenanceRunsListLayout(); void loadMaintenanceRuns().catch(error => toast(error.message)); }
       if (canonicalView === 'protectedCustomers' && (viewChanged
           || (canManageProtectedCustomers() && !state.protectedCustomers.loaded)
           || (canReviewDuplicateCustomers() && !state.duplicateReviews.loaded))) {
@@ -16689,6 +16746,10 @@
         toggleTeamListColumn('team_collaboration', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#protectedColumnSettingsPanel')) {
         toggleProtectedCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) {
+        const columns = maintenanceRunsColumns(); const key = event.target.dataset.listColumnToggle || '';
+        const prefs = listWidget.normalizePreferences(state.maintenanceRunsListLayout, columns); const visible = new Set(prefs.visibleColumns); if (event.target.checked) visible.add(key); else visible.delete(key);
+        state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), { ...prefs, visibleColumns: [...visible] }, undefined, columns); renderMaintenanceRuns();
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }

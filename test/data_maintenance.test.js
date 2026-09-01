@@ -100,6 +100,13 @@ test('data maintenance preview is scoped and execute backs up then resets assign
   assert.equal(fx.db.prepare("SELECT COUNT(*) n FROM customer_pool WHERE customer_id='RU-9010'").get().n, 1);
   assert.equal(fx.db.prepare("SELECT COUNT(*) n FROM recon_jobs WHERE job_id='JOB-RESET'").get().n, 1);
   assert.equal(fx.db.prepare("SELECT status FROM crm_data_maintenance_runs WHERE id=?").get(result.runId).status, 'completed');
+
+  const runs = await fx.requestJson('/api/sales-crm/data-maintenance/runs?limit=20', {
+    cookie: fx.adminCookie,
+  });
+  assert.equal(runs.runs[0].id, result.runId);
+  assert.equal(runs.runs[0].backupFile, result.backupFile);
+  assert.equal(runs.runs[0].status, 'completed');
 });
 
 test('maintenance rejects empty scope, stale preview, non-admin and impersonation', async t => {
