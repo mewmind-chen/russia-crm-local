@@ -11,13 +11,13 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@75f727b`，实现切片已提交；工作区仅保留治理文档更新与未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@d615410`，实现切片已提交；工作区仅保留治理文档更新与未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`75f727b`（统一客户池字段、列表布局设置与 customerProfile 非 AI 资料页）。线索池/客户全景现在可配置 `customer_pool` 中 41 个非内部字段（内部 `is_test_data`/`test_run_id` 继续排除，联系人相关字段仍按 `view_contacts` 门控）；列表列设置支持分组、搜索、“仅核心/显示全部”、用户级显隐/顺序/多级排序；统一资料页继续保留原有跟进、联系人、Recon、标签语义。涉及 accounts/intake 投影、字段目录、访问控制、列表组件与资料页组装；已提交、未部署。
+- 当前重构提交：`d615410`（在 `75f727b` 统一客户池字段、列表布局设置与 customerProfile 非 AI 资料页之后，进一步将 `/legacy` 与 `/tradelead-v2.html` 兼容入口抽为独立 `lib/legacy_entrypoints.js` 装配模块；开关、路径映射和 canonical `/` 行为保持不变）。线索池/客户全景现在可配置 `customer_pool` 中 41 个非内部字段（内部 `is_test_data`/`test_run_id` 继续排除，联系人相关字段仍按 `view_contacts` 门控）；列表列设置支持分组、搜索、“仅核心/显示全部”、用户级显隐/顺序/多级排序；统一资料页继续保留原有跟进、联系人、Recon、标签语义。涉及 accounts/intake 投影、字段目录、访问控制、列表组件、资料页组装与兼容路由装配；已提交、未部署。
 - 双基线已核验且保持一致：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`。生产目录仍只读；本次未执行生产验证或部署。
-- 当前验证摘要（2026-09-02）：`node --test`：全量 `2090/2090`；`npm test`：core `1728/1728`；`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
+- 当前验证摘要（2026-09-02）：`node --test`：全量 `2092/2092`；`npm test`：core `1730/1730`；`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
 - 已提交的 Phase E browser acceptance（`583f314`）与本次隔离预览回归共同作为证据：客户全景 83 个授权列、线索池 47 个当前角色可见列，列设置分组/搜索/预设可用；customerProfile 挂载 9 个非 AI widget、五个页签可切换且默认不加载 legacy iframe。AI runtime、`lib/ai_stations/**`、`crm_ai_*` 和 `CRM_AI_*` 保持冻结；生产只读。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
@@ -141,7 +141,7 @@
 
 ## 5. 当前阶段判断
 
-- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `75f727b`；本轮“客户池 41 个非内部字段统一 + 列布局默认值修复 + customerProfile 非 AI 路由统一 + 列设置分组/搜索/预设”已形成独立提交并完成隔离浏览器回归，治理文档与看板已在 `03b3162`/`6aed34f` 收口；不恢复、不新增或迁移 AI 功能，不触碰生产。
+- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `d615410`；`75f727b` 的“客户池 41 个非内部字段统一 + 列布局默认值修复 + customerProfile 非 AI 路由统一 + 列设置分组/搜索/预设”已完成隔离浏览器回归；本轮 `d615410` 仅做旧兼容入口的等价装配抽取并新增路由矩阵测试。治理文档与看板随后同步；不恢复、不新增或迁移 AI 功能，不触碰生产。
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
 - 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、主管任务/风险/指标、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。CRM 抽屉复杂 activity timeline 条目已由 `timeline-widget.js` 渲染，权限/溯源判断留在 app.js。权限配置矩阵与事务预览/审核工作区为专用组件；AI 功能弃用冻结。阶段 E 完成门已通过，当前切片已提交。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
@@ -154,8 +154,8 @@
 
 ## 6. 下一步允许动作
 
-1. 保持 `75f727b` 实现切片、`03b3162` 治理状态与 `6aed34f` 看板同步；如改动代码，先重跑全量与治理门禁。
-2. 下一执行阶段评估阶段 G 兼容层收尾（用户已明确继续时再进入），保持旧入口兼容边界和 AI 冻结不变。
+1. 保持 `d615410` 实现切片与后续治理提交、自动看板同步；如改动代码，先重跑全量与治理门禁。
+2. 下一执行阶段评估阶段 G 兼容层的下一块纯抽取切片（用户明确继续时再进入），保持旧入口兼容边界和 AI 冻结不变。
 3. 不 push、不 merge、不部署，生产继续只读。
 
 > 以下编号内容是历史执行轨迹，仅作审计证据，不覆盖上面的当前恢复点和下一步。
