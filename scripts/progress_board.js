@@ -280,7 +280,7 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 customers、Research People、不对口记录、Pipeline、Intake/lead_flow 与 Alerts/今日待办列表（dfe5937），其余列表继续按页面推进。',
+      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 customers、Research People、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（302454f），其余列表继续按页面推进。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
@@ -302,6 +302,7 @@ function buildPhases(env) {
         ['frontend', 'Pipeline 推进动作台列表迁移（授权列 schema、用户布局偏好、四种服务端排序）', 'eb73388', ''],
         ['frontend', 'Intake/lead_flow 线索列表迁移（授权列 schema、用户布局偏好、四种服务端排序）', 'fffde40', ''],
         ['frontend', 'Alerts/今日待办列表迁移（授权列 schema、用户布局偏好、四种服务端排序）', 'dfe5937', ''],
+        ['frontend', '通知中心列表迁移（授权列 schema、用户布局偏好、四种服务端排序）', '302454f', ''],
       ],
       pending: [
         ['frontend', '销售/经理页面浏览器验证：先建立临时 SQLite + 127.0.0.1 + 禁用 AI provider/monitor 的 Phase E preview harness，再验证默认 customerProfile 与 profile-only 兼容入口（尚未运行）', '', ''],
