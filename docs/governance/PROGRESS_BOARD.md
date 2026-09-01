@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 17:21:50`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 17:23:34`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,7 +8,7 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `211042f`（相对 origin/main ahead 337） |
+| HEAD | `bf7c6f9`（相对 origin/main ahead 338） |
 | 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 2092/2092 |
 | 核心测试 | `npm test` 1730/1730 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 55 |
 | feat(...) | 57 |
-| docs(governance) | 171 |
+| docs(governance) | 172 |
 | 其他 | 24 |
 
 ## 阶段 0：治理基础
@@ -221,7 +221,11 @@
 
 ## 阶段 G：兼容层收尾
 
-> **待办** — 依赖阶段 A/B/C 稳定后执行；销售_crm 收敛为路由/聚合层，前端全由 widget 组装。
+> **进行中** — 已开始兼容层收尾：旧 HTML 入口的开关路由已完成等价装配抽取；后续再评估 sales_crm 路由/聚合收敛与完整 widget 组装。
+
+### 已完成
+
+- [x] 旧入口 /legacy 与 /tradelead-v2.html 抽为独立可选装配，保持 CRM_ENABLE_LEGACY 与 canonical / 行为（`d615410`）
 
 ### 待办
 

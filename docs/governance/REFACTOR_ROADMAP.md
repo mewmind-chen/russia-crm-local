@@ -1,9 +1,9 @@
 # TradePulse 重构路线图
 
-更新时间：2026-09-01
+更新时间：2026-09-02
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@583f314`（未合并）
-状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 的 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD、全范围非 AI List widget、CRM 抽屉非 AI 注册表组合、复杂 activity timeline widget、旧入口兼容边界与项目锁定浏览器双角色验收均已完成；权限配置矩阵及事务预览/审核工作区保留专用组件边界，AI 专用列表保持弃用冻结。阶段 E 完成门已通过，阶段 G 兼容层评估尚未开始。
+执行分支：`codex/frontend-widget-pilot@d615410`（未合并）
+状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 的 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD、全范围非 AI List widget、CRM 抽屉非 AI 注册表组合、复杂 activity timeline widget、旧入口兼容边界与项目锁定浏览器双角色验收均已完成；权限配置矩阵及事务预览/审核工作区保留专用组件边界，AI 专用列表保持弃用冻结。阶段 G 已开始，首个旧入口兼容装配抽取已在 `d615410` 完成，后续仍需独立审计。
 
 ## 当前进度快照
 
@@ -16,7 +16,7 @@
 | 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |
 | 阶段 E：前端 widgets | 完成门已通过：注册表、默认视图、全范围非 AI List widget（含用户级多级排序）、CRM 抽屉非 AI 注册表组合、复杂 activity timeline widget、旧入口兼容边界、隔离 preview harness 与 sales/manager 双角色浏览器验收均已落地；阶段 G 尚未开始 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` Markets 等多列表迁移；`b1fa1cc` manager_tasks；`807b56c` manager_risks；`ed40d76` manager_metrics；`a52e42b` Team 进度/协作列表；`75a30b7` Insights 人工评价列表；`f1fe7d1` 受保护客户目录；`6001f61` 维护运行记录；`61a6572` 跟进更正历史只读列表；`3e55b41` 审计只读列表；`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表；`79036e5` CRM 抽屉非 AI 区块注册表组合与默认 iframe 边界；`092d8a0` 复杂 activity timeline 条目 widget 化；`bc84567` 旧入口兼容边界锁定；`3b2fe24` Phase E harness 加强；`dd650ba` Phase E 隔离 preview harness；`549fdfd` 多级排序协议与服务端白名单收口；`062f31a` 项目锁定 Playwright 1.62.1 与缺失依赖 fail-closed 合同；`583f314` 浏览器验收断言与输出语义收口 | 阶段 E 已完成；维持 AI 冻结，后续评估阶段 G 兼容层 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
-| 阶段 G：兼容层收尾 | 未开始 | - | 等前述阶段稳定后执行 |
+| 阶段 G：兼容层收尾 | 进行中（首片完成） | `d615410` 抽取 `/legacy` 与 `/tradelead-v2.html` 的可选兼容路由装配；开关、路径映射和 canonical `/` 行为保持不变 | sales_crm 路由/聚合收敛、旧入口与完整 widget 组装仍待后续独立切片 |
 
 阶段状态只用于导航，具体 Git、WIP 和测试数以 `CURRENT_STATE.md` 为准。
 
@@ -210,6 +210,6 @@
 13. 阶段 C S3 形状：`38bfe7d` 建 timeline/auditLog 字段级白名单（timeline 剥 copy 字段、provenance 泄漏校验；audit 剥 action），等价/泄漏契约 3/3，为 S4/S6 可复用形状。S5（export）审计发现 users 形状经黑名单保留 password_hash/password_salt——判定暂缓（或先修合规）。全量 1955/1955 绿灯。续：S6（db bootstrap）→ S4（recycle-profile）。
 14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD、`c246360` List widget 协议、`ed40d76` 主管指标列表、`a52e42b` Team 三类业务列表、`75a30b7` Insights 人工评价列表、`f1fe7d1` 受保护客户目录、`6001f61` 维护运行记录、`61a6572` 跟进更正历史、`3e55b41` 审计只读列表、`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表、`79036e5` CRM 抽屉非 AI 注册表组合与默认 iframe 边界、`092d8a0` 复杂 activity timeline 条目 widget 化、`549fdfd` 用户级多级排序与服务端白名单、`062f31a` 项目锁定 Playwright 1.62.1、`583f314` browser acceptance 断言均已落地；本轮列表/排序定向 `67/67`、逐页面 JSON 字段烟测全部通过，Phase E harness contract `5/5`、core `npm test` `1726/1726`、全量 `node --test` `2088/2088`、Playwright manager/sales 隔离验收退出码 0，`node --check`、diff check、治理权威与 AI 边界门禁均通过；权限配置矩阵、事务预览/审核工作区明确为专用组件；AI 功能弃用冻结。阶段 E 完成门已通过，生产未启动或写入。
 
-下一可执行动作：阶段 E 已完成并保持当前实现稳定；后续按用户授权评估阶段 G 兼容层，继续维持 AI 功能弃用冻结。列表迁移、用户级多级排序、CRM 抽屉非 AI 注册表组合、复杂 activity timeline 展示层与浏览器验收均已完成。
+下一可执行动作：保持 `d615410` 首片稳定，按用户授权和独立审计评估阶段 G 的下一块纯抽取切片；继续维持 AI 功能弃用冻结。列表迁移、用户级多级排序、CRM 抽屉非 AI 注册表组合、复杂 activity timeline 展示层与浏览器验收均已完成。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。

@@ -338,9 +338,11 @@ function buildPhases(env) {
     {
       id: 'G',
       title: '阶段 G：兼容层收尾',
-      status: 'todo',
-      summary: '依赖阶段 A/B/C 稳定后执行；销售_crm 收敛为路由/聚合层，前端全由 widget 组装。',
-      done: [],
+      status: 'wip',
+      summary: '已开始兼容层收尾：旧 HTML 入口的开关路由已完成等价装配抽取；后续再评估 sales_crm 路由/聚合收敛与完整 widget 组装。',
+      done: [
+        ['compat', '旧入口 /legacy 与 /tradelead-v2.html 抽为独立可选装配，保持 CRM_ENABLE_LEGACY 与 canonical / 行为', 'd615410', ''],
+      ],
       pending: [
         ['compat', 'sales_crm 收敛为路由转发/聚合层', '', ''],
         ['compat', '旧入口收敛与 widget 全组装', '', ''],
