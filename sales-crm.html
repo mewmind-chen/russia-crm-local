@@ -199,9 +199,17 @@
           <div><p class="eyebrow">线索池</p><h2 id="intakeHeading">线索池</h2><p id="intakeSubheading">集中查看线索资料、分配、领取、退回和后续流转。</p></div>
         </div>
         <article class="panel">
-          <div class="toolbar">
+          <div class="toolbar intake-list-toolbar">
+            <label class="list-sort-control">排序<select id="intakeSort" aria-label="线索列表排序">
+              <option value="status_priority">状态优先</option>
+              <option value="recent_update">最近更新</option>
+              <option value="company_asc">公司名称</option>
+              <option value="claim_due_asc">领取截止</option>
+            </select></label>
+            <button id="intakeColumnSettings" class="button secondary tiny" type="button" aria-expanded="false">列设置</button>
             <span id="intakeAuthorizedResultCount" class="toolbar-count"></span>
           </div>
+          <div id="intakeColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="线索列表列设置"></div>
           <div class="toolbar intake-toolbar hidden">
             <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人" aria-label="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>

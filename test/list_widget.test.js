@@ -170,3 +170,20 @@ test('pipeline list uses the shared widget with per-user layout and server sorti
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="pipeline"/);
   assert.match(app, /params\.set\('sort', state\.pipelineListLayout\.sortPreset/);
 });
+
+test('intake list uses the shared widget with per-user layout and server sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'intake',
+    user: { role: 'manager' },
+    permissions: { view_intake: true, manage_intake: true, view_contacts: true },
+    features: {},
+  });
+  assert.ok(schema.fields.some(field => field.key === 'company_name'));
+  assert.match(html, /id="intakeSort"/);
+  assert.match(html, /id="intakeColumnSettings"/);
+  assert.match(html, /id="intakeColumnSettingsPanel"/);
+  assert.match(app, /intakeListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.intake/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="intake"/);
+  assert.match(app, /params\.set\('sort', state\.intakeListLayout\.sortPreset/);
+});

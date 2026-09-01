@@ -136,3 +136,27 @@ test('pipeline list accepts only authorized server-side sort presets', async t =
   assert.equal(invalid.status, 403);
   assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
 });
+
+test('intake list accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  const now = '2026-07-21 08:00:00';
+  fx.db.prepare(`INSERT INTO crm_intake_items
+    (id,batch_id,external_customer_id,company_name,status,assigned_owner_id,created_at,updated_at)
+    VALUES ('INTAKE-ALPHA','BATCH-TEST','BR-9005','Alpha Lead','pending','',?,?),
+           ('INTAKE-ZETA','BATCH-TEST','BR-9006','Zeta Lead','approved','',?,?)`).run(now, now, now, now);
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/intake', {
+    cookie: fx.adminCookie,
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/lists/intake?sort=company_asc&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.deepEqual(sorted.rows.map(row => row.id), ['INTAKE-ALPHA', 'INTAKE-OTHER', 'INTAKE-ZETA']);
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/intake?sort=contact_email&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

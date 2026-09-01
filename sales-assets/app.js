@@ -104,6 +104,7 @@
       hasMore: false, loading: false, loaded: false,
     },
     customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
+    intakeListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
@@ -1034,6 +1035,108 @@
     saveRecycleBinListLayout();
     renderRecycleBin();
   }
+  function intakeColumnDefinitions(options = {}) {
+    const showAI = options.showAI ?? technicalAIPresentationAllowed();
+    const showAssignmentAI = options.showAssignmentAI ?? (showAI && canViewAssignmentDecisions());
+    const canManualAssign = options.canManualAssign ?? (!state.data?.impersonation && can('manage_intake'));
+    const columns = [
+      canManualAssign
+        ? { key: 'select', label: '', header: '<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>', required: true, sortable: false, className: 'col-check' }
+        : null,
+      { key: 'company', label: '线索资料 / 客户标签', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'fit', label: 'Fit / readiness / 优先级', className: 'col-fit', sortKey: 'fit_score', visible: showAI },
+      { key: 'candidates', label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name', visible: showAssignmentAI },
+      { key: 'contact', label: '联系质量 / 联系人', className: 'col-contact', sortKey: 'contact_level' },
+      { key: 'owner', label: canViewAssignmentDecisions() ? '负责人 / 阻断原因' : '负责人', className: 'col-owner', sortKey: 'assigned_owner_name' },
+      { key: 'status', label: '状态 / 时限', className: 'col-status', sortKey: 'status' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ].filter(Boolean);
+    const schema = state.fieldSchemas?.intake || state.fieldSchemas?.lead_flow;
+    const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+    const schemaColumns = fieldWidget?.intakeColumnKeys(schema);
+    return columns.filter(column => {
+      if (column.key === 'select' || column.key === 'actions') return true;
+      if (column.visible === false) return false;
+      if (schemaColumns) return schemaColumns.includes(column.key);
+      return true;
+    });
+  }
+  function intakeListLayoutStorageKey() {
+    return `tradepulse.listLayout.intake.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultIntakeListLayout() {
+    const columns = intakeColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'status_priority' };
+  }
+  function restoreIntakeListLayout() {
+    const columns = intakeColumnDefinitions();
+    state.intakeListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(intakeListLayoutStorageKey(), undefined, columns)
+      : defaultIntakeListLayout();
+    const allowedSorts = ['status_priority', 'recent_update', 'company_asc', 'claim_due_asc'];
+    if (!allowedSorts.includes(state.intakeListLayout.sortPreset)) {
+      state.intakeListLayout = { ...state.intakeListLayout, sortPreset: 'status_priority' };
+    }
+    if ($('#intakeSort')) $('#intakeSort').value = state.intakeListLayout.sortPreset;
+    renderIntakeColumnSettings();
+  }
+  function saveIntakeListLayout() {
+    const columns = intakeColumnDefinitions();
+    state.intakeListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(intakeListLayoutStorageKey(), state.intakeListLayout, undefined, columns)
+      : state.intakeListLayout;
+    renderIntakeColumnSettings();
+  }
+  function renderIntakeColumnSettings() {
+    const host = $('#intakeColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '线索列表列设置',
+      columns: intakeColumnDefinitions(),
+      preferences: state.intakeListLayout,
+    });
+  }
+  function closeIntakeColumnSettings() {
+    $('#intakeColumnSettingsPanel')?.classList.add('hidden');
+    $('#intakeColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openIntakeColumnSettings() {
+    renderIntakeColumnSettings();
+    $('#intakeColumnSettingsPanel')?.classList.remove('hidden');
+    $('#intakeColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetIntakeListLayout() {
+    state.intakeListLayout = { ...defaultIntakeListLayout(), sortPreset: 'status_priority' };
+    saveIntakeListLayout();
+    if ($('#intakeSort')) $('#intakeSort').value = 'status_priority';
+    renderIntake();
+    void loadAuthorizedBusinessPage('intake', { reset: true, force: true });
+  }
+  function moveIntakeListColumn(key, direction) {
+    const columns = intakeColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.intakeListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.intakeListLayout = { ...state.intakeListLayout, columnOrder: order };
+    saveIntakeListLayout();
+    renderIntake();
+  }
+  function toggleIntakeListColumn(key, visible) {
+    const columns = intakeColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.intakeListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.intakeListLayout = { ...state.intakeListLayout, visibleColumns: [...current] };
+    saveIntakeListLayout();
+    renderIntake();
+  }
   function pipelineColumnDefinitions() {
     const columns = [
       { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
@@ -1869,6 +1972,9 @@
       if (pageKey === 'pipeline') {
         params.set('sort', state.pipelineListLayout.sortPreset || 'pending_action');
       }
+      if (pageKey === 'intake') {
+        params.set('sort', state.intakeListLayout.sortPreset || 'status_priority');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -2028,6 +2134,7 @@
       };
       restoreCustomerFilters();
       restoreCustomerListLayout();
+      restoreIntakeListLayout();
       restoreResearchPeopleListLayout();
       restoreRecycleBinListLayout();
       restorePipelineListLayout();
@@ -3364,25 +3471,21 @@
     // 列由字段目录驱动：schema 就绪时按服务端可见字段裁剪列（candidates/actions 非数据字段，
     // 分别沿用原 AI 开关与固定显示逻辑）；schema 缺失时回退到原硬编码列。
     const intakeColumns = [
-      { key: 'company', header: '线索资料 / 客户标签', fieldClass: 'col-company', visible: true },
-      { key: 'fit', header: 'Fit / readiness / 优先级', fieldClass: 'col-fit', visible: showAI },
-      { key: 'candidates', header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI },
-      { key: 'contact', header: '联系质量 / 联系人', fieldClass: 'col-contact', visible: true },
-      { key: 'owner', header: salesView ? '负责人' : '负责人 / 阻断原因', fieldClass: 'col-owner', visible: true },
-      { key: 'status', header: '状态 / 时限', fieldClass: 'col-status', visible: true },
-      { key: 'actions', header: '操作', fieldClass: 'col-actions', visible: true },
+      { key: 'company', header: '线索资料 / 客户标签', fieldClass: 'col-company', visible: true, label: '线索资料 / 客户标签', className: 'col-company', sortKey: 'company_name' },
+      { key: 'fit', header: 'Fit / readiness / 优先级', fieldClass: 'col-fit', visible: showAI, label: 'Fit / readiness / 优先级', className: 'col-fit', sortKey: 'fit_score' },
+      { key: 'candidates', header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI, label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name' },
+      { key: 'contact', header: '联系质量 / 联系人', fieldClass: 'col-contact', visible: true, label: '联系质量 / 联系人', className: 'col-contact', sortKey: 'contact_level' },
+      { key: 'owner', header: salesView ? '负责人' : '负责人 / 阻断原因', fieldClass: 'col-owner', visible: true, label: salesView ? '负责人' : '负责人 / 阻断原因', className: 'col-owner', sortKey: 'assigned_owner_name' },
+      { key: 'status', header: '状态 / 时限', fieldClass: 'col-status', visible: true, label: '状态 / 时限', className: 'col-status', sortKey: 'status' },
+      { key: 'actions', header: '操作', fieldClass: 'col-actions', visible: true, label: '操作', className: 'col-actions', sortable: false, required: true },
     ].filter(column => {
       if (column.key === 'candidates' || column.key === 'actions') return column.visible;
       return schemaColumns ? schemaColumns.includes(column.key) : column.visible;
     });
-    const intakeHeaders = intakeColumns.map(column => column.header);
-    const intakeColumnClasses = intakeColumns.map(column => column.fieldClass);
-    if (canManualAssign) {
-      intakeHeaders.unshift('<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>');
-    }
-    $('#intakeTable').innerHTML = table(
-      intakeHeaders,
-      items.map(item => {
+    const listColumns = canManualAssign
+      ? [{ key: 'select', label: '', header: '<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>', fieldClass: 'col-check', className: 'col-check', required: true, sortable: false }, ...intakeColumns]
+      : intakeColumns;
+    const tableRows = items.map(item => {
         let primaryActions = [];
         let moreActions = [];
         let actions = '';
@@ -3467,20 +3570,33 @@
           status: businessColumns[3],
           actions: businessColumns[4],
         }[column.key]));
+        const record = Object.fromEntries(intakeColumns.map((column, index) => [column.key, row[index]]));
         if (canManualAssign) {
-          row.unshift(intakeItemAssignable(item)
+          record.select = intakeItemAssignable(item)
             ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.intakeSelectAllScope || state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
-            : '');
+            : '';
         }
-        row._attrs = `data-intake-profile="${esc(item.id)}"`;
-        return row;
-      }),
-    );
-    applyTableColumnClasses($('#intakeTable'), [
-      canManualAssign ? 'col-check' : '',
-      ...intakeColumnClasses,
-    ]);
-    if (!items.length) $('#intakeTable').innerHTML = '<div class="empty">暂无符合条件的线索</div>';
+        record._attrs = `data-intake-profile="${esc(item.id)}"`;
+        return record;
+      });
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(listColumns, state.intakeListLayout)
+      : listColumns;
+    $('#intakeTable').innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: listColumns,
+        rows: tableRows,
+        preferences: state.intakeListLayout,
+        attrs: 'data-list-page="intake"',
+        headerAttrs: 'class="intake-list-head"',
+        emptyText: '暂无符合条件的线索',
+      })
+      : table(
+        visibleColumns.map(column => column.header || column.label),
+        tableRows.map(row => visibleColumns.map(column => row[column.key])),
+        'data-list-page="intake"',
+      );
+    applyTableColumnClasses($('#intakeTable'), visibleColumns.map(column => column.className || column.fieldClass || ''));
     const selectVisible = $('#selectVisibleIntake');
     if (selectVisible) {
       selectVisible.checked = Boolean(assignableItems.length)
@@ -13487,6 +13603,11 @@
       else closePipelineColumnSettings();
       return;
     }
+    if (event.target.closest('#intakeColumnSettings')) {
+      if ($('#intakeColumnSettingsPanel')?.classList.contains('hidden')) openIntakeColumnSettings();
+      else closeIntakeColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
@@ -13495,6 +13616,8 @@
         moveRecycleBinListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#pipelineColumnSettingsPanel')) {
         movePipelineListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#intakeColumnSettingsPanel')) {
+        moveIntakeListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -13504,6 +13627,7 @@
       if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
+      else if (event.target.closest('#intakeColumnSettingsPanel')) resetIntakeListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -13511,6 +13635,7 @@
       if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
+      else if (event.target.closest('#intakeColumnSettingsPanel')) closeIntakeColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -14497,6 +14622,7 @@
         restoreCustomerFilters();
         restoreCustomerListLayout();
       }
+      if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
@@ -14633,6 +14759,8 @@
         toggleRecycleBinListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#pipelineColumnSettingsPanel')) {
         togglePipelineListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#intakeColumnSettingsPanel')) {
+        toggleIntakeListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
@@ -14708,6 +14836,14 @@
       };
       savePipelineListLayout();
       void loadAuthorizedBusinessPage('pipeline', { reset: true, force: true });
+    }
+    if (event.target.id === 'intakeSort') {
+      state.intakeListLayout = {
+        ...state.intakeListLayout,
+        sortPreset: event.target.value || 'status_priority',
+      };
+      saveIntakeListLayout();
+      void loadAuthorizedBusinessPage('intake', { reset: true, force: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();
