@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 02:45:30`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 03:19:55`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `262d045`（相对 origin/main ahead 212） |
+| HEAD | `d1ef416`（相对 origin/main ahead 215） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2026/2026 |
-| 核心测试 | `npm test` 1665/1665 |
+| 全量测试 | `node --test` 2031/2031 |
+| 核心测试 | `npm test` 1670/1670 |
 | sales_crm.js | 12883 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-01-phase-e-widget-host-isolation.md` |
+| 最近会话 | `2026-09-01-phase-e-source-tags-widget.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 53 |
+| refactor(其他/通用) | 54 |
 | feat(...) | 32 |
-| docs(governance) | 82 |
+| docs(governance) | 84 |
 | 其他 | 15 |
 
 ## 阶段 0：治理基础
@@ -127,7 +127,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts 列表（78e698b）、intake 页（5e992fe）、通知页（1835f73）已切字段级白名单；S3 timeline/auditLog 形状已建（38bfe7d）。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表与 S3 timeline/auditLog 形状已白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。
 
 ### 已完成
 
@@ -138,13 +138,12 @@
 - [x] intake 页切字段级白名单（contactSafeIntakeRecord 新投影，contact_* 隐藏）（`5e992fe`）
 - [x] 通知页切字段级白名单（contactSafeNotificationRecord 新投影）（`1835f73`）
 - [x] S3 形状：timeline/auditLog 白名单（含 provenance 泄漏校验）（`38bfe7d`）
-- [x] 范围解释器统一：accountScope ≡ buildAccessContext 等价契约（`2ca107b`）
+- [x] 范围解释器等价契约：accountScope ≡ buildAccessContext（`2ca107b`）
+- [x] 范围解释器代码级统一：共享 accountVisibilityScope（`f2056e5`）
 - [x] 按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）（`45e0c05`）
 
 ### 待办
 
-- [ ] **access** 主线：buildAccessContext 与列表查询范围解释器统一
-- [ ] **access** 按页面落地"权限→字段→筛选"合同测试
 - [ ] **access** 可选残值：legacy customers 形状白名单（S6 审计确认其余联系形状已源头门控）
 - [ ] **access** P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）
 
@@ -165,7 +164,7 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用。
+> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）。
 
 ### 已完成
 
@@ -182,11 +181,11 @@
 - [x] insight-section 抽为共用壳 widget（洞察/商务/审计/时间线壳）（`6aa9353`）
 - [x] next-step 抽为共用 widget（三源状态条 + 告警条/异常明细）（`f8e67c9…e920f7b`）
 - [x] timeline 抽为共用 widget（开发历史/完整时间线条目）（`93b5dbb`）
+- [x] identity/source tags：sourceTagMarkup 抽为自包含 UMD widget（只读投影、去重/limit/转义；AI gate 由 app 注入）（`3adc1d1`）
 
 ### 待办
 
-- [ ] **frontend** identity/source tags：sourceTagMarkup 抽为自包含 UMD widget
-- [ ] **frontend** 销售/经理页面浏览器验证：默认 customerProfile 与 profile-only 兼容入口
+- [ ] **frontend** 销售/经理页面浏览器验证：先建立临时 SQLite + 127.0.0.1 + 禁用 AI provider/monitor 的 Phase E preview harness，再验证默认 customerProfile 与 profile-only 兼容入口（尚未运行）
 - [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body
 - [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）
 
