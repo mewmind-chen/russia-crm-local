@@ -4470,6 +4470,7 @@
     const frame = $('#customerProfileFrame');
     const widgets = $('#customerProfileWidgets');
     if (frame) frame.classList.toggle('hidden', on);
+    if (on && frame) frame.removeAttribute('src');
     if (widgets) widgets.classList.remove('hidden');
   }
 
@@ -4551,9 +4552,30 @@
     registerIfMissing({
       id: 'drawer-facts',
       pages: ['crmDrawer'],
-      order: 10,
+      order: 20,
       when: ctx => Boolean(ctx.drawerFactsWidget),
       render: renderDrawerFactsWidget,
+    });
+    registerIfMissing({
+      id: 'drawer-next-step',
+      pages: ['crmDrawer'],
+      order: 10,
+      when: ctx => Boolean(ctx.account),
+      render: renderDrawerNextStepWidget,
+    });
+    registerIfMissing({
+      id: 'drawer-master',
+      pages: ['crmDrawer'],
+      order: 25,
+      when: ctx => Boolean(ctx.account),
+      render: renderDrawerMasterWidget,
+    });
+    registerIfMissing({
+      id: 'drawer-timeline',
+      pages: ['crmDrawer'],
+      order: 27,
+      when: ctx => Boolean(ctx.account),
+      render: renderDrawerTimelineWidget,
     });
     registerIfMissing({
       id: 'drawer-ai',
@@ -4700,6 +4722,44 @@
     if (!ctx.drawerFactsWidget || !container) return [];
     container.innerHTML = ctx.drawerFactsWidget.renderFactsHtml(ctx);
     return [{ id: 'drawer-facts', status: 'mounted' }];
+  }
+
+  function renderDrawerNextStepWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    container.innerHTML = nextStepHtml({
+      eyebrow: 'NEXT ACTION',
+      text: ctx.account.next_action || '尚未填写下一步',
+      actionHtml: nextActionTimeMarkup(ctx.account),
+    });
+    return [{ id: 'drawer-next-step', status: 'mounted' }];
+  }
+
+  function renderDrawerMasterWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const account = ctx.account;
+    container.innerHTML = masterProfileSectionHtml({
+      title: '企业背景与开发依据',
+      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      gridClass: 'drawer-master-grid',
+      rows: [
+        ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
+        ['产品与潜在需求', esc(account.product_focus || '未标注')],
+        ...(ctx.showTechnicalSources ? [['背调与来源', esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')]] : []),
+      ],
+    });
+    return [{ id: 'drawer-master', status: 'mounted' }];
+  }
+
+  function renderDrawerTimelineWidget(container, ctx) {
+    if (!ctx.account || !container) return [];
+    const events = Array.isArray(ctx.timeline) ? ctx.timeline : [];
+    container.innerHTML = timelineSectionHtml({
+      title: '完整客户时间线',
+      note: `${events.length} 条记录`,
+      actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
+      bodyHtml: events.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
+    });
+    return [{ id: 'drawer-timeline', status: 'mounted' }];
   }
 
   // 抽屉 facts 区 HTML（widget 优先，缺 widget 时内联回退到逐字节一致模板）。
@@ -4932,7 +4992,7 @@
   }
 
   function reloadCustomerProfileFrame() {
-    if (state.view !== 'customerProfile' || !state.customerProfileExternalId) return;
+    if (state.view !== 'customerProfile' || !state.customerProfileExternalId || isProfileWidgetsMode()) return;
     $('#customerProfileFrame').src = customerProfileFrameUrl(
       state.customerProfileExternalId,
       state.customerProfileIntakeItemId,
@@ -4957,8 +5017,10 @@
     switchView('customerProfile');
     renderCustomerProfileHeader();
     mountCustomerProfileWidgets(externalCustomerId);
-    const frame = $('#customerProfileFrame');
-    frame.src = customerProfileFrameUrl(externalCustomerId);
+    if (!isProfileWidgetsMode()) {
+      const frame = $('#customerProfileFrame');
+      if (frame) frame.src = customerProfileFrameUrl(externalCustomerId);
+    }
     const url = new URL(location.href);
     url.searchParams.set('customer', externalCustomerId);
     url.searchParams.delete('intake');
@@ -5047,7 +5109,10 @@
     switchView('customerProfile');
     renderCustomerProfileHeader();
     mountCustomerProfileWidgets(externalCustomerId, state.customerProfileIntakeItemId);
-    $('#customerProfileFrame').src = customerProfileFrameUrl(externalCustomerId, state.customerProfileIntakeItemId);
+    if (!isProfileWidgetsMode()) {
+      const frame = $('#customerProfileFrame');
+      if (frame) frame.src = customerProfileFrameUrl(externalCustomerId, state.customerProfileIntakeItemId);
+    }
     const url = new URL(location.href);
     url.searchParams.set('customer', externalCustomerId);
     url.searchParams.set('intake', state.customerProfileIntakeItemId);
@@ -12822,13 +12887,40 @@
     // 缺 widget 时回退到 fieldWidget.renderFacts/accountFacts 硬编码（行为不变）。
     registerProfilePageWidgets();
     const drawerFacts = drawerFactsContext(account, showTechnicalSources);
-    let factsHtml = '';
-    if (drawerFacts.drawerFactsWidget) {
-      factsHtml = drawerFacts.drawerFactsWidget.renderFactsHtml(drawerFacts);
-      factsHtml = factsHtml || drawerFacts.fallback.map(drawerFactMarkup).join('');
-    } else {
+    const drawerWidgetContext = {
+      account,
+      customerId: account.external_customer_id || account.id,
+      permissions: state.data?.user?.permissions || {},
+      features: state.data?.features || {},
+      drawerFactsWidget: drawerFacts.drawerFactsWidget,
+      fieldWidget: drawerFacts.fieldWidget,
+      schema: drawerFacts.schema,
+      data: drawerFacts.data,
+      formatters: drawerFacts.formatters,
+      fallback: drawerFacts.fallback,
+      showTechnicalSources,
+      timeline,
+    };
+    // 抽屉的非 AI 区块由同一注册表选出并按顺序同步挂载。同步 helper 保留
+    // renderDrawer 的即时 DOM 契约；注册表或单个 widget 不可用时回退到原模板。
+    const renderRegisteredDrawerWidget = (widgetId, fallback) => {
+      const registry = typeof window !== 'undefined' ? window.TradePulseWidgetRegistry : null;
+      const widget = registry?.widgetsForPage?.('crmDrawer', drawerWidgetContext)
+        ?.find(item => item.id === widgetId);
+      if (!widget || typeof widget.render !== 'function') return fallback();
+      const host = typeof document !== 'undefined' && typeof document.createElement === 'function'
+        ? document.createElement('div') : { innerHTML: '' };
+      try {
+        widget.render(host, drawerWidgetContext);
+        return host.innerHTML || fallback();
+      } catch (_error) {
+        return fallback();
+      }
+    };
+    const factsFallback = () => {
       const schemaFacts = state.fieldSchemas?.crm_drawer;
       const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
+      let factsHtml = '';
       if (schemaFacts?.fields?.length && fieldWidget) {
         try {
           factsHtml = window.TradePulseFieldWidget.renderFacts({
@@ -12840,31 +12932,40 @@
           factsHtml = '';
         }
       }
-      factsHtml = factsHtml || drawerFacts.fallback.map(drawerFactMarkup).join('');
-    }
+      return factsHtml || drawerFacts.fallback.map(drawerFactMarkup).join('');
+    };
+    const factsHtml = renderRegisteredDrawerWidget('drawer-facts', factsFallback);
+    const nextStepMarkup = renderRegisteredDrawerWidget('drawer-next-step', () => nextStepHtml({
+      eyebrow: 'NEXT ACTION',
+      text: account.next_action || '尚未填写下一步',
+      actionHtml: nextActionTimeMarkup(account),
+    }));
+    const masterMarkup = renderRegisteredDrawerWidget('drawer-master', () => masterProfileSectionHtml({
+      title: '企业背景与开发依据',
+      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      gridClass: 'drawer-master-grid',
+      rows: [
+        ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
+        ['产品与潜在需求', esc(account.product_focus || '未标注')],
+        ...(showTechnicalSources ? [['背调与来源', esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')]] : []),
+      ],
+    }));
+    const timelineMarkup = renderRegisteredDrawerWidget('drawer-timeline', () => timelineSectionHtml({
+      title: '完整客户时间线',
+      note: `${timeline.length} 条记录`,
+      actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
+      bodyHtml: timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
+    }));
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `
       ${alertStepHtml(alert)}
       ${alertDetailsHtml(alert)}
-      ${nextStepHtml({
-        eyebrow: 'NEXT ACTION',
-        text: account.next_action || '尚未填写下一步',
-        actionHtml: nextActionTimeMarkup(account),
-      })}
+      ${nextStepMarkup}
       ${sourceTagMarkup(account)}
       <div class="account-facts">
         ${factsHtml}
       </div>
-      ${masterProfileSectionHtml({
-        title: '企业背景与开发依据',
-        actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
-        gridClass: 'drawer-master-grid',
-        rows: [
-          ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
-          ['产品与潜在需求', esc(account.product_focus || '未标注')],
-          ...(showTechnicalSources ? [['背调与来源', esc([account.deep_report, account.source_file].filter(Boolean).join(' · ') || '暂无关联资料')]] : []),
-        ],
-      })}
+      ${masterMarkup}
       ${customerAiSection(state.drawerAiContext)}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${rfqs.length && can('record_quote') ? '<button class="button secondary" data-add-quote>＋ 记录报价</button>' : ''}
@@ -12877,12 +12978,7 @@
         ${!state.data.impersonation && can('manage_manual_customer_deletion') && !account.intake_item_id && account.source_file === 'CRM手工新增'
           ? '<button class="button danger" data-trash-customer="' + esc(account.id) + '">删除到回收站</button>' : ''}
       </div>
-      ${timelineSectionHtml({
-        title: '完整客户时间线',
-        note: `${timeline.length} 条记录`,
-        actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
-        bodyHtml: timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
-      })}`;
+      ${timelineMarkup}`;
     startDrawerNextActionTimer();
   }
 

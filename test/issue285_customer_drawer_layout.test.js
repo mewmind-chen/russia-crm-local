@@ -70,8 +70,8 @@ function cssBlock(prefix) {
 
 test('CRM drawer keeps business cards for sales and adds the technical source card for managers', () => {
   const drawer = functionSource('renderDrawer', 'openModal');
-  const master = drawer.match(/masterProfileSectionHtml\(\{[\s\S]*?\n      \}\)\}/)?.[0] || '';
-  // 主档区块经 masterProfileSectionHtml 委托渲染：gridClass 与业务卡片在调用处组装
+  const master = functionSource('renderDrawerMasterWidget', 'renderDrawerTimelineWidget');
+  // 主档区块经注册表 widget 委托渲染：gridClass 与业务卡片在 widget 调用处组装
   assert.match(master, /gridClass: 'drawer-master-grid'/);
   assert.match(master, /\[企业简介|'企业简介'/);
   assert.match(master, /\[产品与潜在需求|'产品与潜在需求'/);
@@ -125,8 +125,9 @@ test('drawer-specific CSS creates a responsive two-column layout without fixed c
 
 test('drawer layout classes do not leak into other master profile grids', () => {
   const drawer = functionSource('renderDrawer', 'openModal');
-  const outsideDrawer = appSource.replace(drawer, '');
-  // drawer 专属网格类只在 renderDrawer 的 masterProfileSectionHtml 调用中作为参数出现
+  const drawerMaster = functionSource('renderDrawerMasterWidget', 'renderDrawerTimelineWidget');
+  const outsideDrawer = appSource.replace(drawer, '').replace(drawerMaster, '');
+  // drawer 专属网格类只在 crmDrawer 的 master widget 调用中作为参数出现
   assert.doesNotMatch(outsideDrawer, /drawer-master-(?:grid|card-wide)/);
   // 其他主档区块（intake/recycle）经同一 masterProfileSectionHtml 渲染，不附加 drawer 专属类
   assert.match(appSource, /masterProfileSectionHtml\(\{/);

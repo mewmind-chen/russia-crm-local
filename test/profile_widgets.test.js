@@ -57,6 +57,23 @@ test('widget mount is wired into both customer profile entry points', () => {
   const openIntake = asyncFunctionSource('openIntakeMasterProfile', 'renderCustomerProfileHeader');
   assert.match(openIntake, /mountCustomerProfileWidgets\(externalCustomerId, state\.customerProfileIntakeItemId\)/);
 });
+
+test('default widget profile mode does not load the legacy iframe', () => {
+  const openCustomer = functionSource('openCustomerProfile', 'openIntakeMasterProfile');
+  assert.match(openCustomer, /if \(!isProfileWidgetsMode\(\)\)[\s\S]*frame\.src = customerProfileFrameUrl/);
+  assert.doesNotMatch(openCustomer, /mountCustomerProfileWidgets\([^\n]+\);\s*const frame = \$\('#customerProfileFrame'\);\s*frame\.src/);
+
+  const openIntake = asyncFunctionSource('openIntakeMasterProfile', 'renderCustomerProfileHeader');
+  assert.match(openIntake, /if \(!isProfileWidgetsMode\(\)\)[\s\S]*frame\.src = customerProfileFrameUrl/);
+
+  const reload = functionSource('reloadCustomerProfileFrame', 'openCustomerProfile');
+  assert.match(reload, /isProfileWidgetsMode\(\)/);
+  assert.match(reload, /return;/);
+});
+
+test('theme changes refresh the profile iframe only in explicit legacy mode', () => {
+  assert.match(html, /profileView === 'legacy' && frame && frame\.getAttribute\('src'\)/);
+});
 test('widget reuses the same profile endpoint contract as the legacy slices', () => {
   // 新旧实现必须指向同一端点，保证数据契约一致
   assert.match(widgetSource, /\/api\/sales-crm\/profile\/\$\{encodeURIComponent\(customerId\)\}/);

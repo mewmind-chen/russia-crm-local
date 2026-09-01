@@ -510,6 +510,31 @@ test('app.js registers drawer-facts widget on crmDrawer page and delegates throu
   assert.match(renderer, /renderFactsHtml\(ctx\)/);
 });
 
+test('crm drawer composes non-AI sections from the shared widget registry', () => {
+  const register = functionSource('registerProfilePageWidgets', 'renderProfileFactsWidget');
+  for (const [id, renderer, order] of [
+    ['drawer-next-step', 'renderDrawerNextStepWidget', 10],
+    ['drawer-facts', 'renderDrawerFactsWidget', 20],
+    ['drawer-master', 'renderDrawerMasterWidget', 25],
+    ['drawer-timeline', 'renderDrawerTimelineWidget', 27],
+  ]) {
+    assert.match(register, new RegExp(`id: '${id}'`));
+    assert.match(register, /pages: \['crmDrawer'\]/);
+    assert.match(register, new RegExp(`order: ${order}`));
+    assert.match(register, new RegExp(`render: ${renderer}`));
+  }
+
+  const renderDrawer = functionSource('renderDrawer', 'stopDrawerNextActionTimer');
+  assert.match(renderDrawer, /renderRegisteredDrawerWidget/);
+  assert.match(renderDrawer, /widgetsForPage\?\.\('crmDrawer', drawerWidgetContext\)/);
+  assert.match(renderDrawer, /renderRegisteredDrawerWidget\('drawer-facts'/);
+  assert.match(renderDrawer, /renderRegisteredDrawerWidget\('drawer-next-step'/);
+  assert.match(renderDrawer, /renderRegisteredDrawerWidget\('drawer-master'/);
+  assert.match(renderDrawer, /renderRegisteredDrawerWidget\('drawer-timeline'/);
+  // AI 区域继续走既有冻结路径，不由本轮非 AI 组合逻辑改写。
+  assert.match(renderDrawer, /customerAiSection\(state\.drawerAiContext\)/);
+});
+
 test('app.js drawerFactsFallbackHtml lets intake and recycle drawers share the drawer-facts widget', () => {
   const fallback = functionSource('drawerFactsFallbackHtml', 'drawerAiContext');
   assert.match(fallback, /TradePulseDrawerFactsWidget/);

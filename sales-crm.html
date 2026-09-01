@@ -1028,8 +1028,9 @@
         var sel = document.getElementById('themeSwitcher');
         if (sel) sel.value = theme;
         try { localStorage.setItem(KEY, theme); } catch (_e) {}
+        var profileView = new URLSearchParams(location.search).get('profileView');
         var frame = document.getElementById('customerProfileFrame');
-        if (frame && frame.getAttribute('src')) {
+        if (profileView === 'legacy' && frame && frame.getAttribute('src')) {
           try {
             var url = new URL(frame.src, location.origin);
             if (url.searchParams.get('profile') === '1') {
