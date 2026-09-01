@@ -2,7 +2,7 @@
 
 更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@45594dd`（未合并）
+执行分支：`codex/frontend-widget-pilot@6674cab`（未合并）
 状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 协议与客户列表样板已落地；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
