@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 11:40:56`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 12:30:06`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,11 +8,11 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `18b4693`（相对 origin/main ahead 321） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 2081/2081 |
-| 核心测试 | `npm test` 1719/1719 |
-| sales_crm.js | 12945 行 |
+| HEAD | `549fdfd`（相对 origin/main ahead 323） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 2087/2087 |
+| 核心测试 | `npm test` 1725/1725 |
+| sales_crm.js | 12978 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
 | 最近会话 | `2026-09-01-browser-acceptance-boundary.md` |
 
@@ -23,8 +23,8 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
-| feat(...) | 55 |
-| docs(governance) | 161 |
+| feat(...) | 56 |
+| docs(governance) | 162 |
 | 其他 | 21 |
 
 ## 阶段 0：治理基础
@@ -164,7 +164,7 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表，以及用户/归档用户/权限组/迁移复核后台列表（8d1bb05）；CRM 抽屉非 AI 状态条、事实、主档、时间线已纳入 crmDrawer 注册表，复杂 activity timeline 条目（更正入口/溯源）已下沉至 timeline widget，旧入口兼容边界已锁定（bc84567：统一根路径 canonical，legacy HTML 路由由 CRM_ENABLE_LEGACY 显式控制），默认 widget 模式不加载兼容 iframe（79036e5/092d8a0）。Phase E harness 已加强为验证默认 customerProfile widget/iframe 边界与 profile-only 只读动作（3b2fe24）。权限配置矩阵、事务预览/审核工作区保留专用组件；AI 列表与 AI 专用工作区冻结，不纳入迁移。
+> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表，以及用户/归档用户/权限组/迁移复核后台列表（8d1bb05）；`549fdfd` 补齐用户级升降序/多级排序、稳定主键和服务端授权字段白名单；CRM 抽屉非 AI 状态条、事实、主档、时间线已纳入 crmDrawer 注册表，复杂 activity timeline 条目（更正入口/溯源）已下沉至 timeline widget，旧入口兼容边界已锁定（bc84567：统一根路径 canonical，legacy HTML 路由由 CRM_ENABLE_LEGACY 显式控制），默认 widget 模式不加载兼容 iframe（79036e5/092d8a0）。Phase E harness 已加强为验证默认 customerProfile widget/iframe 边界与 profile-only 只读动作（3b2fe24）。权限配置矩阵、事务预览/审核工作区保留专用组件；AI 列表与 AI 专用工作区冻结，不纳入迁移。
 
 ### 已完成
 
@@ -183,6 +183,7 @@
 - [x] timeline 抽为共用 widget（开发历史/完整时间线条目）（`93b5dbb`）
 - [x] identity/source tags：sourceTagMarkup 抽为自包含 UMD widget（只读投影、去重/limit/转义；AI gate 由 app 注入）（`3adc1d1`）
 - [x] List widget 协议 + 客户列表样板（列显隐/顺序、用户布局偏好、服务端排序预设、客户字段 schema）（`c246360`）
+- [x] List widget 用户级升降序/多级排序收口（服务端授权白名单、稳定主键、非法请求 403）（`549fdfd`）
 - [x] Research People 列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`3c9a97f`）
 - [x] Research Recon 列表迁移（授权列 schema、用户布局偏好、三种服务端排序）（`2f3dc4a`）
 - [x] 不对口记录列表迁移（授权列 schema、用户布局偏好、四种服务端排序）（`1bbc5c4`）
