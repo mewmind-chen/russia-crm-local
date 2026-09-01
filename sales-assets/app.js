@@ -2070,7 +2070,7 @@
         params.set('sort', state.intakeListLayout.sortPreset || 'status_priority');
       }
       if (pageKey === 'alerts') {
-        params.set('sort', state.alertsListLayout.sortPreset || 'urgency_priority');
+        params.set('sort', state.alertsListLayout?.sortPreset || 'urgency_priority');
       }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });

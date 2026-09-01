@@ -204,5 +204,5 @@ test('alerts list uses the shared widget with per-user layout and server sorting
   assert.match(app, /alertsListLayout/);
   assert.match(app, /tradepulse\.listLayout\.alerts/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="alerts"/);
-  assert.match(app, /params\.set\('sort', state\.alertsListLayout\.sortPreset/);
+  assert.match(app, /params\.set\('sort', state\.alertsListLayout\?\.sortPreset/);
 });
