@@ -133,6 +133,27 @@ test('dashboard country snapshot uses the shared widget with per-user layout and
   assert.match(app, /event\.target\.id === 'dashboardCountrySort'/);
 });
 
+test('markets country and cohort reports use the shared widget with independent user layouts', () => {
+  const country = fieldCatalog.effectiveFieldSchema({ pageKey: 'markets_country', user: { role: 'manager' }, permissions: { view_markets: true }, features: {} });
+  const cohort = fieldCatalog.effectiveFieldSchema({ pageKey: 'markets_cohort', user: { role: 'manager' }, permissions: { view_markets: true }, features: {} });
+  assert.deepEqual(country.fields.map(field => field.key), [
+    'country', 'sample', 'contact_rate', 'reply_rate', 'meeting_rate', 'rfq_rate', 'order_rate', 'repeat_rate', 'revenue', 'value_per_account', 'judgement',
+  ]);
+  assert.deepEqual(cohort.fields.map(field => field.key), [
+    'cohort', 'assigned', 'contact_rate', 'reply_rate', 'meeting_rate', 'rfq_rate', 'order_rate', 'revenue',
+  ]);
+  assert.match(html, /id="marketCountrySort"/);
+  assert.match(html, /id="marketCountryColumnSettings"/);
+  assert.match(html, /id="marketCohortSort"/);
+  assert.match(html, /id="marketCohortColumnSettings"/);
+  assert.match(app, /marketsCountryListLayout/);
+  assert.match(app, /marketsCohortListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.markets_country/);
+  assert.match(app, /tradepulse\.listLayout\.markets_cohort/);
+  assert.match(app, /data-list-page="markets_country"/);
+  assert.match(app, /data-list-page="markets_cohort"/);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

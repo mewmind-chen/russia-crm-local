@@ -112,6 +112,9 @@
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     notificationsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     dashboardCountryListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    marketsCountryListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    marketsCohortListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    marketsSegmentsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -274,7 +277,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -310,6 +313,9 @@
       }
       if (state.data && state.view === 'dashboard') {
         renderDashboard();
+      }
+      if (state.data && state.view === 'markets') {
+        renderMarkets();
       }
       if (state.data && state.view === 'contacts') {
         renderUnifiedPeople();
@@ -867,6 +873,279 @@
     state.dashboardCountryListLayout = { ...state.dashboardCountryListLayout, visibleColumns: [...current] };
     saveDashboardCountryListLayout();
     renderDashboard();
+  }
+  function marketsCountryColumnDefinitions() {
+    const columns = [
+      { key: 'country', label: '国家', required: true, className: 'col-country', sortKey: 'country' },
+      { key: 'sample', label: '样本', className: 'col-accounts', sortKey: 'accounts' },
+      { key: 'contact_rate', label: '触达率', className: 'col-rate', sortKey: 'contactRate' },
+      { key: 'reply_rate', label: '回复率', className: 'col-rate', sortKey: 'replyRate' },
+      { key: 'meeting_rate', label: '会议率', className: 'col-rate', sortKey: 'meetingRate' },
+      { key: 'rfq_rate', label: '询价率', className: 'col-rate', sortKey: 'rfqRate' },
+      { key: 'order_rate', label: '首单率', className: 'col-rate', sortKey: 'orderRate' },
+      { key: 'repeat_rate', label: '复购率', className: 'col-rate', sortKey: 'repeatRate' },
+      { key: 'revenue', label: '收入', className: 'col-value', sortKey: 'revenue' },
+      { key: 'value_per_account', label: '单客毛利', className: 'col-value', sortKey: 'valuePerAccount' },
+      { key: 'judgement', label: '策略判断', className: 'col-judgement', sortKey: 'judgement' },
+    ];
+    const schemaFields = state.fieldSchemas?.markets_country?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function marketsCountryListLayoutStorageKey() {
+    return `tradepulse.listLayout.markets_country.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultMarketsCountryListLayout() {
+    const columns = marketsCountryColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'value_per_account_desc' };
+  }
+  function restoreMarketsCountryListLayout() {
+    const columns = marketsCountryColumnDefinitions();
+    state.marketsCountryListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(marketsCountryListLayoutStorageKey(), undefined, columns)
+      : defaultMarketsCountryListLayout();
+    const allowedSorts = ['value_per_account_desc', 'revenue_desc', 'accounts_desc', 'reply_rate_desc', 'order_rate_desc', 'country_asc'];
+    if (!allowedSorts.includes(state.marketsCountryListLayout.sortPreset)) {
+      state.marketsCountryListLayout = { ...state.marketsCountryListLayout, sortPreset: 'value_per_account_desc' };
+    }
+    if ($('#marketCountrySort')) $('#marketCountrySort').value = state.marketsCountryListLayout.sortPreset;
+    renderMarketsCountryColumnSettings();
+  }
+  function saveMarketsCountryListLayout() {
+    const columns = marketsCountryColumnDefinitions();
+    state.marketsCountryListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(marketsCountryListLayoutStorageKey(), state.marketsCountryListLayout, undefined, columns)
+      : state.marketsCountryListLayout;
+    renderMarketsCountryColumnSettings();
+  }
+  function renderMarketsCountryColumnSettings() {
+    const host = $('#marketCountryColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '国家经营矩阵列设置',
+      columns: marketsCountryColumnDefinitions(),
+      preferences: state.marketsCountryListLayout,
+    });
+  }
+  function closeMarketsCountryColumnSettings() {
+    $('#marketCountryColumnSettingsPanel')?.classList.add('hidden');
+    $('#marketCountryColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openMarketsCountryColumnSettings() {
+    renderMarketsCountryColumnSettings();
+    $('#marketCountryColumnSettingsPanel')?.classList.remove('hidden');
+    $('#marketCountryColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetMarketsCountryListLayout() {
+    state.marketsCountryListLayout = { ...defaultMarketsCountryListLayout(), sortPreset: 'value_per_account_desc' };
+    saveMarketsCountryListLayout();
+    if ($('#marketCountrySort')) $('#marketCountrySort').value = 'value_per_account_desc';
+    renderMarkets();
+  }
+  function moveMarketsCountryListColumn(key, direction) {
+    const columns = marketsCountryColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.marketsCountryListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.marketsCountryListLayout = { ...state.marketsCountryListLayout, columnOrder: order };
+    saveMarketsCountryListLayout();
+    renderMarkets();
+  }
+  function toggleMarketsCountryListColumn(key, visible) {
+    const columns = marketsCountryColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.marketsCountryListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.marketsCountryListLayout = { ...state.marketsCountryListLayout, visibleColumns: [...current] };
+    saveMarketsCountryListLayout();
+    renderMarkets();
+  }
+  function marketsCohortColumnDefinitions() {
+    const columns = [
+      { key: 'cohort', label: '分配月份', required: true, className: 'col-date', sortKey: 'cohort' },
+      { key: 'assigned', label: '客户数', className: 'col-accounts', sortKey: 'assigned' },
+      { key: 'contact_rate', label: '触达率', className: 'col-rate', sortKey: 'contactRate' },
+      { key: 'reply_rate', label: '回复率', className: 'col-rate', sortKey: 'replyRate' },
+      { key: 'meeting_rate', label: '会议率', className: 'col-rate', sortKey: 'meetingRate' },
+      { key: 'rfq_rate', label: '会议→询价', className: 'col-rate', sortKey: 'rfqRate' },
+      { key: 'order_rate', label: '询价→首单', className: 'col-rate', sortKey: 'orderRate' },
+      { key: 'revenue', label: '收入', className: 'col-value', sortKey: 'revenue' },
+    ];
+    const schemaFields = state.fieldSchemas?.markets_cohort?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function marketsCohortListLayoutStorageKey() {
+    return `tradepulse.listLayout.markets_cohort.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultMarketsCohortListLayout() {
+    const columns = marketsCohortColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'cohort_desc' };
+  }
+  function restoreMarketsCohortListLayout() {
+    const columns = marketsCohortColumnDefinitions();
+    state.marketsCohortListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(marketsCohortListLayoutStorageKey(), undefined, columns)
+      : defaultMarketsCohortListLayout();
+    const allowedSorts = ['cohort_desc', 'revenue_desc', 'assigned_desc', 'reply_rate_desc', 'order_rate_desc'];
+    if (!allowedSorts.includes(state.marketsCohortListLayout.sortPreset)) {
+      state.marketsCohortListLayout = { ...state.marketsCohortListLayout, sortPreset: 'cohort_desc' };
+    }
+    if ($('#marketCohortSort')) $('#marketCohortSort').value = state.marketsCohortListLayout.sortPreset;
+    renderMarketsCohortColumnSettings();
+  }
+  function saveMarketsCohortListLayout() {
+    const columns = marketsCohortColumnDefinitions();
+    state.marketsCohortListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(marketsCohortListLayoutStorageKey(), state.marketsCohortListLayout, undefined, columns)
+      : state.marketsCohortListLayout;
+    renderMarketsCohortColumnSettings();
+  }
+  function renderMarketsCohortColumnSettings() {
+    const host = $('#marketCohortColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '分配批次列设置',
+      columns: marketsCohortColumnDefinitions(),
+      preferences: state.marketsCohortListLayout,
+    });
+  }
+  function closeMarketsCohortColumnSettings() {
+    $('#marketCohortColumnSettingsPanel')?.classList.add('hidden');
+    $('#marketCohortColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openMarketsCohortColumnSettings() {
+    renderMarketsCohortColumnSettings();
+    $('#marketCohortColumnSettingsPanel')?.classList.remove('hidden');
+    $('#marketCohortColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetMarketsCohortListLayout() {
+    state.marketsCohortListLayout = { ...defaultMarketsCohortListLayout(), sortPreset: 'cohort_desc' };
+    saveMarketsCohortListLayout();
+    if ($('#marketCohortSort')) $('#marketCohortSort').value = 'cohort_desc';
+    renderMarkets();
+  }
+  function moveMarketsCohortListColumn(key, direction) {
+    const columns = marketsCohortColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.marketsCohortListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.marketsCohortListLayout = { ...state.marketsCohortListLayout, columnOrder: order };
+    saveMarketsCohortListLayout();
+    renderMarkets();
+  }
+  function toggleMarketsCohortListColumn(key, visible) {
+    const columns = marketsCohortColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.marketsCohortListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.marketsCohortListLayout = { ...state.marketsCohortListLayout, visibleColumns: [...current] };
+    saveMarketsCohortListLayout();
+    renderMarkets();
+  }
+  function marketsSegmentsColumnDefinitions() {
+    const columns = [
+      { key: 'name', label: '细分', required: true, className: 'col-segment', sortKey: 'name' },
+      { key: 'accounts', label: '客户', className: 'col-accounts', sortKey: 'accounts' },
+      { key: 'reply_rate', label: '回复率', className: 'col-rate', sortKey: 'replyRate' },
+      { key: 'rfq_rate', label: '询价率', className: 'col-rate', sortKey: 'rfqRate' },
+      { key: 'order_rate', label: '首单率', className: 'col-rate', sortKey: 'orderRate' },
+    ];
+    const schemaFields = state.fieldSchemas?.markets_segments?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function marketsSegmentsListLayoutStorageKey() {
+    return `tradepulse.listLayout.markets_segments.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultMarketsSegmentsListLayout() {
+    const columns = marketsSegmentsColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'order_rate_desc' };
+  }
+  function restoreMarketsSegmentsListLayout() {
+    const columns = marketsSegmentsColumnDefinitions();
+    state.marketsSegmentsListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(marketsSegmentsListLayoutStorageKey(), undefined, columns)
+      : defaultMarketsSegmentsListLayout();
+    const allowedSorts = ['order_rate_desc', 'rfq_rate_desc', 'reply_rate_desc', 'accounts_desc', 'name_asc'];
+    if (!allowedSorts.includes(state.marketsSegmentsListLayout.sortPreset)) {
+      state.marketsSegmentsListLayout = { ...state.marketsSegmentsListLayout, sortPreset: 'order_rate_desc' };
+    }
+    if ($('#marketSegmentsSort')) $('#marketSegmentsSort').value = state.marketsSegmentsListLayout.sortPreset;
+    renderMarketsSegmentsColumnSettings();
+  }
+  function saveMarketsSegmentsListLayout() {
+    const columns = marketsSegmentsColumnDefinitions();
+    state.marketsSegmentsListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(marketsSegmentsListLayoutStorageKey(), state.marketsSegmentsListLayout, undefined, columns)
+      : state.marketsSegmentsListLayout;
+    renderMarketsSegmentsColumnSettings();
+  }
+  function renderMarketsSegmentsColumnSettings() {
+    const host = $('#marketSegmentsColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '细分转化列设置',
+      columns: marketsSegmentsColumnDefinitions(),
+      preferences: state.marketsSegmentsListLayout,
+    });
+  }
+  function closeMarketsSegmentsColumnSettings() {
+    $('#marketSegmentsColumnSettingsPanel')?.classList.add('hidden');
+    $('#marketSegmentsColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openMarketsSegmentsColumnSettings() {
+    renderMarketsSegmentsColumnSettings();
+    $('#marketSegmentsColumnSettingsPanel')?.classList.remove('hidden');
+    $('#marketSegmentsColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetMarketsSegmentsListLayout() {
+    state.marketsSegmentsListLayout = { ...defaultMarketsSegmentsListLayout(), sortPreset: 'order_rate_desc' };
+    saveMarketsSegmentsListLayout();
+    if ($('#marketSegmentsSort')) $('#marketSegmentsSort').value = 'order_rate_desc';
+    renderMarkets();
+  }
+  function moveMarketsSegmentsListColumn(key, direction) {
+    const columns = marketsSegmentsColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.marketsSegmentsListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.marketsSegmentsListLayout = { ...state.marketsSegmentsListLayout, columnOrder: order };
+    saveMarketsSegmentsListLayout();
+    renderMarkets();
+  }
+  function toggleMarketsSegmentsListColumn(key, visible) {
+    const columns = marketsSegmentsColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.marketsSegmentsListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.marketsSegmentsListLayout = { ...state.marketsSegmentsListLayout, visibleColumns: [...current] };
+    saveMarketsSegmentsListLayout();
+    renderMarkets();
   }
   function customerListColumnDefinitions() {
     const columns = [
@@ -2520,6 +2799,9 @@
       restoreCustomerFilters();
       restoreCustomerListLayout();
       restoreDashboardCountryListLayout();
+      restoreMarketsCountryListLayout();
+      restoreMarketsCohortListLayout();
+      restoreMarketsSegmentsListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -7578,25 +7860,71 @@
       ['最高有效回复', bestReply?.country || '—', bestReply ? `${bestReply.replyRate.toFixed(1)}% 回复率` : '暂无数据'],
       ['最高询价成交', bestOrder?.country || '—', bestOrder ? `${bestOrder.orderRate.toFixed(1)}% 询价转首单` : '暂无数据'],
     ].map(([label, value, note]) => `<article class="market-card"><small>${label}</small><strong>${esc(value)}</strong><p>${esc(note)}</p></article>`).join('');
-    $('#marketTable').innerHTML = table(
-      ['国家', '样本', '触达率', '回复率', '会议率', '询价率', '首单率', '复购率', '收入', '单客毛利', '策略判断'],
-      rows.map(row => {
-        const judgement = row.sampleStatus === '样本不足' ? '继续积累样本' : row.valuePerAccount > 300 ? '优先增加资源' : row.replyRate < 5 ? '减少冷开发投入' : '保持并优化';
-        return [
-          `<strong>${esc(row.country)}</strong>`, `${row.accounts} · ${row.sampleStatus}`, `${row.contactRate.toFixed(1)}%`, `${row.replyRate.toFixed(1)}%`,
-          `${row.meetingRate.toFixed(1)}%`, `${row.rfqRate.toFixed(1)}%`, `${row.orderRate.toFixed(1)}%`, `${row.repeatRate.toFixed(1)}%`,
-          money(row.revenue), money(row.valuePerAccount), `<span class="pill ${judgement.includes('减少') ? 'red' : judgement.includes('积累') ? 'gray' : ''}">${judgement}</span>`,
-        ];
-      }),
-    );
-    $('#cohortTable').innerHTML = table(
-      ['分配月份','客户数','触达率','回复率','会议率','会议→询价','询价→首单','收入'],
-      (state.data.cohortReport || []).map(row => [
-        `<strong>${esc(row.cohort)}</strong>`, row.assigned, `${row.contactRate.toFixed(1)}%`,
-        `${row.replyRate.toFixed(1)}%`, `${row.meetingRate.toFixed(1)}%`, `${row.rfqRate.toFixed(1)}%`,
-        `${row.orderRate.toFixed(1)}%`, money(row.revenue),
-      ]),
-    );
+    const countryPreset = state.marketsCountryListLayout?.sortPreset || 'value_per_account_desc';
+    const countrySorters = {
+      value_per_account_desc: (left, right) => Number(right.valuePerAccount || 0) - Number(left.valuePerAccount || 0),
+      revenue_desc: (left, right) => Number(right.revenue || 0) - Number(left.revenue || 0),
+      accounts_desc: (left, right) => Number(right.accounts || 0) - Number(left.accounts || 0),
+      reply_rate_desc: (left, right) => Number(right.replyRate || 0) - Number(left.replyRate || 0),
+      order_rate_desc: (left, right) => Number(right.orderRate || 0) - Number(left.orderRate || 0),
+      country_asc: (left, right) => String(left.country || '').localeCompare(String(right.country || ''), 'zh-CN'),
+    };
+    const countryRows = rows.slice().sort((left, right) => (countrySorters[countryPreset] || countrySorters.value_per_account_desc)(left, right)
+      || String(left.country || '').localeCompare(String(right.country || ''), 'zh-CN'));
+    const countryColumns = marketsCountryColumnDefinitions();
+    const visibleCountryColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(countryColumns, state.marketsCountryListLayout)
+      : countryColumns;
+    const countryTableRows = countryRows.map(row => {
+      const judgement = row.sampleStatus === '样本不足' ? '继续积累样本' : row.valuePerAccount > 300 ? '优先增加资源' : row.replyRate < 5 ? '减少冷开发投入' : '保持并优化';
+      return {
+        country: `<strong>${esc(row.country)}</strong>`,
+        sample: `${row.accounts} · ${esc(row.sampleStatus)}`,
+        contact_rate: `${row.contactRate.toFixed(1)}%`,
+        reply_rate: `${row.replyRate.toFixed(1)}%`,
+        meeting_rate: `${row.meetingRate.toFixed(1)}%`,
+        rfq_rate: `${row.rfqRate.toFixed(1)}%`,
+        order_rate: `${row.orderRate.toFixed(1)}%`,
+        repeat_rate: `${row.repeatRate.toFixed(1)}%`,
+        revenue: money(row.revenue),
+        value_per_account: money(row.valuePerAccount),
+        judgement: `<span class="pill ${judgement.includes('减少') ? 'red' : judgement.includes('积累') ? 'gray' : ''}">${judgement}</span>`,
+      };
+    });
+    $('#marketTable').innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({ columns: countryColumns, rows: countryTableRows, preferences: state.marketsCountryListLayout, attrs: 'data-list-page="markets_country"' })
+      : table(visibleCountryColumns.map(column => column.label), countryTableRows.map(row => visibleCountryColumns.map(column => row[column.key])));
+    applyTableColumnClasses($('#marketTable'), visibleCountryColumns.map(column => column.className || ''));
+
+    const cohortPreset = state.marketsCohortListLayout?.sortPreset || 'cohort_desc';
+    const cohortRows = (state.data.cohortReport || []).slice().sort((left, right) => {
+      const sorters = {
+        cohort_desc: () => String(right.cohort || '').localeCompare(String(left.cohort || '')),
+        revenue_desc: () => Number(right.revenue || 0) - Number(left.revenue || 0),
+        assigned_desc: () => Number(right.assigned || 0) - Number(left.assigned || 0),
+        reply_rate_desc: () => Number(right.replyRate || 0) - Number(left.replyRate || 0),
+        order_rate_desc: () => Number(right.orderRate || 0) - Number(left.orderRate || 0),
+      };
+      return (sorters[cohortPreset] || sorters.cohort_desc)() || String(right.cohort || '').localeCompare(String(left.cohort || ''));
+    });
+    const cohortColumns = marketsCohortColumnDefinitions();
+    const visibleCohortColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(cohortColumns, state.marketsCohortListLayout)
+      : cohortColumns;
+    const cohortTableRows = cohortRows.map(row => ({
+      cohort: `<strong>${esc(row.cohort)}</strong>`,
+      assigned: row.assigned,
+      contact_rate: `${row.contactRate.toFixed(1)}%`,
+      reply_rate: `${row.replyRate.toFixed(1)}%`,
+      meeting_rate: `${row.meetingRate.toFixed(1)}%`,
+      rfq_rate: `${row.rfqRate.toFixed(1)}%`,
+      order_rate: `${row.orderRate.toFixed(1)}%`,
+      revenue: money(row.revenue),
+    }));
+    $('#cohortTable').innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({ columns: cohortColumns, rows: cohortTableRows, preferences: state.marketsCohortListLayout, attrs: 'data-list-page="markets_cohort"' })
+      : table(visibleCohortColumns.map(column => column.label), cohortTableRows.map(row => visibleCohortColumns.map(column => row[column.key])));
+    applyTableColumnClasses($('#cohortTable'), visibleCohortColumns.map(column => column.className || ''));
     renderSegments(scopedAccounts());
   }
 
@@ -7627,13 +7955,35 @@
     const configs = [
       ['客户来源', 'source'], ['应用行业', 'industry'], ['客户类型', 'customer_type'], ['产品需求', 'product_focus'],
     ];
+    const preset = state.marketsSegmentsListLayout?.sortPreset || 'order_rate_desc';
+    const columns = marketsSegmentsColumnDefinitions();
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.marketsSegmentsListLayout)
+      : columns;
     $('#segmentGrid').innerHTML = configs.map(([title, field]) => {
-      const rows = segmentReport(accounts, field).slice(0, 6);
+      const sorters = {
+        order_rate_desc: (left, right) => Number(right.orderRate || 0) - Number(left.orderRate || 0),
+        rfq_rate_desc: (left, right) => Number(right.rfqRate || 0) - Number(left.rfqRate || 0),
+        reply_rate_desc: (left, right) => Number(right.replyRate || 0) - Number(left.replyRate || 0),
+        accounts_desc: (left, right) => Number(right.accounts || 0) - Number(left.accounts || 0),
+        name_asc: (left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'zh-CN'),
+      };
+      const rows = segmentReport(accounts, field).slice().sort((left, right) => (sorters[preset] || sorters.order_rate_desc)(left, right)
+        || String(left.name || '').localeCompare(String(right.name || ''), 'zh-CN')).slice(0, 6);
+      const tableRows = rows.map(row => ({
+        name: `<strong>${esc(row.name)}</strong>`,
+        accounts: row.accounts,
+        reply_rate: `${row.replyRate.toFixed(1)}%`,
+        rfq_rate: `${row.rfqRate.toFixed(1)}%`,
+        order_rate: ratePill(row.orderRate),
+      }));
+      const tableHtml = listWidget?.renderTable
+        ? listWidget.renderTable({ columns, rows: tableRows, preferences: state.marketsSegmentsListLayout, attrs: 'data-list-page="markets_segments"' })
+        : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])));
       return `<article class="segment-panel"><div class="panel-head"><div><p class="eyebrow">SEGMENT VIEW</p><h3>${title}转化</h3></div><span class="panel-note">回复 → 询价 → 首单</span></div>
-        <div class="data-table compact">${table(['细分', '客户', '回复率', '询价率', '首单率'], rows.map(row => [
-          `<strong>${esc(row.name)}</strong>`, row.accounts, `${row.replyRate.toFixed(1)}%`, `${row.rfqRate.toFixed(1)}%`, ratePill(row.orderRate),
-        ]))}</div></article>`;
+        <div class="data-table compact">${tableHtml}</div></article>`;
     }).join('');
+    $$('#segmentGrid .data-table').forEach(root => applyTableColumnClasses(root, visibleColumns.map(column => column.className || '')));
   }
 
   function renderUsers() {
@@ -14074,6 +14424,21 @@
       else closeDashboardCountryColumnSettings();
       return;
     }
+    if (event.target.closest('#marketCountryColumnSettings')) {
+      if ($('#marketCountryColumnSettingsPanel')?.classList.contains('hidden')) openMarketsCountryColumnSettings();
+      else closeMarketsCountryColumnSettings();
+      return;
+    }
+    if (event.target.closest('#marketCohortColumnSettings')) {
+      if ($('#marketCohortColumnSettingsPanel')?.classList.contains('hidden')) openMarketsCohortColumnSettings();
+      else closeMarketsCohortColumnSettings();
+      return;
+    }
+    if (event.target.closest('#marketSegmentsColumnSettings')) {
+      if ($('#marketSegmentsColumnSettingsPanel')?.classList.contains('hidden')) openMarketsSegmentsColumnSettings();
+      else closeMarketsSegmentsColumnSettings();
+      return;
+    }
     if (event.target.closest('#peopleColumnSettings')) {
       if ($('#peopleColumnSettingsPanel')?.classList.contains('hidden')) openResearchPeopleColumnSettings();
       else closeResearchPeopleColumnSettings();
@@ -14113,6 +14478,12 @@
     if (columnMove) {
       if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
         moveDashboardCountryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#marketCountryColumnSettingsPanel')) {
+        moveMarketsCountryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#marketCohortColumnSettingsPanel')) {
+        moveMarketsCohortListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#marketSegmentsColumnSettingsPanel')) {
+        moveMarketsSegmentsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#peopleColumnSettingsPanel')) {
         moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#reconColumnSettingsPanel')) {
@@ -14134,6 +14505,9 @@
     }
     if (event.target.closest('[data-list-layout-reset]')) {
       if (event.target.closest('#dashboardCountryColumnSettingsPanel')) resetDashboardCountryListLayout();
+      else if (event.target.closest('#marketCountryColumnSettingsPanel')) resetMarketsCountryListLayout();
+      else if (event.target.closest('#marketCohortColumnSettingsPanel')) resetMarketsCohortListLayout();
+      else if (event.target.closest('#marketSegmentsColumnSettingsPanel')) resetMarketsSegmentsListLayout();
       else if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
       else if (event.target.closest('#reconColumnSettingsPanel')) resetReconListLayout();
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
@@ -14146,6 +14520,9 @@
     }
     if (event.target.closest('[data-list-layout-close]')) {
       if (event.target.closest('#dashboardCountryColumnSettingsPanel')) closeDashboardCountryColumnSettings();
+      else if (event.target.closest('#marketCountryColumnSettingsPanel')) closeMarketsCountryColumnSettings();
+      else if (event.target.closest('#marketCohortColumnSettingsPanel')) closeMarketsCohortColumnSettings();
+      else if (event.target.closest('#marketSegmentsColumnSettingsPanel')) closeMarketsSegmentsColumnSettings();
       else if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
       else if (event.target.closest('#reconColumnSettingsPanel')) closeReconColumnSettings();
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
@@ -15140,6 +15517,11 @@
         restoreCustomerListLayout();
       }
       if (viewChanged && canonicalView === 'dashboard') restoreDashboardCountryListLayout();
+      if (viewChanged && canonicalView === 'markets') {
+        restoreMarketsCountryListLayout();
+        restoreMarketsCohortListLayout();
+        restoreMarketsSegmentsListLayout();
+      }
       if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
       if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
       if (viewChanged && canonicalView === 'recon') restoreReconListLayout();
@@ -15276,6 +15658,12 @@
     if (event.target.matches('[data-list-column-toggle]')) {
       if (event.target.closest('#dashboardCountryColumnSettingsPanel')) {
         toggleDashboardCountryListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#marketCountryColumnSettingsPanel')) {
+        toggleMarketsCountryListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#marketCohortColumnSettingsPanel')) {
+        toggleMarketsCohortListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#marketSegmentsColumnSettingsPanel')) {
+        toggleMarketsSegmentsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#peopleColumnSettingsPanel')) {
         toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#reconColumnSettingsPanel')) {
@@ -15349,6 +15737,30 @@
       };
       saveDashboardCountryListLayout();
       renderDashboard();
+    }
+    if (event.target.id === 'marketCountrySort') {
+      state.marketsCountryListLayout = {
+        ...state.marketsCountryListLayout,
+        sortPreset: event.target.value || 'value_per_account_desc',
+      };
+      saveMarketsCountryListLayout();
+      renderMarkets();
+    }
+    if (event.target.id === 'marketCohortSort') {
+      state.marketsCohortListLayout = {
+        ...state.marketsCohortListLayout,
+        sortPreset: event.target.value || 'cohort_desc',
+      };
+      saveMarketsCohortListLayout();
+      renderMarkets();
+    }
+    if (event.target.id === 'marketSegmentsSort') {
+      state.marketsSegmentsListLayout = {
+        ...state.marketsSegmentsListLayout,
+        sortPreset: event.target.value || 'order_rate_desc',
+      };
+      saveMarketsSegmentsListLayout();
+      renderMarkets();
     }
     if (event.target.id === 'peopleSort') {
       state.researchPeopleListLayout = {

@@ -627,9 +627,49 @@
         <div id="marketCards" class="market-cards"></div>
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">COUNTRY MATRIX</p><h2>国家经营矩阵</h2></div><span class="panel-note">小于10个客户标记为样本不足</span></div>
+          <div class="toolbar markets-country-list-toolbar">
+            <label class="sr-only" for="marketCountrySort">国家经营矩阵排序</label>
+            <select id="marketCountrySort" aria-label="国家经营矩阵排序">
+              <option value="value_per_account_desc">单客毛利优先</option>
+              <option value="revenue_desc">收入优先</option>
+              <option value="accounts_desc">客户数优先</option>
+              <option value="reply_rate_desc">回复率优先</option>
+              <option value="order_rate_desc">首单率优先</option>
+              <option value="country_asc">国家名称</option>
+            </select>
+            <button id="marketCountryColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="marketCountryColumnSettingsPanel">列设置</button>
+            <div id="marketCountryColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="国家经营矩阵列设置"></div>
+          </div>
           <div id="marketTable" class="data-table"></div>
         </article>
-        <article class="panel cohort-panel"><div class="panel-head"><div><p class="eyebrow">ASSIGNMENT COHORT</p><h2>分配批次转化</h2></div><span class="panel-note">避免把尚未成熟的新客户直接算作失败</span></div><div id="cohortTable" class="data-table"></div></article>
+        <article class="panel cohort-panel">
+          <div class="panel-head"><div><p class="eyebrow">ASSIGNMENT COHORT</p><h2>分配批次转化</h2></div><span class="panel-note">避免把尚未成熟的新客户直接算作失败</span></div>
+          <div class="toolbar markets-cohort-list-toolbar">
+            <label class="sr-only" for="marketCohortSort">分配批次转化排序</label>
+            <select id="marketCohortSort" aria-label="分配批次转化排序">
+              <option value="cohort_desc">最新批次优先</option>
+              <option value="revenue_desc">收入优先</option>
+              <option value="assigned_desc">客户数优先</option>
+              <option value="reply_rate_desc">回复率优先</option>
+              <option value="order_rate_desc">首单率优先</option>
+            </select>
+            <button id="marketCohortColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="marketCohortColumnSettingsPanel">列设置</button>
+            <div id="marketCohortColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="分配批次列设置"></div>
+          </div>
+          <div id="cohortTable" class="data-table"></div>
+        </article>
+        <div class="toolbar markets-segment-list-toolbar">
+          <label class="sr-only" for="marketSegmentsSort">细分转化排序</label>
+          <select id="marketSegmentsSort" aria-label="细分转化排序">
+            <option value="order_rate_desc">首单率优先</option>
+            <option value="rfq_rate_desc">询价率优先</option>
+            <option value="reply_rate_desc">回复率优先</option>
+            <option value="accounts_desc">客户数优先</option>
+            <option value="name_asc">细分名称</option>
+          </select>
+          <button id="marketSegmentsColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="marketSegmentsColumnSettingsPanel">列设置</button>
+          <div id="marketSegmentsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="细分转化列设置"></div>
+        </div>
         <div id="segmentGrid" class="segment-grid"></div>
       </section>
 
