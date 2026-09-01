@@ -390,16 +390,24 @@
           <div id="managerAnomalyTable" class="data-table"></div>
         </article>
         <article class="panel">
-          <div class="toolbar">
+          <div class="toolbar alerts-list-toolbar">
             <div class="segmented" id="alertTabs">
               <button class="active" data-severity=""><span class="severity-label-full">全部异常</span><span class="severity-label-short">全部</span></button>
               <button data-severity="immediate"><span class="severity-label-full">立即处理</span><span class="severity-label-short">立即</span></button>
               <button data-severity="today"><span class="severity-label-full">今天完成</span><span class="severity-label-short">今天</span></button>
               <button data-severity="attention"><span class="severity-label-full">需要关注</span><span class="severity-label-short">关注</span></button>
             </div>
+            <label class="list-sort-control">排序<select id="alertsSort" aria-label="今日待办排序">
+              <option value="urgency_priority">紧急程度</option>
+              <option value="due_at_asc">计划时间</option>
+              <option value="recent_update">最近更新</option>
+              <option value="company_asc">客户名称</option>
+            </select></label>
+            <button id="alertsColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="alertsColumnSettingsPanel">列设置</button>
             <span class="toolbar-count">同一对象只显示一行，其他原因保留为标签</span>
             <span id="alertsAuthorizedResultCount" class="toolbar-count"></span>
           </div>
+          <div id="alertsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="今日待办列设置"></div>
           <div id="alertTable" class="today-task-list"></div>
           <div id="alertsAuthorizedPagination" class="shared-pagination" data-pagination="alerts"></div>
         </article>

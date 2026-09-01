@@ -160,3 +160,29 @@ test('intake list accepts only authorized server-side sort presets', async t => 
   assert.equal(invalid.status, 403);
   assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
 });
+
+test('alerts list accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE crm_accounts SET manager_required=1,next_action='',next_action_at=''
+    WHERE id IN ('CRM-WU','CRM-OWN','CRM-OTHER')`).run();
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Zeta Alert', 'RU-9001');
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Alpha Alert', 'RU-9002');
+  fx.db.prepare('UPDATE customer_pool SET company_name=? WHERE customer_id=?').run('Mid Alert', 'RU-9003');
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/alerts', {
+    cookie: fx.adminCookie,
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/lists/alerts?sort=company_asc&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.ok(sorted.rows.length >= 2);
+  const names = sorted.rows.map(row => row.companyName);
+  assert.deepEqual(names, [...names].sort((left, right) => String(left).localeCompare(String(right), 'zh-CN')));
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/alerts?sort=contact_email&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

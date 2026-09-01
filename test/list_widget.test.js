@@ -187,3 +187,22 @@ test('intake list uses the shared widget with per-user layout and server sorting
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="intake"/);
   assert.match(app, /params\.set\('sort', state\.intakeListLayout\.sortPreset/);
 });
+
+test('alerts list uses the shared widget with per-user layout and server sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'alerts',
+    user: { role: 'sales' },
+    permissions: { view_alerts: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'urgency', 'company', 'reasons', 'due_at', 'owner',
+  ]);
+  assert.match(html, /id="alertsSort"/);
+  assert.match(html, /id="alertsColumnSettings"/);
+  assert.match(html, /id="alertsColumnSettingsPanel"/);
+  assert.match(app, /alertsListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.alerts/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="alerts"/);
+  assert.match(app, /params\.set\('sort', state\.alertsListLayout\.sortPreset/);
+});

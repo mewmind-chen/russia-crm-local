@@ -105,6 +105,7 @@
     },
     customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
     intakeListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    alertsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
@@ -270,7 +271,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline', 'alerts']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -312,6 +313,9 @@
       }
       if (state.data && state.view === 'pipeline') {
         renderPipeline();
+      }
+      if (state.data && state.view === 'alerts') {
+        renderAlerts();
       }
     });
   }
@@ -1136,6 +1140,96 @@
     state.intakeListLayout = { ...state.intakeListLayout, visibleColumns: [...current] };
     saveIntakeListLayout();
     renderIntake();
+  }
+  function alertsColumnDefinitions() {
+    const columns = [
+      { key: 'urgency', label: '等级', className: 'col-urgency', sortKey: 'urgency' },
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'companyName' },
+      { key: 'reasons', label: '主要原因 / 其他原因', className: 'col-reasons', sortKey: 'reasonCount' },
+      { key: 'due_at', label: '计划时间', className: 'col-due', sortKey: 'dueAt' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'actions', label: '唯一建议动作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.alerts?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const schemaKeys = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || schemaKeys.has(column.key));
+  }
+  function alertsListLayoutStorageKey() {
+    return `tradepulse.listLayout.alerts.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultAlertsListLayout() {
+    const columns = alertsColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'urgency_priority' };
+  }
+  function restoreAlertsListLayout() {
+    const columns = alertsColumnDefinitions();
+    state.alertsListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(alertsListLayoutStorageKey(), undefined, columns)
+      : defaultAlertsListLayout();
+    const allowedSorts = ['urgency_priority', 'due_at_asc', 'recent_update', 'company_asc'];
+    if (!allowedSorts.includes(state.alertsListLayout.sortPreset)) {
+      state.alertsListLayout = { ...state.alertsListLayout, sortPreset: 'urgency_priority' };
+    }
+    if ($('#alertsSort')) $('#alertsSort').value = state.alertsListLayout.sortPreset;
+    renderAlertsColumnSettings();
+  }
+  function saveAlertsListLayout() {
+    const columns = alertsColumnDefinitions();
+    state.alertsListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(alertsListLayoutStorageKey(), state.alertsListLayout, undefined, columns)
+      : state.alertsListLayout;
+    renderAlertsColumnSettings();
+  }
+  function renderAlertsColumnSettings() {
+    const host = $('#alertsColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '今日待办列设置',
+      columns: alertsColumnDefinitions(),
+      preferences: state.alertsListLayout,
+    });
+  }
+  function closeAlertsColumnSettings() {
+    $('#alertsColumnSettingsPanel')?.classList.add('hidden');
+    $('#alertsColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openAlertsColumnSettings() {
+    renderAlertsColumnSettings();
+    $('#alertsColumnSettingsPanel')?.classList.remove('hidden');
+    $('#alertsColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetAlertsListLayout() {
+    state.alertsListLayout = { ...defaultAlertsListLayout(), sortPreset: 'urgency_priority' };
+    saveAlertsListLayout();
+    if ($('#alertsSort')) $('#alertsSort').value = 'urgency_priority';
+    renderAlerts();
+    void loadAuthorizedBusinessPage('alerts', { reset: true, force: true });
+  }
+  function moveAlertsListColumn(key, direction) {
+    const columns = alertsColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.alertsListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.alertsListLayout = { ...state.alertsListLayout, columnOrder: order };
+    saveAlertsListLayout();
+    renderAlerts();
+  }
+  function toggleAlertsListColumn(key, visible) {
+    const columns = alertsColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.alertsListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.alertsListLayout = { ...state.alertsListLayout, visibleColumns: [...current] };
+    saveAlertsListLayout();
+    renderAlerts();
   }
   function pipelineColumnDefinitions() {
     const columns = [
@@ -1975,6 +2069,9 @@
       if (pageKey === 'intake') {
         params.set('sort', state.intakeListLayout.sortPreset || 'status_priority');
       }
+      if (pageKey === 'alerts') {
+        params.set('sort', state.alertsListLayout.sortPreset || 'urgency_priority');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -2135,6 +2232,7 @@
       restoreCustomerFilters();
       restoreCustomerListLayout();
       restoreIntakeListLayout();
+      restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
       restoreRecycleBinListLayout();
       restorePipelineListLayout();
@@ -6029,26 +6127,40 @@
       ['attention', '需要关注', counts.attention, '存在阶段停滞风险'],
     ].map(([key, label, value, text]) => `<button type="button" class="alert-kpi ${state.alertSeverity === key ? 'is-active' : ''}" data-alert-drilldown="${esc(key)}" aria-pressed="${state.alertSeverity === key}"><span>${label}</span><strong>${value}</strong><small class="subtle">${text}</small></button>`).join('');
     const rows = all.filter(item => !state.alertSeverity || item.urgency === state.alertSeverity);
-    const desktopTable = table(
-      ['等级', '客户', '主要原因 / 其他原因', '计划时间', '负责人', '唯一建议动作'],
-      rows.map(item => {
-        const account = state.data.accounts.find(row => row.id === item.customerId);
-        const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
-        const other = (item.otherReasons || []).map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('');
-        const row = [
-          `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
-          `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${esc(todayTaskContext(item, account))}</span></div>`,
-          `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
-          esc(todayTaskDueText(item)),
-          esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
-          todayTaskActionMarkup(item),
-        ];
-        row._attrs = item.intakeItemId
+    const alertColumns = alertsColumnDefinitions();
+    const alertTableRows = rows.map(item => {
+      const account = state.data.accounts.find(row => row.id === item.customerId);
+      const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
+      const other = (item.otherReasons || []).map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('');
+      return {
+        urgency: `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
+        company: `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${esc(todayTaskContext(item, account))}</span></div>`,
+        reasons: `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
+        due_at: esc(todayTaskDueText(item)),
+        owner: esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
+        actions: todayTaskActionMarkup(item),
+        _attrs: item.intakeItemId
           ? `data-intake-profile="${esc(item.intakeItemId)}"`
-          : `data-customer="${esc(item.customerId)}"`;
-        return row;
-      }),
-    );
+          : `data-customer="${esc(item.customerId)}"`,
+      };
+    });
+    const visibleAlertColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(alertColumns, state.alertsListLayout)
+      : alertColumns;
+    const desktopTable = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: alertColumns,
+        rows: alertTableRows,
+        preferences: state.alertsListLayout,
+        attrs: 'data-list-page="alerts"',
+        headerAttrs: 'class="alerts-list-head"',
+        emptyText: '暂无符合条件的数据',
+      })
+      : table(
+        visibleAlertColumns.map(column => column.label),
+        alertTableRows.map(row => visibleAlertColumns.map(column => row[column.key])),
+        'data-list-page="alerts"',
+      );
     const mobileCards = rows.length
       ? rows.map(item => renderTodayTaskMobileCard(
         item,
@@ -6057,6 +6169,7 @@
       : '<div class="empty">暂无符合条件的数据</div>';
     $('#alertTable').innerHTML = `<div class="today-task-desktop-table"><div class="data-table">${desktopTable}</div></div>
       <div class="today-task-mobile-list">${mobileCards}</div>`;
+    applyTableColumnClasses($('#alertTable'), visibleAlertColumns.map(column => column.className || ''));
     renderManagerAnomalies();
   }
 
@@ -13609,6 +13722,11 @@
       else closeIntakeColumnSettings();
       return;
     }
+    if (event.target.closest('#alertsColumnSettings')) {
+      if ($('#alertsColumnSettingsPanel')?.classList.contains('hidden')) openAlertsColumnSettings();
+      else closeAlertsColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
@@ -13619,6 +13737,8 @@
         movePipelineListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#intakeColumnSettingsPanel')) {
         moveIntakeListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#alertsColumnSettingsPanel')) {
+        moveAlertsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -13629,6 +13749,7 @@
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
       else if (event.target.closest('#intakeColumnSettingsPanel')) resetIntakeListLayout();
+      else if (event.target.closest('#alertsColumnSettingsPanel')) resetAlertsListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -13637,6 +13758,7 @@
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
       else if (event.target.closest('#intakeColumnSettingsPanel')) closeIntakeColumnSettings();
+      else if (event.target.closest('#alertsColumnSettingsPanel')) closeAlertsColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -14624,6 +14746,7 @@
         restoreCustomerListLayout();
       }
       if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
+      if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
@@ -14762,6 +14885,8 @@
         togglePipelineListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#intakeColumnSettingsPanel')) {
         toggleIntakeListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#alertsColumnSettingsPanel')) {
+        toggleAlertsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
@@ -14845,6 +14970,14 @@
       };
       saveIntakeListLayout();
       void loadAuthorizedBusinessPage('intake', { reset: true, force: true });
+    }
+    if (event.target.id === 'alertsSort') {
+      state.alertsListLayout = {
+        ...state.alertsListLayout,
+        sortPreset: event.target.value || 'urgency_priority',
+      };
+      saveAlertsListLayout();
+      void loadAuthorizedBusinessPage('alerts', { reset: true, force: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();
