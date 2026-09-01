@@ -3570,13 +3570,14 @@
           status: businessColumns[3],
           actions: businessColumns[4],
         }[column.key]));
+        row._attrs = `data-intake-profile="${esc(item.id)}"`;
         const record = Object.fromEntries(intakeColumns.map((column, index) => [column.key, row[index]]));
         if (canManualAssign) {
           record.select = intakeItemAssignable(item)
             ? `<span class="intake-select-cell"><input type="checkbox" data-select-intake="${esc(item.id)}" ${state.intakeSelectAllScope || state.selectedIntakeIds.has(item.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(item))}"></span>`
             : '';
         }
-        record._attrs = `data-intake-profile="${esc(item.id)}"`;
+        record._attrs = row._attrs;
         return record;
       });
     const visibleColumns = listWidget?.resolveColumns
