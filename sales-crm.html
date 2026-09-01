@@ -317,7 +317,21 @@
       <section id="contactsView" class="view">
         <div class="section-intro"><div><p class="eyebrow">联系人资料</p><h2>客户联系人线索</h2><p>寻找并核实客户公司的采购、老板、工程师等潜在联系人；确认后进入正式客户联系人。</p></div></div>
         <div id="peopleAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <article class="panel"><div class="toolbar"><span id="peopleResultCount" class="toolbar-count"></span></div><div id="unifiedPeopleTable" class="data-table"></div><div id="peoplePagination" class="shared-pagination" data-pagination="contacts"></div></article>
+        <article class="panel">
+          <div class="toolbar people-list-toolbar">
+            <select id="peopleSort" aria-label="联系人排序">
+              <option value="sales_ready">可交付优先</option>
+              <option value="contact_level">联系人等级</option>
+              <option value="updated_desc">最近更新</option>
+              <option value="company_asc">客户名称</option>
+            </select>
+            <button id="peopleColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="peopleColumnSettingsPanel">列设置</button>
+            <span id="peopleResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="peopleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="联系人列表列设置"></div>
+          <div id="unifiedPeopleTable" class="data-table"></div>
+          <div id="peoplePagination" class="shared-pagination" data-pagination="contacts"></div>
+        </article>
       </section>
 
       <section id="reconView" class="view">

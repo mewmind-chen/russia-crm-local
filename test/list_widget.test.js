@@ -104,3 +104,22 @@ test('customer list has a server field-schema catalog separate from local layout
   assert.match(app, /state\.fieldSchemas\?\.customers\?\.fields/);
   assert.match(app, /state\.fieldSchemas = \{\};/);
 });
+
+test('research people list uses the shared widget with per-user layout and authorized columns', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'contacts',
+    user: { role: 'sales' },
+    permissions: { view_contacts: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'contact', 'title_department', 'level', 'methods', 'status',
+  ]);
+  assert.match(html, /id="peopleSort"/);
+  assert.match(html, /id="peopleColumnSettings"/);
+  assert.match(html, /id="peopleColumnSettingsPanel"/);
+  assert.match(app, /researchPeopleListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.contacts/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="contacts"/);
+  assert.match(app, /params\.set\('sort', state\.researchPeopleListLayout\.sortPreset/);
+});

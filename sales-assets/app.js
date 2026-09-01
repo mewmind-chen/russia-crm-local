@@ -104,6 +104,7 @@
       hasMore: false, loading: false, loaded: false,
     },
     customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
+    researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -266,7 +267,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -299,6 +300,9 @@
       }
       if (state.data && state.view === 'customers') {
         renderCustomers();
+      }
+      if (state.data && state.view === 'contacts') {
+        renderUnifiedPeople();
       }
     });
   }
@@ -835,6 +839,103 @@
     state.customerListLayout = { ...state.customerListLayout, visibleColumns: [...current] };
     saveCustomerListLayout();
     renderCustomers();
+  }
+  function researchPeopleColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'contact', label: '联系人', className: 'col-contact', sortKey: 'full_name' },
+      { key: 'title_department', label: '职位 / 部门', className: 'col-title', sortKey: 'title' },
+      { key: 'level', label: '等级', className: 'col-level', sortKey: 'contact_level' },
+      { key: 'methods', label: '直接联系方式', className: 'col-methods', sortKey: 'methods_summary' },
+      { key: 'status', label: '资料状态', className: 'col-status', sortKey: 'sales_ready' },
+    ];
+    const schemaFields = state.fieldSchemas?.contacts?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => field.key));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function researchPeopleListLayoutStorageKey() {
+    return `tradepulse.listLayout.contacts.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultResearchPeopleListLayout() {
+    const columns = researchPeopleColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: '' };
+  }
+  function restoreResearchPeopleListLayout() {
+    const columns = researchPeopleColumnDefinitions();
+    state.researchPeopleListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(researchPeopleListLayoutStorageKey(), undefined, columns)
+      : defaultResearchPeopleListLayout();
+    const allowedSorts = ['sales_ready', 'contact_level', 'updated_desc', 'company_asc'];
+    if (!allowedSorts.includes(state.researchPeopleListLayout.sortPreset)) {
+      state.researchPeopleListLayout = {
+        ...state.researchPeopleListLayout,
+        sortPreset: 'sales_ready',
+      };
+    }
+    if ($('#peopleSort')) $('#peopleSort').value = state.researchPeopleListLayout.sortPreset;
+    renderResearchPeopleColumnSettings();
+  }
+  function saveResearchPeopleListLayout() {
+    const columns = researchPeopleColumnDefinitions();
+    state.researchPeopleListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(researchPeopleListLayoutStorageKey(), state.researchPeopleListLayout, undefined, columns)
+      : state.researchPeopleListLayout;
+    renderResearchPeopleColumnSettings();
+  }
+  function renderResearchPeopleColumnSettings() {
+    const host = $('#peopleColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '联系人列表列设置',
+      columns: researchPeopleColumnDefinitions(),
+      preferences: state.researchPeopleListLayout,
+    });
+  }
+  function closeResearchPeopleColumnSettings() {
+    $('#peopleColumnSettingsPanel')?.classList.add('hidden');
+    $('#peopleColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openResearchPeopleColumnSettings() {
+    renderResearchPeopleColumnSettings();
+    $('#peopleColumnSettingsPanel')?.classList.remove('hidden');
+    $('#peopleColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetResearchPeopleListLayout() {
+    state.researchPeopleListLayout = defaultResearchPeopleListLayout();
+    state.researchPeopleListLayout = {
+      ...state.researchPeopleListLayout,
+      sortPreset: 'sales_ready',
+    };
+    saveResearchPeopleListLayout();
+    if ($('#peopleSort')) $('#peopleSort').value = 'sales_ready';
+    renderUnifiedPeople();
+    void loadResearch('contacts', { reset: true });
+  }
+  function moveResearchPeopleListColumn(key, direction) {
+    const columns = researchPeopleColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.researchPeopleListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.researchPeopleListLayout = { ...state.researchPeopleListLayout, columnOrder: order };
+    saveResearchPeopleListLayout();
+    renderUnifiedPeople();
+  }
+  function toggleResearchPeopleListColumn(key, visible) {
+    const columns = researchPeopleColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.researchPeopleListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.researchPeopleListLayout = { ...state.researchPeopleListLayout, visibleColumns: [...current] };
+    saveResearchPeopleListLayout();
+    renderUnifiedPeople();
   }
   function selectedValues(select) {
     return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
@@ -1735,6 +1836,7 @@
       };
       restoreCustomerFilters();
       restoreCustomerListLayout();
+      restoreResearchPeopleListLayout();
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -2308,6 +2410,9 @@
         permissionVersion: String(payload.permissionVersion || ''),
         filters: JSON.stringify(componentPayloadToRaw(payload)),
       });
+      if (kind === 'contacts') {
+        params.set('sort', state.researchPeopleListLayout.sortPreset || 'sales_ready');
+      }
       const result = await api(
         `/api/sales-crm/research/${config.endpointKind}?${params}`,
         { timeoutMs: 12000 },
@@ -2440,14 +2545,28 @@
     if (loading) { root.innerHTML = loading; $('#peopleResultCount').textContent = ''; return; }
     const rows = state.data.people || [];
     $('#peopleResultCount').textContent = `已显示 ${rows.length} / ${state.research.contacts.total} 条线索`;
-    root.innerHTML = table(['客户','联系人','职位/部门','等级','直接联系方式','资料状态'], rows.map(item => [
-      `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
-      `<strong>${esc(item.name || item.full_name || item.full_name_local || '未识别')}</strong>`,
-      `${esc(item.title || '未标注')}<br><span class="subtle">${esc(item.department || '')}</span>`,
-      `<span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>`,
-      esc(item.methods_summary || '未找到直接联系方式'),
-      item.sales_ready ? '<span class="good-text">可交付销售</span>' : '<span class="subtle">仍需验证</span>',
-    ]));
+    const columns = researchPeopleColumnDefinitions();
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.researchPeopleListLayout)
+      : columns;
+    const tableRows = rows.map(item => ({
+      company: `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
+      contact: `<strong>${esc(item.name || item.full_name || item.full_name_local || '未识别')}</strong>`,
+      title_department: `${esc(item.title || '未标注')}<br><span class="subtle">${esc(item.department || '')}</span>`,
+      level: `<span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>`,
+      methods: esc(item.methods_summary || '未找到直接联系方式'),
+      status: item.sales_ready ? '<span class="good-text">可交付销售</span>' : '<span class="subtle">仍需验证</span>',
+      _attrs: `data-person-candidate="${esc(item.person_id || '')}"`,
+    }));
+    root.innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns,
+        rows: tableRows,
+        preferences: state.researchPeopleListLayout,
+        attrs: 'data-list-page="contacts"',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])));
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
   }
 
   function renderUnifiedRecon() {
@@ -13139,17 +13258,28 @@
       else closeCustomerColumnSettings();
       return;
     }
+    if (event.target.closest('#peopleColumnSettings')) {
+      if ($('#peopleColumnSettingsPanel')?.classList.contains('hidden')) openResearchPeopleColumnSettings();
+      else closeResearchPeopleColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
-      moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      if (columnMove.closest('#peopleColumnSettingsPanel')) {
+        moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else {
+        moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      }
       return;
     }
     if (event.target.closest('[data-list-layout-reset]')) {
-      resetCustomerListLayout();
+      if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
+      else resetCustomerListLayout();
       return;
     }
     if (event.target.closest('[data-list-layout-close]')) {
-      closeCustomerColumnSettings();
+      if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
+      else closeCustomerColumnSettings();
       return;
     }
     const customerStar = event.target.closest('[data-toggle-customer-star]');
@@ -14263,7 +14393,11 @@
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-list-column-toggle]')) {
-      toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      if (event.target.closest('#peopleColumnSettingsPanel')) {
+        toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else {
+        toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      }
       return;
     }
     if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
@@ -14312,6 +14446,14 @@
       };
       saveCustomerListLayout();
       void loadCustomerPage({ reset: true });
+    }
+    if (event.target.id === 'peopleSort') {
+      state.researchPeopleListLayout = {
+        ...state.researchPeopleListLayout,
+        sortPreset: event.target.value || 'sales_ready',
+      };
+      saveResearchPeopleListLayout();
+      void loadResearch('contacts', { reset: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();

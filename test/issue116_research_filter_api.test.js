@@ -207,6 +207,29 @@ test('contacts API uses its authorized schema and only returns the sales user da
   assert.equal(payload.rows[0].customer_id, 'RU-9003');
   assert.equal(payload.schema.permissionVersion, schema.permissionVersion);
 
+  fx.db.prepare(`INSERT INTO person_candidates
+    (person_id,customer_id,contact_recon_job_id,full_name,department,title,contact_level,
+     sales_ready,first_found_at,created_at,updated_at)
+    VALUES ('PERSON-OLD','RU-9003','CONTACT-OTHER','Older Buyer','Procurement',
+      'Buyer','L1',0,?,?,?)`).run('2026-07-01 10:00:00', '2026-07-01 10:00:00', '2026-07-01 10:00:00');
+  fx.db.prepare(`INSERT INTO person_candidates
+    (person_id,customer_id,contact_recon_job_id,full_name,department,title,contact_level,
+     sales_ready,first_found_at,created_at,updated_at)
+    VALUES ('PERSON-NEW','RU-9003','CONTACT-OTHER','Newest Buyer','Procurement',
+      'Buyer','L2',1,?,?,?)`).run('2026-07-30 10:00:00', '2026-07-30 10:00:00', '2026-07-30 10:00:00');
+  const sorted = await fx.request(
+    `/api/sales-crm/research/people?sort=updated_desc&permissionVersion=${schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.otherCookie },
+  );
+  assert.equal(sorted.status, 200);
+  assert.equal((await sorted.json()).rows[0].person_id, 'PERSON-NEW');
+  const invalidSort = await fx.request(
+    `/api/sales-crm/research/people?sort=not_allowed&permissionVersion=${schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.otherCookie },
+  );
+  assert.equal(invalidSort.status, 403);
+  assert.equal((await invalidSort.json()).code, 'SORT_NOT_AUTHORIZED');
+
   const legacy = await fx.request('/api/sales-crm/research/people?level=L3', {
     cookie: fx.otherCookie,
   });
