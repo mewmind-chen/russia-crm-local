@@ -11,7 +11,7 @@
 长期方向：
 
 1. 后端按 identity、filter、customer、activity、planning、lifecycle、intake、assignment、commerce、contact、recon、delivery 等边界拆分。
-2. 前端建立 widget 注册与组合机制，字段通过字段目录和有效 schema 控制。
+2. 前端建立 widget 注册与组合机制，所有业务列表页通过统一 List widget 支持授权列显隐、列顺序、用户级布局偏好和升降序/多级排序；字段通过字段目录和有效 schema 控制。
 3. 统一状态真源、权限范围、字段投影与筛选授权。
 4. 客户完整资料最终解除旧 iframe 依赖，成为统一壳的一方视图。
 5. 每个切片保持兼容、测试、证据和回滚点。

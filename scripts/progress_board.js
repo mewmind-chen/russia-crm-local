@@ -299,6 +299,7 @@ function buildPhases(env) {
       ],
       pending: [
         ['frontend', '销售/经理页面浏览器验证：先建立临时 SQLite + 127.0.0.1 + 禁用 AI provider/monitor 的 Phase E preview harness，再验证默认 customerProfile 与 profile-only 兼容入口（尚未运行）', '', ''],
+        ['frontend', '统一所有业务列表页 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序', '', ''],
         ['frontend', '其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body', '', ''],
         ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）', '', ''],
       ],

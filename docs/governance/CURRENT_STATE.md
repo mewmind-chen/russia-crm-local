@@ -11,15 +11,16 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@3adc1d1`，业务提交态；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@45594dd`，业务与看板提交态；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`3adc1d1`（阶段 E：抽取 identity/source tags UMD widget；前置 `8a86425` 已完成 widget 宿主隔离，`e59bf22` 已锁定 profile-only 只读兼容契约）
+- 当前重构提交：`45594dd`（阶段 E：identity/source tags UMD widget 与进度看板已落地；前置 `8a86425` 已完成 widget 宿主隔离，`e59bf22` 已锁定 profile-only 只读兼容契约）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
 - 当前验证（2026-09-01）：目标前端/标签专项 `106/106`、core `npm test` `1670/1670`、全量 `node --test` `2031/2031`；`node --check`、`check:ai-boundary`、`check:governance-authority`、`git diff --check` 均通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
+- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。当前尚未实现，登记为阶段 C 字段 schema + 阶段 E List widget 的联合目标。
 
 ## 2. 已提交的重构进度
 
@@ -96,7 +97,7 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `3adc1d1`：12,883 行。
+- 当前提交态 `45594dd`：12,883 行。
 - `sales-assets/app.js` 当前为 14,418 行。
 - 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
 
@@ -113,7 +114,7 @@
 
 注意：pipeline 行仍由 `business_page_filters.js` 附加 state DTO（未内联），与 accounts/bootstrap/profile 的“无 state DTO”存在边界差异，已通过测试确认前端不依赖该差异。
 
-`after/` 当前业务提交 `3adc1d1` 已落地；本治理 checkpoint（`CURRENT_STATE.md`、`REFACTOR_ROADMAP.md` 与本次 session 记录）待提交。生产目录保持只读。
+`after/` 当前业务提交 `3adc1d1` 与后续治理看板提交 `45594dd` 已落地；本治理 checkpoint（`CURRENT_STATE.md`、`REFACTOR_ROADMAP.md`、`TARGET_ARCHITECTURE.md`、`GOAL_PROMPT.md` 与本次 session 记录）待提交。生产目录保持只读。
 
 ## 4. 最近验证结果
 

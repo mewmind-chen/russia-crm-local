@@ -2,7 +2,7 @@
 
 更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@3adc1d1`（未合并）
+执行分支：`codex/frontend-widget-pilot@45594dd`（未合并）
 状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离与 identity/source tags UMD 已落地；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
@@ -94,7 +94,7 @@
 ## 阶段 C：权限与筛选收口 + 字段级自由显示
 
 ### 目标
-把权限、数据范围、字段投影和筛选授权拆成明确组合，并让**字段内容**（线索池、客户资料、客户列表等页面的字段）可配置化自由显示。
+把权限、数据范围、字段投影和筛选授权拆成明确组合，并让**所有业务列表页面**的字段内容、列顺序和行排序可按用户配置；客户资料等详情视图复用同一字段 schema。
 
 ### 关键动作
 - 把 `access_control` / `permission_groups` / `filter_authorization` 的共享逻辑抽到 `identity/filter`。
@@ -102,13 +102,15 @@
 - 落地 **字段目录（FIELDS_CATALOG）**：具体字段定义与试点顺序见 `FIELD_CATALOG.md`；首个试点为线索池（intake/lead_flow），随后客户资料、客户列表。
 - 服务端按 角色 + 权限 + 开关 计算**有效字段 schema**（per-page, per-user，含版本，`/field-schema/:pageKey`，冲突码 `FIELD_SCHEMA_VERSION_CONFLICT`），与筛选 schema 同源。
 - Widget 按字段 schema 渲染列/详情/表单，前端不再硬编码字段名（消除 `app.js` 中硬编码渲染）。
+- 建立统一 List widget 协议，覆盖客户、线索池、管道、告警、洞察、回收站、主管任务/风险/指标、通知及后续联系人/Recon 等列表页；按有效 schema 提供列显隐、列顺序、升降序/多级排序。
+- 为每个用户保存列表布局偏好（`visibleColumns`、`columnOrder`、`sort`）；偏好只能在授权字段集合内生效，schema 版本变化时校验并安全回退。
 - 用字段级白名单投影替换 `CONTACT_KEYS` 递归黑名单；未授权字段不下发数据；过渡期保留 `redactContactFields` 兜底并断言结果一致。
 - 为每个页面建立“权限->字段->筛选”的合同测试。
-- 后续可选：用户/角色级字段显隐覆盖（个人偏好配置），仍由配置驱动。
 
 ### 完成门
 - 任意角色的页面/API/导出在字段和筛选上得到同一结论。
-- 线索池、客户资料、客户列表等页面的字段显隐可通过配置（角色/权限/开关）调整，无需改代码。
+- 所有业务列表页的字段显隐、列顺序和排序可通过统一配置与用户偏好调整，无需改代码；详情页字段继续复用同一 schema。
+- 用户偏好不能扩大数据范围、字段权限、筛选授权、导出权限或业务动作权限。
 - `FILTER_VERSION_CONFLICT`、`FIELD_SCHEMA_VERSION_CONFLICT`、`CUSTOMER_DUPLICATE`、`blockedWhileImpersonating` 语义保持一致。
 
 ## 阶段 D：线索、任务与商业闭环收口
@@ -129,9 +131,9 @@
 ## 阶段 E：前端 widget 组合架构与客户完整资料统一
 
 ### 目标
-把“新壳 iframe + 旧版 `Index.html` 双用途页面”组合下的客户完整资料收敛为统一壳内的 widget 组合视图，并让整个前端变成“模块化、自由搭建、自由选择显示内容”的架构，后续前端 issue 只改对应 widget。
+把“新壳 iframe + 旧版 `Index.html` 双用途页面”组合下的客户完整资料收敛为统一壳内的 widget 组合视图，并让整个前端变成“模块化、自由搭建、自由选择显示内容”的架构；所有业务列表页统一使用 List widget，后续前端 issue 只改对应 widget。
 
-### 现状（已核对代码，截至 `3adc1d1`）
+### 现状（已核对代码，截至 `45594dd`；业务切片截至 `3adc1d1`）
 - 正式入口 `/` 返回统一壳 `sales-crm.html`（`server.js:72`）；`/sales` 是 302 重定向到 `/`（`lib/sales_crm.js:5044`）。
 - `sales-crm.html#customerProfileView` 默认由 `sales-assets/widget-registry.js` 组装 customerProfile widget 集合；仅 `profileView=legacy` 显式回退到 `/development-workbench?...` iframe 兼容路径。
 - `/development-workbench` 由 `server.js` 返回旧版 `Index.html`；profile-only 路径已由 `e59bf22` 约束为只读兼容入口，旧工作台与兼容资料页仍按 query 区分。
@@ -142,8 +144,8 @@
 ### 关键动作
 1. **建立 Widget 注册表**：widget 元数据（id、页面、权限、开关、位置、顺序、加载方式），页面 = 注册表配置化组装；新增/隐藏内容只改配置。
 2. **Widget 化**：按功能拆独立 widget（身份、业务画像、联系人、洞察/评价、时间线、商务、下一步、回收状态、AI 区域等），每个 widget 自包含模板/状态/事件，对外只暴露 `render(container, ctx)`；以 `filter-component.js` 的 UMD 模式为范式。
-3. **客户完整资料统一**：`#customerProfileView` 改为统一壳内的 widget 集合，直接消费 `getCustomerProfileData` 返回结构（客户/线索/回收三种来源复用同一集合）；`#customerDrawer` 与完整资料共用同一 widget 集合。
-4. **AI 区域**：登记为 widget，由现有开关决定是否挂载/显示，AI 内部代码零改动。
+3. **统一列表 widget**：抽出共享的列 schema、列显隐/顺序编辑器、排序描述、用户偏好读写和表格渲染；覆盖所有业务列表页，页面只提供数据与授权 schema，不再复制列布局逻辑。
+4. **客户完整资料统一**：`#customerProfileView` 改为统一壳内的 widget 集合，直接消费 `getCustomerProfileData` 返回结构（客户/线索/回收三种来源复用同一集合）；`#customerDrawer` 与完整资料共用同一 widget 集合。
 5. **权限与开关裁剪**：widget 显隐沿用 `data-permission` / `data-ai-business` 等价机制 + bootstrap features。
 6. 统一视图通过验收后，`/development-workbench` 的 profile 模式与旧版 `Index.html` 收敛为只读/兼容入口（先确认现有使用方，再决定下线方式）；`/legacy`、`/tradelead-v2.html` 继续由 `CRM_ENABLE_LEGACY` 控制。
 7. **身份/来源标签下沉**：`3adc1d1` 以 UMD `source-tags-widget` 承担只读 `customerTags` 的归一化、去重保序、来源分类、AI 开关裁剪、数量上限与安全转义；`app.js` 只保留兼容 wrappers，既有编辑/postMessage、API 与 AI internals 不变。
@@ -151,6 +153,8 @@
 
 ### 完成门
 - 客户完整资料不再加载 `/development-workbench` iframe。
+- 所有业务列表页均由统一 List widget 提供授权列显隐、列顺序、用户级布局偏好和升降序/多级排序；不同页面只提供各自数据与 schema。
+- 列表偏好不能绕过服务端权限、数据范围、筛选授权、导出权限或动作权限。
 - 联系人管理、评价/洞察、时间线、商务、下一步在统一视图中可用，三角色权限与脱敏行为与现状一致。
 - 关闭 AI 开关时 AI widget 不显示；开启时行为与现状一致。
 - 新增/隐藏前端内容只需改注册表配置或对应 widget，`app.js` 不再需要整体改动。
