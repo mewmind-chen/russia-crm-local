@@ -21,6 +21,7 @@
 - `npm test`：core `1718/1718` 通过。
 - `node --test`：全量 `2080/2080` 通过。
 - `git diff --check`：通过。
+- `npm run check:governance-authority`、`npm run check:ai-boundary`：通过（2 frozen plans / 8 active documents；194 files，no AI boundary violations）。
 - 浏览器 Phase E harness 仍按设计 fail-closed：未锁定 Playwright/Puppeteer，不安装依赖、不伪造双角色验收。
 
 ## 当前判断与下一步
