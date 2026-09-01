@@ -3094,8 +3094,11 @@
     );
   }
 
+  // 完整资料视图模式：默认走 widget 集合（统一壳），profileView=legacy 时回退
+  // 旧 iframe（Index.html profile 模式）。widget 集合已覆盖 facts/contacts/master/
+  // timeline/insight/next-step/AI 站，与抽屉共用同一套模板。
   function isProfileWidgetsMode() {
-    try { return new URLSearchParams(location.search).get('profileView') === 'widgets'; } catch (_e) { return false; }
+    try { return new URLSearchParams(location.search).get('profileView') !== 'legacy'; } catch (_e) { return true; }
   }
 
   // 客户资料区块偏好键（用户维度）。偏好读写/切换状态由 profile-facts-widget 自持。

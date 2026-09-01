@@ -816,3 +816,16 @@ test('app.js registers profile-next-step widget and delegates to the shared next
   assert.match(renderer, /next_action \|\| '尚未填写下一步'/);
   assert.match(renderer, /nextActionTimeMarkup\(account\)/);
 });
+
+test('complete profile view defaults to the widget shell with a legacy iframe fallback', () => {
+  const mode = functionSource('isProfileWidgetsMode', 'applyProfileViewMode');
+  // 默认走 widget 集合（统一壳），profileView=legacy 显式回退旧 iframe
+  assert.match(mode, /get\('profileView'\) !== 'legacy'/);
+  assert.match(mode, /return true;/);
+
+  const apply = functionSource('applyProfileViewMode', 'profileWidgetContext');
+  assert.match(apply, /isProfileWidgetsMode\(\)/);
+  assert.match(apply, /profile-widgets-only/);
+  assert.match(apply, /frame\.classList\.toggle\('hidden', on\)/);
+  assert.match(apply, /widgets\.classList\.remove\('hidden'\)/);
+});
