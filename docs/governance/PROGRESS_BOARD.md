@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 08:09:42`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 08:19:51`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `807b56c`（相对 origin/main ahead 271） |
+| HEAD | `ed40d76`（相对 origin/main ahead 273） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2060/2060 |
-| 核心测试 | `npm test` 1699/1699 |
+| 全量测试 | `node --test` 2061/2061 |
+| 核心测试 | `npm test` 1700/1700 |
 | sales_crm.js | 12936 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-01-list-widget-manager-tasks.md` |
+| 最近会话 | `2026-09-01-list-widget-manager-risks.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -23,8 +23,8 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
-| feat(...) | 45 |
-| docs(governance) | 124 |
+| feat(...) | 46 |
+| docs(governance) | 125 |
 | 其他 | 18 |
 
 ## 阶段 0：治理基础
@@ -164,7 +164,7 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、customers、Research People、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（807b56c），其余列表继续按页面推进。
+> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、customers、Research People、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办与通知中心列表（ed40d76），其余列表继续按页面推进。
 
 ### 已完成
 
@@ -194,12 +194,13 @@
 - [x] Markets 国家矩阵、分配批次与细分报表迁移（授权列 schema、用户级布局偏好、本地排序预设）（`cd9f198`）
 - [x] 主管任务列表迁移（授权列 schema、用户级布局偏好、期限/状态/负责人排序，保留任务动作）（`b1fa1cc`）
 - [x] 主管风险明细列表迁移（授权列 schema、独立用户布局偏好、期限/状态/负责人排序，保留查看历史动作）（`807b56c`）
+- [x] 主管指标列表迁移（聚合字段 schema、独立用户布局偏好、销售/指标排序，保留数字钻取动作）（`ed40d76`）
 - [x] Phase E 隔离浏览器预览 harness（临时 SQLite/loopback/随机端口/AI 关闭/fail-closed）（`dd650ba`）
 
 ### 待办
 
 - [ ] **frontend** 销售/经理页面真实浏览器验证：运行已建立的 Phase E preview harness，验证默认 customerProfile 与 profile-only 兼容入口（当前依赖缺失时 fail-closed）
-- [ ] **frontend** manager_metrics 与其余业务列表页迁移到 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序
+- [ ] **frontend** Team 进度/协作与其余业务列表页迁移到 List widget：授权列显隐、列顺序、用户级布局偏好、升降序/多级排序
 - [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body
 - [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）
 
