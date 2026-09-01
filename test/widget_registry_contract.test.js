@@ -837,6 +837,8 @@ test('timeline widget is loaded on shell before app.js and exposes item renderin
   assert.ok(timelineIndex > -1 && timelineIndex < appIndex && timelineIndex < registryIndex,
     'timeline-widget.js must load before widget-registry.js and app.js');
   assert.equal(typeof timelineWidget.renderItemsHtml, 'function');
+  assert.equal(typeof timelineWidget.renderActivityItemHtml, 'function');
+  assert.equal(typeof timelineWidget.renderActivityItemsHtml, 'function');
   assert.equal(typeof timelineWidget.render, 'function');
   assert.equal(typeof timelineWidget.escapeHtml, 'function');
 });
@@ -862,6 +864,40 @@ test('timeline widget renders items with escaped fields, optional next action an
   assert.equal(timelineWidget.renderItemsHtml([], { emptyText: '暂无历史记录' }), '<div class="empty">暂无历史记录</div>');
 });
 
+test('timeline widget renders correction-aware items without owning business state', () => {
+  const ready = timelineWidget.renderActivityItemHtml({
+    id: 'activity:ACT-1', kind: 'activity', title: '<标题>', summary: '<说明>', actor_name: 'Ada', occurred_at: '2026-08-04',
+  }, {
+    titleOf: event => event.title,
+    summaryOf: event => event.summary,
+    actorOf: event => event.actor_name,
+    dateOf: event => event.occurred_at,
+    correctionOf: () => ({ activityId: 'ACT-1&safe', enabled: true, writeReady: true }),
+    provenanceOf: () => ({ state: 'superseded' }),
+  });
+  assert.match(ready, /data-correct-activity="ACT-1&amp;safe"/);
+  assert.doesNotMatch(ready, /disabled aria-disabled/);
+  assert.match(ready, /已更正 · 目标记录信息受权限保护/);
+  assert.match(ready, /&lt;标题&gt;/);
+  assert.match(ready, /&lt;说明&gt;/);
+  assert.match(ready, /data-timeline-kind="activity"/);
+
+  const disabled = timelineWidget.renderActivityItemHtml({
+    id: 'activity:ACT-2', title: '替代记录', summary: '已迁移', actor_name: 'Bob', occurred_at: '2026-08-05',
+  }, {
+    correctionOf: () => ({ activityId: 'ACT-2', enabled: true, writeReady: false, disabledReason: '更正功能尚未启用' }),
+    provenanceOf: () => ({ state: 'replacement', originalLabel: '<来源客户>' }),
+  });
+  assert.match(disabled, /disabled aria-disabled="true"/);
+  assert.match(disabled, /title="更正功能尚未启用"/);
+  assert.match(disabled, /更正自来源客户：&lt;来源客户&gt; · 当前记录有效/);
+
+  assert.equal(
+    timelineWidget.renderActivityItemsHtml([], { emptyText: '暂无活动' }),
+    '<div class="empty">暂无活动</div>',
+  );
+});
+
 test('app.js timelineItemsHtml delegates to widget and recycle plus intake drawers compose item lists', () => {
   const helper = functionSource('timelineItemsHtml', 'mountCustomerProfileWidgets');
   assert.match(helper, /TradePulseTimelineWidget/);
@@ -876,6 +912,24 @@ test('app.js timelineItemsHtml delegates to widget and recycle plus intake drawe
   const intake = functionSource('openIntakeProfile', 'closeDrawer');
   assert.match(intake, /timelineItemsHtml\(developmentTimeline, \{ emptyText: '暂无开发历史' \}\)/);
   assert.doesNotMatch(intake, /developmentTimeline\.map\(event/);
+});
+
+test('app.js adapts correction state into the activity timeline widget and keeps an inline fallback', () => {
+  const context = functionSource('activityTimelineRenderContext', 'renderActivityTimelineItemFallback');
+  const adapter = functionSource('renderActivityTimelineItem', 'timelineActivityFor');
+  assert.match(context, /canStartActivityCorrection\(event\)/);
+  assert.match(context, /correctionOf/);
+  assert.match(context, /replacementCustomerId/);
+  assert.match(context, /originalCustomerId/);
+  assert.doesNotMatch(context, /api\(/);
+  assert.match(adapter, /TradePulseTimelineWidget/);
+  assert.match(adapter, /renderActivityItemHtml/);
+  assert.match(adapter, /renderActivityTimelineItemFallback/);
+  const items = functionSource('activityTimelineItemsHtml', 'renderTimelineEventDetail');
+  assert.match(items, /renderActivityItemsHtml/);
+  assert.match(items, /activityTimelineRenderContext/);
+  const drawerTimeline = functionSource('renderDrawerTimelineWidget', 'drawerFactsFallbackHtml');
+  assert.match(drawerTimeline, /activityTimelineItemsHtml\(events/);
 });
 
 test('app.js registers profile-master widget and delegates to masterProfileSectionHtml', () => {

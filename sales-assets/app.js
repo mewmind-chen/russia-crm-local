@@ -4757,7 +4757,7 @@
       title: '完整客户时间线',
       note: `${events.length} 条记录`,
       actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
-      bodyHtml: events.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
+      bodyHtml: activityTimelineItemsHtml(events, { emptyText: '暂无跟进记录' }),
     });
     return [{ id: 'drawer-timeline', status: 'mounted' }];
   }
@@ -11871,7 +11871,47 @@
     );
   }
 
-  function renderActivityTimelineItem(event) {
+  function activityTimelineRenderContext() {
+    return {
+      titleOf: event => timelineEventTitle(event),
+      summaryOf: event => timelineEventSummary(event),
+      actorOf: event => event?.actor_name || event?.actorName,
+      dateOf: event => shortDate(event?.occurred_at || event?.occurredAt, true),
+      timelineKindOf: event => event?.kind || 'activity',
+      nextActionOf: event => event?.no_plan
+        ? '暂无计划'
+        : (event?.next_action && event.next_action !== timelineEventSummary(event) ? event.next_action : ''),
+      correctionOf: event => ({
+        activityId: correctionActivityId(event),
+        enabled: canStartActivityCorrection(event),
+        writeReady: state.activityCorrection.writeEnabled === true,
+        disabledTitle: state.activityCorrection.writeEnabled === false
+          ? '更正功能尚未启用' : '正在检查更正功能状态',
+      }),
+      provenanceOf: event => {
+        const provenance = event?.provenance || {};
+        const replacementCustomerId = provenance.replacementCustomerId || provenance.targetCustomerId || '';
+        const replacementActivityId = provenance.replacementActivityId || '';
+        const originalCustomerId = provenance.originalCustomerId || provenance.sourceCustomerId || '';
+        const originalActivityId = provenance.originalActivityId || '';
+        const replacementCustomer = replacementCustomerId
+          ? (state.data?.accounts || []).find(row => [row.id, row.external_customer_id].map(String).includes(String(replacementCustomerId)))
+          : null;
+        const originalCustomer = originalCustomerId
+          ? (state.data?.accounts || []).find(row => [row.id, row.external_customer_id].map(String).includes(String(originalCustomerId)))
+          : null;
+        return {
+          state: provenance.kind || '',
+          replacementLabel: replacementCustomerId && replacementActivityId && replacementCustomer
+            ? accountDisplayName(replacementCustomer) : '',
+          originalLabel: originalCustomerId && originalActivityId && originalCustomer
+            ? accountDisplayName(originalCustomer) : '',
+        };
+      },
+    };
+  }
+
+  function renderActivityTimelineItemFallback(event) {
     const provenance = event.provenance || {};
     const replacementCustomerId = provenance.replacementCustomerId || provenance.targetCustomerId || '';
     const replacementActivityId = provenance.replacementActivityId || '';
@@ -11900,6 +11940,23 @@
       <div class="activity-correction-timeline-head"><h4>${esc(title)}</h4>${correctionEntry}</div>
       ${summary ? `<p>${esc(summary)}${event.no_plan ? '<br><strong>下一步：</strong>暂无计划' : (event.next_action && event.next_action !== summary ? `<br><strong>下一步：</strong>${esc(event.next_action)}` : '')}</p>` : ''}
       ${provenanceMarkup}<time>${esc(event.actor_name || '')}${event.actor_name ? ' · ' : ''}${shortDate(event.occurred_at, true)}</time></div>`;
+  }
+
+  function renderActivityTimelineItem(event) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseTimelineWidget : null;
+    if (widget && typeof widget.renderActivityItemHtml === 'function') {
+      return widget.renderActivityItemHtml(event, activityTimelineRenderContext());
+    }
+    return renderActivityTimelineItemFallback(event);
+  }
+
+  function activityTimelineItemsHtml(events = [], { emptyText = '' } = {}) {
+    const widget = typeof window !== 'undefined' ? window.TradePulseTimelineWidget : null;
+    if (widget && typeof widget.renderActivityItemsHtml === 'function') {
+      return widget.renderActivityItemsHtml(events, { ...activityTimelineRenderContext(), emptyText });
+    }
+    const list = Array.isArray(events) ? events : [];
+    return list.map(renderActivityTimelineItem).join('') || `<div class="empty">${esc(emptyText)}</div>`;
   }
 
   function timelineActivityFor(event) {
@@ -12954,7 +13011,7 @@
       title: '完整客户时间线',
       note: `${timeline.length} 条记录`,
       actionHtml: '<button class="text-button" data-customer-history>查看客户历史</button>',
-      bodyHtml: timeline.map(renderActivityTimelineItem).join('') || '<div class="empty">暂无跟进记录</div>',
+      bodyHtml: activityTimelineItemsHtml(timeline, { emptyText: '暂无跟进记录' }),
     }));
     state.drawerAiContext = { customerId: account.external_customer_id || account.id, crmCustomerId: account.id, companyName: account.company_name, view: state.view };
     $('#drawerContent').innerHTML = `

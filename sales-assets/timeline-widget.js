@@ -54,6 +54,67 @@
     }).join('');
   }
 
+  // CRM 活动时间线条目（含更正入口）使用显式回调注入业务状态。
+  // widget 不读取宿主 state，也不自行请求 counterpart/customer 数据，避免把
+  // 权限边界或 AI/业务状态带入通用模板。宿主只需提供：
+  // titleOf/summaryOf/actorOf/dateOf/activityIdOf、correctionOf，以及 provenanceOf。
+  function renderActivityItemHtml(event = {}, ctx = {}) {
+    const item = event || {};
+    const titleOf = ctx.titleOf || (row => row?.title);
+    const summaryOf = ctx.summaryOf || (row => row?.summary);
+    const actorOf = ctx.actorOf || (row => row?.actor_name || row?.actorName);
+    const dateOf = ctx.dateOf || (row => row?.occurred_at || row?.occurredAt);
+    const activityIdOf = ctx.activityIdOf || (row => row?.activity_id
+      || (String(row?.id || '').startsWith('activity:') ? String(row.id).slice(9) : ''));
+    const provenanceOf = typeof ctx.provenanceOf === 'function' ? ctx.provenanceOf : (() => ({}));
+    const correctionOf = typeof ctx.correctionOf === 'function'
+      ? ctx.correctionOf
+      : row => ({
+        activityId: activityIdOf(row),
+        enabled: typeof ctx.canCorrect === 'function' && ctx.canCorrect(row),
+        writeReady: ctx.correctionWriteReady === true,
+        disabledTitle: ctx.correctionDisabledTitle || '',
+      });
+    const provenance = provenanceOf(item) || {};
+    const superseded = typeof ctx.supersededOf === 'function'
+      ? Boolean(ctx.supersededOf(item)) : Boolean(item.superseded);
+    const title = titleOf(item) ?? '';
+    const summary = summaryOf(item) ?? '';
+    const actor = actorOf(item) ?? '';
+    const date = dateOf(item) ?? '';
+    const correction = correctionOf(item) || {};
+    const activityId = correction.activityId ?? activityIdOf(item) ?? '';
+    const correctionEntry = correction.enabled === true
+      ? `<button class="text-button activity-correction-entry" type="button" data-correct-activity="${escapeHtml(activityId)}" ${correction.writeReady === true ? '' : `disabled aria-disabled="true" title="${escapeHtml(correction.disabledTitle || correction.disabledReason || '')}"`}>${escapeHtml(correction.label || ctx.correctionLabel || '更正归属客户')}</button>`
+      : '';
+    let provenanceMarkup = '';
+    const provenanceState = provenance.state || provenance.kind || '';
+    if (provenanceState === 'superseded_original' || provenanceState === 'superseded' || superseded) {
+      const target = provenance.replacementLabel
+        ? `目标客户：${escapeHtml(provenance.replacementLabel)}` : '目标记录信息受权限保护';
+      provenanceMarkup = `<span class="activity-correction-provenance superseded">已更正 · ${target}</span>`;
+    } else if (provenanceState === 'replacement') {
+      const source = provenance.originalLabel
+        ? `来源客户：${escapeHtml(provenance.originalLabel)}` : '受保护的来源记录';
+      provenanceMarkup = `<span class="activity-correction-provenance replacement">更正自${source} · 当前记录有效</span>`;
+    }
+    const nextAction = typeof ctx.nextActionOf === 'function'
+      ? ctx.nextActionOf(item) : (item.no_plan ? '暂无计划'
+        : (item.next_action && item.next_action !== summary ? item.next_action : ''));
+    const nextLine = nextAction ? `<br><strong>下一步：</strong>${escapeHtml(nextAction)}` : '';
+    const summaryHtml = summary ? `<p>${escapeHtml(summary)}${nextLine}</p>` : '';
+    const timelineKind = typeof ctx.timelineKindOf === 'function' ? ctx.timelineKindOf(item) : item.kind || 'activity';
+    return `<div class="timeline-item ${superseded ? 'is-superseded' : ''}" data-timeline-kind="${escapeHtml(timelineKind)}">
+      <div class="activity-correction-timeline-head"><h4>${escapeHtml(title)}</h4>${correctionEntry}</div>
+      ${summaryHtml}${provenanceMarkup}<time>${escapeHtml(actor)}${actor ? ' · ' : ''}${escapeHtml(date)}</time></div>`;
+  }
+
+  function renderActivityItemsHtml(events = [], ctx = {}) {
+    const list = Array.isArray(events) ? events : [];
+    if (!list.length) return `<div class="empty">${escapeHtml(ctx.emptyText || '')}</div>`;
+    return list.map(event => renderActivityItemHtml(event, ctx)).join('');
+  }
+
   function render(container, events = [], ctx = {}) {
     if (!container) return;
     container.innerHTML = renderItemsHtml(events, ctx);
@@ -74,6 +135,8 @@
   return Object.freeze({
     escapeHtml,
     renderItemsHtml,
+    renderActivityItemHtml,
+    renderActivityItemsHtml,
     renderSectionHtml,
     render,
   });

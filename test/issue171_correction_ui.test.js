@@ -9,6 +9,7 @@ const ROOT = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.css'), 'utf8');
+const timelineWidget = fs.readFileSync(path.join(ROOT, 'sales-assets', 'timeline-widget.js'), 'utf8');
 
 function functionBlock(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -35,16 +36,17 @@ test('timeline correction entry is gated by feature, permission, authorship, eff
   assert.match(gate, /state\.data\?*\.impersonation|state\.data\.impersonation/);
   assert.match(gate, /superseded|provenance|effective/);
 
-  const timeline = functionBlock(app, 'renderActivityTimelineItem');
-  assert.match(timeline, /canStartActivityCorrection\(event\)/);
-  assert.match(timeline, /data-correct-activity=/);
-  assert.match(timeline, /更正归属|更正客户/);
-  assert.match(timeline, /writeEnabled\s*===\s*true/);
-  assert.match(timeline, /disabled aria-disabled/);
+  const adapter = `${functionBlock(app, 'activityTimelineRenderContext')}\n${functionBlock(app, 'renderActivityTimelineItem')}`;
+  assert.match(adapter, /canStartActivityCorrection\(event\)/);
+  assert.match(adapter, /renderActivityItemHtml/);
+  assert.match(timelineWidget, /data-correct-activity=/);
+  assert.match(timelineWidget, /更正归属|更正客户/);
+  assert.match(timelineWidget, /writeReady\s*===\s*true/);
+  assert.match(timelineWidget, /disabled aria-disabled/);
 });
 
 test('timeline keeps both audit sides and renders only visible provenance counterparts', () => {
-  const timeline = functionBlock(app, 'renderActivityTimelineItem');
+  const timeline = `${functionBlock(app, 'activityTimelineRenderContext')}\n${functionBlock(app, 'renderActivityTimelineItemFallback')}`;
   assert.match(timeline, /superseded_original/);
   assert.match(timeline, /replacement/);
   assert.match(timeline, /已更正/);
@@ -60,6 +62,7 @@ test('timeline keeps both audit sides and renders only visible provenance counte
   assert.match(timeline, /(?:if\s*\([^)]*)?replacementCustomerId\s*(?:\?|&&|\))/);
   assert.match(timeline, /(?:if\s*\([^)]*)?originalCustomerId\s*(?:\?|&&|\))/);
   assert.doesNotMatch(timeline, /api\([^)]*(replacement|original)(Customer|Activity)Id/);
+  assert.match(timelineWidget, /受保护的来源记录|目标记录信息受权限保护/);
 });
 
 test('correction modal is an explicit three-step accessible workflow', () => {
