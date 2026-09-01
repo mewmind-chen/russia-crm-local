@@ -77,14 +77,54 @@
       .sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
   }
 
+  function clearContainer(container) {
+    if (typeof container.replaceChildren === 'function') {
+      container.replaceChildren();
+      return;
+    }
+    if (typeof container.removeChild === 'function') {
+      while (container.firstChild) container.removeChild(container.firstChild);
+    }
+    if (Array.isArray(container.children)) container.children.length = 0;
+    if ('innerHTML' in container) container.innerHTML = '';
+  }
+
+  function createWidgetHost(container, widgetId) {
+    const ownerDocument = container && container.ownerDocument;
+    const documentRef = ownerDocument && typeof ownerDocument.createElement === 'function'
+      ? ownerDocument
+      : typeof globalThis !== 'undefined' ? globalThis.document : null;
+    const host = documentRef && typeof documentRef.createElement === 'function'
+      ? documentRef.createElement('div')
+      : {
+        children: [],
+        innerHTML: '',
+        className: '',
+        appendChild(node) { this.children.push(node); return node; },
+        replaceChildren(...nodes) {
+          this.children.length = 0;
+          this.children.push(...nodes);
+        },
+        addEventListener() {},
+        querySelector() { return null; },
+      };
+    if (host && host.dataset && typeof host.dataset === 'object') host.dataset.widgetId = widgetId;
+    if (host && typeof host.setAttribute === 'function') host.setAttribute('data-widget-id', widgetId);
+    else if (host && (!host.dataset || typeof host.dataset !== 'object')) host.dataset = { widgetId };
+    return host;
+  }
+
   // 返回挂载结果列表：[{ id }] 或 [{ id, error }]；不抛异常，异常按 widget 隔离。
   // render 可为 async（内部拉取数据后落 DOM），renderPage 依次 await 保持装配顺序。
   async function renderPage(pageKey, container, ctx = {}) {
     if (!container) return [];
+    clearContainer(container);
     const mounted = [];
     for (const widget of widgetsForPage(pageKey, ctx)) {
       try {
-        await widget.render(container, ctx);
+        const host = createWidgetHost(container, widget.id);
+        container.appendChild(host);
+        await widget.render(host, ctx);
         mounted.push({ id: widget.id });
       } catch (error) {
         mounted.push({ id: widget.id, error: error && error.message ? error.message : String(error) });

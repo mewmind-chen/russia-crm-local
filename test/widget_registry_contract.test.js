@@ -154,12 +154,72 @@ test('renderPage mounts eligible widgets in order and isolates per-widget errors
   const container = makeContainer();
   const result = await registry.renderPage('page1', container, {});
   assert.deepEqual(calls, ['first', 'last']);
-  assert.deepEqual(container.children, ['FIRST', 'LAST']);
+  assert.deepEqual(container.children.map(host => host.dataset.widgetId), ['first', 'boom', 'last']);
+  assert.deepEqual(container.children.map(host => host.children), [['FIRST'], [], ['LAST']]);
   assert.deepEqual(result, [
     { id: 'first' },
     { id: 'boom', error: 'boom' },
     { id: 'last' },
   ]);
+});
+
+test('renderPage clears old hosts and keeps only widgets eligible for the current run', async () => {
+  registry.clear();
+  registry.register({
+    id: 'gated', pages: ['page1'], order: 10,
+    when: ctx => Boolean(ctx.enabled),
+    render(container, ctx) {
+      container.className = 'gated-widget';
+      container.innerHTML = `gated:${ctx.run}`;
+    },
+  });
+  registry.register({
+    id: 'always', pages: ['page1'], order: 20,
+    render(container, ctx) { container.innerHTML = `always:${ctx.run}`; },
+  });
+
+  const container = makeContainer();
+  await registry.renderPage('page1', container, { enabled: true, run: 1 });
+  const firstHosts = container.children.slice();
+  assert.deepEqual(firstHosts.map(host => host.dataset.widgetId), ['gated', 'always']);
+  assert.deepEqual(firstHosts.map(host => host.innerHTML), ['gated:1', 'always:1']);
+
+  await registry.renderPage('page1', container, { enabled: false, run: 2 });
+  assert.equal(container.children.length, 1);
+  assert.equal(container.children[0].dataset.widgetId, 'always');
+  assert.equal(container.children[0].innerHTML, 'always:2');
+  assert.notEqual(container.children[0], firstHosts[1]);
+});
+
+test('renderPage isolates host creation failures and continues with later widgets', async () => {
+  registry.clear();
+  registry.register({ id: 'broken-host', pages: ['page1'], order: 10, render() {} });
+  registry.register({
+    id: 'healthy', pages: ['page1'], order: 20,
+    render(container) { container.innerHTML = 'healthy'; },
+  });
+  const container = makeContainer();
+  let creations = 0;
+  container.ownerDocument = {
+    createElement() {
+      creations += 1;
+      if (creations === 1) throw new Error('host failed');
+      return {
+        dataset: {},
+        innerHTML: '',
+        setAttribute(name, value) { if (name === 'data-widget-id') this.dataset.widgetId = value; },
+      };
+    },
+  };
+
+  const result = await registry.renderPage('page1', container, {});
+  assert.deepEqual(result, [
+    { id: 'broken-host', error: 'host failed' },
+    { id: 'healthy' },
+  ]);
+  assert.equal(container.children.length, 1);
+  assert.equal(container.children[0].dataset.widgetId, 'healthy');
+  assert.equal(container.children[0].innerHTML, 'healthy');
 });
 
 test('renderPage with no container returns empty and unregister/clear work', async () => {
