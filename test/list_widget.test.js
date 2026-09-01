@@ -293,6 +293,31 @@ test('insights list uses the shared widget with per-user layout and server sorti
   assert.doesNotMatch(app, /insightsColumnDefinitions[\s\S]{0,2500}ai_/i);
 });
 
+test('protected customer directory exposes only manual fields and shared list controls', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'protected_customers',
+    user: { role: 'admin' },
+    permissions: { manage_protected_customers: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'external_customer_id', 'alpha_nickname', 'crm_nickname', 'company_name', 'country', 'city',
+    'website', 'industry', 'customer_type', 'product_focus', 'status', 'batch_id', 'created_at',
+    'activated_at', 'updated_at',
+  ]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+  assert.equal(schema.fields.some(field => field.key === 'actions'), false);
+  assert.match(html, /id="protectedSort"/);
+  assert.match(html, /id="protectedColumnSettings"[\s\S]*aria-controls="protectedColumnSettingsPanel"/);
+  assert.match(html, /id="protectedColumnSettingsPanel"[^>]*list-column-settings/);
+  assert.match(app, /protectedCustomerColumns\(\)/);
+  assert.match(app, /team_collaboration', 'insights', 'protected_customers', 'recycle_bin'/);
+  assert.match(app, /tradepulse\.listLayout\.protected_customers/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*protected-list-table/);
+  assert.match(app, /sort: model\.sort \|\| 'created_desc'/);
+  assert.doesNotMatch(app, /protectedCustomerColumns[\s\S]{0,2400}ai_/i);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

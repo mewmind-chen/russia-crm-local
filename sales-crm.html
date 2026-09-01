@@ -924,8 +924,11 @@
           <div class="protected-toolbar">
             <label class="protected-search">搜索<input id="protectedSearch" type="search" autocomplete="off" placeholder="搜索客户昵称、公司名称或客户编号"></label>
             <label>保护状态<select id="protectedStatus"><option value="all">全部状态</option><option value="protected">保护中</option><option value="activated">已激活</option></select></label>
+            <label>排序<select id="protectedSort"><option value="created_desc">创建时间（新→旧）</option><option value="created_asc">创建时间（旧→新）</option><option value="company_asc">公司名称</option><option value="status_priority">状态优先</option><option value="country_asc">国家</option></select></label>
+            <button id="protectedColumnSettings" class="text-button" type="button" aria-expanded="false" aria-controls="protectedColumnSettingsPanel">列设置</button>
             <span id="protectedListCount" class="toolbar-count">0 个客户</span>
           </div>
+          <div id="protectedColumnSettingsPanel" class="list-column-settings list-column-settings-panel hidden"></div>
           <div id="protectedListStatus" class="protected-inline-status" role="status" aria-live="polite"></div>
           <div id="protectedCustomerList" class="data-table protected-data-table"><div class="empty">进入页面后加载保护名单</div></div>
           <div id="protectedCustomerPagination" class="shared-pagination" data-pagination="protected_customers"></div>

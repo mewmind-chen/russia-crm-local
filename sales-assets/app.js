@@ -244,6 +244,7 @@
       conflictPage: 1, conflictPageSize: 50, conflictTotalPages: 0, conflictHasMore: false,
       conflictsLoading: false, conflictsError: '', conflictPendingId: '',
       conflictsLoaded: false,
+      sort: 'created_desc', listLayout: null,
     },
     pendingCenter: {
       activeTab: 'conflicts', selectedKey: '', query: '', mobileDetailOpen: false,
@@ -284,7 +285,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -9432,7 +9433,10 @@
       root.innerHTML = '<div class="empty">当前筛选范围内没有保护客户</div>';
       return;
     }
-    root.innerHTML = `<table><thead><tr><th>客户</th><th>正式公司名称</th><th>国家/地区</th><th>状态</th><th>稳定客户编号</th><th>创建/激活时间</th><th>操作</th></tr></thead><tbody>${model.items.map(item => `<tr>
+    const columns = protectedCustomerColumns();
+    root.innerHTML = listWidget?.renderTable ? listWidget.renderTable({ columns, preferences: model.listLayout || {}, rows: model.items.map(item => ({
+      external_customer_id: esc(item.externalCustomerId || '—'), alpha_nickname: `<div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div>`, crm_nickname: esc(item.crmNickname || '—'), company_name: esc(item.companyName || '—'), country: esc(item.country || '—'), city: esc(item.city || '—'), website: esc(item.website || '—'), industry: esc(item.industry || '—'), customer_type: esc(item.customerType || '—'), product_focus: esc(item.productFocus || '—'), status: protectedStatusMarkup(item.status), batch_id: esc(item.batchId || '—'), created_at: esc(shortDate(item.createdAt, true)), activated_at: esc(item.activatedAt ? shortDate(item.activatedAt, true) : '—'), updated_at: esc(shortDate(item.updatedAt, true)), actions: `<div class="protected-row-actions"><button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}</div>`
+    })) , attrs: 'class="protected-list-table"' }) : `<table><tbody>${model.items.map(item => `<tr>
       <td data-label="客户"><div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div></td>
       <td data-label="正式公司名称">${esc(item.companyName || '—')}</td>
       <td data-label="国家/地区">${esc([item.country, item.city].filter(Boolean).join(' · ') || '—')}</td>
@@ -9445,6 +9449,24 @@
       </div></td>
     </tr>`).join('')}</tbody></table>`;
   }
+
+  function protectedCustomerColumns() {
+    const keys = ['external_customer_id','alpha_nickname','crm_nickname','company_name','country','city','website','industry','customer_type','product_focus','status','batch_id','created_at','activated_at','updated_at'];
+    const labels = ['客户ID','Alpha 昵称','CRM 昵称','公司','国家','城市','官网','行业','客户类型','产品方向','状态','批次','创建时间','激活时间','更新时间'];
+    const columns = keys.map((key, index) => ({ key, label: labels[index], required: key === 'external_customer_id' || key === 'alpha_nickname' })).concat([{ key: 'actions', label: '操作', required: true, sortable: false }]);
+    const schemaFields = state.fieldSchemas?.protected_customers?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function protectedListLayoutKey() { return `tradepulse.listLayout.protected_customers.${state.data?.user?.id || 'anonymous'}`; }
+  function restoreProtectedListLayout() {
+    state.protectedCustomers.listLayout = listWidget?.loadPreferences?.(protectedListLayoutKey(), undefined, protectedCustomerColumns()) || {};
+    state.protectedCustomers.sort = state.protectedCustomers.listLayout.sortPreset || 'created_desc';
+    renderProtectedColumnSettings();
+  }
+  function renderProtectedColumnSettings() { const host = $('#protectedColumnSettingsPanel'); if (host && listWidget?.renderColumnSettingsHtml) host.innerHTML = listWidget.renderColumnSettingsHtml({ title: '保护目录列设置', columns: protectedCustomerColumns(), preferences: state.protectedCustomers.listLayout }); }
+  function toggleProtectedCustomerListColumn(key, checked) { const p = state.protectedCustomers.listLayout || {}; const visible = new Set(p.visibleColumns || protectedCustomerColumns().map(c => c.key)); if (checked) visible.add(key); else visible.delete(key); state.protectedCustomers.listLayout = listWidget.savePreferences(protectedListLayoutKey(), { ...p, visibleColumns: [...visible] }, undefined, protectedCustomerColumns()); renderProtectedCustomers(); renderProtectedColumnSettings(); }
 
   function renderProtectedBatch() {
     const root = $('#protectedBatchPreview');
@@ -10123,6 +10145,8 @@
     state.pendingCenter.mobileDetailOpen = true;
     state.pendingCenter.deepLinkUnavailable = true;
     renderPendingCenter();
+    if (!state.protectedCustomers.listLayout) restoreProtectedListLayout();
+    if ($('#protectedSort')) $('#protectedSort').value = state.protectedCustomers.sort || 'created_desc';
   }
 
   async function loadDuplicateReviews({ page } = {}) {
@@ -10474,6 +10498,7 @@
       const targetPage = reset ? 1 : Math.max(1, Number(page || model.page || 1));
       const params = new URLSearchParams({
         status: model.status, query: model.query,
+        sort: model.sort || 'created_desc',
         page: String(targetPage), pageSize: String(model.pageSize),
       });
       const result = await api(`/api/sales-crm/protected-customers?${params}`);
@@ -15407,6 +15432,11 @@
         moveTeamListColumn('team_progress_drilldown', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#teamCollaborationColumnSettingsPanel')) {
         moveTeamListColumn('team_collaboration', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#protectedColumnSettingsPanel')) {
+        const order = listWidget.normalizePreferences(state.protectedCustomers.listLayout, protectedCustomerColumns()).columnOrder;
+        const index = order.indexOf(columnMove.dataset.listColumnKey || '');
+        const next = index + (columnMove.dataset.listColumnMove === 'up' ? -1 : 1);
+        if (index >= 0 && next >= 0 && next < order.length) { [order[index], order[next]] = [order[next], order[index]]; state.protectedCustomers.listLayout = listWidget.savePreferences(protectedListLayoutKey(), { ...state.protectedCustomers.listLayout, columnOrder: order }, undefined, protectedCustomerColumns()); renderProtectedCustomers(); renderProtectedColumnSettings(); }
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -15431,6 +15461,7 @@
       else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) resetTeamListLayout('team_progress_sales');
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) resetTeamListLayout('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
+      else if (event.target.closest('#protectedColumnSettingsPanel')) { state.protectedCustomers.listLayout = listWidget.defaultPreferences(protectedCustomerColumns()); listWidget.savePreferences(protectedListLayoutKey(), state.protectedCustomers.listLayout, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); renderProtectedCustomers(); }
       else resetCustomerListLayout();
       return;
     }
@@ -15453,6 +15484,7 @@
       else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_sales');
       else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_drilldown');
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
+      else if (event.target.closest('#protectedColumnSettingsPanel')) { $('#protectedColumnSettingsPanel')?.classList.add('hidden'); $('#protectedColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else closeCustomerColumnSettings();
       return;
     }
@@ -15874,6 +15906,7 @@
     const protectedActivate = event.target.closest('[data-protected-activate]');
     if (protectedActivate) openProtectedActivationModal(protectedActivate.dataset.protectedActivate);
     if (event.target.closest('#protectedRefreshBtn')) await loadProtectedCustomers();
+    if (event.target.closest('#protectedColumnSettings')) { const panel = $('#protectedColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); renderProtectedColumnSettings(); }
     if (event.target.closest('#protectedRescanBtn')) await loadProtectedConflicts({ rescan: true });
     const pendingType = event.target.closest('[data-pending-type]');
     if (pendingType) {
@@ -16654,10 +16687,22 @@
         toggleTeamListColumn('team_progress_drilldown', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) {
         toggleTeamListColumn('team_collaboration', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#protectedColumnSettingsPanel')) {
+        toggleProtectedCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
       return;
+    }
+    if (event.target.id === 'protectedSort') {
+      state.protectedCustomers.sort = event.target.value || 'created_desc';
+      state.protectedCustomers.listLayout = listWidget.savePreferences(
+        protectedListLayoutKey(),
+        { ...state.protectedCustomers.listLayout, sortPreset: state.protectedCustomers.sort },
+        undefined,
+        protectedCustomerColumns(),
+      );
+      void loadProtectedCustomers({ reset: true });
     }
     if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
     if (event.target.matches('[data-duplicate-review-select]')) {

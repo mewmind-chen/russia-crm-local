@@ -59,6 +59,39 @@ test('protected-customer list paginates while its export remains the full filter
   assert.equal((await exported.text()).trim().split(/\r?\n/).length, 56);
 });
 
+test('protected-customer directory accepts only safe server-side sort presets', async t => {
+  const fx = await adminFixture(t);
+  fx.db.prepare('INSERT INTO customer_pool(customer_id,company_name,country) VALUES (?,?,?)')
+    .run('RU-9201', 'Alpha Protected', 'RU');
+  fx.db.prepare('INSERT INTO customer_pool(customer_id,company_name,country) VALUES (?,?,?)')
+    .run('CN-9202', 'Zulu Protected', 'CN');
+  fx.db.prepare(`INSERT INTO crm_protected_customer_batches
+    (batch_id,idempotency_key,input_hash,status,created_by,created_at,committed_at)
+    VALUES ('PCB-SORT','issue-205-sort','hash-205-sort','committed','USR-ADMIN',?,?)`)
+    .run('2026-08-01 00:00:00', '2026-08-01 00:00:00');
+  const insert = fx.db.prepare(`INSERT INTO crm_protected_customers
+    (external_customer_id,normalized_name,alpha_nickname,batch_id,status,created_by,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?)`);
+  insert.run('CN-9202', 'zulu protected', 'Zulu Alpha', 'PCB-SORT', 'protected', 'USR-ADMIN', '2026-08-03 00:00:00', '2026-08-03 00:00:00');
+  insert.run('RU-9201', 'alpha protected', 'Alpha Zulu', 'PCB-SORT', 'protected', 'USR-ADMIN', '2026-08-02 00:00:00', '2026-08-02 00:00:00');
+
+  const companySorted = await fx.requestJson(
+    '/api/sales-crm/protected-customers?sort=company_asc&page=1&pageSize=50',
+    { cookie: fx.adminCookie },
+  );
+  const ids = companySorted.items
+    .filter(item => ['RU-9201', 'CN-9202'].includes(item.externalCustomerId))
+    .map(item => item.externalCustomerId);
+  assert.deepEqual(ids, ['RU-9201', 'CN-9202']);
+
+  const invalid = await fx.request(
+    '/api/sales-crm/protected-customers?sort=ai_summary',
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});
+
 test('protected identity conflicts support 50 and 100 row pages with a 50 row default', async t => {
   const fx = await adminFixture(t);
   const insert = fx.db.prepare('INSERT INTO customer_pool(customer_id,company_name,nickname) VALUES (?,?,?)');
