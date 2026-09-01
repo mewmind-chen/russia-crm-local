@@ -141,9 +141,9 @@
 
 ## 5. 当前阶段判断
 
-- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `75f727b`；本轮“客户池 41 个非内部字段统一 + 列布局默认值修复 + customerProfile 非 AI 路由统一 + 列设置分组/搜索/预设”已形成独立提交并完成隔离浏览器回归。当前仅待治理文档提交后的看板核对；不恢复、不新增或迁移 AI 功能，不触碰生产。
+- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `75f727b`；本轮“客户池 41 个非内部字段统一 + 列布局默认值修复 + customerProfile 非 AI 路由统一 + 列设置分组/搜索/预设”已形成独立提交并完成隔离浏览器回归，治理文档与看板已在 `03b3162`/`6aed34f` 收口；不恢复、不新增或迁移 AI 功能，不触碰生产。
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
-- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、主管任务/风险/指标、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。CRM 抽屉复杂 activity timeline 条目已由 `timeline-widget.js` 渲染，权限/溯源判断留在 app.js。权限配置矩阵与事务预览/审核工作区为专用组件；AI 功能弃用冻结。阶段 E 仍未完成，浏览器双角色验收待做。
+- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、主管任务/风险/指标、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。CRM 抽屉复杂 activity timeline 条目已由 `timeline-widget.js` 渲染，权限/溯源判断留在 app.js。权限配置矩阵与事务预览/审核工作区为专用组件；AI 功能弃用冻结。阶段 E 完成门已通过，当前切片已提交。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,945 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
@@ -154,9 +154,11 @@
 
 ## 6. 下一步允许动作
 
-1. 提交治理文档与重新生成的看板，确保 HEAD、测试计数、最近会话与当前工作区一致。
-2. 下一执行阶段评估阶段 G 兼容层收尾（仅在用户明确继续后），保持旧入口兼容边界和 AI 冻结不变。
+1. 保持 `75f727b` 实现切片、`03b3162` 治理状态与 `6aed34f` 看板同步；如改动代码，先重跑全量与治理门禁。
+2. 下一执行阶段评估阶段 G 兼容层收尾（用户已明确继续时再进入），保持旧入口兼容边界和 AI 冻结不变。
 3. 不 push、不 merge、不部署，生产继续只读。
+
+> 以下编号内容是历史执行轨迹，仅作审计证据，不覆盖上面的当前恢复点和下一步。
 2. 阶段 A 接线恢复：**已完成**——44 个域模块中 41 个已重新接入，仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
 3. 阶段 B 业务侧收尾完成（`929b8c1` 止：§1 写点 + §4 强化 + 边界 + 种子收敛）。剩余项均涉红线/评估——AI next_action 写点（`ai_stations/next_action.js`）仅评估不改；`last_activity_at` 归属明确为"活动溯源"列（addActivity/quote/order/completeManagerAssistance 写、rebuild 重算，不入网关收敛范围）；状态解释器统一消费（前端侧后续评估）。
 4. 阶段 C（权限/筛选/字段）：**主体完成**——列表路径白名单化（accounts/intake/通知）、S3 形状（timeline/auditLog）、范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`，含空 WHERE 修复）、按页面"权限→字段→筛选"合同（`45e0c05`）均落地。**大聚合设计**（`docs/governance/PHASE_C_AGGREGATE_WHITELIST_DESIGN.md`）三轮审计结论：P1/P3（loadIntakeState 嵌套泄漏）、S5（export users 密码哈希）暂缓；S6（db bootstrap）联系形状源头门控、低价值。剩余仅：可选残值（legacy customers 形状白名单，S6 审计确认其余联系形状已源头门控，低价值可暂缓）。
