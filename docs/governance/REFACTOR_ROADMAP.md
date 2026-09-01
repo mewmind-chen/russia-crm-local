@@ -1,9 +1,9 @@
 # TradePulse 重构路线图
 
-更新时间：2026-08-29
+更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@cb6c6e4`（相对基线 ahead 108，未合并）
-状态：路线图执行中；阶段 A 接线恢复 13 切片全部完成（42 个域模块 39 个已接入），阶段 B 业务侧全部完成（§1 写点收敛零裸写 + §4 强化 + state DTO 边界收敛 + smoke 种子收敛），阶段 C 推进中（accounts/intake/通知白名单 + S3 形状 + 范围等价契约 + 按页面合同），全绿
+执行分支：`codex/frontend-widget-pilot@8a86425`（未合并）
+状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表与默认 customerProfile widget 视图已落地、profile-only 只读兼容契约与独立 host 隔离已落地；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
 
@@ -14,7 +14,7 @@
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中 | field catalog、schema 渲染、多个白名单投影已提交；accounts 列表（`78e698b`）、intake 页（`5e992fe`）、通知页（`1835f73`）白名单化；S3 形状（`38bfe7d`）；范围解释器等价契约（`2ca107b`）；按页面权限→字段→筛选合同（`45e0c05`） | 大聚合设计已排除 P1/P3（嵌套泄漏）与 S5（export users 密码哈希）；S6（bootstrap）审计为低价值；范围解释器代码级去重（待安全落点）、可选残值（legacy customers 形状） |
 | 阶段 D：线索/任务/商业闭环 | 部分开始 | intake、assignment、planning、commerce helper 已抽取 | 尚未形成完整领域边界 |
-| 阶段 E：前端 widgets | 试点完成、架构未完成 | profile widgets、字段分组、用户偏好 | 注册表未落地；iframe 仍存在；`app.js` 仍约 1.4 万行 |
+| 阶段 E：前端 widgets | 注册表与默认视图已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；customerProfile 默认 widget 组合 | `sourceTagMarkup`/身份来源标签 UMD 下沉；sales/manager 浏览器双角色验收；其余 widget body 与兼容层继续收敛；`app.js` 仍约 1.4 万行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
 | 阶段 G：兼容层收尾 | 未开始 | - | 等前述阶段稳定后执行 |
 
@@ -131,12 +131,12 @@
 ### 目标
 把“新壳 iframe + 旧版 `Index.html` 双用途页面”组合下的客户完整资料收敛为统一壳内的 widget 组合视图，并让整个前端变成“模块化、自由搭建、自由选择显示内容”的架构，后续前端 issue 只改对应 widget。
 
-### 现状（已核对代码）
+### 现状（已核对代码，截至 `8a86425`）
 - 正式入口 `/` 返回统一壳 `sales-crm.html`（`server.js:72`）；`/sales` 是 302 重定向到 `/`（`lib/sales_crm.js:5044`）。
-- `sales-crm.html#customerProfileView` 通过 `<iframe id="customerProfileFrame">` 加载 `/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&customer=<id>[&intake=<id>]`。
-- `/development-workbench` 由 `server.js` 返回旧版 `Index.html`，同一页面按 query 承担“旧工作台（`/legacy`）”与“被嵌入的客户完整资料”两种用途，客户完整资料不是独立、可复用的底层。
+- `sales-crm.html#customerProfileView` 默认由 `sales-assets/widget-registry.js` 组装 customerProfile widget 集合；仅 `profileView=legacy` 显式回退到 `/development-workbench?...` iframe 兼容路径。
+- `/development-workbench` 由 `server.js` 返回旧版 `Index.html`；profile-only 路径已由 `e59bf22` 约束为只读兼容入口，旧工作台与兼容资料页仍按 query 区分。
 - 资料数据来自统一 API：`/api/sales-crm/profile/:customerId` 与 `/api/sales-crm/intake/:itemId/profile`（均调用 `getCustomerProfileData`）。
-- 前端资产：`sales-assets/app.js`（约 1.4 万行，统一壳主逻辑）、`sales-assets/filter-component.js`（独立 UMD 组件范式）、`Index.html`（旧版，内嵌脚本）；`/legacy` 与 `/tradelead-v2.html` 由 `CRM_ENABLE_LEGACY` 控制（`server.js:73-78`）。
+- 前端资产：`sales-assets/app.js`（约 1.4 万行，统一壳主逻辑）、`sales-assets/widget-registry.js`（UMD 注册表）、`sales-assets/filter-component.js`（独立 UMD 组件范式）、`Index.html`（旧版，内嵌脚本）；`/legacy` 与 `/tradelead-v2.html` 由 `CRM_ENABLE_LEGACY` 控制（`server.js:73-78`）。
 - 显隐机制已存在：`[data-permission]` 权限显隐、`[data-ai-business]` AI 开关显隐（`app.js` `applyBusinessAIVisibility`）、bootstrap 下发 `permissions + features`。
 
 ### 关键动作
