@@ -281,10 +281,13 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'widget 注册表已落地（2d98eea）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，customerProfile 注册表化组装，三源抽屉 facts/主档/状态条/时间线共用。',
+      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
+        ['frontend', 'customerProfile 默认 widget view 接线（profile-only 兼容入口保留）', '29282df', ''],
+        ['frontend', '/development-workbench profile-only 只读兼容契约（浏览器运行时无写入待验证）', 'e59bf22', ''],
+        ['frontend', 'widget registry 每个 widget 独立 mount host（失败隔离/重渲染清理）', '8a86425', ''],
         ['frontend', 'profile-facts 抽为自包含 UMD widget（模板/偏好/事件下沉）', '41a722e', ''],
         ['frontend', 'drawer-facts 抽为自包含 UMD widget（三源 facts 统一）', '7c76fb3…8135ac2', ''],
         ['frontend', 'drawer-ai 抽为自包含 UMD widget（AI 问答区，AI 零改动）', '64b9418', ''],
@@ -295,9 +298,10 @@ function buildPhases(env) {
         ['frontend', 'timeline 抽为共用 widget（开发历史/完整时间线条目）', '93b5dbb', ''],
       ],
       pending: [
+        ['frontend', 'identity/source tags：sourceTagMarkup 抽为自包含 UMD widget', '', ''],
+        ['frontend', '销售/经理页面浏览器验证：默认 customerProfile 与 profile-only 兼容入口', '', ''],
         ['frontend', '其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body', '', ''],
-        ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂活动时间线评估下沉）', '', ''],
-        ['frontend', '/development-workbench profile 模式收敛为只读/兼容入口', '', ''],
+        ['frontend', '#customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）', '', ''],
       ],
     },
     {
