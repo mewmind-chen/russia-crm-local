@@ -11,13 +11,13 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@092d8a0`，所有纳入本轮范围的业务列表已迁移到 List widget；CRM 抽屉非 AI 区块与复杂 activity timeline 条目已纳入 widget 组合；权限配置矩阵、事务预览/审核工作区与 AI 专用列表按专用边界冻结；Phase E 隔离预览 harness 已提交；工作区当前干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@bc84567`，所有纳入本轮范围的业务列表已迁移到 List widget；CRM 抽屉非 AI 区块与复杂 activity timeline 条目已纳入 widget 组合；旧入口兼容边界已锁定；权限配置矩阵、事务预览/审核工作区与 AI 专用列表按专用边界冻结；Phase E 隔离预览 harness 已提交；工作区当前干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`092d8a0`（`79036e5` 在 `8d1bb05` 列表迁移基础上，将 CRM 抽屉的非 AI 状态条、事实、主档和时间线区块纳入 `crmDrawer` 注册表同步装配；`6bfa5f0` 对齐抽屉摘要契约；本轮将复杂 activity timeline 条目（更正入口、写入状态、溯源文案）下沉到 `timeline-widget.js`，由 app.js 注入授权回调并保留内联回退；默认 profile widget 模式的兼容 iframe 加载仍严格限制为显式 `profileView=legacy`，不改 bootstrap 查询、后端写入或 AI 行为）
+- 当前重构提交：`bc84567`（`092d8a0` 将复杂 activity timeline 条目下沉到 `timeline-widget.js`；本轮补充统一根路径与 legacy HTML 入口的运行时契约：`/` 始终返回统一壳，`/legacy` 与 `/tradelead-v2.html` 仅在 `CRM_ENABLE_LEGACY=true` 时开放；默认 profile widget 模式的兼容 iframe 加载仍严格限制为显式 `profileView=legacy`，不改 bootstrap 查询、后端写入或 AI 行为）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，widget/抽屉/iframe + Issue 171/287 定向全部通过；`npm test`：core `1718/1718`，`node --test`：全量 `2080/2080`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁已复跑通过。
+- 当前验证（2026-09-01）：列表 widget/访问控制/API 定向 `62/62`，widget/抽屉/iframe + Issue 171/287 定向全部通过；旧入口运行时契约 `4/4` 通过；`npm test`：core `1719/1719`，`node --test`：全量 `2081/2081`；本轮业务切片已通过 `node --check`、`git diff --check`。治理权威门禁与 AI 边界门禁已复跑通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
@@ -29,6 +29,7 @@
 - `3adc1d1`：抽取 `sales-assets/source-tags-widget.js` identity/source tags UMD widget；`sales-assets/app.js` 的 wrappers 改为委托，`sales-crm.html` 在 registry/app 之前加载该资产。保留只读 `customerTags` 投影、归一化/去重保序/空名过滤、默认 5 项与 `+N` 溢出；UMD 负责 source/category/name 转义，`app.js` 注入 AI 开关的 `includeReadOnly`，identity warning 仍由 `app.js` 以 `esc` 转义并追加。`Index.html` 编辑/postMessage、API 与 AI internals 未改。
 - `79036e5`：CRM 抽屉非 AI 状态条、事实、主档、时间线区块由 `crmDrawer` 注册表同步选配，保留即时 DOM 契约、逐 widget 回退与原有动作/权限语义；默认 profile widget 模式清理遗留 iframe `src`，兼容 iframe 仅在显式 `profileView=legacy` 时设置或按主题刷新，并新增 registry/iframe 契约。
 - `092d8a0`：复杂 CRM activity timeline 条目下沉至 `timeline-widget.js` 的 correction-aware renderer；业务权限、写入状态、授权客户溯源由 `app.js` 通过纯回调注入，跨权限对端仍只显示保护文案，保留 inline fallback 与全局事件委托；AI 功能零改动。
+- `bc84567`：锁定旧入口兼容边界；运行时验证统一根路径为 canonical，`CRM_ENABLE_LEGACY` 关闭时 `/legacy` 与 `/tradelead-v2.html` 返回 404，开启时两者继续提供兼容页面；未删除旧页面，待浏览器双角色验收后再决定是否进入阶段 G 收尾。
 - `6bfa5f0`：按抽屉注册表组合后的真实结构更新摘要/布局静态契约测试；不改变运行时代码或 AI 边界。
 - `4941b7e`：校准进度看板，使阶段 E 显示 profile-only 只读契约、默认 widget 视图、独立 host 隔离与 source tags UMD 的真实状态；该提交仅为治理看板校准。
 - `e59bf22`：为 `/development-workbench` 的 profile-only 只读兼容门槛补契约，锁定 `profileAccess.readOnly` 与现有只读分支；运行时无写入口仍列入浏览器验收。
@@ -194,9 +195,9 @@ OK。本轮 core 1658/1658、全量 2019/2019 全绿。`3c9369d` 再让完整资
 `/development-workbench` profile-only 只读兼容契约，`8a86425` 修复注册表独立
 widget host 隔离，`3adc1d1` 将 identity/source tags 抽为 `source-tags-widget.js`
 UMD；本次目标前端/标签专项 `106/106`、core `1670/1670`、全量 `2031/2031`。
-阶段 E 仍进行中：尚余 sales/manager 浏览器双角色验收、其余复杂 widget body 与 CRM 活动时间线评估下沉。隔离 preview/mock runtime 已建立为显式
+阶段 E 仍进行中：尚余 sales/manager 浏览器双角色验收。复杂 widget body、CRM 活动时间线与旧入口兼容边界已完成当前可验证切片；隔离 preview/mock runtime 已建立为显式
 opt-in harness；当前环境缺少锁定浏览器依赖，浏览器入口 fail-closed，真实浏览器验收不得写成已通过。
-`092d8a0` 已补齐复杂 activity timeline 条目 widget 化（宿主注入权限/溯源回调，保留 inline fallback），并继承 `79036e5` 的默认模式 iframe 边界与 `crmDrawer` 注册表组合；下一动作固定为：在具备锁定浏览器依赖的环境运行 Phase E harness，完成 sales/manager 双角色默认 customerProfile 与 profile-only 只读兼容验收；同时评估剩余旧入口兼容层。列表迁移、抽屉注册表与复杂时间线展示层已完成，AI 功能继续弃用冻结。
+`092d8a0` 已补齐复杂 activity timeline 条目 widget 化（宿主注入权限/溯源回调，保留 inline fallback），`bc84567` 已锁定旧入口兼容边界（统一根路径 canonical，两个 legacy HTML 路由由 `CRM_ENABLE_LEGACY` 显式控制）；下一动作固定为：在具备锁定浏览器依赖的环境运行 Phase E harness，完成 sales/manager 双角色默认 customerProfile 与 profile-only 只读兼容验收。列表迁移、抽屉注册表、复杂时间线展示层与当前旧入口评估已完成，AI 功能继续弃用冻结。
 本轮已先落地可独立验证的 List widget 基础切片：`sales-assets/list-widget.js` 提供
 列 schema、必选列、显隐/顺序编辑、排序描述、偏好读写和 descriptor table 渲染；
 `customers` 字段目录由 `/api/sales-crm/field-schema/customers` 提供，客户列表接入

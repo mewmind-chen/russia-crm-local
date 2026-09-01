@@ -280,7 +280,7 @@ function buildPhases(env) {
       id: 'E',
       title: '阶段 E：前端 widgets',
       status: 'wip',
-      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表，以及用户/归档用户/权限组/迁移复核后台列表（8d1bb05）；CRM 抽屉非 AI 状态条、事实、主档、时间线已纳入 crmDrawer 注册表，复杂 activity timeline 条目（更正入口/溯源）已下沉至 timeline widget，默认 widget 模式不加载兼容 iframe（79036e5/092d8a0）。权限配置矩阵、事务预览/审核工作区保留专用组件；AI 列表与 AI 专用工作区冻结，不纳入迁移。',
+      summary: 'customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表，以及用户/归档用户/权限组/迁移复核后台列表（8d1bb05）；CRM 抽屉非 AI 状态条、事实、主档、时间线已纳入 crmDrawer 注册表，复杂 activity timeline 条目（更正入口/溯源）已下沉至 timeline widget，旧入口兼容边界已锁定（bc84567：统一根路径 canonical，legacy HTML 路由由 CRM_ENABLE_LEGACY 显式控制），默认 widget 模式不加载兼容 iframe（79036e5/092d8a0）。权限配置矩阵、事务预览/审核工作区保留专用组件；AI 列表与 AI 专用工作区冻结，不纳入迁移。',
       done: [
         ['frontend', '字段目录/widget 试点提交', '7a26074…077c88c', ''],
         ['frontend', 'widget 注册表落地 + customerProfile 注册表化组装', '2d98eea', ''],
@@ -320,10 +320,10 @@ function buildPhases(env) {
         ['frontend', 'Phase E 隔离浏览器预览 harness（临时 SQLite/loopback/随机端口/AI 关闭/fail-closed）', 'dd650ba', ''],
         ['frontend', 'CRM 抽屉非 AI 区块纳入 crmDrawer 注册表；默认 widget 模式清理兼容 iframe src，legacy-only 刷新', '79036e5', ''],
         ['frontend', '复杂 CRM activity timeline 条目 widget 化（宿主注入权限/溯源回调，保留 inline fallback）', '092d8a0', ''],
+        ['frontend', '旧入口兼容边界锁定：统一根路径为 canonical，/legacy 与 /tradelead-v2.html 仅在 CRM_ENABLE_LEGACY=true 时开放', 'bc84567', ''],
       ],
       pending: [
         ['frontend', '销售/经理页面真实浏览器验证：运行已建立的 Phase E preview harness，验证默认 customerProfile 与 profile-only 兼容入口（当前依赖缺失时 fail-closed）', '', ''],
-        ['frontend', '其余旧入口兼容层收敛评估：确认 legacy profile/workbench 使用方后再决定下线或继续保留', '', ''],
       ],
     },
     {
