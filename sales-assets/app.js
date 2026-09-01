@@ -105,6 +105,7 @@
     },
     customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -267,7 +268,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -303,6 +304,9 @@
       }
       if (state.data && state.view === 'contacts') {
         renderUnifiedPeople();
+      }
+      if (state.data && state.view === 'recycleBin') {
+        renderRecycleBin();
       }
     });
   }
@@ -936,6 +940,95 @@
     state.researchPeopleListLayout = { ...state.researchPeopleListLayout, visibleColumns: [...current] };
     saveResearchPeopleListLayout();
     renderUnifiedPeople();
+  }
+  function recycleBinColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'previous_owner', label: '原负责人', className: 'col-owner', sortKey: 'previous_owner_name' },
+      { key: 'reason', label: '原因', className: 'col-reason', sortKey: 'reason' },
+      { key: 'recycled_at', label: '回收时间', className: 'col-date', sortKey: 'recycled_at' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.recycle_bin?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => field.key));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function recycleBinListLayoutStorageKey() {
+    return `tradepulse.listLayout.recycle_bin.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultRecycleBinListLayout() {
+    const columns = recycleBinColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'recycled_desc' };
+  }
+  function restoreRecycleBinListLayout() {
+    const columns = recycleBinColumnDefinitions();
+    state.recycleBinListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(recycleBinListLayoutStorageKey(), undefined, columns)
+      : defaultRecycleBinListLayout();
+    const allowedSorts = ['recycled_desc', 'recycled_asc', 'company_asc', 'reason_asc'];
+    if (!allowedSorts.includes(state.recycleBinListLayout.sortPreset)) {
+      state.recycleBinListLayout = { ...state.recycleBinListLayout, sortPreset: 'recycled_desc' };
+    }
+    if ($('#recycleSort')) $('#recycleSort').value = state.recycleBinListLayout.sortPreset;
+    renderRecycleBinColumnSettings();
+  }
+  function saveRecycleBinListLayout() {
+    const columns = recycleBinColumnDefinitions();
+    state.recycleBinListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(recycleBinListLayoutStorageKey(), state.recycleBinListLayout, undefined, columns)
+      : state.recycleBinListLayout;
+    renderRecycleBinColumnSettings();
+  }
+  function renderRecycleBinColumnSettings() {
+    const host = $('#recycleColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '不对口记录列设置',
+      columns: recycleBinColumnDefinitions(),
+      preferences: state.recycleBinListLayout,
+    });
+  }
+  function closeRecycleBinColumnSettings() {
+    $('#recycleColumnSettingsPanel')?.classList.add('hidden');
+    $('#recycleColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openRecycleBinColumnSettings() {
+    renderRecycleBinColumnSettings();
+    $('#recycleColumnSettingsPanel')?.classList.remove('hidden');
+    $('#recycleColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetRecycleBinListLayout() {
+    state.recycleBinListLayout = { ...defaultRecycleBinListLayout(), sortPreset: 'recycled_desc' };
+    saveRecycleBinListLayout();
+    if ($('#recycleSort')) $('#recycleSort').value = 'recycled_desc';
+    renderRecycleBin();
+    void loadRecycleBin({ reset: true });
+  }
+  function moveRecycleBinListColumn(key, direction) {
+    const columns = recycleBinColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.recycleBinListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.recycleBinListLayout = { ...state.recycleBinListLayout, columnOrder: order };
+    saveRecycleBinListLayout();
+    renderRecycleBin();
+  }
+  function toggleRecycleBinListColumn(key, visible) {
+    const columns = recycleBinColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.recycleBinListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.recycleBinListLayout = { ...state.recycleBinListLayout, visibleColumns: [...current] };
+    saveRecycleBinListLayout();
+    renderRecycleBin();
   }
   function selectedValues(select) {
     return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
@@ -1677,6 +1770,9 @@
         params.set('actionQueue', state.pipelineActionQueue);
       }
       if (pageKey === 'pipeline') params.set('starView', state.pipelineStarView);
+      if (pageKey === 'recycle_bin') {
+        params.set('sort', state.recycleBinListLayout.sortPreset || 'recycled_desc');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -1837,6 +1933,7 @@
       restoreCustomerFilters();
       restoreCustomerListLayout();
       restoreResearchPeopleListLayout();
+      restoreRecycleBinListLayout();
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -5094,14 +5191,8 @@
     const root = $('#recycleTable');
     if (!root) return;
     const rows = state.recycleBin.rows || [];
-    if (!rows.length) {
-      root.innerHTML = '<div class="empty">回收站暂无客户</div>';
-      return;
-    }
     const sales = state.data.assignmentCandidates || [];
-    root.innerHTML = table(
-      ['客户', '原负责人', '原因', '回收时间', '操作'],
-      rows.map(row => {
+    const tableRows = rows.map(row => {
         const customerCell = `<button type="button" class="text-button tp-company-anchor" data-open-mismatch-record="${esc(row.recordKey)}">${esc(accountDisplayName(row))}</button>`;
         let actionCell = '<span class="subtle">仅查看记录</span>';
         if (row.actions?.includes('reassign')) {
@@ -5114,19 +5205,30 @@
           && !state.data.impersonation) {
           actionCell = `<button class="button secondary tiny" data-restore-customer="${esc(row.customerId)}">恢复客户</button>`;
         }
-        const cells = [
-          `<div class="company-cell">${customerCell}<span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}${row.sourceType === 'intake' ? ' · 领取前线索' : ''}</span></div>`,
-          esc(row.previousOwnerName || '未分配'),
-          esc(row.reason || '—'),
-          shortDate(row.recycledAt, true),
-          actionCell,
-        ];
-        row._attrs = `data-recycle-record="${esc(row.recordKey)}"`;
-        cells._attrs = row._attrs;
-        return cells;
-      }),
-      'class="mismatch-record-table"',
-    );
+        return {
+          company: `<div class="company-cell">${customerCell}<span>${esc(accountIdentity(row))}${accountIdentity(row) ? ' · ' : ''}${esc(row.country || '—')}${row.sourceType === 'intake' ? ' · 领取前线索' : ''}</span></div>`,
+          previous_owner: esc(row.previousOwnerName || '未分配'),
+          reason: esc(row.reason || '—'),
+          recycled_at: shortDate(row.recycledAt, true),
+          actions: actionCell,
+          _attrs: `data-recycle-record="${esc(row.recordKey)}"`,
+        };
+      });
+    const columns = recycleBinColumnDefinitions();
+    root.innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns,
+        rows: tableRows,
+        preferences: state.recycleBinListLayout,
+        attrs: 'class="mismatch-record-table" data-list-page="recycle_bin"',
+        emptyText: '回收站暂无客户',
+      })
+      : table(
+        columns.map(column => column.label),
+        tableRows.map(row => columns.map(column => row[column.key])),
+        'class="mismatch-record-table"',
+      );
+    applyTableColumnClasses(root, columns.map(column => column.className || ''));
   }
 
   function mismatchSafeObject(value) {
@@ -13263,10 +13365,17 @@
       else closeResearchPeopleColumnSettings();
       return;
     }
+    if (event.target.closest('#recycleColumnSettings')) {
+      if ($('#recycleColumnSettingsPanel')?.classList.contains('hidden')) openRecycleBinColumnSettings();
+      else closeRecycleBinColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
         moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#recycleColumnSettingsPanel')) {
+        moveRecycleBinListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -13274,11 +13383,13 @@
     }
     if (event.target.closest('[data-list-layout-reset]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
+      else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
       else resetCustomerListLayout();
       return;
     }
     if (event.target.closest('[data-list-layout-close]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
+      else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -14265,6 +14376,7 @@
         restoreCustomerFilters();
         restoreCustomerListLayout();
       }
+      if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -14395,6 +14507,8 @@
     if (event.target.matches('[data-list-column-toggle]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) {
         toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#recycleColumnSettingsPanel')) {
+        toggleRecycleBinListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
@@ -14454,6 +14568,14 @@
       };
       saveResearchPeopleListLayout();
       void loadResearch('contacts', { reset: true });
+    }
+    if (event.target.id === 'recycleSort') {
+      state.recycleBinListLayout = {
+        ...state.recycleBinListLayout,
+        sortPreset: event.target.value || 'recycled_desc',
+      };
+      saveRecycleBinListLayout();
+      void loadRecycleBin({ reset: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();

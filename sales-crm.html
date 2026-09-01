@@ -285,7 +285,17 @@
             <input id="recycleSearch" placeholder="搜索客户昵称、公司名称或客户编号" aria-label="搜索客户昵称、公司名称或客户编号">
             <button id="recycleRefresh" class="button secondary tiny" type="button">刷新</button>
           </div>
-          <div class="toolbar"><span id="recycleAuthorizedResultCount" class="toolbar-count"></span></div>
+          <div class="toolbar recycle-list-toolbar">
+            <label class="list-sort-control">排序<select id="recycleSort" aria-label="不对口记录排序">
+              <option value="recycled_desc">最近回收</option>
+              <option value="recycled_asc">最早回收</option>
+              <option value="company_asc">客户名称</option>
+              <option value="reason_asc">原因</option>
+            </select></label>
+            <button id="recycleColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="recycleColumnSettingsPanel">列设置</button>
+            <span id="recycleAuthorizedResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="recycleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="不对口记录列表列设置"></div>
           <div id="recycleTable" class="data-table"></div>
           <div id="recycleAuthorizedPagination" class="shared-pagination" data-pagination="recycle_bin"></div>
         </article>

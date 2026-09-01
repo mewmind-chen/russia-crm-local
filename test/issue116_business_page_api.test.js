@@ -86,3 +86,31 @@ test('business list API validates boolean intake filters, versions, and forged f
   assert.equal(legacy.status, 403);
   assert.equal((await legacy.json()).code, 'FILTER_NOT_AUTHORIZED');
 });
+
+test('recycle list accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='mismatch',
+    recycle_reason='Z reason',previous_owner_id='U-WU',recycled_by='USR-ADMIN',
+    recycled_at='2026-08-05 08:00:00' WHERE id='CRM-WU'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='mismatch',
+    recycle_reason='A reason',previous_owner_id='U-MGR',recycled_by='USR-ADMIN',
+    recycled_at='2026-08-06 08:00:00' WHERE id='CRM-OWN'`).run();
+  fx.db.prepare(`UPDATE crm_accounts SET lifecycle_status='recycled',recycle_kind='manual_delete',
+    recycle_reason='M reason',previous_owner_id='U-OTHER',recycled_by='USR-ADMIN',
+    recycled_at='2026-08-05 12:00:00' WHERE id='CRM-OTHER'`).run();
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/recycle_bin', {
+    cookie: fx.adminCookie,
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/lists/recycle_bin?sort=company_asc&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.deepEqual(sorted.rows.map(row => row.customerId), ['CRM-OTHER', 'CRM-OWN', 'CRM-WU']);
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/recycle_bin?sort=contact_email&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

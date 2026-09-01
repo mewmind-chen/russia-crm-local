@@ -123,3 +123,22 @@ test('research people list uses the shared widget with per-user layout and autho
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="contacts"/);
   assert.match(app, /params\.set\('sort', state\.researchPeopleListLayout\.sortPreset/);
 });
+
+test('recycle list uses the shared widget with per-user layout and server sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'recycle_bin',
+    user: { role: 'sales' },
+    permissions: { view_own_mismatch_history: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'previous_owner', 'reason', 'recycled_at',
+  ]);
+  assert.match(html, /id="recycleSort"/);
+  assert.match(html, /id="recycleColumnSettings"/);
+  assert.match(html, /id="recycleColumnSettingsPanel"/);
+  assert.match(app, /recycleBinListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.recycle_bin/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="recycle_bin"/);
+  assert.match(app, /params\.set\('sort', state\.recycleBinListLayout\.sortPreset/);
+});
