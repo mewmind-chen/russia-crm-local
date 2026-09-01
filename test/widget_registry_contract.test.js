@@ -4,9 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
 const registryPath = path.join(root, 'sales-assets', 'widget-registry.js');
+const sourceTagsPath = path.join(root, 'sales-assets', 'source-tags-widget.js');
 const factsWidgetPath = path.join(root, 'sales-assets', 'profile-facts-widget.js');
 const drawerFactsPath = path.join(root, 'sales-assets', 'drawer-facts-widget.js');
 const drawerAiPath = path.join(root, 'sales-assets', 'drawer-ai-widget.js');
@@ -16,7 +18,9 @@ const nextStepPath = path.join(root, 'sales-assets', 'next-step-widget.js');
 const timelinePath = path.join(root, 'sales-assets', 'timeline-widget.js');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
+const sourceTagsSource = fs.readFileSync(sourceTagsPath, 'utf8');
 const registry = require(registryPath);
+const sourceTagsWidget = require(sourceTagsPath);
 const factsWidget = require(factsWidgetPath);
 const drawerFactsWidget = require(drawerFactsPath);
 const drawerAiWidget = require(drawerAiPath);
@@ -52,16 +56,22 @@ function makeContainer() {
   };
 }
 
-test('registry script and facts widget are loaded on the sales shell before app.js', () => {
+test('source tags, registry, and facts widgets are loaded on the sales shell before app.js', () => {
   assert.match(html, /sales-assets\/widget-registry\.js/);
+  assert.match(html, /sales-assets\/source-tags-widget\.js/);
   assert.match(html, /sales-assets\/profile-facts-widget\.js/);
+  const sourceTagsIndex = html.indexOf('source-tags-widget.js');
   const factsIndex = html.indexOf('profile-facts-widget.js');
   const registryIndex = html.indexOf('widget-registry.js');
   const appIndex = html.indexOf('sales-assets/app.js');
+  assert.ok(sourceTagsIndex > -1 && appIndex > -1 && sourceTagsIndex < appIndex,
+    'source-tags-widget.js must be loaded before app.js');
   assert.ok(factsIndex > -1 && appIndex > -1 && factsIndex < appIndex,
     'profile-facts-widget.js and widget-registry.js must be loaded before app.js');
-  assert.ok(registryIndex > -1 && registryIndex > factsIndex,
-    'widget-registry.js must load before app.js');
+  assert.ok(registryIndex > -1 && registryIndex > factsIndex && registryIndex < appIndex,
+    'widget-registry.js must load after dependencies and before app.js');
+  assert.ok(sourceTagsIndex < registryIndex,
+    'source-tags-widget.js must load before widget-registry.js');
 });
 
 test('registry UMD exposes register/unregister/has/list/clear/widgetsForPage/renderPage', () => {
@@ -72,6 +82,35 @@ test('registry UMD exposes register/unregister/has/list/clear/widgetsForPage/ren
   assert.equal(typeof registry.clear, 'function');
   assert.equal(typeof registry.widgetsForPage, 'function');
   assert.equal(typeof registry.renderPage, 'function');
+});
+
+test('source tags UMD exposes the pure projection and markup contract', () => {
+  for (const name of [
+    'escapeHtml', 'normalizeTagText', 'uniqueSourceTags',
+    'accountSourceTags', 'renderSourceTagRowHtml',
+  ]) {
+    assert.equal(typeof sourceTagsWidget[name], 'function', `${name} must be exported`);
+  }
+});
+
+test('source tags UMD browser branch attaches the global API', () => {
+  const browserGlobal = {};
+  vm.runInNewContext(sourceTagsSource, browserGlobal);
+  assert.equal(typeof browserGlobal.TradePulseSourceTagsWidget, 'object');
+  assert.equal(typeof browserGlobal.TradePulseSourceTagsWidget.renderSourceTagRowHtml, 'function');
+});
+
+test('app delegates source tag markup and list chips to the source tags widget wrappers', () => {
+  const markupStart = app.indexOf('  function sourceTagMarkup(');
+  const markupEnd = app.indexOf('  function hostLabel(', markupStart);
+  const markupSource = app.slice(markupStart, markupEnd);
+  assert.match(markupSource, /renderSourceTagRowHtml/);
+  assert.doesNotMatch(markupSource, /source-tag-row/);
+
+  const chipsStart = app.indexOf('  function listChipMarkup(');
+  const chipsEnd = app.indexOf('  function rowActionCluster(', chipsStart);
+  const chipsSource = app.slice(chipsStart, chipsEnd);
+  assert.match(chipsSource, /accountSourceTags\(account\)/);
 });
 
 test('register validates id/pages/render and rejects incomplete specs', () => {

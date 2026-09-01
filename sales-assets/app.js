@@ -5,6 +5,10 @@
   const $$ = selector => Array.from(document.querySelectorAll(selector));
   const uiFormat = window.TradePulseUIFormat;
   const nextActionTime = window.TradePulseNextActionTime;
+  // source-tags-widget.js 是 shell 必需资产；缺失时兼容 wrapper fail-closed 为空标签。
+  function sourceTagsWidgetApi() {
+    return typeof window !== 'undefined' ? window.TradePulseSourceTagsWidget : null;
+  }
   const dataTableOverflowState = new WeakMap();
   const dataTablesNeedingHintReset = new Set();
   let dataTableOverflowFrame = 0;
@@ -500,33 +504,26 @@
     return canManageProtectedCustomers() || canReviewDuplicateCustomers();
   }
   function normalizeTagText(value) {
-    return String(value || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-CN');
+    return sourceTagsWidgetApi()?.normalizeTagText?.(value) || '';
   }
   function uniqueSourceTags(tags) {
-    const seen = new Set();
-    return tags.filter(tag => {
-      const key = normalizeTagText(tag.name);
-      if (!tag.name || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return sourceTagsWidgetApi()?.uniqueSourceTags?.(tags) || [];
   }
-  function accountSourceTags(account) {
-    const customerTags = Array.isArray(account?.customerTags) ? account.customerTags : [];
-    return uniqueSourceTags(customerTags
-      .filter(tag => customerAIEnabled() || !tag.readOnly)
-      .map(tag => ({
-        source: tag.readOnly ? 'ai' : 'manual',
-        name: tag.name,
-        category: tag.category,
-      })));
+  function accountSourceTags(account, options = {}) {
+    const widget = sourceTagsWidgetApi();
+    if (!widget?.accountSourceTags) return [];
+    const includeReadOnly = Object.prototype.hasOwnProperty.call(options, 'includeReadOnly')
+      ? Boolean(options.includeReadOnly)
+      : customerAIEnabled();
+    return widget.accountSourceTags(account, { includeReadOnly });
   }
   function sourceTagMarkup(account, limit = 5) {
-    const tags = accountSourceTags(account);
-    const shown = tags.slice(0, limit);
-    return shown.length
-      ? `<div class="source-tag-row">${shown.map(tag => `<span class="source-tag ${esc(tag.source)}" title="${esc(tag.category || '客户标签')}">${esc(tag.name)}</span>`).join('')}${tags.length > shown.length ? `<span class="source-tag manual">+${tags.length - shown.length}</span>` : ''}</div>`
-      : '';
+    const widget = sourceTagsWidgetApi();
+    return widget?.renderSourceTagRowHtml?.({
+      account,
+      limit,
+      includeReadOnly: customerAIEnabled(),
+    }) || '';
   }
   function hostLabel(value) {
     return uiFormat.website(value)?.label || '';

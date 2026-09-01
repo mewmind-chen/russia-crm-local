@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+const sourceTags = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'source-tags-widget.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
 const legacy = fs.readFileSync(path.join(__dirname, '..', 'Index.html'), 'utf8');
 
@@ -43,7 +44,9 @@ test('disabled customer, evaluation and notification views omit historical AI pr
   assert.match(app, /const ai = !technicalAIPresentationAllowed\(\) \? '' : item\.aiStatus/);
   assert.match(app, /showAI \? '保存并生成AI标注' : '保存评价'/);
   assert.match(app, /\.\.\.\(technicalAIPresentationAllowed\(\) \? \[\['评价标签'/);
-  assert.match(app, /const customerTags = Array\.isArray\(account\?\.customerTags\) \? account\.customerTags : \[\]/);
+  assert.match(sourceTags, /const customerTags = Array\.isArray\(account\?\.customerTags\) \? account\.customerTags : \[\]/);
+  assert.match(sourceTags, /\.filter\(tag => includeReadOnly \|\| !tag\.readOnly\)/);
+  assert.match(app, /includeReadOnly: customerAIEnabled\(\)/);
   assert.doesNotMatch(app, /const ai = customerAIEnabled\(\) && account\?\.id\s*\? labelsForAccount\(account\.id\)/);
   assert.match(app, /function notificationRowsAllowedByAIGate\(rows\) \{[\s\S]*?const aiEnabled = customerAIEnabled\(\);[\s\S]*?const packEnabled = salesPackEnabled\(\);[\s\S]*?!aiNotificationCodes\.has[\s\S]*?!salesPackNotificationCodes\.has/);
   assert.match(app, /visiblePermissionDefinitions\(\)/);
