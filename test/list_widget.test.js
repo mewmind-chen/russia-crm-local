@@ -61,6 +61,31 @@ test('correction history uses shared widget with manual fields and complete user
   assert.doesNotMatch(app, /correctionHistoryColumns[\s\S]{0,3000}ai_/i);
 });
 
+test('audit read-only list uses the shared widget with per-user layout controls', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'audit',
+    user: { role: 'admin' },
+    permissions: { view_users: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'created_at', 'operator', 'action', 'object', 'detail',
+  ]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+  assert.match(html, /id="auditSort"/);
+  assert.match(html, /id="auditColumnSettings"[\s\S]*aria-controls="auditColumnSettingsPanel"/);
+  assert.match(app, /auditListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.audit/);
+  assert.match(app, /data-list-page="audit"/);
+  assert.match(app, /auditColumns\(\)/);
+  assert.match(app, /moveAuditListColumn/);
+  assert.match(app, /resetAuditListLayout/);
+  assert.match(app, /closeAuditColumnSettings/);
+  assert.match(app, /state\.fieldSchemas\?\.audit\?\.fields/);
+  assert.match(app, /String\(row\.detail_json \|\| ''\)\.slice\(0, 140\)/);
+  assert.doesNotMatch(`${html}\n${app}`, /audit[\s\S]{0,3000}ai_/i);
+});
+
 test('list widget exposes a browser-safe UMD contract', () => {
   const browserGlobal = {};
   vm.runInNewContext(source, browserGlobal);

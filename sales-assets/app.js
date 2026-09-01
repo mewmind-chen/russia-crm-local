@@ -237,6 +237,7 @@
     maintenanceRuns: [],
     maintenanceRunsListLayout: null,
     correctionHistoryListLayout: null,
+    auditListLayout: null,
     protectedCustomers: {
       items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
       page: 1, pageSize: 50, totalPages: 0, hasMore: false,
@@ -287,7 +288,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs', 'correction_history']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs', 'correction_history', 'audit']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -8905,14 +8906,7 @@
     renderPermissionGroups(canMutate);
     if (state.filterPermissionAdmin) renderFilterPermissionAdmin();
     renderAssistantRuntime();
-    $('#auditTable').innerHTML = table(
-      ['时间','操作人','动作','对象','详情'],
-      (state.data.auditLog || []).map(row => [
-        esc(shortDate(row.created_at, true)), esc(auditOperator(row)),
-        `<strong>${esc(row.action)}</strong>`, `${esc(row.entity_type)} · ${esc(row.entity_id || '—')}`,
-        `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`,
-      ]),
-    );
+    renderAuditList();
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
     $('#migrationReviewCount').textContent = `${state.data.migrationReview?.length || 0} 条待确认`;
     $('#migrationReviewTable').innerHTML = table(
@@ -8930,6 +8924,14 @@
       }),
     );
   }
+
+  function auditColumns() { const columns = [{ key: 'created_at', label: '时间', required: true, sortKey: 'createdAt' }, { key: 'operator', label: '操作人' }, { key: 'action', label: '动作', required: true }, { key: 'object', label: '对象' }, { key: 'detail', label: '详情' }]; const fields = state.fieldSchemas?.audit?.fields; if (!Array.isArray(fields) || !fields.length) return columns; const allowed = new Set(fields.map(field => String(field.key || '').trim())); return columns.filter(column => column.required || allowed.has(column.key)); }
+  function auditStorageKey() { return `tradepulse.listLayout.audit.${state.data?.user?.id || 'anonymous'}`; }
+  function restoreAuditListLayout() { const columns = auditColumns(); state.auditListLayout = listWidget.loadPreferences(auditStorageKey(), undefined, columns); if (!['created_desc','created_asc','action_asc','operator_asc'].includes(state.auditListLayout.sortPreset)) state.auditListLayout = { ...state.auditListLayout, sortPreset: 'created_desc' }; if ($('#auditSort')) $('#auditSort').value = state.auditListLayout.sortPreset; const host = $('#auditColumnSettingsPanel'); if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.auditListLayout, title: '审计列设置' }); }
+  function moveAuditListColumn(key, move) { const columns = auditColumns(); const prefs = listWidget.normalizePreferences(state.auditListLayout, columns); const order = [...prefs.columnOrder]; const index = order.indexOf(key); const next = index + (move === 'up' ? -1 : 1); if (index < 0 || next < 0 || next >= order.length) return; [order[index], order[next]] = [order[next], order[index]]; state.auditListLayout = listWidget.savePreferences(auditStorageKey(), { ...prefs, columnOrder: order }, undefined, columns); restoreAuditListLayout(); renderAuditList(); }
+  function resetAuditListLayout() { const columns = auditColumns(); state.auditListLayout = listWidget.savePreferences(auditStorageKey(), listWidget.defaultPreferences(columns), undefined, columns); restoreAuditListLayout(); renderAuditList(); }
+  function closeAuditColumnSettings() { $('#auditColumnSettingsPanel')?.classList.add('hidden'); $('#auditColumnSettings')?.setAttribute('aria-expanded', 'false'); }
+  function renderAuditList() { const root = $('#auditTable'); if (!root || !can('view_users')) return; const columns = auditColumns(); const prefs = state.auditListLayout || listWidget.defaultPreferences(columns); const rows = (state.data.auditLog || []).map(row => ({ created_at: esc(shortDate(row.created_at, true)), operator: esc(auditOperator(row)), action: `<strong>${esc(row.action)}</strong>`, object: `${esc(row.entity_type)} · ${esc(row.entity_id || '—')}`, detail: `<span class="subtle">${esc(String(row.detail_json || '').slice(0, 140))}</span>`, _sort: { created: String(row.created_at || ''), action: String(row.action || ''), operator: String(auditOperator(row) || '') } })); const key = prefs.sortPreset?.startsWith('action') ? 'action' : prefs.sortPreset?.startsWith('operator') ? 'operator' : 'created'; const dir = prefs.sortPreset === 'created_asc' ? 1 : (prefs.sortPreset === 'created_desc' ? -1 : 1); rows.sort((a,b) => (a._sort[key] < b._sort[key] ? -1 : a._sort[key] > b._sort[key] ? 1 : 0) * dir); rows.forEach(row => delete row._sort); root.innerHTML = listWidget.renderTable({ columns, rows, preferences: prefs, attrs: 'data-list-page="audit"', emptyText: '暂无审计记录' }); }
 
   function renderManagerTaskSettings() {
     const panel = $('#managerTaskSettingsPanel');
@@ -15512,6 +15514,7 @@
       else closeManagerRisksColumnSettings();
       return;
     }
+    if (event.target.closest('#auditColumnSettings')) { const panel = $('#auditColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreAuditListLayout(); return; }
     if (event.target.closest('#maintenanceRunsColumnSettings')) {
       const panel = $('#maintenanceRunsColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreMaintenanceRunsListLayout();
       return;
@@ -15597,6 +15600,8 @@
         }
       } else if (columnMove.closest('#correctionHistoryColumnSettingsPanel')) {
         moveCorrectionHistoryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#auditColumnSettingsPanel')) {
+        moveAuditListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -15623,6 +15628,7 @@
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { state.protectedCustomers.listLayout = listWidget.defaultPreferences(protectedCustomerColumns()); listWidget.savePreferences(protectedListLayoutKey(), state.protectedCustomers.listLayout, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); renderProtectedCustomers(); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { state.maintenanceRunsListLayout = listWidget.defaultPreferences(maintenanceRunsColumns()); listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns()); restoreMaintenanceRunsListLayout(); renderMaintenanceRuns(); }
+      else if (event.target.closest('#auditColumnSettingsPanel')) resetAuditListLayout();
       else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) resetCorrectionHistoryListLayout();
       else resetCustomerListLayout();
       return;
@@ -15648,6 +15654,7 @@
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { $('#protectedColumnSettingsPanel')?.classList.add('hidden'); $('#protectedColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { $('#maintenanceRunsColumnSettingsPanel')?.classList.add('hidden'); $('#maintenanceRunsColumnSettings')?.setAttribute('aria-expanded', 'false'); }
+      else if (event.target.closest('#auditColumnSettingsPanel')) closeAuditColumnSettings();
       else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) closeCorrectionHistoryColumnSettings();
       else closeCustomerColumnSettings();
       return;
@@ -16515,6 +16522,7 @@
       saveManagerMetricsListLayout();
       renderManagerMetrics();
     }
+    if (event.target.id === 'auditSort') { state.auditListLayout = { ...state.auditListLayout, sortPreset: event.target.value }; state.auditListLayout = listWidget.savePreferences(auditStorageKey(), state.auditListLayout, undefined, auditColumns()); renderAuditList(); }
     if (event.target.id === 'maintenanceRunsSort') {
       state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: event.target.value };
       if (listWidget?.savePreferences) state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns());
@@ -16705,6 +16713,7 @@
     if ($('#viewSub')) $('#viewSub').textContent = viewSubtitle(canonicalView);
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
     document.body.classList.toggle('access-admin-active', canonicalView === 'users');
+    if (canonicalView === 'users') restoreAuditListLayout();
     if (canonicalView === 'pool') renderIntake();
       if (canonicalView === 'pool') {
         void initializeAuthorizedBusinessFilters('intake', { force: viewChanged });
@@ -16860,6 +16869,7 @@
         toggleTeamListColumn('team_collaboration', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#protectedColumnSettingsPanel')) {
         toggleProtectedCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#auditColumnSettingsPanel')) { const columns = auditColumns(); const prefs = listWidget.normalizePreferences(state.auditListLayout, columns); const visible = new Set(prefs.visibleColumns); const key = event.target.dataset.listColumnToggle || ''; if (event.target.checked) visible.add(key); else visible.delete(key); state.auditListLayout = listWidget.savePreferences(auditStorageKey(), { ...prefs, visibleColumns: [...visible] }, undefined, columns); renderAuditList();
       } else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) {
         const columns = maintenanceRunsColumns(); const key = event.target.dataset.listColumnToggle || '';
         const prefs = listWidget.normalizePreferences(state.maintenanceRunsListLayout, columns); const visible = new Set(prefs.visibleColumns); if (event.target.checked) visible.add(key); else visible.delete(key);

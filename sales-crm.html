@@ -860,7 +860,7 @@
             </form>
           </article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
-          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">操作记录</p><h2>关键操作审计</h2></div><span class="panel-note">仅管理员可见</span></div><div id="auditTable" class="data-table"></div></article>
+          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">操作记录</p><h2>关键操作审计</h2></div><div class="toolbar"><select id="auditSort" aria-label="审计排序"><option value="created_desc">最近优先</option><option value="created_asc">最早优先</option><option value="action_asc">动作正序</option><option value="operator_asc">操作人正序</option></select><button id="auditColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="auditColumnSettingsPanel">列设置</button><div id="auditColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="审计列设置"></div><span class="panel-note">仅管理员可见</span></div></div><div id="auditTable" class="data-table"></div></article>
         </section>
       </section>
 
