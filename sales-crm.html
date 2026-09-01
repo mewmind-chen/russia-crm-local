@@ -133,6 +133,19 @@
               <div><p class="eyebrow">MARKET SIGNAL</p><h2>国家转化与价值</h2></div>
               <button class="text-button" data-go="markets">深度分析</button>
             </div>
+            <div class="toolbar dashboard-country-list-toolbar">
+              <label class="sr-only" for="dashboardCountrySort">国家转化与价值排序</label>
+              <select id="dashboardCountrySort" aria-label="国家转化与价值排序">
+                <option value="value_per_account_desc">单客毛利优先</option>
+                <option value="accounts_desc">客户数优先</option>
+                <option value="reply_rate_desc">回复率优先</option>
+                <option value="rfq_rate_desc">询价率优先</option>
+                <option value="order_rate_desc">首单率优先</option>
+                <option value="country_asc">国家名称</option>
+              </select>
+              <button id="dashboardCountryColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="dashboardCountryColumnSettingsPanel">列设置</button>
+              <div id="dashboardCountryColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="国家转化与价值列表列设置"></div>
+            </div>
             <div id="countrySnapshot" class="data-table compact"></div>
           </article>
           <article class="panel span-5">

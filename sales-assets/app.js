@@ -111,6 +111,7 @@
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     notificationsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    dashboardCountryListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -273,7 +274,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -306,6 +307,9 @@
       }
       if (state.data && state.view === 'customers') {
         renderCustomers();
+      }
+      if (state.data && state.view === 'dashboard') {
+        renderDashboard();
       }
       if (state.data && state.view === 'contacts') {
         renderUnifiedPeople();
@@ -772,6 +776,98 @@
     state.customerFilters = defaultCustomerFilters();
   }
   function saveCustomerFilters() {}
+  function dashboardCountryColumnDefinitions() {
+    const columns = [
+      { key: 'country', label: '国家', required: true, className: 'col-country', sortKey: 'country' },
+      { key: 'accounts', label: '客户', className: 'col-accounts', sortKey: 'accounts' },
+      { key: 'reply_rate', label: '回复率', className: 'col-rate', sortKey: 'replyRate' },
+      { key: 'rfq_rate', label: '询价率', className: 'col-rate', sortKey: 'rfqRate' },
+      { key: 'order_rate', label: '首单率', className: 'col-rate', sortKey: 'orderRate' },
+      { key: 'value_per_account', label: '单客毛利', className: 'col-value', sortKey: 'valuePerAccount' },
+    ];
+    const schemaFields = state.fieldSchemas?.dashboard?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function dashboardCountryListLayoutStorageKey() {
+    return `tradepulse.listLayout.dashboard_country.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultDashboardCountryListLayout() {
+    const columns = dashboardCountryColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'value_per_account_desc' };
+  }
+  function restoreDashboardCountryListLayout() {
+    const columns = dashboardCountryColumnDefinitions();
+    state.dashboardCountryListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(dashboardCountryListLayoutStorageKey(), undefined, columns)
+      : defaultDashboardCountryListLayout();
+    const allowedSorts = ['value_per_account_desc', 'accounts_desc', 'reply_rate_desc', 'rfq_rate_desc', 'order_rate_desc', 'country_asc'];
+    if (!allowedSorts.includes(state.dashboardCountryListLayout.sortPreset)) {
+      state.dashboardCountryListLayout = {
+        ...state.dashboardCountryListLayout,
+        sortPreset: 'value_per_account_desc',
+      };
+    }
+    if ($('#dashboardCountrySort')) $('#dashboardCountrySort').value = state.dashboardCountryListLayout.sortPreset;
+    renderDashboardCountryColumnSettings();
+  }
+  function saveDashboardCountryListLayout() {
+    const columns = dashboardCountryColumnDefinitions();
+    state.dashboardCountryListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(dashboardCountryListLayoutStorageKey(), state.dashboardCountryListLayout, undefined, columns)
+      : state.dashboardCountryListLayout;
+    renderDashboardCountryColumnSettings();
+  }
+  function renderDashboardCountryColumnSettings() {
+    const host = $('#dashboardCountryColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '国家转化与价值列设置',
+      columns: dashboardCountryColumnDefinitions(),
+      preferences: state.dashboardCountryListLayout,
+    });
+  }
+  function closeDashboardCountryColumnSettings() {
+    $('#dashboardCountryColumnSettingsPanel')?.classList.add('hidden');
+    $('#dashboardCountryColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openDashboardCountryColumnSettings() {
+    renderDashboardCountryColumnSettings();
+    $('#dashboardCountryColumnSettingsPanel')?.classList.remove('hidden');
+    $('#dashboardCountryColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetDashboardCountryListLayout() {
+    state.dashboardCountryListLayout = { ...defaultDashboardCountryListLayout(), sortPreset: 'value_per_account_desc' };
+    saveDashboardCountryListLayout();
+    if ($('#dashboardCountrySort')) $('#dashboardCountrySort').value = 'value_per_account_desc';
+    renderDashboard();
+  }
+  function moveDashboardCountryListColumn(key, direction) {
+    const columns = dashboardCountryColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.dashboardCountryListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.dashboardCountryListLayout = { ...state.dashboardCountryListLayout, columnOrder: order };
+    saveDashboardCountryListLayout();
+    renderDashboard();
+  }
+  function toggleDashboardCountryListColumn(key, visible) {
+    const columns = dashboardCountryColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.dashboardCountryListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.dashboardCountryListLayout = { ...state.dashboardCountryListLayout, visibleColumns: [...current] };
+    saveDashboardCountryListLayout();
+    renderDashboard();
+  }
   function customerListColumnDefinitions() {
     const columns = [
       { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company' },
@@ -2423,6 +2519,7 @@
       };
       restoreCustomerFilters();
       restoreCustomerListLayout();
+      restoreDashboardCountryListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -2850,13 +2947,41 @@
     return state.data.countryReport.filter(item => names.has(item.country));
   }
   function renderCountrySnapshot(accounts) {
-    const rows = countryReportFor(accounts).slice(0, 5);
-    $('#countrySnapshot').innerHTML = table(
-      ['国家', '客户', '回复率', '询价率', '首单率', '单客毛利'],
-      rows.map(row => [
-        `<strong>${esc(row.country)}</strong>`, row.accounts, ratePill(row.replyRate), ratePill(row.rfqRate), ratePill(row.orderRate), money(row.valuePerAccount),
-      ]),
-    );
+    const root = $('#countrySnapshot');
+    if (!root) return;
+    const preset = state.dashboardCountryListLayout?.sortPreset || 'value_per_account_desc';
+    const sorters = {
+      value_per_account_desc: (left, right) => Number(right.valuePerAccount || 0) - Number(left.valuePerAccount || 0),
+      accounts_desc: (left, right) => Number(right.accounts || 0) - Number(left.accounts || 0),
+      reply_rate_desc: (left, right) => Number(right.replyRate || 0) - Number(left.replyRate || 0),
+      rfq_rate_desc: (left, right) => Number(right.rfqRate || 0) - Number(left.rfqRate || 0),
+      order_rate_desc: (left, right) => Number(right.orderRate || 0) - Number(left.orderRate || 0),
+      country_asc: (left, right) => String(left.country || '').localeCompare(String(right.country || ''), 'zh-CN'),
+    };
+    const sorter = sorters[preset] || sorters.value_per_account_desc;
+    const rows = countryReportFor(accounts).slice().sort((left, right) => sorter(left, right)
+      || String(left.country || '').localeCompare(String(right.country || ''), 'zh-CN')).slice(0, 5);
+    const columns = dashboardCountryColumnDefinitions();
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.dashboardCountryListLayout)
+      : columns;
+    const tableRows = rows.map(row => ({
+      country: `<strong>${esc(row.country)}</strong>`,
+      accounts: row.accounts,
+      reply_rate: ratePill(row.replyRate),
+      rfq_rate: ratePill(row.rfqRate),
+      order_rate: ratePill(row.orderRate),
+      value_per_account: money(row.valuePerAccount),
+    }));
+    root.innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns,
+        rows: tableRows,
+        preferences: state.dashboardCountryListLayout,
+        attrs: 'data-list-page="dashboard_country"',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])));
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
   }
   function ratePill(value) {
     return `<span class="pill ${value < 10 ? 'gray' : value > 35 ? '' : 'amber'}">${Number(value || 0).toFixed(1)}%</span>`;
@@ -13944,6 +14069,11 @@
       else closeCustomerColumnSettings();
       return;
     }
+    if (event.target.closest('#dashboardCountryColumnSettings')) {
+      if ($('#dashboardCountryColumnSettingsPanel')?.classList.contains('hidden')) openDashboardCountryColumnSettings();
+      else closeDashboardCountryColumnSettings();
+      return;
+    }
     if (event.target.closest('#peopleColumnSettings')) {
       if ($('#peopleColumnSettingsPanel')?.classList.contains('hidden')) openResearchPeopleColumnSettings();
       else closeResearchPeopleColumnSettings();
@@ -13981,7 +14111,9 @@
     }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
-      if (columnMove.closest('#peopleColumnSettingsPanel')) {
+      if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
+        moveDashboardCountryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#peopleColumnSettingsPanel')) {
         moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#reconColumnSettingsPanel')) {
         moveReconListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
@@ -14001,7 +14133,8 @@
       return;
     }
     if (event.target.closest('[data-list-layout-reset]')) {
-      if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
+      if (event.target.closest('#dashboardCountryColumnSettingsPanel')) resetDashboardCountryListLayout();
+      else if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
       else if (event.target.closest('#reconColumnSettingsPanel')) resetReconListLayout();
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
@@ -14012,7 +14145,8 @@
       return;
     }
     if (event.target.closest('[data-list-layout-close]')) {
-      if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
+      if (event.target.closest('#dashboardCountryColumnSettingsPanel')) closeDashboardCountryColumnSettings();
+      else if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
       else if (event.target.closest('#reconColumnSettingsPanel')) closeReconColumnSettings();
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
@@ -15005,6 +15139,7 @@
         restoreCustomerFilters();
         restoreCustomerListLayout();
       }
+      if (viewChanged && canonicalView === 'dashboard') restoreDashboardCountryListLayout();
       if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
       if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
       if (viewChanged && canonicalView === 'recon') restoreReconListLayout();
@@ -15139,7 +15274,9 @@
   });
   document.addEventListener('change', event => {
     if (event.target.matches('[data-list-column-toggle]')) {
-      if (event.target.closest('#peopleColumnSettingsPanel')) {
+      if (event.target.closest('#dashboardCountryColumnSettingsPanel')) {
+        toggleDashboardCountryListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#peopleColumnSettingsPanel')) {
         toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#reconColumnSettingsPanel')) {
         toggleReconListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
@@ -15204,6 +15341,14 @@
       };
       saveCustomerListLayout();
       void loadCustomerPage({ reset: true });
+    }
+    if (event.target.id === 'dashboardCountrySort') {
+      state.dashboardCountryListLayout = {
+        ...state.dashboardCountryListLayout,
+        sortPreset: event.target.value || 'value_per_account_desc',
+      };
+      saveDashboardCountryListLayout();
+      renderDashboard();
     }
     if (event.target.id === 'peopleSort') {
       state.researchPeopleListLayout = {

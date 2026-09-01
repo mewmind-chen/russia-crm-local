@@ -114,6 +114,25 @@ test('customer list has a server field-schema catalog separate from local layout
   assert.match(app, /state\.fieldSchemas = \{\};/);
 });
 
+test('dashboard country snapshot uses the shared widget with per-user layout and local sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'dashboard',
+    user: { role: 'sales' },
+    permissions: { view_dashboard: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'country', 'accounts', 'reply_rate', 'rfq_rate', 'order_rate', 'value_per_account',
+  ]);
+  assert.match(html, /id="dashboardCountrySort"/);
+  assert.match(html, /id="dashboardCountryColumnSettings"/);
+  assert.match(html, /id="dashboardCountryColumnSettingsPanel"/);
+  assert.match(app, /dashboardCountryListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.dashboard_country/);
+  assert.match(app, /listWidget\.renderTable\([\s\S]*data-list-page="dashboard_country"/);
+  assert.match(app, /event\.target\.id === 'dashboardCountrySort'/);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',
