@@ -49,6 +49,44 @@ test('permission fixture starts an isolated temporary server', async () => {
   }
 });
 
+test('legacy HTML entrypoints stay opt-in while the unified root remains canonical', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-legacy-entrypoints-'));
+  const tempDb = path.join(tempDir, 'crm.db');
+  const keys = ['CRM_DB_PATH', 'NODE_ENV', 'CRM_ENABLE_LEGACY'];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const { createApp } = require('../server');
+  let server;
+  const request = route => fetch(`http://127.0.0.1:${server.address().port}${route}`);
+
+  try {
+    Object.assign(process.env, {
+      CRM_DB_PATH: tempDb,
+      NODE_ENV: 'test',
+      CRM_ENABLE_LEGACY: 'false',
+    });
+    server = createApp().listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    assert.equal((await request('/')).status, 200);
+    assert.equal((await request('/legacy')).status, 404);
+    assert.equal((await request('/tradelead-v2.html')).status, 404);
+    await new Promise(resolve => server.close(resolve));
+
+    process.env.CRM_ENABLE_LEGACY = 'true';
+    server = createApp().listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    assert.equal((await request('/')).status, 200);
+    assert.equal((await request('/legacy')).status, 200);
+    assert.equal((await request('/tradelead-v2.html')).status, 200);
+  } finally {
+    if (server) await new Promise(resolve => server.close(resolve));
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('application startup rejects a development database inside production', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-server-path-guard-'));
   const productionRoot = path.join(tempDir, 'tradepulse-production');
