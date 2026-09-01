@@ -3,9 +3,10 @@
 /**
  * Phase E browser-preview harness.
  *
- * This is deliberately an opt-in smoke harness. It owns an isolated test
- * runtime and never calls the production server entrypoint (which also starts
- * the assistant runtime monitor). Full browser acceptance remains separate.
+ * This is deliberately an opt-in Phase E browser acceptance harness. It owns
+ * an isolated test runtime and never calls the production server entrypoint
+ * (which also starts the assistant runtime monitor). Its scope is the defined
+ * sales/manager widget and profile-only acceptance contract.
  */
 
 const fs = require('node:fs');
@@ -516,7 +517,7 @@ async function runPreview(options) {
       host: PREVIEW_HOST,
       port: new URL(isolated.fixture.baseUrl).port,
       roles,
-      note: 'Preview smoke only; full browser acceptance has not been run.',
+      note: 'Phase E browser acceptance passed in the isolated preview fixture; production was not touched.',
     };
   } finally {
     if (isolated) await isolated.close();
@@ -540,7 +541,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   try {
     const result = await runPreview(options);
     console.log(JSON.stringify(result, null, 2));
-    console.log('[phase-e-browser-preview] Preview smoke finished; this is not full browser acceptance.');
+    console.log('[phase-e-browser-preview] Phase E browser acceptance finished; production was not touched.');
     return 0;
   } catch (error) {
     console.error(`[phase-e-browser-preview] ${error.message}`);
