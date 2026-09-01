@@ -98,7 +98,7 @@
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
 - 当前提交态 `3e55b41`：`lib/sales_crm.js` 12,945 行。
-- `sales-assets/app.js` 当前为 17,276 行。
+- `sales-assets/app.js` 当前为 17,278 行。
 - 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
 
 因此当前结论是：重构已经实质推进，但仍处于渐进迁移中，不能描述为“拆分完成”或“可合并”。
