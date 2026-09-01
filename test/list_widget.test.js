@@ -36,6 +36,31 @@ test('maintenance runs list uses shared widget with non-AI fields and per-user l
   assert.doesNotMatch(app, /maintenanceRunsColumns[\s\S]{0,1800}ai_/i);
 });
 
+test('correction history uses shared widget with manual fields and complete user layout controls', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'correction_history',
+    user: { role: 'sales' },
+    permissions: { correct_own_activity: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'source', 'target', 'milestone', 'reason', 'status', 'operator', 'created_at',
+  ]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+  assert.match(html, /id="correctionHistorySort"/);
+  assert.match(html, /id="correctionHistoryColumnSettings"[\s\S]*aria-controls="correctionHistoryColumnSettingsPanel"/);
+  assert.match(html, /id="activityCorrectionHistoryList"[^>]*data-table/);
+  assert.match(app, /correctionHistoryListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.correction_history/);
+  assert.match(app, /data-list-page="correction_history"/);
+  assert.match(app, /openCorrectionHistoryColumnSettings/);
+  assert.match(app, /moveCorrectionHistoryListColumn/);
+  assert.match(app, /resetCorrectionHistoryListLayout/);
+  assert.match(app, /toggleCorrectionHistoryListColumn/);
+  assert.match(app, /correctionHistoryColumns\(\)/);
+  assert.doesNotMatch(app, /correctionHistoryColumns[\s\S]{0,3000}ai_/i);
+});
+
 test('list widget exposes a browser-safe UMD contract', () => {
   const browserGlobal = {};
   vm.runInNewContext(source, browserGlobal);

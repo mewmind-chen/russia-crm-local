@@ -474,10 +474,10 @@
         </div>
         <div id="activityCorrectionWriteStatus" class="activity-correction-write-status" role="status" aria-live="polite">正在读取更正功能状态…</div>
         <article class="panel activity-correction-workspace">
-          <div class="panel-head"><div><p class="eyebrow">CORRECTION HISTORY</p><h2>更正历史</h2></div><span id="activityCorrectionHistoryCount" class="panel-note"></span></div>
+          <div class="panel-head"><div><p class="eyebrow">CORRECTION HISTORY</p><h2>更正历史</h2></div><div class="toolbar"><select id="correctionHistorySort" aria-label="更正历史排序"><option value="created_desc">最近优先</option><option value="created_asc">最早优先</option></select><button id="correctionHistoryColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="correctionHistoryColumnSettingsPanel">列设置</button><div id="correctionHistoryColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="更正历史列设置"></div><span id="activityCorrectionHistoryCount" class="panel-note"></span></div></div>
           <div id="activityCorrectionHistoryFilters" class="authorized-filter-host" aria-live="polite"></div>
           <p id="activityCorrectionHistoryStatus" class="activity-correction-status" role="status" aria-live="polite"></p>
-          <div id="activityCorrectionHistoryList" class="activity-correction-history-list"><div class="empty">进入页面后读取更正历史</div></div>
+          <div id="activityCorrectionHistoryList" class="activity-correction-history-list data-table compact"><div class="empty">进入页面后读取更正历史</div></div>
           <div id="activityCorrectionHistoryPagination" class="shared-pagination" data-pagination="correction_history"></div>
         </article>
         <article class="panel activity-correction-workspace">

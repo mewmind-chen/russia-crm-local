@@ -236,6 +236,7 @@
     maintenancePreview: null,
     maintenanceRuns: [],
     maintenanceRunsListLayout: null,
+    correctionHistoryListLayout: null,
     protectedCustomers: {
       items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
       page: 1, pageSize: 50, totalPages: 0, hasMore: false,
@@ -286,7 +287,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs', 'correction_history']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -12396,7 +12397,7 @@
     const list = $('#activityCorrectionHistoryList');
     if (list) list.innerHTML = correction.historyLoading && !correction.historyRows.length
       ? '<div class="empty">正在读取更正历史…</div>'
-      : correction.historyRows.map(row => `<article class="activity-correction-history-item"><strong>${esc(correctionProposalCustomer(row, 'source'))} → ${esc(correctionProposalCustomer(row, 'target'))}</strong><p>${esc(row.reason || '未填写原因')}</p><small>${shortDate(row.createdAt, true)} · 已完成</small></article>`).join('') || '<div class="empty">当前筛选下没有更正历史</div>';
+      : renderCorrectionHistoryTable(correction.historyRows);
     const count = $('#activityCorrectionHistoryCount');
     if (count) count.textContent = `已显示 ${correction.historyRows.length} / ${correction.historyTotal} 条（授权范围 ${correction.historyAuthorizedTotal} 条）`;
     renderPagination('#activityCorrectionHistoryPagination', 'correction_history', {
@@ -12406,6 +12407,108 @@
       correction.historyPageSize = pageSize || correction.historyPageSize;
       void loadActivityCorrections({ page: page || 1 });
     });
+  }
+
+  function correctionHistoryColumns() {
+    const columns = [
+      { key: 'source', label: '来源客户', required: true },
+      { key: 'target', label: '目标客户', required: true },
+      { key: 'milestone', label: '里程碑' },
+      { key: 'reason', label: '原因' },
+      { key: 'status', label: '状态' },
+      { key: 'operator', label: '操作人' },
+      { key: 'created_at', label: '时间', sortKey: 'createdAt' },
+    ];
+    const schemaFields = state.fieldSchemas?.correction_history?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function correctionHistoryStorageKey() { return `tradepulse.listLayout.correction_history.${state.data?.user?.id || 'anonymous'}`; }
+  function renderCorrectionHistoryTable(rows) {
+    const columns = correctionHistoryColumns();
+    const prefs = state.correctionHistoryListLayout || listWidget.defaultPreferences(columns);
+    const direction = prefs.sortPreset === 'created_asc' ? 1 : -1;
+    const sorted = [...rows].sort((left, right) => {
+      const created = String(left.createdAt || '').localeCompare(String(right.createdAt || ''));
+      if (created) return created * direction;
+      return String(left.correctionId || '').localeCompare(String(right.correctionId || ''));
+    });
+    const statusLabels = { completed: '已完成', approved: '已通过', rejected: '未通过' };
+    const data = sorted.map(row => ({
+      source: esc(correctionProposalCustomer(row, 'source')),
+      target: esc(correctionProposalCustomer(row, 'target')),
+      milestone: esc(row.milestoneType || row.originalActivityId || '—'),
+      reason: esc(row.reason || '未填写原因'),
+      status: esc(statusLabels[row.status] || row.status || '已完成'),
+      operator: esc(row.actorId || row.reviewerId || '系统'),
+      created_at: esc(shortDate(row.createdAt, true)),
+    }));
+    return listWidget.renderTable({ columns, rows: data, preferences: prefs, attrs: 'data-list-page="correction_history"', emptyText: '当前筛选下没有更正历史' });
+  }
+  function restoreCorrectionHistoryListLayout() {
+    const columns = correctionHistoryColumns();
+    state.correctionHistoryListLayout = listWidget.loadPreferences(correctionHistoryStorageKey(), undefined, columns);
+    if (!['created_desc', 'created_asc'].includes(state.correctionHistoryListLayout.sortPreset)) {
+      state.correctionHistoryListLayout = { ...state.correctionHistoryListLayout, sortPreset: 'created_desc' };
+    }
+    if ($('#correctionHistorySort')) $('#correctionHistorySort').value = state.correctionHistoryListLayout.sortPreset;
+    renderCorrectionHistoryColumnSettings();
+  }
+  function renderCorrectionHistoryColumnSettings() {
+    const host = $('#correctionHistoryColumnSettingsPanel');
+    if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({
+      columns: correctionHistoryColumns(),
+      preferences: state.correctionHistoryListLayout,
+      title: '更正历史列设置',
+    });
+  }
+  function openCorrectionHistoryColumnSettings() {
+    renderCorrectionHistoryColumnSettings();
+    $('#correctionHistoryColumnSettingsPanel')?.classList.remove('hidden');
+    $('#correctionHistoryColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function closeCorrectionHistoryColumnSettings() {
+    $('#correctionHistoryColumnSettingsPanel')?.classList.add('hidden');
+    $('#correctionHistoryColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function resetCorrectionHistoryListLayout() {
+    const columns = correctionHistoryColumns();
+    state.correctionHistoryListLayout = listWidget.savePreferences(
+      correctionHistoryStorageKey(),
+      { ...listWidget.defaultPreferences(columns), sortPreset: 'created_desc' },
+      undefined,
+      columns,
+    );
+    restoreCorrectionHistoryListLayout();
+    renderActivityCorrectionHistoryRows();
+  }
+  function moveCorrectionHistoryListColumn(key, direction) {
+    const columns = correctionHistoryColumns();
+    const prefs = listWidget.normalizePreferences(state.correctionHistoryListLayout, columns);
+    const order = [...prefs.columnOrder];
+    const index = order.indexOf(key);
+    const next = index + (direction === 'up' ? -1 : 1);
+    if (index < 0 || next < 0 || next >= order.length) return;
+    [order[index], order[next]] = [order[next], order[index]];
+    state.correctionHistoryListLayout = listWidget.savePreferences(
+      correctionHistoryStorageKey(), { ...prefs, columnOrder: order }, undefined, columns,
+    );
+    renderActivityCorrectionHistoryRows();
+    renderCorrectionHistoryColumnSettings();
+  }
+  function toggleCorrectionHistoryListColumn(key, visible) {
+    const columns = correctionHistoryColumns();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const prefs = listWidget.normalizePreferences(state.correctionHistoryListLayout, columns);
+    const visibleColumns = new Set(prefs.visibleColumns);
+    if (visible) visibleColumns.add(key); else visibleColumns.delete(key);
+    state.correctionHistoryListLayout = listWidget.savePreferences(
+      correctionHistoryStorageKey(), { ...prefs, visibleColumns: [...visibleColumns] }, undefined, columns,
+    );
+    renderActivityCorrectionHistoryRows();
+    renderCorrectionHistoryColumnSettings();
   }
 
   async function loadActivityCorrections({ reset = false, page } = {}) {
@@ -15413,6 +15516,11 @@
       const panel = $('#maintenanceRunsColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreMaintenanceRunsListLayout();
       return;
     }
+    if (event.target.closest('#correctionHistoryColumnSettings')) {
+      if ($('#correctionHistoryColumnSettingsPanel')?.classList.contains('hidden')) openCorrectionHistoryColumnSettings();
+      else closeCorrectionHistoryColumnSettings();
+      return;
+    }
     if (event.target.closest('#managerMetricColumnSettings')) {
       if ($('#managerMetricColumnSettingsPanel')?.classList.contains('hidden')) openManagerMetricsColumnSettings();
       else closeManagerMetricsColumnSettings();
@@ -15487,6 +15595,8 @@
           renderMaintenanceRuns();
           restoreMaintenanceRunsListLayout();
         }
+      } else if (columnMove.closest('#correctionHistoryColumnSettingsPanel')) {
+        moveCorrectionHistoryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -15513,6 +15623,7 @@
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { state.protectedCustomers.listLayout = listWidget.defaultPreferences(protectedCustomerColumns()); listWidget.savePreferences(protectedListLayoutKey(), state.protectedCustomers.listLayout, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); renderProtectedCustomers(); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { state.maintenanceRunsListLayout = listWidget.defaultPreferences(maintenanceRunsColumns()); listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns()); restoreMaintenanceRunsListLayout(); renderMaintenanceRuns(); }
+      else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) resetCorrectionHistoryListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -15537,6 +15648,7 @@
       else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
       else if (event.target.closest('#protectedColumnSettingsPanel')) { $('#protectedColumnSettingsPanel')?.classList.add('hidden'); $('#protectedColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { $('#maintenanceRunsColumnSettingsPanel')?.classList.add('hidden'); $('#maintenanceRunsColumnSettings')?.setAttribute('aria-expanded', 'false'); }
+      else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) closeCorrectionHistoryColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -16408,6 +16520,7 @@
       if (listWidget?.savePreferences) state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns());
       renderMaintenanceRuns();
     }
+    if (event.target.id === 'correctionHistorySort') { state.correctionHistoryListLayout = { ...state.correctionHistoryListLayout, sortPreset: event.target.value }; state.correctionHistoryListLayout = listWidget.savePreferences(correctionHistoryStorageKey(), state.correctionHistoryListLayout, undefined, correctionHistoryColumns()); renderActivityCorrectionHistoryRows(); }
     if (event.target.id === 'teamProgressSalesSort') {
       state.teamProgressSalesListLayout = { ...state.teamProgressSalesListLayout, sortPreset: event.target.value };
       saveTeamProgressSalesListLayout();
@@ -16645,6 +16758,7 @@
         void initializeAuthorizedBusinessFilters('manager_risks', { force: viewChanged });
       }
       if (canonicalView === 'activityCorrections') {
+        restoreCorrectionHistoryListLayout();
         void initializeActivityCorrectionHistoryFilters({ force: viewChanged });
         void initializeActivityCorrectionProposalFilters({ force: viewChanged });
     }
@@ -16750,6 +16864,8 @@
         const columns = maintenanceRunsColumns(); const key = event.target.dataset.listColumnToggle || '';
         const prefs = listWidget.normalizePreferences(state.maintenanceRunsListLayout, columns); const visible = new Set(prefs.visibleColumns); if (event.target.checked) visible.add(key); else visible.delete(key);
         state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), { ...prefs, visibleColumns: [...visible] }, undefined, columns); renderMaintenanceRuns();
+      } else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) {
+        toggleCorrectionHistoryListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
