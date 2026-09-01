@@ -11,16 +11,16 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@6674cab`，业务提交 `e76ae96` 与治理看板已提交；工作区干净 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@3c9a97f`，业务提交 `3c9a97f` 与治理看板已提交；工作区干净 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`e76ae96`（阶段 E：通用 List widget 协议、客户列表样板与 customers 字段 schema 已落地；并在切换用户时清空旧有效 schema；前置 `3adc1d1` identity/source tags UMD、`8a86425` widget 宿主隔离、`e59bf22` profile-only 只读兼容契约已完成）
+- 当前重构提交：`3c9a97f`（阶段 E：Research People 列表已迁移到 List widget，支持授权列 schema、用户级布局偏好和四种服务端排序；前置 customers 样板与切换用户时清空旧有效 schema 已完成）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
-- 当前验证（2026-09-01）：List widget/字段目录专项 `27/27`、core `npm test` `1677/1677`、全量 `node --test` `2038/2038`；`node --check`、`git diff --check` 均通过，治理与 AI 边界门禁待本治理 checkpoint 一并复核。
+- 当前验证（2026-09-01）：List widget/Research People/字段目录专项 `17/17`、core `npm test` `1678/1678`、全量 `node --test` `2039/2039`；`node --check`、`git diff --check`、治理权威门禁与 AI 边界门禁均通过。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
-- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、customers 服务端字段 schema 与客户列表样板；其余业务列表页仍按页面逐步迁移。
+- 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、customers 样板与 Research People 列表迁移；其余业务列表页仍按页面逐步迁移。
 
 ## 2. 已提交的重构进度
 
@@ -114,28 +114,28 @@
 
 注意：pipeline 行仍由 `business_page_filters.js` 附加 state DTO（未内联），与 accounts/bootstrap/profile 的“无 state DTO”存在边界差异，已通过测试确认前端不依赖该差异。
 
-`after/` 当前业务提交 `c246360`（List widget 客户样板）与前置治理提交已落地；本治理 checkpoint（`CURRENT_STATE.md`、`REFACTOR_ROADMAP.md`、`TARGET_ARCHITECTURE.md`、`GOAL_PROMPT.md` 与本次 session 记录）待提交。生产目录保持只读。
+`after/` 当前业务提交 `3c9a97f`（Research People 列表迁移）与前置治理提交已落地；本治理 checkpoint（`CURRENT_STATE.md`、看板生成器、生成看板与本次 session 记录）随独立治理提交落地。生产目录保持只读。
 
 ## 4. 最近验证结果
 
 在 `/Users/ylf/Desktop/projects/tradepulse-refactor/after` 执行：
 
 - `npm ci`：成功安装；审计报告未升级依赖。
-- `npm test`：全量 core `1677/1677` 通过。
-- `node --test`：全量 `2038/2038` 通过。
-- 本轮 `c246360`：List widget/字段目录专项 `27/27`；`node --check`、`git diff --check` 均通过。未执行浏览器双角色、生产或部署验证；治理与 AI 边界门禁待 checkpoint 收尾时复核。
+- `npm test`：全量 core `1678/1678` 通过。
+- `node --test`：全量 `2039/2039` 通过。
+- 本轮 `3c9a97f`：Research People/List widget/字段目录专项 `17/17`；`node --check`、`git diff --check`、`npm run check:governance-authority`、`npm run check:ai-boundary` 均通过。未执行浏览器双角色、生产或部署验证。
 - 专项：`domain_facades`+`issue103` 9/9；`lifecycle_state_projection` 22/22；`phase_c_account_whitelist_contract` 3/3；`phase_c_intake_whitelist_contract` 3/3；`phase_c_notification_whitelist_contract` 3/3；`phase_c_timeline_audit_whitelist_contract` 3/3；`phase_c_account_scope_contract` 3/3；`phase_c_permission_field_filter_contract` 3/3；`state_projection_time_basis_contract` 3/3；`state_projection_alerts_contract` 3/3；`report_builders_projection_contract` 2/2；`pipeline_key_projection_contract` 1/1；`state_write_update_account_contract` 7/7；`pipeline_row_state_boundary_contract` 2/2；`state_write_recycle_restore_invariant_contract` 5/5；`smoke_seed_plan_basis_contract` 6/6；`smoke_test_data` 5/5；`issue209` 5/5；`state_write_reject_contract` 2/2；`state_write_return_contract` 2/2；`state_write_stage_contract` 4/4；`state_write_stage_precondition_guard_contract` 1/1；`state_write_invariant_contract` 4/4；`state_write_commerce_contract` 5/5；`collaboration_write_commerce_contract` 4/4；`state_write_activity_contract` 4/4；`collaboration_write_plan_points_contract` 6/6；`state_write_claim_manager_contract` 5/5；`state_write_recycle_restore_contract` 4/4；`domain_wiring_*_contract` 15 文件 33 断言全绿（含新增 `domain_wiring_commerce_commit_contract` 5 断言）；报价/订单/阶段边界回归 49/49 + stage guard 组 15/15。
 
 阶段 B 契约测试 18 文件 66 断言 + 阶段 A 接线契约 13 文件 24 断言 + 阶段 C 契约（白名单 accounts 3 + intake 3 + 通知 3 + timeline/audit 3 + 范围等价+结构 3 + 权限→字段→筛选 3 = 18 断言）+ 阶段 D commerce 契约（幂等保留 4 + 行级写 4 + 金额/币种/毛利校验 2 + commit 服务 5 = 15 断言）（含共享结构化断言助手 `test/helpers/lifecycle_gate_contract.js`）。
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
-当前测试结论是“绿灯”。本轮新增 List widget/字段目录专项 `27/27`，core `1677/1677`，全量 `2038/2038`。旧文档中的 1353/1353 或 1361/1364 只属于历史 checkpoint，不能作为当前完成证据。
+当前测试结论是“绿灯”。本轮 Research People/List widget/字段目录专项 `17/17`，core `1678/1678`，全量 `2039/2039`。旧文档中的 1353/1353、1361/1364、1677/1677 或 2038/2038 只属于历史 checkpoint，不能作为当前完成证据。
 
 ## 5. 当前阶段判断
 
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
-- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；本轮新增通用 `list-widget.js`、customers 字段 schema 与客户列表列设置样板（列显隐/顺序、用户级偏好、服务端排序预设）。阶段 E 仍未完成，其他列表页迁移和浏览器双角色验收待做。
+- 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 customers 与 Research People 列表，支持授权字段目录、列显隐/顺序、用户级偏好和服务端排序预设。阶段 E 仍未完成，其他列表页迁移和浏览器双角色验收待做。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；`sales_crm.js` 12,883 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
