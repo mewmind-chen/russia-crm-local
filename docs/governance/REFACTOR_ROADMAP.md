@@ -2,8 +2,8 @@
 
 更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@6bfa5f0`（未合并）
-状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 已覆盖 Dashboard、Markets、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表；CRM 抽屉非 AI 状态条/事实/主档/时间线已纳入 `crmDrawer` 注册表，默认模式不加载兼容 iframe；权限配置矩阵及事务预览/审核工作区保留专用组件边界，AI 专用列表保持弃用冻结。浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
+执行分支：`codex/frontend-widget-pilot@092d8a0`（未合并）
+状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 已覆盖 Dashboard、Markets、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表；CRM 抽屉非 AI 状态条/事实/主档/时间线已纳入 `crmDrawer` 注册表，复杂 activity timeline 条目（含更正入口与溯源）已下沉至 timeline widget，默认模式不加载兼容 iframe；权限配置矩阵及事务预览/审核工作区保留专用组件边界，AI 专用列表保持弃用冻结。浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
 
@@ -14,7 +14,7 @@
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中（主体完成） | field catalog、schema 渲染、列表/形状白名单；范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`）；按页面权限→字段→筛选合同（`45e0c05`） | P1/P3 嵌套聚合与 S5 export 因泄漏风险暂缓；S6 bootstrap 审计为低价值；仅余可选 legacy customers 形状白名单 |
 | 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |
-| 阶段 E：前端 widgets | 注册表、默认视图、全范围非 AI List widget、CRM 抽屉非 AI 注册表组合与隔离 preview harness 已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` Markets 等多列表迁移；`b1fa1cc` manager_tasks；`807b56c` manager_risks；`ed40d76` manager_metrics；`a52e42b` Team 进度/协作列表；`75a30b7` Insights 人工评价列表；`f1fe7d1` 受保护客户目录；`6001f61` 维护运行记录；`61a6572` 跟进更正历史只读列表；`3e55b41` 审计只读列表；`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表；`79036e5` CRM 抽屉非 AI 区块注册表组合与默认 iframe 边界；`dd650ba` Phase E harness（显式 opt-in、临时 SQLite、loopback、AI 关闭、依赖缺失 fail-closed） | 在具备锁定浏览器依赖的环境运行 harness，完成 sales/manager 浏览器双角色验收；widget body/兼容层继续收敛；CRM 复杂 activity timeline 评估；`app.js` 当前 17,606 行 |
+| 阶段 E：前端 widgets | 注册表、默认视图、全范围非 AI List widget、CRM 抽屉非 AI 注册表组合、复杂 activity timeline widget 与隔离 preview harness 已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` Markets 等多列表迁移；`b1fa1cc` manager_tasks；`807b56c` manager_risks；`ed40d76` manager_metrics；`a52e42b` Team 进度/协作列表；`75a30b7` Insights 人工评价列表；`f1fe7d1` 受保护客户目录；`6001f61` 维护运行记录；`61a6572` 跟进更正历史只读列表；`3e55b41` 审计只读列表；`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表；`79036e5` CRM 抽屉非 AI 区块注册表组合与默认 iframe 边界；`092d8a0` 复杂 activity timeline 条目 widget 化（权限/溯源由宿主注入，保留 inline fallback）；`dd650ba` Phase E harness（显式 opt-in、临时 SQLite、loopback、AI 关闭、依赖缺失 fail-closed） | 在具备锁定浏览器依赖的环境运行 harness，完成 sales/manager 浏览器双角色验收；旧入口兼容层继续评估；`app.js` 当前 17,646 行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
 | 阶段 G：兼容层收尾 | 未开始 | - | 等前述阶段稳定后执行 |
 
@@ -133,7 +133,7 @@
 ### 目标
 把“新壳 iframe + 旧版 `Index.html` 双用途页面”组合下的客户完整资料收敛为统一壳内的 widget 组合视图，并让整个前端变成“模块化、自由搭建、自由选择显示内容”的架构；所有业务列表页统一使用 List widget，后续前端 issue 只改对应 widget。
 
-### 现状（已核对代码，截至 `79036e5`；业务切片含全范围非 AI List widget 与专用组件例外）
+### 现状（已核对代码，截至 `092d8a0`；业务切片含全范围非 AI List widget、复杂 activity timeline widget 与专用组件例外）
 - 正式入口 `/` 返回统一壳 `sales-crm.html`（`server.js:72`）；`/sales` 是 302 重定向到 `/`（`lib/sales_crm.js:5044`）。
 - `sales-crm.html#customerProfileView` 默认由 `sales-assets/widget-registry.js` 组装 customerProfile widget 集合；仅 `profileView=legacy` 显式回退到 `/development-workbench?...` iframe 兼容路径。
 - `/development-workbench` 由 `server.js` 返回旧版 `Index.html`；profile-only 路径已由 `e59bf22` 约束为只读兼容入口，旧工作台与兼容资料页仍按 query 区分。
@@ -208,8 +208,8 @@
 11. 阶段 C 次片：`5e992fe` 把 intake 页（`queryIntakeFlowPage`，intake/lead_flow）从递归黑名单切到新字段级白名单 `contactSafeIntakeRecord`（`CONTACT_SAFE_INTAKE_KEYS` 镜像黑名单保留的全部键；contact_*/evidence/report_url/decision_reason/return_reason 继续隐藏），等价 + API 行为契约锁定。全量 1949/1949 绿灯。续：通知/评估/bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
 12. 阶段 C 通知片：`1835f73` 把通知页（`listNotificationRows`）从递归黑名单切到新字段级白名单 `contactSafeNotificationRecord`（镜像黑名单保留的全部键；title/detail 属 CONTACT_KEYS，对无 view_contacts 一并剥离，忠实镜像），sales 收件人裁剪保持。全量 1952/1952 绿灯。续：evaluation/db bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
 13. 阶段 C S3 形状：`38bfe7d` 建 timeline/auditLog 字段级白名单（timeline 剥 copy 字段、provenance 泄漏校验；audit 剥 action），等价/泄漏契约 3/3，为 S4/S6 可复用形状。S5（export）审计发现 users 形状经黑名单保留 password_hash/password_salt——判定暂缓（或先修合规）。全量 1955/1955 绿灯。续：S6（db bootstrap）→ S4（recycle-profile）。
-14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD、`c246360` List widget 协议、`ed40d76` 主管指标列表、`a52e42b` Team 三类业务列表、`75a30b7` Insights 人工评价列表、`f1fe7d1` 受保护客户目录、`6001f61` 维护运行记录、`61a6572` 跟进更正历史、`3e55b41` 审计只读列表、`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表、`79036e5` CRM 抽屉非 AI 注册表组合与默认 iframe 边界均已落地；本轮列表/访问控制/API 定向 `62/62`、widget/抽屉/iframe 定向 `105/105`，core `npm test` `1716/1716`、全量 `node --test` `2078/2078`，`node --check`、diff check 通过；治理/AI boundary 将在本 checkpoint 收口。权限配置矩阵、事务预览/审核工作区明确为专用组件；AI 功能弃用冻结。阶段 E 仍进行中，浏览器双角色验收待执行。
+14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD、`c246360` List widget 协议、`ed40d76` 主管指标列表、`a52e42b` Team 三类业务列表、`75a30b7` Insights 人工评价列表、`f1fe7d1` 受保护客户目录、`6001f61` 维护运行记录、`61a6572` 跟进更正历史、`3e55b41` 审计只读列表、`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表、`79036e5` CRM 抽屉非 AI 注册表组合与默认 iframe 边界、`092d8a0` 复杂 activity timeline 条目 widget 化均已落地；本轮列表/访问控制/API 定向 `62/62`、widget/抽屉/iframe + timeline 定向全部通过，core `npm test` 与全量 `node --test` 结果以本轮 session 记录为准，`node --check`、diff check 通过；权限配置矩阵、事务预览/审核工作区明确为专用组件；AI 功能弃用冻结。阶段 E 仍进行中，浏览器双角色验收待执行。
 
-下一可执行动作：先收口全量回归与治理门禁；在具备锁定浏览器依赖的环境运行 Phase E harness，完成 sales/manager 双角色默认 customerProfile 与 profile-only 只读兼容验收；随后评估 CRM 复杂 activity timeline 与剩余兼容层。列表迁移及 CRM 抽屉非 AI 注册表组合已完成，AI 功能继续弃用冻结。
+下一可执行动作：收口本轮全量回归与治理门禁；在具备锁定浏览器依赖的环境运行 Phase E harness，完成 sales/manager 双角色默认 customerProfile 与 profile-only 只读兼容验收；随后评估剩余旧入口兼容层。列表迁移、CRM 抽屉非 AI 注册表组合与复杂 activity timeline 展示层已完成，AI 功能继续弃用冻结。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。
