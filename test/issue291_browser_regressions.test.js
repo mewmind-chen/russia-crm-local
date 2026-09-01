@@ -51,7 +51,7 @@ test('identity warnings disable intake actions and expose only the public hint',
 });
 
 test('manager task dates have separate due and trigger columns', () => {
-  const renderer = section(app, 'function renderManagerTasks', 'function renderManagerRisks');
+  const renderer = section(app, 'function renderManagerTasks()', 'function renderManagerRisks()');
   assert.match(renderer, /due_at:/);
   assert.match(renderer, /triggered_at:/);
 });

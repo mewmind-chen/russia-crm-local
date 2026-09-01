@@ -169,6 +169,21 @@ test('manager tasks list uses shared widget with per-user layout and local sorti
   ]);
 });
 
+test('manager risks list uses shared widget with an independent user layout', () => {
+  assert.match(html, /id="managerRiskSort"/);
+  assert.match(html, /id="managerRiskColumnSettings"/);
+  assert.match(html, /id="managerRiskColumnSettingsPanel"/);
+  assert.match(app, /managerRisksListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.manager_risks/);
+  assert.match(app, /data-list-page="manager_risks"/);
+  assert.match(app, /managerRisksColumnDefinitions/);
+  assert.match(app, /sortedManagerRiskRows/);
+  assert.ok(fieldCatalog.listFieldPages().includes('manager_risks'));
+  assert.deepEqual(fieldCatalog.FIELDS_CATALOG.manager_risks.map(field => field.key), [
+    'company', 'customer_id', 'status', 'owner', 'reason', 'due_at', 'triggered_at',
+  ]);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

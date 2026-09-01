@@ -116,6 +116,7 @@
     marketsCohortListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     marketsSegmentsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     managerTasksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    managerRisksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -278,7 +279,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -338,6 +339,9 @@
       }
       if (state.data && state.view === 'notifications') {
         renderNotifications();
+      }
+      if (state.data && state.view === 'managerMetrics') {
+        renderManagerMetrics();
       }
     });
   }
@@ -2807,6 +2811,7 @@
       restoreMarketsCohortListLayout();
       restoreMarketsSegmentsListLayout();
       restoreManagerTasksListLayout();
+      restoreManagerRisksListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -6824,7 +6829,7 @@
     return `<button class="text-button" type="button" data-manager-task-id="${esc(task.id)}">${esc(label)} →</button>`;
   }
 
-  function managerTasksColumnDefinitions() {
+  function managerTaskColumnDefinitions(pageKey = 'manager_tasks') {
     const columns = [
       { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'companyName' },
       { key: 'customer_id', label: '客户ID', className: 'col-id', sortKey: 'customerId' },
@@ -6835,10 +6840,16 @@
       { key: 'triggered_at', label: '触发时间', className: 'col-date', sortKey: 'triggeredAt' },
       { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
     ];
-    const schemaFields = state.fieldSchemas?.manager_tasks?.fields;
+    const schemaFields = state.fieldSchemas?.[pageKey]?.fields;
     if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
     const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
     return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function managerTasksColumnDefinitions() {
+    return managerTaskColumnDefinitions('manager_tasks');
+  }
+  function managerRisksColumnDefinitions() {
+    return managerTaskColumnDefinitions('manager_risks');
   }
   function managerTasksListLayoutStorageKey() {
     return `tradepulse.listLayout.manager_tasks.${state.data?.user?.id || 'anonymous'}`;
@@ -6930,6 +6941,88 @@
       return (a < b ? -1 : a > b ? 1 : 0) * direction;
     });
   }
+  function managerRisksListLayoutStorageKey() {
+    return `tradepulse.listLayout.manager_risks.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultManagerRisksListLayout() {
+    const columns = managerRisksColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'due_at_asc' };
+  }
+  function restoreManagerRisksListLayout() {
+    const columns = managerRisksColumnDefinitions();
+    state.managerRisksListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(managerRisksListLayoutStorageKey(), undefined, columns)
+      : defaultManagerRisksListLayout();
+    const allowedSorts = ['due_at_asc', 'due_at_desc', 'status_asc', 'status_desc', 'owner_asc', 'reason_asc', 'company_asc'];
+    if (!allowedSorts.includes(state.managerRisksListLayout.sortPreset)) {
+      state.managerRisksListLayout = { ...state.managerRisksListLayout, sortPreset: 'due_at_asc' };
+    }
+    if ($('#managerRiskSort')) $('#managerRiskSort').value = state.managerRisksListLayout.sortPreset;
+    renderManagerRisksColumnSettings();
+  }
+  function saveManagerRisksListLayout() {
+    const columns = managerRisksColumnDefinitions();
+    state.managerRisksListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(managerRisksListLayoutStorageKey(), state.managerRisksListLayout, undefined, columns)
+      : state.managerRisksListLayout;
+    renderManagerRisksColumnSettings();
+  }
+  function renderManagerRisksColumnSettings() {
+    const host = $('#managerRiskColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '风险明细列设置', columns: managerRisksColumnDefinitions(), preferences: state.managerRisksListLayout,
+    });
+  }
+  function closeManagerRisksColumnSettings() {
+    $('#managerRiskColumnSettingsPanel')?.classList.add('hidden');
+    $('#managerRiskColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openManagerRisksColumnSettings() {
+    renderManagerRisksColumnSettings();
+    $('#managerRiskColumnSettingsPanel')?.classList.remove('hidden');
+    $('#managerRiskColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetManagerRisksListLayout() {
+    state.managerRisksListLayout = { ...defaultManagerRisksListLayout(), sortPreset: 'due_at_asc' };
+    saveManagerRisksListLayout();
+    if ($('#managerRiskSort')) $('#managerRiskSort').value = 'due_at_asc';
+    renderManagerRisks();
+  }
+  function moveManagerRisksListColumn(key, direction) {
+    const columns = managerRisksColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.managerRisksListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.managerRisksListLayout = { ...state.managerRisksListLayout, columnOrder: order };
+    saveManagerRisksListLayout();
+    renderManagerRisks();
+  }
+  function toggleManagerRisksListColumn(key, visible) {
+    const columns = managerRisksColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.managerRisksListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.managerRisksListLayout = { ...state.managerRisksListLayout, visibleColumns: [...current] };
+    saveManagerRisksListLayout();
+    renderManagerRisks();
+  }
+  function sortedManagerRiskRows(rows) {
+    const preset = state.managerRisksListLayout?.sortPreset || 'due_at_asc';
+    const direction = preset.endsWith('_desc') ? -1 : 1;
+    return [...rows].sort((left, right) => {
+      const a = managerTaskSortValue(left, preset);
+      const b = managerTaskSortValue(right, preset);
+      return (a < b ? -1 : a > b ? 1 : 0) * direction;
+    });
+  }
 
   function renderManagerTasks() {
     const root = $('#managerTaskList');
@@ -7000,9 +7093,11 @@
     const drilldown = state.managerMetricDrilldown;
     const filters = $('#managerRiskFilters');
     const pagination = $('#managerRiskPagination');
+    const toolbar = $('#managerRiskToolbar');
     if (drilldown) {
       filters?.classList.add('hidden');
       pagination?.classList.add('hidden');
+      toolbar?.classList.add('hidden');
       if ($('#managerRiskResultCount')) {
         $('#managerRiskResultCount').textContent = drilldown.loading
           ? '正在读取对应客户…'
@@ -7023,17 +7118,36 @@
     }
     filters?.classList.remove('hidden');
     pagination?.classList.remove('hidden');
+    toolbar?.classList.remove('hidden');
     const meta = state.authorizedBusinessLists.manager_risks;
     const rows = managerTaskRows('manager_risks');
+    const visible = sortedManagerRiskRows(rows);
+    const columns = managerRisksColumnDefinitions();
+    const tableRows = visible.map(task => ({
+      company: `<div class="company-cell"><strong>${esc(managerTaskName(task))}</strong></div>`,
+      customer_id: esc(task.customerId || ''),
+      status: `<span class="pill ${task.status === 'overdue' || task.status === 'escalated' ? 'red' : task.status === 'completed' ? 'gray' : 'amber'}">${esc(managerTaskStatusLabels[task.status] || task.status)}</span>`,
+      owner: esc(task.ownerName || userById(task.ownerId)?.name || task.ownerId || '未记录'),
+      reason: esc(managerTaskReasonLabels[task.reason] || task.reason),
+      due_at: `<strong>${esc(shortDate(task.dueAt, true))}</strong>`,
+      triggered_at: esc(shortDate(task.triggeredAt, true)),
+      actions: managerTaskButton(task, '查看历史'),
+    }));
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.managerRisksListLayout)
+      : columns;
+    const renderedTable = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns, rows: tableRows, preferences: state.managerRisksListLayout,
+        attrs: 'data-list-page="manager_risks"', headerAttrs: 'class="manager-risk-list-head"', emptyText: '当前没有待复盘客户',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])), 'data-list-page="manager_risks"');
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取客户风险…</div>'
-      : rows.length
-        ? rows.map(task => `<article class="manager-risk-card">
-          <div><strong>${esc(managerTaskName(task))}</strong><span>${esc(managerTaskReasonLabels[task.reason] || task.reason)} · ${esc(managerTaskStatusLabels[task.status] || task.status)}</span></div>
-          <div><span>负责人 ${esc(task.ownerName || task.ownerId || '未记录')}</span><span>期限 ${esc(shortDate(task.dueAt, true))}</span></div>
-          ${managerTaskButton(task, '查看历史')}
-        </article>`).join('')
+      : visible.length
+        ? `<div class="data-table">${renderedTable}</div>`
         : `<div class="empty">${esc(meta.error || '当前没有待复盘客户')}</div>`;
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
   }
 
   function metricSummary(rows) {
@@ -14606,6 +14720,11 @@
       else closeManagerTasksColumnSettings();
       return;
     }
+    if (event.target.closest('#managerRiskColumnSettings')) {
+      if ($('#managerRiskColumnSettingsPanel')?.classList.contains('hidden')) openManagerRisksColumnSettings();
+      else closeManagerRisksColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
@@ -14632,6 +14751,8 @@
         moveNotificationsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#managerTaskColumnSettingsPanel')) {
         moveManagerTasksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#managerRiskColumnSettingsPanel')) {
+        moveManagerRisksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -14650,6 +14771,7 @@
       else if (event.target.closest('#alertsColumnSettingsPanel')) resetAlertsListLayout();
       else if (event.target.closest('#notificationsColumnSettingsPanel')) resetNotificationsListLayout();
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) resetManagerTasksListLayout();
+      else if (event.target.closest('#managerRiskColumnSettingsPanel')) resetManagerRisksListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -14666,6 +14788,7 @@
       else if (event.target.closest('#alertsColumnSettingsPanel')) closeAlertsColumnSettings();
       else if (event.target.closest('#notificationsColumnSettingsPanel')) closeNotificationsColumnSettings();
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) closeManagerTasksColumnSettings();
+      else if (event.target.closest('#managerRiskColumnSettingsPanel')) closeManagerRisksColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -15521,6 +15644,11 @@
       saveManagerTasksListLayout();
       renderManagerTasks();
     }
+    if (event.target.id === 'managerRiskSort') {
+      state.managerRisksListLayout = { ...state.managerRisksListLayout, sortPreset: event.target.value };
+      saveManagerRisksListLayout();
+      renderManagerRisks();
+    }
     if (event.target.name?.startsWith('permission__') && event.target.closest('#permissionGroupForm')) {
       refreshPermissionGroupSummary(event.target.closest('#permissionGroupForm'));
     }
@@ -15670,6 +15798,7 @@
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
       if (viewChanged && canonicalView === 'managerTasks') restoreManagerTasksListLayout();
+      if (viewChanged && canonicalView === 'managerMetrics') restoreManagerRisksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -15822,6 +15951,8 @@
         toggleNotificationsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#managerTaskColumnSettingsPanel')) {
         toggleManagerTasksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#managerRiskColumnSettingsPanel')) {
+        toggleManagerRisksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }

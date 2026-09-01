@@ -546,7 +546,21 @@
         <article class="panel manager-risk-panel">
           <div class="panel-head">
             <div><p class="eyebrow">客户明细</p><h2>需要处理的明细</h2><p>点击上方团队数字或销售行数字，查看对应客户、最近动作和下一步计划。</p></div>
-            <span id="managerRiskResultCount" class="panel-note"></span>
+            <div id="managerRiskToolbar" class="manager-risk-toolbar">
+              <span id="managerRiskResultCount" class="panel-note"></span>
+              <label class="sr-only" for="managerRiskSort">风险明细排序</label>
+              <select id="managerRiskSort" aria-label="风险明细排序">
+                <option value="due_at_asc">最早期限优先</option>
+                <option value="due_at_desc">最晚期限优先</option>
+                <option value="status_asc">状态正序</option>
+                <option value="status_desc">状态倒序</option>
+                <option value="owner_asc">负责人正序</option>
+                <option value="reason_asc">触发原因正序</option>
+                <option value="company_asc">客户名称正序</option>
+              </select>
+              <button id="managerRiskColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="managerRiskColumnSettingsPanel">列设置</button>
+              <div id="managerRiskColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="风险明细列设置"></div>
+            </div>
           </div>
           <div id="managerRiskList" class="manager-risk-list" aria-live="polite"></div>
           <div id="managerRiskPagination" class="shared-pagination" data-pagination="manager_risks"></div>
