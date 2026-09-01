@@ -79,6 +79,15 @@ test('descriptor table renderer keeps raw cell actions and row attributes', () =
   assert.doesNotMatch(markup, /负责人/);
 });
 
+test('descriptor table renderer preserves an optional header row attribute', () => {
+  const markup = widget.renderTable({
+    columns,
+    rows: [{ company: 'Acme', actions: '打开' }],
+    headerAttrs: 'class="pipeline-list-head"',
+  });
+  assert.match(markup, /<tr class="pipeline-list-head">/);
+});
+
 test('customer list is wired to the shared widget and user layout controls', () => {
   assert.match(html, /sales-assets\/list-widget\.js[^>]*><\/script>/);
   assert.ok(html.indexOf('list-widget.js') < html.indexOf('sales-assets/app.js'));

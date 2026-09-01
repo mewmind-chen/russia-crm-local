@@ -5703,6 +5703,7 @@
         rows: pipelineRows,
         preferences: state.pipelineListLayout,
         attrs: 'class="pipeline-grid" data-list-page="pipeline"',
+        headerAttrs: 'class="pipeline-list-head"',
         emptyText: `当前没有${activeLabel}客户`,
       })
       : rows.length
