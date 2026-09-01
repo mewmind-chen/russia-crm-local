@@ -77,14 +77,16 @@ test('drawer text facts escape labels and values instead of accepting raw HTML',
 
 test('CRM drawer uses website fact rendering and removes the repeated master-data card', () => {
   const drawer = appSource.match(/  function renderDrawer\(\)[\s\S]*?\n  function openModal\(/)?.[0] || '';
-  const master = drawer.match(/masterProfileSectionHtml\(\{[\s\S]*?\n      \}\)\}/)?.[0] || '';
+  const master = functionSource('renderDrawerMasterWidget', 'renderDrawerTimelineWidget');
+  const factsRenderer = functionSource('renderDrawerFactsWidget', 'renderDrawerNextStepWidget');
   const factsCtx = functionSource('drawerFactsContext', 'renderDrawerFactsWidget');
-  // 事实区经 drawer-facts-widget 渲染：fallback 行含官网 website 链接，行为保持
+  // 事实区经 crmDrawer 注册表的 drawer-facts widget 渲染：fallback 行含官网 website 链接，行为保持
   assert.match(drawer, /drawerFactsContext\(account, showTechnicalSources\)/);
-  assert.match(drawer, /renderFactsHtml\(drawerFacts\)/);
+  assert.match(drawer, /renderRegisteredDrawerWidget\('drawer-facts'/);
+  assert.match(factsRenderer, /renderFactsHtml\(ctx\)/);
   assert.match(factsCtx, /\['官网', account\.website, 'website'\]/);
   assert.match(drawer, /factsHtml \|\| drawerFacts\.fallback\.map\(drawerFactMarkup\)/);
-  // 主档区块经 masterProfileSectionHtml 委托：业务卡片组装在调用处，模板在 widget
+  // 主档区块经 masterProfileSectionHtml 委托：业务卡片组装在 widget，模板仍共用
   assert.match(master, /gridClass: 'drawer-master-grid'/);
   assert.doesNotMatch(master, /行业与客户类型/);
   assert.match(master, /企业简介/);
