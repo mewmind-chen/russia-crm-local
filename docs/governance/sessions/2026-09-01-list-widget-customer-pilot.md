@@ -24,7 +24,7 @@
 - 生产 `current/.release-sha`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
 - 生产 `state/state.json.lastSuccessfulSha`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
 - after 分支：`codex/frontend-widget-pilot`
-- 业务提交：`c246360 feat(frontend): add shared list widget customer pilot`
+- 业务提交：`c246360 feat(frontend): add shared list widget customer pilot`；后续 `e76ae96` 在切换用户时清空旧有效 schema，避免权限短暂串用。
 - List widget/字段目录专项：`27/27`
 - `npm test`：`1677/1677`
 - `node --test`：`2038/2038`

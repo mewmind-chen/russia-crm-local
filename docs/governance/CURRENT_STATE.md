@@ -11,11 +11,11 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@c246360`，List widget 客户样板已提交；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@e76ae96`，List widget 客户样板与身份切换 schema reset 已提交；本治理 checkpoint 待提交 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前重构提交：`c246360`（阶段 E：通用 List widget 协议、客户列表样板与 customers 字段 schema 已落地；前置 `3adc1d1` identity/source tags UMD、`8a86425` widget 宿主隔离、`e59bf22` profile-only 只读兼容契约已完成）
+- 当前重构提交：`e76ae96`（阶段 E：通用 List widget 协议、客户列表样板与 customers 字段 schema 已落地；并在切换用户时清空旧有效 schema；前置 `3adc1d1` identity/source tags UMD、`8a86425` widget 宿主隔离、`e59bf22` profile-only 只读兼容契约已完成）
 - 双基线实时核验（2026-09-01）：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`；两者一致，继续以此作为重构唯一双基线。
 - 当前验证（2026-09-01）：List widget/字段目录专项 `27/27`、core `npm test` `1677/1677`、全量 `node --test` `2038/2038`；`node --check`、`git diff --check` 均通过，治理与 AI 边界门禁待本治理 checkpoint 一并复核。
 - 重构分支未合并；本轮未执行浏览器双角色验收、生产验证或部署。
@@ -97,7 +97,7 @@
 规模变化仅表示已经开始拆分，不代表单体拆分完成：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `c246360`：12,883 行。
+- 当前提交态 `e76ae96`：12,883 行。
 - `sales-assets/app.js` 当前为 14,418 行。
 - 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
 
