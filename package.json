@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node scripts/run-core-tests.js",
     "test:ai-legacy": "node scripts/run-core-tests.js --ai",
+    "phase:e:browser-preview": "node scripts/phase-e-browser-preview.js --run",
     "check:ai-boundary": "node scripts/check-ai-boundary.js",
     "check:governance-authority": "node scripts/check-governance-authority.js",
     "board": "node scripts/progress_board.js",
