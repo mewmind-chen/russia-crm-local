@@ -61,6 +61,8 @@ button.metric.alert{background:var(--danger-subtle)}
 .intake-all-confirm{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border-default);border-radius:8px;background:var(--surface-subtle);font-size:13px}
 .dashboard-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.span-8{grid-column:span 8}.span-7{grid-column:span 7}.span-5{grid-column:span 5}.span-4{grid-column:span 4}
 .panel{background:var(--surface-panel);border:1px solid var(--border-default);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+/* Column settings are an anchored overlay; list panels must not clip it. */
+.panel:has(.list-column-settings){position:relative;overflow:visible}
 .panel-head{padding:16px 18px;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center;gap:10px}.panel-head h2{font-size:16px}
 .funnel-chart{width:min(100%,900px);max-width:900px;padding:18px;display:grid;gap:3px}.funnel-row{display:grid;grid-template-columns:84px 1fr 42px 52px;gap:10px;align-items:center;width:100%;height:24px;padding:0 4px;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.funnel-row:hover,.funnel-row:focus-visible{background:var(--surface-page);border-color:transparent;outline:0}.funnel-label{font-size:12.5px;font-weight:500;color:var(--text-secondary)}.funnel-track{height:16px;display:flex;align-items:center;background:transparent;border-radius:0;overflow:visible}.funnel-bar{height:15px;background:linear-gradient(90deg,var(--brand),#22988a);border-radius:4px;min-width:3px}.funnel-row.ghost .funnel-bar{background:#c3d3cf}.funnel-count{font-weight:550;text-align:right;font-size:14px}.funnel-rate{color:var(--text-secondary);font-size:11.5px;text-align:right}.funnel-count,.funnel-rate{font-variant-numeric:tabular-nums}
 .attention-panel{border-top:1px solid var(--danger)}.attention-summary{display:block;margin-top:4px;color:var(--warning);font-size:12px;font-weight:600}.attention-summary.critical{color:var(--danger)}.attention-list{padding:4px 14px 14px}.attention-item{padding:12px 4px;border-bottom:1px solid var(--border-default);background:transparent;display:grid;grid-template-columns:8px 1fr auto;gap:10px;align-items:start;cursor:pointer}.attention-item:last-child{border:0}.attention-item:hover{background:var(--surface-subtle)}.attention-item:hover strong{color:var(--brand)}.severity-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--warning)}.severity-dot.critical,.severity-dot.immediate{background:var(--danger)}.severity-dot.today{background:var(--info)}.attention-item div{display:grid;gap:3px}.attention-item strong{font-size:13px}.attention-item span{color:var(--text-secondary);font-size:12px}.attention-item b{font-size:11px;color:var(--danger);white-space:nowrap}
@@ -1531,8 +1533,7 @@ body[data-app="sales"] .ai-task-events li{padding:7px 14px}
   border-color:color-mix(in srgb,var(--danger) 38%,var(--border-default));box-shadow:none;
 }
 #poolView #intakeSummary .metric.alert strong{color:var(--danger)}
-#poolView .section-intro,
-#poolView .panel > .toolbar:not(.intake-toolbar){display:none}
+#poolView .section-intro{display:none}
 #poolView .studio-pills-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 #poolView #intakeTabs.segmented{max-width:none;border:0;background:transparent;padding:0;gap:6px;box-shadow:none}
 #poolView #intakeTabs button{

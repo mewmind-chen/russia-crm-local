@@ -219,10 +219,10 @@
               <option value="company_asc">公司名称</option>
               <option value="claim_due_asc">领取截止</option>
             </select></label>
-            <button id="intakeColumnSettings" class="button secondary tiny" type="button" aria-expanded="false">列设置</button>
+            <button id="intakeColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="intakeColumnSettingsPanel">列设置</button>
+            <div id="intakeColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="线索列表列设置"></div>
             <span id="intakeAuthorizedResultCount" class="toolbar-count"></span>
           </div>
-          <div id="intakeColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="线索列表列设置"></div>
           <div class="toolbar intake-toolbar hidden">
             <div class="search-box">⌕ <input id="intakeSearch" placeholder="搜索客户昵称、企业、网站、产品或联系人" aria-label="搜索客户昵称、企业、网站、产品或联系人"></div>
             <button id="intakeFilterToggle" class="button secondary tiny" type="button" aria-expanded="false">详细筛选</button>
@@ -280,10 +280,10 @@
               <option value="company">公司名称</option>
             </select>
             <button id="customerColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="customerColumnSettingsPanel">列设置</button>
+            <div id="customerColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="客户列表列设置"></div>
             <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出当前结果</button>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
-          <div id="customerColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="客户列表列设置"></div>
           <div id="customerBulkBar" class="customer-bulk-bar hidden">
             <div class="customer-selection-summary">
               <span id="customerSelectionCount">已选择 0 个客户</span>
@@ -315,9 +315,9 @@
               <option value="reason_asc">原因</option>
             </select></label>
             <button id="recycleColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="recycleColumnSettingsPanel">列设置</button>
+            <div id="recycleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="不对口记录列表列设置"></div>
             <span id="recycleAuthorizedResultCount" class="toolbar-count"></span>
           </div>
-          <div id="recycleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="不对口记录列表列设置"></div>
           <div id="recycleTable" class="data-table"></div>
           <div id="recycleAuthorizedPagination" class="shared-pagination" data-pagination="recycle_bin"></div>
         </article>
@@ -358,9 +358,9 @@
               <option value="company_asc">客户名称</option>
             </select>
             <button id="peopleColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="peopleColumnSettingsPanel">列设置</button>
+            <div id="peopleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="联系人列表列设置"></div>
             <span id="peopleResultCount" class="toolbar-count"></span>
           </div>
-          <div id="peopleColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="联系人列表列设置"></div>
           <div id="unifiedPeopleTable" class="data-table"></div>
           <div id="peoplePagination" class="shared-pagination" data-pagination="contacts"></div>
         </article>
@@ -377,9 +377,9 @@
               <option value="company_asc">客户名称</option>
             </select>
             <button id="reconColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="reconColumnSettingsPanel">列设置</button>
+            <div id="reconColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="Recon 情报列表列设置"></div>
             <span id="reconResultCount" class="toolbar-count"></span>
           </div>
-          <div id="reconColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="Recon 情报列表列设置"></div>
           <div id="unifiedReconTable" class="data-table"></div>
           <div id="reconPagination" class="shared-pagination" data-pagination="recon"></div>
         </article>
@@ -398,9 +398,9 @@
             <option value="company_asc">客户名称</option>
           </select></label>
           <button id="pipelineColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="pipelineColumnSettingsPanel">列设置</button>
+          <div id="pipelineColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="推进列表列设置"></div>
           <span id="pipelineAuthorizedResultCount" class="toolbar-count"></span>
         </div>
-        <div id="pipelineColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="推进列表列设置"></div>
         <div id="pipelineBoard" class="pipeline-command"></div>
         <div id="pipelineAuthorizedPagination" class="shared-pagination" data-pagination="pipeline"></div>
       </section>
@@ -431,10 +431,10 @@
               <option value="company_asc">客户名称</option>
             </select></label>
             <button id="alertsColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="alertsColumnSettingsPanel">列设置</button>
+            <div id="alertsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="今日待办列设置"></div>
             <span class="toolbar-count">同一对象只显示一行，其他原因保留为标签</span>
             <span id="alertsAuthorizedResultCount" class="toolbar-count"></span>
           </div>
-          <div id="alertsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="今日待办列设置"></div>
           <div id="alertTable" class="today-task-list"></div>
           <div id="alertsAuthorizedPagination" class="shared-pagination" data-pagination="alerts"></div>
         </article>
@@ -460,9 +460,9 @@
               <option value="title_asc">通知标题</option>
             </select></label>
             <button id="notificationsColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="notificationsColumnSettingsPanel">列设置</button>
+            <div id="notificationsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="通知列表列设置"></div>
             <span id="notificationResultCount" class="toolbar-count"></span>
           </div>
-          <div id="notificationsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="通知列表列设置"></div>
           <div id="notificationList" class="notification-list" aria-live="polite"></div>
           <div id="notificationsAuthorizedPagination" class="shared-pagination" data-pagination="notifications"></div>
         </article>

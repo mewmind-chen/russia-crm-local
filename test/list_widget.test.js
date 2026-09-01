@@ -10,6 +10,7 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'sales-assets', 'list-widget.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'sales-assets', 'app.css'), 'utf8');
 const widget = require(path.join(root, 'sales-assets', 'list-widget.js'));
 const fieldCatalog = require(path.join(root, 'lib', 'field_catalog.js'));
 
@@ -182,6 +183,27 @@ test('customer list is wired to the shared widget and user layout controls', () 
   assert.match(app, /listWidget\.renderTable\(\{ columns: renderColumns/);
   assert.match(app, /data-list-column-toggle/);
   assert.match(app, /sortPreset/);
+});
+
+test('list column settings overlay is not clipped by its panel container', () => {
+  assert.match(css, /\.panel:has\(\.list-column-settings\)\{position:relative;overflow:visible\}/);
+  assert.match(html, /pipelineColumnSettingsPanel[\s\S]*pipelineAuthorizedResultCount/);
+  assert.match(html, /id="intakeColumnSettings"[^>]*aria-controls="intakeColumnSettingsPanel"/);
+  for (const [buttonId, panelId] of [
+    ['intakeColumnSettings', 'intakeColumnSettingsPanel'],
+    ['customerColumnSettings', 'customerColumnSettingsPanel'],
+    ['recycleColumnSettings', 'recycleColumnSettingsPanel'],
+    ['peopleColumnSettings', 'peopleColumnSettingsPanel'],
+    ['reconColumnSettings', 'reconColumnSettingsPanel'],
+    ['alertsColumnSettings', 'alertsColumnSettingsPanel'],
+    ['notificationsColumnSettings', 'notificationsColumnSettingsPanel'],
+  ]) {
+    const buttonIndex = html.indexOf(`id="${buttonId}"`);
+    const panelIndex = html.indexOf(`id="${panelId}"`);
+    assert.ok(buttonIndex >= 0 && panelIndex > buttonIndex, `${panelId} should follow its button in the toolbar`);
+    assert.ok(panelIndex - buttonIndex < 900, `${panelId} should remain anchored near its button`);
+  }
+  assert.doesNotMatch(css, /#poolView \.panel > \.toolbar:not\(\.intake-toolbar\)\{display:none\}/);
 });
 
 test('customer list has a server field-schema catalog separate from local layout preferences', () => {
@@ -492,6 +514,13 @@ test('intake list uses the shared widget with per-user layout and server sorting
   assert.match(html, /id="intakeColumnSettingsPanel"/);
   assert.match(app, /intakeListLayout/);
   assert.match(app, /tradepulse\.listLayout\.intake/);
+  assert.match(app, /intakeListLayoutStorageKey\(\)/);
+  assert.match(app, /openIntakeColumnSettings/);
+  assert.match(app, /moveIntakeListColumn/);
+  assert.match(app, /toggleIntakeListColumn/);
+  assert.match(app, /resetIntakeListLayout/);
+  assert.match(app, /columnMove\.closest\('#intakeColumnSettingsPanel'\)/);
+  assert.match(app, /event\.target\.closest\('#intakeColumnSettingsPanel'\)/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="intake"/);
   assert.match(app, /listSortRequestValue\(state\.intakeListLayout/);
 });
