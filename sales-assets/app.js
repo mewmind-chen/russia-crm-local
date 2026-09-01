@@ -107,6 +107,7 @@
     intakeListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     alertsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    reconListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     notificationsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
@@ -272,7 +273,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -308,6 +309,9 @@
       }
       if (state.data && state.view === 'contacts') {
         renderUnifiedPeople();
+      }
+      if (state.data && state.view === 'recon') {
+        renderUnifiedRecon();
       }
       if (state.data && state.view === 'recycleBin') {
         renderRecycleBin();
@@ -953,6 +957,96 @@
     state.researchPeopleListLayout = { ...state.researchPeopleListLayout, visibleColumns: [...current] };
     saveResearchPeopleListLayout();
     renderUnifiedPeople();
+  }
+  function reconColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
+      { key: 'score_group', label: '评分 / 分组', className: 'col-score', sortKey: 'score' },
+      { key: 'profile', label: '客户画像', className: 'col-profile', sortKey: 'customer_type' },
+      { key: 'opportunity', label: '需求与机会', className: 'col-opportunity', sortKey: 'opportunity_summary' },
+      { key: 'contacts', label: '联系人', className: 'col-contact', sortKey: 'contacts_summary' },
+      { key: 'report', label: '报告', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.recon?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function reconListLayoutStorageKey() {
+    return `tradepulse.listLayout.recon.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultReconListLayout() {
+    const columns = reconColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'updated_desc' };
+  }
+  function restoreReconListLayout() {
+    const columns = reconColumnDefinitions();
+    state.reconListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(reconListLayoutStorageKey(), undefined, columns)
+      : defaultReconListLayout();
+    const allowedSorts = ['updated_desc', 'score_desc', 'company_asc'];
+    if (!allowedSorts.includes(state.reconListLayout.sortPreset)) {
+      state.reconListLayout = { ...state.reconListLayout, sortPreset: 'updated_desc' };
+    }
+    if ($('#reconSort')) $('#reconSort').value = state.reconListLayout.sortPreset;
+    renderReconColumnSettings();
+  }
+  function saveReconListLayout() {
+    const columns = reconColumnDefinitions();
+    state.reconListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(reconListLayoutStorageKey(), state.reconListLayout, undefined, columns)
+      : state.reconListLayout;
+    renderReconColumnSettings();
+  }
+  function renderReconColumnSettings() {
+    const host = $('#reconColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: 'Recon 情报列表列设置',
+      columns: reconColumnDefinitions(),
+      preferences: state.reconListLayout,
+    });
+  }
+  function closeReconColumnSettings() {
+    $('#reconColumnSettingsPanel')?.classList.add('hidden');
+    $('#reconColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openReconColumnSettings() {
+    renderReconColumnSettings();
+    $('#reconColumnSettingsPanel')?.classList.remove('hidden');
+    $('#reconColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetReconListLayout() {
+    state.reconListLayout = { ...defaultReconListLayout(), sortPreset: 'updated_desc' };
+    saveReconListLayout();
+    if ($('#reconSort')) $('#reconSort').value = 'updated_desc';
+    renderUnifiedRecon();
+    void loadResearch('recon', { reset: true });
+  }
+  function moveReconListColumn(key, direction) {
+    const columns = reconColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.reconListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.reconListLayout = { ...state.reconListLayout, columnOrder: order };
+    saveReconListLayout();
+    renderUnifiedRecon();
+  }
+  function toggleReconListColumn(key, visible) {
+    const columns = reconColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.reconListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.reconListLayout = { ...state.reconListLayout, visibleColumns: [...current] };
+    saveReconListLayout();
+    renderUnifiedRecon();
   }
   function recycleBinColumnDefinitions() {
     const columns = [
@@ -2332,6 +2426,7 @@
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
+      restoreReconListLayout();
       restoreRecycleBinListLayout();
       restorePipelineListLayout();
       restoreNotificationsListLayout();
@@ -2911,6 +3006,9 @@
       if (kind === 'contacts') {
         params.set('sort', state.researchPeopleListLayout.sortPreset || 'sales_ready');
       }
+      if (kind === 'recon') {
+        params.set('sort', state.reconListLayout?.sortPreset || 'updated_desc');
+      }
       const result = await api(
         `/api/sales-crm/research/${config.endpointKind}?${params}`,
         { timeoutMs: 12000 },
@@ -3074,14 +3172,29 @@
     if (loading) { root.innerHTML = loading; $('#reconResultCount').textContent = ''; return; }
     const rows = state.data.reconResults || [];
     $('#reconResultCount').textContent = `已显示 ${rows.length} / ${state.research.recon.total} 份结果`;
-    root.innerHTML = table(['客户','评分/分组','客户画像','需求与机会','联系人','报告'], rows.map(item => [
-      `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
-      `<span class="pill">${esc(item.score || '—')} · ${esc(item.current_pool || '未分池')}</span>`,
-      `<span>${esc(item.customer_type || item.industry || '待确认')}</span>`,
-      `<span>${esc(item.opportunity_summary || item.next_action || '待确认')}</span>`,
-      `<span>${esc(item.contacts_summary || item.contact_name || '未找到')}</span>`,
-      item.job_id && can('view_recon') && can('view_contacts') ? `<a class="text-button" href="/api/report?job_id=${encodeURIComponent(item.job_id)}" target="_blank">查看报告</a>` : '<span class="subtle">已关联档案</span>',
-    ]));
+    const columns = reconColumnDefinitions();
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.reconListLayout)
+      : columns;
+    const tableRows = rows.map(item => ({
+      company: `<div class="company-cell"><strong>${esc(item.company_name || item.customer_id)}</strong><span>${esc(item.customer_id)}</span></div>`,
+      score_group: `<span class="pill">${esc(item.score || '—')} · ${esc(item.current_pool || '未分池')}</span>`,
+      profile: `<span>${esc(item.customer_type || item.industry || '待确认')}</span>`,
+      opportunity: `<span>${esc(item.opportunity_summary || item.next_action || '待确认')}</span>`,
+      contacts: `<span>${esc(item.contacts_summary || item.contact_name || '未找到')}</span>`,
+      report: item.job_id && can('view_recon') && can('view_contacts')
+        ? `<a class="text-button" href="/api/report?job_id=${encodeURIComponent(item.job_id)}" target="_blank">查看报告</a>`
+        : '<span class="subtle">已关联档案</span>',
+    }));
+    root.innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns,
+        rows: tableRows,
+        preferences: state.reconListLayout,
+        attrs: 'data-list-page="recon"',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])));
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
   }
 
   function intakeStatusLabel(status) {
@@ -13836,6 +13949,11 @@
       else closeResearchPeopleColumnSettings();
       return;
     }
+    if (event.target.closest('#reconColumnSettings')) {
+      if ($('#reconColumnSettingsPanel')?.classList.contains('hidden')) openReconColumnSettings();
+      else closeReconColumnSettings();
+      return;
+    }
     if (event.target.closest('#recycleColumnSettings')) {
       if ($('#recycleColumnSettingsPanel')?.classList.contains('hidden')) openRecycleBinColumnSettings();
       else closeRecycleBinColumnSettings();
@@ -13865,6 +13983,8 @@
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
         moveResearchPeopleListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#reconColumnSettingsPanel')) {
+        moveReconListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#recycleColumnSettingsPanel')) {
         moveRecycleBinListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#pipelineColumnSettingsPanel')) {
@@ -13882,6 +14002,7 @@
     }
     if (event.target.closest('[data-list-layout-reset]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) resetResearchPeopleListLayout();
+      else if (event.target.closest('#reconColumnSettingsPanel')) resetReconListLayout();
       else if (event.target.closest('#recycleColumnSettingsPanel')) resetRecycleBinListLayout();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
       else if (event.target.closest('#intakeColumnSettingsPanel')) resetIntakeListLayout();
@@ -13892,6 +14013,7 @@
     }
     if (event.target.closest('[data-list-layout-close]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) closeResearchPeopleColumnSettings();
+      else if (event.target.closest('#reconColumnSettingsPanel')) closeReconColumnSettings();
       else if (event.target.closest('#recycleColumnSettingsPanel')) closeRecycleBinColumnSettings();
       else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
       else if (event.target.closest('#intakeColumnSettingsPanel')) closeIntakeColumnSettings();
@@ -14885,6 +15007,7 @@
       }
       if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
       if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
+      if (viewChanged && canonicalView === 'recon') restoreReconListLayout();
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
@@ -15018,6 +15141,8 @@
     if (event.target.matches('[data-list-column-toggle]')) {
       if (event.target.closest('#peopleColumnSettingsPanel')) {
         toggleResearchPeopleListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#reconColumnSettingsPanel')) {
+        toggleReconListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#recycleColumnSettingsPanel')) {
         toggleRecycleBinListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#pipelineColumnSettingsPanel')) {
@@ -15087,6 +15212,14 @@
       };
       saveResearchPeopleListLayout();
       void loadResearch('contacts', { reset: true });
+    }
+    if (event.target.id === 'reconSort') {
+      state.reconListLayout = {
+        ...state.reconListLayout,
+        sortPreset: event.target.value || 'updated_desc',
+      };
+      saveReconListLayout();
+      void loadResearch('recon', { reset: true });
     }
     if (event.target.id === 'recycleSort') {
       state.recycleBinListLayout = {

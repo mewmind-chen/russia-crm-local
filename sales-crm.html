@@ -355,7 +355,20 @@
       <section id="reconView" class="view">
         <div class="section-intro"><div><p class="eyebrow">Recon 情报</p><h2>Recon 情报</h2><p>所有背调结论均保留公开资料、核验记录和更新时间，并直接关联客户经营档案。</p></div></div>
         <div id="reconAuthorizedFilters" class="authorized-filter-host" aria-live="polite"></div>
-        <article class="panel"><div class="toolbar"><span id="reconResultCount" class="toolbar-count"></span></div><div id="unifiedReconTable" class="data-table"></div><div id="reconPagination" class="shared-pagination" data-pagination="recon"></div></article>
+        <article class="panel">
+          <div class="toolbar recon-list-toolbar">
+            <select id="reconSort" aria-label="Recon 情报排序">
+              <option value="updated_desc">最近更新</option>
+              <option value="score_desc">评分优先</option>
+              <option value="company_asc">客户名称</option>
+            </select>
+            <button id="reconColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="reconColumnSettingsPanel">列设置</button>
+            <span id="reconResultCount" class="toolbar-count"></span>
+          </div>
+          <div id="reconColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="Recon 情报列表列设置"></div>
+          <div id="unifiedReconTable" class="data-table"></div>
+          <div id="reconPagination" class="shared-pagination" data-pagination="recon"></div>
+        </article>
       </section>
 
       <section id="pipelineView" class="view">

@@ -130,7 +130,27 @@ test('research people list uses the shared widget with per-user layout and autho
   assert.match(app, /researchPeopleListLayout/);
   assert.match(app, /tradepulse\.listLayout\.contacts/);
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="contacts"/);
-  assert.match(app, /params\.set\('sort', state\.researchPeopleListLayout\.sortPreset/);
+  assert.match(app, /params\.set\('sort', state\.researchPeopleListLayout\??\.sortPreset/);
+});
+
+test('research recon list uses the shared widget with per-user layout and authorized columns', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'recon',
+    user: { role: 'sales' },
+    permissions: { view_recon: true, view_contacts: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'score_group', 'profile', 'opportunity', 'contacts',
+  ]);
+  assert.match(html, /id="reconSort"/);
+  assert.match(html, /id="reconColumnSettings"/);
+  assert.match(html, /id="reconColumnSettingsPanel"/);
+  assert.match(app, /state\.fieldSchemas\?\.recon\?\.fields/);
+  assert.match(app, /reconListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.recon/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="recon"/);
+  assert.match(app, /params\.set\('sort', state\.reconListLayout\?\.sortPreset/);
 });
 
 test('recycle list uses the shared widget with per-user layout and server sorting', () => {

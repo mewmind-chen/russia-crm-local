@@ -130,6 +130,35 @@ test('research APIs enforce authorized AST, permission version, scope, paginatio
   assert.equal((await legacy.json()).code, 'FILTER_NOT_AUTHORIZED');
 });
 
+test('recon API accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  const insert = fx.db.prepare(`INSERT INTO recon_results
+    (job_id,customer_id,company_name,industry,customer_type,score,updated_at)
+    VALUES (?,?,?,?,?,?,?)`);
+  insert.run('JOB-SORT-HIGH', 'RU-9003', 'Recon Sort High', 'Industrial', 'Manufacturer', '90', '2026-07-30 10:00:00');
+  insert.run('JOB-SORT-LOW', 'RU-9003', 'Recon Sort Low', 'Industrial', 'Manufacturer', '10', '2026-07-31 10:00:00');
+
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/recon', {
+    cookie: fx.adminCookie,
+  });
+  const filters = encodedFilters({
+    search: { operator: 'contains', value: 'Recon Sort' },
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/research/recon?sort=score_desc&permissionVersion=${schema.schema.permissionVersion}&filters=${filters}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.deepEqual(sorted.rows.map(row => row.job_id), ['JOB-SORT-HIGH', 'JOB-SORT-LOW']);
+
+  const invalid = await fx.request(
+    `/api/sales-crm/research/recon?sort=not_allowed&permissionVersion=${schema.schema.permissionVersion}&filters=${filters}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});
+
 test('Recon neither searches nor returns contact-derived data without view_contacts', async t => {
   const fx = await adminFixture();
   t.after(() => fx.close());

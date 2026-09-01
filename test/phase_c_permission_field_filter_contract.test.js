@@ -74,7 +74,7 @@ test('authorized filter schema never leaks a filter the user lacks permission fo
     ['manager', 'manager', {}],
     ['admin', 'admin', {}],
   ];
-  const pages = ['customers', 'intake', 'lead_flow', 'pipeline', 'alerts', 'notifications'];
+  const pages = ['customers', 'intake', 'lead_flow', 'pipeline', 'alerts', 'notifications', 'recon'];
   const definitions = new Map(listFilterDefinitions(db).map(item => [item.key, item]));
   for (const [, role, patch] of variants) {
     const actor = user(role, patch);
