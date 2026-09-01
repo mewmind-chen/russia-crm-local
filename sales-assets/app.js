@@ -5,6 +5,7 @@
   const $$ = selector => Array.from(document.querySelectorAll(selector));
   const uiFormat = window.TradePulseUIFormat;
   const nextActionTime = window.TradePulseNextActionTime;
+  const listWidget = window.TradePulseListWidget;
   // source-tags-widget.js 是 shell 必需资产；缺失时兼容 wrapper fail-closed 为空标签。
   function sourceTagsWidgetApi() {
     return typeof window !== 'undefined' ? window.TradePulseSourceTagsWidget : null;
@@ -102,6 +103,7 @@
       rows: [], page: 1, pageSize: 50, total: 0, totalPages: 0, authorizedTotal: 0,
       hasMore: false, loading: false, loaded: false,
     },
+    customerListLayout: { visibleColumns: [], columnOrder: [], sort: [] },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -264,7 +266,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -294,6 +296,9 @@
       }
       if (state.data && state.view === 'pool') {
         renderIntake();
+      }
+      if (state.data && state.view === 'customers') {
+        renderCustomers();
       }
     });
   }
@@ -742,6 +747,95 @@
     state.customerFilters = defaultCustomerFilters();
   }
   function saveCustomerFilters() {}
+  function customerListColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company' },
+      { key: 'country_industry', label: '国家 / 行业', className: 'col-country', sortKey: 'country' },
+      { key: 'stage', label: '阶段', className: 'col-stage', sortKey: 'stage' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'owner' },
+      { key: 'last_activity', label: '最近动作', className: 'col-last', sortKey: 'last_activity' },
+      { key: 'next_action', label: '下一步', className: 'col-next', sortKey: 'next_action' },
+      { key: 'priority', label: '优先级', className: 'col-priority', sortKey: 'priority' },
+      { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.customers?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => field.key));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function customerListLayoutStorageKey() {
+    return `tradepulse.listLayout.customers.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultCustomerListLayout() {
+    const columns = customerListColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [] };
+  }
+  function restoreCustomerListLayout() {
+    const columns = customerListColumnDefinitions();
+    state.customerListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(customerListLayoutStorageKey(), undefined, columns)
+      : defaultCustomerListLayout();
+    const allowedSorts = ['pending_priority', 'oldest_activity', 'recent_progress', 'newest', 'company'];
+    if (allowedSorts.includes(state.customerListLayout.sortPreset)) {
+      state.customerFilters.sort = state.customerListLayout.sortPreset;
+    }
+    renderCustomerColumnSettings();
+  }
+  function saveCustomerListLayout() {
+    const columns = customerListColumnDefinitions();
+    state.customerListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(customerListLayoutStorageKey(), state.customerListLayout, undefined, columns)
+      : state.customerListLayout;
+    renderCustomerColumnSettings();
+  }
+  function renderCustomerColumnSettings() {
+    const host = $('#customerColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      columns: customerListColumnDefinitions(),
+      preferences: state.customerListLayout,
+    });
+  }
+  function closeCustomerColumnSettings() {
+    $('#customerColumnSettingsPanel')?.classList.add('hidden');
+    $('#customerColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openCustomerColumnSettings() {
+    renderCustomerColumnSettings();
+    $('#customerColumnSettingsPanel')?.classList.remove('hidden');
+    $('#customerColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetCustomerListLayout() {
+    state.customerListLayout = defaultCustomerListLayout();
+    saveCustomerListLayout();
+    renderCustomers();
+  }
+  function moveCustomerListColumn(key, direction) {
+    const columns = customerListColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.customerListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.customerListLayout = { ...state.customerListLayout, columnOrder: order };
+    saveCustomerListLayout();
+    renderCustomers();
+  }
+  function toggleCustomerListColumn(key, visible) {
+    const columns = customerListColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.customerListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.customerListLayout = { ...state.customerListLayout, visibleColumns: [...current] };
+    saveCustomerListLayout();
+    renderCustomers();
+  }
   function selectedValues(select) {
     return select ? [...select.selectedOptions].map(option => option.value).filter(Boolean) : [];
   }
@@ -1638,6 +1732,7 @@
         hasMore: false, loading: false, loaded: false,
       };
       restoreCustomerFilters();
+      restoreCustomerListLayout();
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -4721,50 +4816,62 @@
       $('#customerTable').innerHTML = '<div class="empty">正在加载客户结果…</div>';
       return;
     }
-    $('#customerTable').innerHTML = table(
-      [canSelectCustomers ? '<input id="selectCustomerPage" type="checkbox" aria-label="选择当前页客户">' : '', '客户', '国家 / 行业', '阶段', '负责人', '最近动作', '下一步', '优先级', '状态', '操作'],
-      accounts.map(account => {
-        const alert = alertFor(account.id);
-        const canReturn = canReturnCustomer(account);
-        const canReject = canRejectCustomer(account);
-        const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
-          && !account.intake_item_id && account.source_file === 'CRM手工新增';
-        const lifecycleActions = [
-          state.customerStarView !== 'all' ? `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
-          state.customerStarView !== 'all' && can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
-          canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
-          canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
-          canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
-        ].filter(Boolean);
-        const primaryStatus = customerPrimaryStatus(alert);
-        return [
-          canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-          listEntityMarkup(
-            accountDisplayName(account),
-            [accountIdentity(account), hostLabel(account.website || account.domain)],
-          ),
-          `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
-          statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
-          `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
-          `<span>${relative(account.last_activity_at)}</span>`,
-          `<span class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</span><div class="id">${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</div>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}`,
-          `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span>`,
-          `${primaryStatus.tone === 'good'
-            ? `<span class="good-text">${esc(primaryStatus.label)}</span>`
-            : `<span class="pill ${primaryStatus.tone}">${esc(primaryStatus.label)}</span>`}`,
-          `${lifecycleActions.length ? `<div class="assignment-actions">${rowActionCluster(lifecycleActions.slice(0, 2), lifecycleActions.slice(2))}</div>` : ''}`,
-        ];
-      }).map((row, index) => {
-        row._id = accounts[index].id;
-        row._attrs = `data-customer="${esc(accounts[index].id)}"`;
-        return row;
-      }),
-    );
-    applyTableColumnClasses($('#customerTable'), [
-      canSelectCustomers ? 'col-check' : '',
-      'col-company', 'col-country', 'col-stage', 'col-owner', 'col-last', 'col-next',
-      'col-priority', 'col-status', 'col-actions',
-    ]);
+    const baseColumns = listWidget?.normalizeColumns
+      ? listWidget.normalizeColumns(customerListColumnDefinitions())
+      : customerListColumnDefinitions();
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(baseColumns, state.customerListLayout)
+      : baseColumns;
+    const renderColumns = canSelectCustomers
+      ? [{ key: 'select', label: '', header: '<input id="selectCustomerPage" type="checkbox" aria-label="选择当前页客户">', required: true, sortable: false, className: 'col-check' }, ...visibleColumns]
+      : visibleColumns;
+    const legacyCustomerHeaders = ['优先级', '状态', '操作'];
+    const rows = accounts.map(account => {
+      const alert = alertFor(account.id);
+      const canReturn = canReturnCustomer(account);
+      const canReject = canRejectCustomer(account);
+      const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
+        && !account.intake_item_id && account.source_file === 'CRM手工新增';
+      const lifecycleActions = [
+        state.customerStarView !== 'all' ? `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
+        state.customerStarView !== 'all' && can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
+        canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
+        canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
+        canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
+      ].filter(Boolean);
+      const primaryStatus = customerPrimaryStatus(alert);
+      return {
+        select: canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
+        company: listEntityMarkup(
+          accountDisplayName(account),
+          [accountIdentity(account), hostLabel(account.website || account.domain)],
+        ),
+        country_industry: `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
+        stage: statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
+        owner: `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
+        last_activity: `<span>${relative(account.last_activity_at)}</span>`,
+        next_action: `<span class="${alertHasCode(alert, 'OVERDUE') ? 'overdue-text' : ''}">${esc(account.next_action || '未填写')}</span><div class="id">${storedPlanDateLabel(account.next_action_at, account.next_action_time_basis)}</div>${account.next_action_at ? legacyPlanTimeNote(account.next_action_time_basis) : ''}`,
+        priority: `<span class="priority ${esc(account.priority)}">${esc(account.priority)}</span>`,
+        status: primaryStatus.tone === 'good'
+          ? `<span class="good-text">${esc(primaryStatus.label)}</span>`
+          : `<span class="pill ${primaryStatus.tone}">${esc(primaryStatus.label)}</span>`,
+        actions: `${lifecycleActions.length ? `<div class="assignment-actions">${rowActionCluster(lifecycleActions.slice(0, 2), lifecycleActions.slice(2))}</div>` : ''}`,
+      };
+    });
+    rows.forEach((row, index) => {
+      row._id = accounts[index].id;
+      row._attrs = `data-customer="${esc(accounts[index].id)}"`;
+    });
+    const tablePreferences = { visibleColumns: renderColumns.map(column => column.key), columnOrder: renderColumns.map(column => column.key) };
+    $('#customerTable').innerHTML = listWidget?.renderTable
+      ? listWidget.renderTable({ columns: renderColumns, rows, preferences: tablePreferences, attrs: 'data-list-page="customers"' })
+      : table(renderColumns.map(column => column.header || column.label), rows.map(row => renderColumns.map(column => row[column.key])));
+    const columnClassFallback = {
+      select: 'col-check', company: 'col-company', country_industry: 'col-country', stage: 'col-stage',
+      owner: 'col-owner', last_activity: 'col-last', next_action: 'col-next', priority: 'col-priority',
+      status: 'col-status', actions: 'col-actions',
+    };
+    applyTableColumnClasses($('#customerTable'), renderColumns.map(column => column.className || columnClassFallback[column.key] || ''));
     const pageCheckbox = $('#selectCustomerPage');
     if (pageCheckbox) {
       pageCheckbox.checked = Boolean(selectableIds.length && selectedVisibleCount === selectableIds.length);
@@ -13025,6 +13132,24 @@
       state.customerStarView = customerStarView.dataset.customerStarView || 'all';
       await loadCustomerPage({ reset: true, force: true });
     }
+    if (event.target.closest('#customerColumnSettings')) {
+      if ($('#customerColumnSettingsPanel')?.classList.contains('hidden')) openCustomerColumnSettings();
+      else closeCustomerColumnSettings();
+      return;
+    }
+    const columnMove = event.target.closest('[data-list-column-move]');
+    if (columnMove) {
+      moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      return;
+    }
+    if (event.target.closest('[data-list-layout-reset]')) {
+      resetCustomerListLayout();
+      return;
+    }
+    if (event.target.closest('[data-list-layout-close]')) {
+      closeCustomerColumnSettings();
+      return;
+    }
     const customerStar = event.target.closest('[data-toggle-customer-star]');
     if (customerStar) {
       const customerId = customerStar.dataset.toggleCustomerStar;
@@ -14004,7 +14129,10 @@
     }
       const viewChanged = state.view !== canonicalView;
       state.view = canonicalView;
-      if (viewChanged && canonicalView === 'customers') restoreCustomerFilters();
+      if (viewChanged && canonicalView === 'customers') {
+        restoreCustomerFilters();
+        restoreCustomerListLayout();
+      }
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -14132,6 +14260,10 @@
     if (event.target.id === 'activitySummary') resizeActivitySummary(event.target);
   });
   document.addEventListener('change', event => {
+    if (event.target.matches('[data-list-column-toggle]')) {
+      toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      return;
+    }
     if (event.target.id === 'teamRange') void loadTeamStatus({ reset: true });
     if (event.target.matches('[data-duplicate-review-select]')) {
       if (state.duplicateReviews.pendingAction || state.duplicateReviews.loading) return;
@@ -14172,6 +14304,11 @@
         : '例如：请补充官网与采购联系人';
     }
     if (event.target.id === 'customerSort') {
+      state.customerListLayout = {
+        ...state.customerListLayout,
+        sortPreset: event.target.value || 'pending_priority',
+      };
+      saveCustomerListLayout();
       void loadCustomerPage({ reset: true });
     }
     if (event.target.id === 'filterPermissionScope') {

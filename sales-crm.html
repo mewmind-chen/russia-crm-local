@@ -257,9 +257,11 @@
               <option value="newest">最近创建</option>
               <option value="company">公司名称</option>
             </select>
+            <button id="customerColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="customerColumnSettingsPanel">列设置</button>
             <button id="customerExportBtn" data-permission="export_data" class="button secondary tiny" type="button">导出当前结果</button>
             <span id="customerResultCount" class="toolbar-count"></span>
           </div>
+          <div id="customerColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="客户列表列设置"></div>
           <div id="customerBulkBar" class="customer-bulk-bar hidden">
             <div class="customer-selection-summary">
               <span id="customerSelectionCount">已选择 0 个客户</span>
@@ -815,6 +817,7 @@
   <script src="/sales-assets/source-tags-widget.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/widget-registry.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/next-action-time.js?v=20260824-studio-deck-v1"></script>
+  <script src="/sales-assets/list-widget.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/app.js?v=20260824-studio-deck-v1"></script>
   <script>
     (function () {
