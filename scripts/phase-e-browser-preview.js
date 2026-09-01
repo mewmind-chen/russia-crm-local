@@ -363,12 +363,74 @@ async function browserRoleSmoke(page, baseUrl, credentials) {
   if (capabilities.status !== 200 || capabilities.body?.ok !== true) {
     throw new Error(`${credentials.role} capability bootstrap failed with HTTP ${capabilities.status}`);
   }
+
+  const customerId = credentials.role === 'sales' ? 'RU-9003' : 'RU-9001';
+  const profileResponse = await page.goto(
+    `${baseUrl}/?customer=${encodeURIComponent(customerId)}#customerProfile`,
+    { waitUntil: 'domcontentloaded', timeout: 15000 },
+  );
+  const profileDeadline = Date.now() + 15000;
+  let profile = null;
+  while (Date.now() < profileDeadline) {
+    profile = await page.evaluate(() => {
+      const view = document.querySelector('#customerProfileView');
+      const frame = document.querySelector('#customerProfileFrame');
+      const root = document.querySelector('#profileWidgetRoot');
+      return {
+        active: Boolean(view?.classList.contains('active')),
+        widgetHosts: root?.querySelectorAll(':scope > [data-widget-id]').length || 0,
+        frameSrc: frame?.getAttribute('src') || '',
+        frameHidden: frame?.classList.contains('hidden') || false,
+        title: document.querySelector('#customerProfileTitle')?.textContent || '',
+      };
+    });
+    if (profile.active && profile.widgetHosts > 0 && profile.title.trim()) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (!profile?.active || profile.widgetHosts === 0 || !profile.title.trim()) {
+    throw new Error(`${credentials.role} default customerProfile did not mount its widget collection`);
+  }
+  if (profile.frameSrc || !profile.frameHidden) {
+    throw new Error(`${credentials.role} default customerProfile unexpectedly loaded the legacy iframe`);
+  }
+
+  const profileOnlyResponse = await page.goto(
+    `${baseUrl}/development-workbench?embedded=1&profile=1&assistant=0&prospect=0&theme=studio&customer=${encodeURIComponent(customerId)}`,
+    { waitUntil: 'domcontentloaded', timeout: 15000 },
+  );
+  const profileOnlyDeadline = Date.now() + 15000;
+  let profileOnly = null;
+  while (Date.now() < profileOnlyDeadline) {
+    profileOnly = await page.evaluate(() => {
+      const actions = document.querySelector('.modal-actions');
+      const save = document.querySelector('#saveBtn');
+      return {
+        profileMode: document.body.classList.contains('profile-mode'),
+        modalOpen: document.querySelector('#modalBackdrop')?.classList.contains('show') || false,
+        actionsDisplay: actions ? getComputedStyle(actions).display : '',
+        saveVisible: Boolean(save && getComputedStyle(save).display !== 'none' && save.offsetParent !== null),
+      };
+    });
+    if (profileOnly.profileMode && profileOnly.modalOpen) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (!profileOnly?.profileMode || !profileOnly.modalOpen) {
+    throw new Error(`${credentials.role} profile-only compatibility entry did not open its read-only detail`);
+  }
+  if (profileOnly.actionsDisplay !== 'none' || profileOnly.saveVisible) {
+    throw new Error(`${credentials.role} profile-only compatibility entry exposed a write action`);
+  }
   return {
     role: credentials.role,
     rootStatus,
     capabilityStatus: capabilities.status,
     modules: capabilities.body.modules || [],
     aiStations: Boolean(capabilities.body.features?.aiStations),
+    profile,
+    profileOnly: {
+      ...profileOnly,
+      httpStatus: profileOnlyResponse?.status?.() ?? 0,
+    },
   };
 }
 
