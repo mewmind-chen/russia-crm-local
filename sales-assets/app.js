@@ -109,6 +109,7 @@
     researchPeopleListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     recycleBinListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     pipelineListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    notificationsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -271,7 +272,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline', 'alerts']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -316,6 +317,9 @@
       }
       if (state.data && state.view === 'alerts') {
         renderAlerts();
+      }
+      if (state.data && state.view === 'notifications') {
+        renderNotifications();
       }
     });
   }
@@ -1231,6 +1235,97 @@
     saveAlertsListLayout();
     renderAlerts();
   }
+  function notificationsColumnDefinitions() {
+    const columns = [
+      { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
+      { key: 'title', label: '通知', required: true, className: 'col-title', sortKey: 'title' },
+      { key: 'customer', label: '客户', className: 'col-company', sortKey: 'customerName' },
+      { key: 'detail', label: '详情', className: 'col-detail', sortKey: 'detail' },
+      { key: 'created_at', label: '时间', className: 'col-date', sortKey: 'createdAt' },
+      { key: 'delivery', label: '投递', className: 'col-delivery', sortKey: 'deliveryStatus' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.notifications?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function notificationsListLayoutStorageKey() {
+    return `tradepulse.listLayout.notifications.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultNotificationsListLayout() {
+    const columns = notificationsColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'unread_priority' };
+  }
+  function restoreNotificationsListLayout() {
+    const columns = notificationsColumnDefinitions();
+    state.notificationsListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(notificationsListLayoutStorageKey(), undefined, columns)
+      : defaultNotificationsListLayout();
+    const allowedSorts = ['unread_priority', 'recent_update', 'severity_priority', 'title_asc'];
+    if (!allowedSorts.includes(state.notificationsListLayout.sortPreset)) {
+      state.notificationsListLayout = { ...state.notificationsListLayout, sortPreset: 'unread_priority' };
+    }
+    if ($('#notificationsSort')) $('#notificationsSort').value = state.notificationsListLayout.sortPreset;
+    renderNotificationsColumnSettings();
+  }
+  function saveNotificationsListLayout() {
+    const columns = notificationsColumnDefinitions();
+    state.notificationsListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(notificationsListLayoutStorageKey(), state.notificationsListLayout, undefined, columns)
+      : state.notificationsListLayout;
+    renderNotificationsColumnSettings();
+  }
+  function renderNotificationsColumnSettings() {
+    const host = $('#notificationsColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '通知列表列设置',
+      columns: notificationsColumnDefinitions(),
+      preferences: state.notificationsListLayout,
+    });
+  }
+  function closeNotificationsColumnSettings() {
+    $('#notificationsColumnSettingsPanel')?.classList.add('hidden');
+    $('#notificationsColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openNotificationsColumnSettings() {
+    renderNotificationsColumnSettings();
+    $('#notificationsColumnSettingsPanel')?.classList.remove('hidden');
+    $('#notificationsColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetNotificationsListLayout() {
+    state.notificationsListLayout = { ...defaultNotificationsListLayout(), sortPreset: 'unread_priority' };
+    saveNotificationsListLayout();
+    if ($('#notificationsSort')) $('#notificationsSort').value = 'unread_priority';
+    renderNotifications();
+    void loadAuthorizedBusinessPage('notifications', { reset: true, force: true });
+  }
+  function moveNotificationsListColumn(key, direction) {
+    const columns = notificationsColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.notificationsListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.notificationsListLayout = { ...state.notificationsListLayout, columnOrder: order };
+    saveNotificationsListLayout();
+    renderNotifications();
+  }
+  function toggleNotificationsListColumn(key, visible) {
+    const columns = notificationsColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.notificationsListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.notificationsListLayout = { ...state.notificationsListLayout, visibleColumns: [...current] };
+    saveNotificationsListLayout();
+    renderNotifications();
+  }
   function pipelineColumnDefinitions() {
     const columns = [
       { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'company_name' },
@@ -2072,6 +2167,9 @@
       if (pageKey === 'alerts') {
         params.set('sort', state.alertsListLayout?.sortPreset || 'urgency_priority');
       }
+      if (pageKey === 'notifications') {
+        params.set('sort', state.notificationsListLayout?.sortPreset || 'unread_priority');
+      }
       const endpoint = config.endpoint || `/lists/${pageKey}`;
       const result = await api(`${endpoint}?${params}`, { timeoutMs: 12000 });
       if (requestEpoch !== meta.requestEpoch) return;
@@ -2236,6 +2334,7 @@
       restoreResearchPeopleListLayout();
       restoreRecycleBinListLayout();
       restorePipelineListLayout();
+      restoreNotificationsListLayout();
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -6438,9 +6537,7 @@
       button.disabled = Boolean(meta.filterController) && !statusAuthorized;
       button.classList.toggle('active', button.dataset.notificationStatus === state.notificationStatus);
     });
-    root.innerHTML = meta.loading && !meta.loaded
-      ? '<div class="empty">正在读取通知…</div>'
-      : all.length ? all.map(rawItem => {
+    const rendered = all.map(rawItem => {
       const item = notificationBusinessCopy(rawItem);
       const account = notificationAccount(item.customerId);
       const isOwn = !item.recipientId || item.recipientId === state.data.user.id;
@@ -6459,7 +6556,10 @@
           : item.code === 'SALES_COACHING_READY'
             ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="team">查看辅导</button>`
           : '';
-      return `<article class="notification-item ${isUnread ? 'unread' : ''}">
+      const readAction = isOwn && isUnread
+        ? `<button class="icon-button notification-read" type="button" data-notification-read="${esc(item.id)}" title="标记已读" aria-label="标记已读">✓</button>`
+        : '';
+      const card = `<article class="notification-item ${isUnread ? 'unread' : ''}">
         <span class="notification-state" aria-label="${isUnread ? '未读' : '已读'}"></span>
         <div class="notification-copy">
           <div class="notification-title"><span class="pill ${severity}">${esc(item.title)}</span><strong>${esc(accountDisplayName(account))}</strong></div>
@@ -6469,10 +6569,39 @@
         </div>
         <div class="notification-actions">
           ${action}
-          ${isOwn && isUnread ? `<button class="icon-button notification-read" type="button" data-notification-read="${esc(item.id)}" title="标记已读" aria-label="标记已读">✓</button>` : ''}
+          ${readAction}
         </div>
       </article>`;
-    }).join('') : `<div class="empty">${esc(meta.error || (state.notificationStatus === 'unread' ? '当前没有未读通知' : '暂无通知'))}</div>`;
+      return {
+        card,
+        tableRow: {
+          status: `<span class="pill ${isUnread ? 'green' : 'gray'}">${isUnread ? '未读' : '已读'}</span>`,
+          title: `<span class="pill ${severity}">${esc(item.title)}</span>`,
+          customer: `<strong>${esc(accountDisplayName(account))}</strong>${accountIdentity(account) ? `<small class="subtle">${esc(accountIdentity(account))}</small>` : ''}`,
+          detail: esc(item.detail || '暂无详细说明'),
+          created_at: `${esc(shortDate(item.createdAt, true))}<small class="subtle">${esc(recipient)}</small>`,
+          delivery: channelFailed ? '<span class="pill amber">企微失败</span>' : '<span class="pill gray">网页正常</span>',
+          actions: `${action}${readAction}`,
+          _attrs: `data-notification-row="${esc(item.id)}"`,
+        },
+      };
+    });
+    root.innerHTML = meta.loading && !meta.loaded
+      ? '<div class="empty">正在读取通知…</div>'
+      : all.length ? `<div class="notification-desktop-table"><div class="data-table">${listWidget?.renderTable
+        ? listWidget.renderTable({
+          columns: notificationsColumnDefinitions(),
+          rows: rendered.map(item => item.tableRow),
+          preferences: state.notificationsListLayout,
+          attrs: 'class="notification-grid"',
+          headerAttrs: 'class="notifications-list-head"',
+        })
+        : ''}</div></div><div class="notification-mobile-list">${rendered.map(item => item.card).join('')}</div>`
+        : `<div class="empty">${esc(meta.error || (state.notificationStatus === 'unread' ? '当前没有未读通知' : '暂无通知'))}</div>`;
+    const visibleNotificationColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(notificationsColumnDefinitions(), state.notificationsListLayout)
+      : notificationsColumnDefinitions();
+    applyTableColumnClasses(root, visibleNotificationColumns.map(column => column.className || ''));
   }
 
   async function markNotificationRead(notificationId, options = {}) {
@@ -13727,6 +13856,11 @@
       else closeAlertsColumnSettings();
       return;
     }
+    if (event.target.closest('#notificationsColumnSettings')) {
+      if ($('#notificationsColumnSettingsPanel')?.classList.contains('hidden')) openNotificationsColumnSettings();
+      else closeNotificationsColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#peopleColumnSettingsPanel')) {
@@ -13739,6 +13873,8 @@
         moveIntakeListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#alertsColumnSettingsPanel')) {
         moveAlertsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#notificationsColumnSettingsPanel')) {
+        moveNotificationsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -13750,6 +13886,7 @@
       else if (event.target.closest('#pipelineColumnSettingsPanel')) resetPipelineListLayout();
       else if (event.target.closest('#intakeColumnSettingsPanel')) resetIntakeListLayout();
       else if (event.target.closest('#alertsColumnSettingsPanel')) resetAlertsListLayout();
+      else if (event.target.closest('#notificationsColumnSettingsPanel')) resetNotificationsListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -13759,6 +13896,7 @@
       else if (event.target.closest('#pipelineColumnSettingsPanel')) closePipelineColumnSettings();
       else if (event.target.closest('#intakeColumnSettingsPanel')) closeIntakeColumnSettings();
       else if (event.target.closest('#alertsColumnSettingsPanel')) closeAlertsColumnSettings();
+      else if (event.target.closest('#notificationsColumnSettingsPanel')) closeNotificationsColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -14749,6 +14887,7 @@
       if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
+      if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -14887,6 +15026,8 @@
         toggleIntakeListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#alertsColumnSettingsPanel')) {
         toggleAlertsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#notificationsColumnSettingsPanel')) {
+        toggleNotificationsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
@@ -14978,6 +15119,14 @@
       };
       saveAlertsListLayout();
       void loadAuthorizedBusinessPage('alerts', { reset: true, force: true });
+    }
+    if (event.target.id === 'notificationsSort') {
+      state.notificationsListLayout = {
+        ...state.notificationsListLayout,
+        sortPreset: event.target.value || 'unread_priority',
+      };
+      saveNotificationsListLayout();
+      void loadAuthorizedBusinessPage('notifications', { reset: true, force: true });
     }
     if (event.target.id === 'filterPermissionScope') {
       syncFilterPermissionTargets();

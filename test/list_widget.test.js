@@ -206,3 +206,22 @@ test('alerts list uses the shared widget with per-user layout and server sorting
   assert.match(app, /listWidget\?\.renderTable[\s\S]*data-list-page="alerts"/);
   assert.match(app, /params\.set\('sort', state\.alertsListLayout\?\.sortPreset/);
 });
+
+test('notifications list uses the shared widget with per-user layout and server sorting', () => {
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'notifications',
+    user: { role: 'sales' },
+    permissions: { view_notifications: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'status', 'title', 'customer', 'detail', 'created_at', 'delivery',
+  ]);
+  assert.match(html, /id="notificationsSort"/);
+  assert.match(html, /id="notificationsColumnSettings"/);
+  assert.match(html, /id="notificationsColumnSettingsPanel"/);
+  assert.match(app, /notificationsListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.notifications/);
+  assert.match(app, /listWidget\?\.renderTable[\s\S]*notification-grid/);
+  assert.match(app, /params\.set\('sort', state\.notificationsListLayout\?\.sortPreset/);
+});

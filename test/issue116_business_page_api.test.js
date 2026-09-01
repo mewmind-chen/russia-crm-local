@@ -186,3 +186,33 @@ test('alerts list accepts only authorized server-side sort presets', async t => 
   assert.equal(invalid.status, 403);
   assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
 });
+
+test('notifications list accepts only authorized server-side sort presets', async t => {
+  const fx = await adminFixture();
+  t.after(() => fx.close());
+  fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,wecom_status,created_at,read_at)
+    VALUES (?,?,?,?,?,?,?,?,?,'pending',?,'')`).run(
+    'NOTE-SORT-Z', 'USR-ADMIN', 'CRM-WU', 'AUTH_REQUIRED', 'info', 'SortOnly Zulu', 'Z', 'unread', 'issue116:NOTE-SORT-Z', '2026-08-02 10:00:00',
+  );
+  fx.db.prepare(`INSERT INTO crm_notifications
+    (id,user_id,customer_id,code,severity,title,detail,status,dedupe_key,wecom_status,created_at,read_at)
+    VALUES (?,?,?,?,?,?,?,?,?,'pending',?,'')`).run(
+    'NOTE-SORT-A', 'USR-ADMIN', 'CRM-WU', 'AUTH_REQUIRED', 'info', 'SortOnly Alpha', 'A', 'unread', 'issue116:NOTE-SORT-A', '2026-08-02 09:00:00',
+  );
+  const schema = await fx.requestJson('/api/sales-crm/filter-schema/notifications', {
+    cookie: fx.adminCookie,
+  });
+  const sorted = await fx.requestJson(
+    `/api/sales-crm/lists/notifications?sort=title_asc&permissionVersion=${schema.schema.permissionVersion}`
+      + `&filters=${encodedFilters({ search: { operator: 'contains', value: 'SortOnly' } })}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.deepEqual(sorted.rows.map(row => row.title), ['SortOnly Alpha', 'SortOnly Zulu']);
+  const invalid = await fx.request(
+    `/api/sales-crm/lists/notifications?sort=recipient_email&permissionVersion=${schema.schema.permissionVersion}&filters=${encodedFilters({})}`,
+    { cookie: fx.adminCookie },
+  );
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).code, 'SORT_NOT_AUTHORIZED');
+});

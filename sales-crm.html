@@ -421,13 +421,21 @@
             <div><p class="eyebrow">通知中心</p><h2>通知中心</h2><p>集中查看客户认领、业务提醒和投递失败通知。</p></div>
             <button id="notificationRefresh" class="button secondary" type="button">刷新</button>
           </div>
-          <div class="toolbar">
+          <div class="toolbar notifications-list-toolbar">
             <div class="segmented" id="notificationTabs">
               <button data-notification-status="unread">未读</button>
               <button class="active" data-notification-status="">全部</button>
             </div>
+            <label class="list-sort-control">排序<select id="notificationsSort" aria-label="通知列表排序">
+              <option value="unread_priority">未读优先</option>
+              <option value="recent_update">最近更新</option>
+              <option value="severity_priority">严重程度</option>
+              <option value="title_asc">通知标题</option>
+            </select></label>
+            <button id="notificationsColumnSettings" class="button secondary tiny" type="button" aria-expanded="false" aria-controls="notificationsColumnSettingsPanel">列设置</button>
             <span id="notificationResultCount" class="toolbar-count"></span>
           </div>
+          <div id="notificationsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="通知列表列设置"></div>
           <div id="notificationList" class="notification-list" aria-live="polite"></div>
           <div id="notificationsAuthorizedPagination" class="shared-pagination" data-pagination="notifications"></div>
         </article>

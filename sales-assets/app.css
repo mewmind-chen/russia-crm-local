@@ -647,13 +647,22 @@ body.customer-profile-active .top-actions{display:none}
 .notification-intro .button{white-space:nowrap}
 .notification-intro h2{margin:2px 0 5px}.notification-intro p:last-child{margin:0;color:var(--muted);font-size:11px}
 .notification-list{display:grid}
+.notification-desktop-table{display:block;overflow-x:auto}
+.notification-mobile-list{display:none}
+.notification-grid{width:100%;min-width:760px}
+.notification-grid th,.notification-grid td{vertical-align:middle}
+.notification-grid td small{display:block;margin-top:3px}
+.notification-grid .col-status{width:72px}.notification-grid .col-title{min-width:180px}
+.notification-grid .col-company{min-width:140px}.notification-grid .col-detail{min-width:220px}
+.notification-grid .col-date{width:150px}.notification-grid .col-delivery{width:100px}.notification-grid .col-actions{width:160px}
+.notification-grid .notification-actions{justify-content:flex-start}
 .notification-item{position:relative;display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:82px;padding:14px 18px;border-top:1px solid var(--line)}
 .notification-item:first-child{border-top:0}.notification-item.unread{background:var(--surface-subtle)}
 .notification-state{width:7px;height:7px;border-radius:50%;background:#cad3ce}.notification-item.unread .notification-state{background:var(--green)}
 .notification-copy{min-width:0;display:grid;gap:6px}.notification-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.notification-title strong{font-size:12px}
 .notification-copy p{margin:0;color:var(--ink);font-size:12px;line-height:1.55;overflow-wrap:anywhere}.notification-copy small{color:var(--muted);font-size:11px}
 .notification-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}.notification-read{width:30px;height:30px;font-size:14px}
-@media(max-width:780px){.notification-button{margin-left:auto}.notification-intro{align-items:flex-start}.notification-intro .button{align-self:flex-start}.notification-item{grid-template-columns:8px minmax(0,1fr);padding:12px}.notification-actions{grid-column:2;justify-content:flex-start}.notification-copy p{font-size:11px}}
+@media(max-width:780px){.notification-button{margin-left:auto}.notification-intro{align-items:flex-start}.notification-intro .button{align-self:flex-start}.notification-desktop-table{display:none}.notification-mobile-list{display:grid}.notification-item{grid-template-columns:8px minmax(0,1fr);padding:12px}.notification-actions{grid-column:2;justify-content:flex-start}.notification-copy p{font-size:11px}.notifications-list-toolbar{flex-wrap:wrap}.notifications-list-toolbar .segmented{order:1}.notifications-list-toolbar .list-sort-control{order:2}.notifications-list-toolbar #notificationsColumnSettings{order:3}.notifications-list-toolbar #notificationResultCount{order:4;width:100%}}
 
 /* Unified lead pool */
 .intake-toolbar{flex-wrap:wrap}
