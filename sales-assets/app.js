@@ -115,6 +115,7 @@
     marketsCountryListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     marketsCohortListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     marketsSegmentsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    managerTasksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -277,7 +278,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -316,6 +317,9 @@
       }
       if (state.data && state.view === 'markets') {
         renderMarkets();
+      }
+      if (state.data && state.view === 'managerTasks') {
+        renderManagerTasks();
       }
       if (state.data && state.view === 'contacts') {
         renderUnifiedPeople();
@@ -2802,6 +2806,7 @@
       restoreMarketsCountryListLayout();
       restoreMarketsCohortListLayout();
       restoreMarketsSegmentsListLayout();
+      restoreManagerTasksListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -6819,6 +6824,113 @@
     return `<button class="text-button" type="button" data-manager-task-id="${esc(task.id)}">${esc(label)} →</button>`;
   }
 
+  function managerTasksColumnDefinitions() {
+    const columns = [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'companyName' },
+      { key: 'customer_id', label: '客户ID', className: 'col-id', sortKey: 'customerId' },
+      { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'reason', label: '触发原因', className: 'col-reason', sortKey: 'reason' },
+      { key: 'due_at', label: '处理期限', className: 'col-date', sortKey: 'dueAt' },
+      { key: 'triggered_at', label: '触发时间', className: 'col-date', sortKey: 'triggeredAt' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ];
+    const schemaFields = state.fieldSchemas?.manager_tasks?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function managerTasksListLayoutStorageKey() {
+    return `tradepulse.listLayout.manager_tasks.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultManagerTasksListLayout() {
+    const columns = managerTasksColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? listWidget.defaultPreferences(columns)
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'due_at_asc' };
+  }
+  function restoreManagerTasksListLayout() {
+    const columns = managerTasksColumnDefinitions();
+    state.managerTasksListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(managerTasksListLayoutStorageKey(), undefined, columns)
+      : defaultManagerTasksListLayout();
+    const allowedSorts = ['due_at_asc', 'due_at_desc', 'status_asc', 'status_desc', 'owner_asc', 'reason_asc', 'company_asc'];
+    if (!allowedSorts.includes(state.managerTasksListLayout.sortPreset)) {
+      state.managerTasksListLayout = { ...state.managerTasksListLayout, sortPreset: 'due_at_asc' };
+    }
+    if ($('#managerTaskSort')) $('#managerTaskSort').value = state.managerTasksListLayout.sortPreset;
+    renderManagerTasksColumnSettings();
+  }
+  function saveManagerTasksListLayout() {
+    const columns = managerTasksColumnDefinitions();
+    state.managerTasksListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(managerTasksListLayoutStorageKey(), state.managerTasksListLayout, undefined, columns)
+      : state.managerTasksListLayout;
+    renderManagerTasksColumnSettings();
+  }
+  function renderManagerTasksColumnSettings() {
+    const host = $('#managerTaskColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '主管任务列设置', columns: managerTasksColumnDefinitions(), preferences: state.managerTasksListLayout,
+    });
+  }
+  function closeManagerTasksColumnSettings() {
+    $('#managerTaskColumnSettingsPanel')?.classList.add('hidden');
+    $('#managerTaskColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openManagerTasksColumnSettings() {
+    renderManagerTasksColumnSettings();
+    $('#managerTaskColumnSettingsPanel')?.classList.remove('hidden');
+    $('#managerTaskColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetManagerTasksListLayout() {
+    state.managerTasksListLayout = { ...defaultManagerTasksListLayout(), sortPreset: 'due_at_asc' };
+    saveManagerTasksListLayout();
+    if ($('#managerTaskSort')) $('#managerTaskSort').value = 'due_at_asc';
+    renderManagerTasks();
+  }
+  function moveManagerTasksListColumn(key, direction) {
+    const columns = managerTasksColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.managerTasksListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.managerTasksListLayout = { ...state.managerTasksListLayout, columnOrder: order };
+    saveManagerTasksListLayout();
+    renderManagerTasks();
+  }
+  function toggleManagerTasksListColumn(key, visible) {
+    const columns = managerTasksColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.managerTasksListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.managerTasksListLayout = { ...state.managerTasksListLayout, visibleColumns: [...current] };
+    saveManagerTasksListLayout();
+    renderManagerTasks();
+  }
+  function managerTaskSortValue(task, preset) {
+    const text = value => String(value || '').toLocaleLowerCase();
+    if (preset.startsWith('due_at')) return String(task.dueAt || '');
+    if (preset.startsWith('status')) return text(managerTaskStatusLabels[task.status] || task.status);
+    if (preset === 'owner_asc') return text(task.ownerName || userById(task.ownerId)?.name || task.ownerId);
+    if (preset === 'reason_asc') return text(managerTaskReasonLabels[task.reason] || task.reason);
+    return text(managerTaskName(task));
+  }
+  function sortedManagerTaskRows(rows) {
+    const preset = state.managerTasksListLayout?.sortPreset || 'due_at_asc';
+    const direction = preset.endsWith('_desc') ? -1 : 1;
+    return [...rows].sort((left, right) => {
+      const a = managerTaskSortValue(left, preset);
+      const b = managerTaskSortValue(right, preset);
+      return (a < b ? -1 : a > b ? 1 : 0) * direction;
+    });
+  }
+
   function renderManagerTasks() {
     const root = $('#managerTaskList');
     if (!root) return;
@@ -6849,18 +6961,33 @@
       summary.innerHTML = values.map(([label, value]) =>
         `<article><span>${esc(label)}</span><strong>${Number(value)}</strong></article>`).join('');
     }
-    const visible = rows;
+    const visible = sortedManagerTaskRows(rows);
+    const columns = managerTasksColumnDefinitions();
+    const tableRows = visible.map(task => ({
+      company: `<div class="company-cell"><strong>${esc(managerTaskName(task))}</strong></div>`,
+      customer_id: esc(task.customerId || ''),
+      status: `<span class="pill ${task.status === 'overdue' || task.status === 'escalated' ? 'red' : task.status === 'completed' ? 'gray' : 'amber'}">${esc(managerTaskStatusLabels[task.status] || task.status)}</span>`,
+      owner: esc(task.ownerName || userById(task.ownerId)?.name || task.ownerId || '未记录'),
+      reason: esc(managerTaskReasonLabels[task.reason] || task.reason),
+      due_at: `<strong>${esc(shortDate(task.dueAt, true))}</strong>`,
+      triggered_at: esc(shortDate(task.triggeredAt, true)),
+      actions: managerTaskButton(task),
+    }));
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.managerTasksListLayout)
+      : columns;
+    const renderedTable = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns, rows: tableRows, preferences: state.managerTasksListLayout,
+        attrs: 'data-list-page="manager_tasks"', headerAttrs: 'class="manager-task-list-head"', emptyText: '当前授权范围内没有主管任务',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])), 'data-list-page="manager_tasks"');
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取主管任务…</div>'
       : visible.length
-        ? visible.map(task => `<article class="manager-task-card">
-          <header class="manager-task-heading"><div><h3>${esc(managerTaskName(task))}</h3><p>${esc(task.customerId)}</p></div><span class="pill ${task.status === 'overdue' || task.status === 'escalated' ? 'red' : task.status === 'completed' ? 'gray' : 'amber'}">${esc(managerTaskStatusLabels[task.status] || task.status)}</span></header>
-          <dl><div class="manager-task-fact"><dt>负责人</dt><dd>${esc(task.ownerName || userById(task.ownerId)?.name || task.ownerId || '未记录')}</dd></div>
-          <div class="manager-task-fact"><dt>触发原因</dt><dd>${esc(managerTaskReasonLabels[task.reason] || task.reason)}</dd></div>
-          <div class="manager-task-fact manager-task-dates"><dt>处理期限</dt><dd><strong>${esc(shortDate(task.dueAt, true))}</strong><small>${esc(shortDate(task.triggeredAt, true))} 触发</small></dd></div></dl>
-          <footer class="manager-task-actions">${managerTaskButton(task)}</footer>
-        </article>`).join('')
+        ? `<div class="data-table">${renderedTable}</div>`
         : `<div class="empty">${esc(meta.error || '当前授权范围内没有主管任务')}</div>`;
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
   }
 
   function renderManagerRisks() {
@@ -14474,6 +14601,11 @@
       else closeNotificationsColumnSettings();
       return;
     }
+    if (event.target.closest('#managerTaskColumnSettings')) {
+      if ($('#managerTaskColumnSettingsPanel')?.classList.contains('hidden')) openManagerTasksColumnSettings();
+      else closeManagerTasksColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
@@ -14498,6 +14630,8 @@
         moveAlertsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#notificationsColumnSettingsPanel')) {
         moveNotificationsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#managerTaskColumnSettingsPanel')) {
+        moveManagerTasksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -14515,6 +14649,7 @@
       else if (event.target.closest('#intakeColumnSettingsPanel')) resetIntakeListLayout();
       else if (event.target.closest('#alertsColumnSettingsPanel')) resetAlertsListLayout();
       else if (event.target.closest('#notificationsColumnSettingsPanel')) resetNotificationsListLayout();
+      else if (event.target.closest('#managerTaskColumnSettingsPanel')) resetManagerTasksListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -14530,6 +14665,7 @@
       else if (event.target.closest('#intakeColumnSettingsPanel')) closeIntakeColumnSettings();
       else if (event.target.closest('#alertsColumnSettingsPanel')) closeAlertsColumnSettings();
       else if (event.target.closest('#notificationsColumnSettingsPanel')) closeNotificationsColumnSettings();
+      else if (event.target.closest('#managerTaskColumnSettingsPanel')) closeManagerTasksColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -15380,6 +15516,11 @@
 
   document.addEventListener('change', event => {
     if (event.target.id === 'managerTaskAction') setManagerTaskAction(event.target.value);
+    if (event.target.id === 'managerTaskSort') {
+      state.managerTasksListLayout = { ...state.managerTasksListLayout, sortPreset: event.target.value };
+      saveManagerTasksListLayout();
+      renderManagerTasks();
+    }
     if (event.target.name?.startsWith('permission__') && event.target.closest('#permissionGroupForm')) {
       refreshPermissionGroupSummary(event.target.closest('#permissionGroupForm'));
     }
@@ -15528,6 +15669,7 @@
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
       if (viewChanged && canonicalView === 'pipeline') restorePipelineListLayout();
       if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
+      if (viewChanged && canonicalView === 'managerTasks') restoreManagerTasksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -15678,6 +15820,8 @@
         toggleAlertsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#notificationsColumnSettingsPanel')) {
         toggleNotificationsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#managerTaskColumnSettingsPanel')) {
+        toggleManagerTasksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }

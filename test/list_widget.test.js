@@ -154,6 +154,21 @@ test('markets country and cohort reports use the shared widget with independent 
   assert.match(app, /data-list-page="markets_cohort"/);
 });
 
+test('manager tasks list uses shared widget with per-user layout and local sorting', () => {
+  assert.match(html, /id="managerTaskSort"/);
+  assert.match(html, /id="managerTaskColumnSettings"/);
+  assert.match(html, /id="managerTaskColumnSettingsPanel"/);
+  assert.match(app, /managerTasksListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.manager_tasks/);
+  assert.match(app, /data-list-page="manager_tasks"/);
+  assert.match(app, /managerTasksColumnDefinitions/);
+  assert.match(app, /sortedManagerTaskRows/);
+  assert.ok(fieldCatalog.listFieldPages().includes('manager_tasks'));
+  assert.deepEqual(fieldCatalog.FIELDS_CATALOG.manager_tasks.map(field => field.key), [
+    'company', 'customer_id', 'status', 'owner', 'reason', 'due_at', 'triggered_at',
+  ]);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

@@ -502,6 +502,18 @@
         <article class="panel manager-task-panel">
           <div class="toolbar manager-task-toolbar">
             <span id="managerTaskResultCount" class="toolbar-count">进入页面后加载授权任务</span>
+            <label class="sr-only" for="managerTaskSort">主管任务排序</label>
+            <select id="managerTaskSort" aria-label="主管任务排序">
+              <option value="due_at_asc">最早期限优先</option>
+              <option value="due_at_desc">最晚期限优先</option>
+              <option value="status_asc">状态正序</option>
+              <option value="status_desc">状态倒序</option>
+              <option value="owner_asc">负责人正序</option>
+              <option value="reason_asc">触发原因正序</option>
+              <option value="company_asc">客户名称正序</option>
+            </select>
+            <button id="managerTaskColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="managerTaskColumnSettingsPanel">列设置</button>
+            <div id="managerTaskColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="主管任务列设置"></div>
           </div>
           <div id="managerTaskList" class="data-table manager-task-list" aria-live="polite"></div>
           <nav id="managerTaskPagination" class="shared-pagination" data-pagination="manager_tasks" aria-label="主管任务分页"></nav>
