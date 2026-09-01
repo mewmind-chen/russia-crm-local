@@ -629,7 +629,13 @@
           <div id="teamProgressFilters" class="authorized-filter-host" aria-live="polite"></div>
           <div id="teamProgressSummary" class="team-progress-summary"></div>
           <article class="panel team-status-list-panel">
-            <div class="panel-head"><div><h2>按销售查看推进事实</h2><p>同时显示数量、比例和样本范围。</p></div></div>
+            <div class="panel-head"><div><h2>按销售查看推进事实</h2><p>同时显示数量、比例和样本范围。</p></div>
+              <div class="toolbar team-progress-sales-toolbar"><label class="sr-only" for="teamProgressSalesSort">销售推进汇总排序</label>
+                <select id="teamProgressSalesSort" aria-label="销售推进汇总排序"><option value="owner_asc">销售名称</option><option value="progress_desc">推进率优先</option><option value="active_desc">开发客户数优先</option><option value="silent_desc">沉默客户数优先</option></select>
+                <button id="teamProgressSalesColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="teamProgressSalesColumnSettingsPanel">列设置</button>
+                <div id="teamProgressSalesColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="销售推进汇总列设置"></div>
+              </div>
+            </div>
             <div id="teamProgressSales" class="team-progress-sales"></div>
           </article>
           <article id="teamProgressDrilldown" class="panel team-progress-drilldown">
@@ -638,6 +644,11 @@
               <button class="active" type="button" data-team-progress-drilldown="customer">客户</button>
               <button type="button" data-team-progress-drilldown="task">待办</button>
               <button type="button" data-team-progress-drilldown="timeline">事实时间线</button>
+            </div>
+            <div class="toolbar team-progress-drilldown-toolbar"><label class="sr-only" for="teamProgressDrilldownSort">推进明细排序</label>
+              <select id="teamProgressDrilldownSort" aria-label="推进明细排序"><option value="occurred_desc">时间最新</option><option value="occurred_asc">时间最早</option><option value="company_asc">客户 / 类型</option><option value="owner_asc">负责人</option><option value="status_asc">状态</option></select>
+              <button id="teamProgressDrilldownColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="teamProgressDrilldownColumnSettingsPanel">列设置</button>
+              <div id="teamProgressDrilldownColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="推进明细列设置"></div>
             </div>
             <div id="teamProgressDrilldownList" class="team-progress-drilldown-list"></div>
             <div id="teamProgressPagination" class="shared-pagination" data-pagination="team_progress"></div>
@@ -653,7 +664,12 @@
         <section id="teamCollaborationPanel" class="team-status-panel hidden" data-team-panel="collaboration">
           <div class="team-collaboration-head">
             <div id="teamCollaborationFilters" class="authorized-filter-host" aria-live="polite"></div>
-            <button id="teamCollaborationAdd" data-permission="record_collaboration_support" class="button primary" type="button">补记协作</button>
+            <div class="toolbar team-collaboration-toolbar"><label class="sr-only" for="teamCollaborationSort">协作记录排序</label>
+              <select id="teamCollaborationSort" aria-label="协作记录排序"><option value="created_desc">最新记录</option><option value="created_asc">最早记录</option><option value="status_asc">状态</option><option value="source_asc">来源</option><option value="customer_asc">客户</option></select>
+              <button id="teamCollaborationColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="teamCollaborationColumnSettingsPanel">列设置</button>
+              <div id="teamCollaborationColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="协作记录列设置"></div>
+              <button id="teamCollaborationAdd" data-permission="record_collaboration_support" class="button primary" type="button">补记协作</button>
+            </div>
           </div>
           <div id="teamCollaborationList" class="team-collaboration-list"></div>
           <div id="teamCollaborationPagination" class="shared-pagination" data-pagination="team_collaboration"></div>

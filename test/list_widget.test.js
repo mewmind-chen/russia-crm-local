@@ -202,6 +202,69 @@ test('manager metrics list uses shared widget while preserving drilldown metric 
   ]);
 });
 
+test('team business lists use independent per-user shared-widget layouts while AI stays out of scope', () => {
+  for (const [sortId, settingsId, pageKey, layoutKey, definition, sortFn] of [
+    ['teamProgressSalesSort', 'teamProgressSalesColumnSettings', 'team_progress_sales', 'teamProgressSalesListLayout', 'teamProgressSalesColumnDefinitions', 'sortedTeamProgressSalesRows'],
+    ['teamProgressDrilldownSort', 'teamProgressDrilldownColumnSettings', 'team_progress_drilldown', 'teamProgressDrilldownListLayout', 'teamProgressDrilldownColumnDefinitions', 'sortedTeamProgressDrilldownRows'],
+    ['teamCollaborationSort', 'teamCollaborationColumnSettings', 'team_collaboration', 'teamCollaborationListLayout', 'teamCollaborationColumnDefinitions', 'sortedTeamCollaborationRows'],
+  ]) {
+    assert.match(html, new RegExp(`id="${sortId}"`));
+    assert.match(html, new RegExp(`id="${settingsId}"`));
+    assert.match(html, new RegExp(`id="${settingsId}Panel"`));
+    assert.match(app, new RegExp(layoutKey));
+    assert.match(app, new RegExp(`data-list-page="${pageKey}"`));
+    assert.match(app, new RegExp(definition));
+    assert.match(app, new RegExp(sortFn));
+  }
+  assert.doesNotMatch(`${html}\n${app}`, /team_progress_sales[\s\S]{0,200}ai_/i);
+});
+
+test('team progress sales schema exposes only non-AI summary fields', () => {
+  assert.ok(fieldCatalog.listFieldPages().includes('team_progress_sales'));
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'team_progress_sales',
+    user: { role: 'manager' },
+    permissions: { view_team: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'owner', 'sample', 'progress_rate', 'progressed_customers', 'silent_customers',
+    'repeated_deferred_customers', 'plans_formed_customers', 'actions_after_plan_customers',
+    'overdue_manager_tasks', 'escalated_manager_tasks',
+  ]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+});
+
+test('team progress drilldown schema shares read-only customer, task, and timeline fields', () => {
+  assert.ok(fieldCatalog.listFieldPages().includes('team_progress_drilldown'));
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'team_progress_drilldown',
+    user: { role: 'manager' },
+    permissions: { view_team: true },
+    features: {},
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'company', 'customer_id', 'owner', 'country', 'stage', 'facts', 'task_reason',
+    'status', 'kind', 'detail', 'occurred_at',
+  ]);
+  assert.equal(schema.fields.some(field => field.key === 'actions'), false);
+});
+
+test('team collaboration schema exposes collaboration facts and the page action key without AI fields', () => {
+  assert.ok(fieldCatalog.listFieldPages().includes('team_collaboration'));
+  const schema = fieldCatalog.effectiveFieldSchema({
+    pageKey: 'team_collaboration',
+    user: { role: 'manager' },
+    permissions: { view_customers: true, record_collaboration_support: true },
+    features: { ai_stations: true },
+  });
+  assert.deepEqual(schema.fields.map(field => field.key), [
+    'sales_user', 'customer', 'status', 'source', 'relation', 'problem', 'suggestion',
+    'outcome', 'next_step', 'created_at', 'actions',
+  ]);
+  assert.equal(schema.fields.some(field => field.key.startsWith('ai_')), false);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

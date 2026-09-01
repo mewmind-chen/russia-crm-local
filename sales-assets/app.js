@@ -118,6 +118,9 @@
     managerTasksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     managerRisksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     managerMetricsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    teamProgressSalesListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    teamProgressDrilldownListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    teamCollaborationListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -280,7 +283,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -343,6 +346,12 @@
       }
       if (state.data && state.view === 'managerMetrics') {
         renderManagerMetrics();
+      }
+      if (state.data && state.view === 'team') {
+        restoreTeamProgressSalesListLayout();
+        restoreTeamProgressDrilldownListLayout();
+        restoreTeamCollaborationListLayout();
+        renderTeamSection();
       }
     });
   }
@@ -2814,6 +2823,9 @@
       restoreManagerTasksListLayout();
       restoreManagerRisksListLayout();
       restoreManagerMetricsListLayout();
+      restoreTeamProgressSalesListLayout();
+      restoreTeamProgressDrilldownListLayout();
+      restoreTeamCollaborationListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -7717,6 +7729,243 @@
     revocation: '撤销记录', system: '系统事实',
   };
 
+  function teamSchemaColumns(pageKey, columns) {
+    const schemaFields = state.fieldSchemas?.[pageKey]?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+
+  function teamProgressSalesColumnDefinitions() {
+    return teamSchemaColumns('team_progress_sales', [
+      { key: 'owner', label: '销售', required: true, className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'sample', label: '样本', className: 'col-number', sortKey: 'sampleSize' },
+      { key: 'progress_rate', label: '推进率', className: 'col-number', sortKey: 'progressRate' },
+      { key: 'progressed_customers', label: '真实推进', className: 'col-number', sortKey: 'progressedCustomers' },
+      { key: 'silent_customers', label: '持续沉默', className: 'col-number', sortKey: 'silentCustomers' },
+      { key: 'repeated_deferred_customers', label: '反复延期', className: 'col-number', sortKey: 'repeatedDeferredCustomers' },
+      { key: 'plans_formed_customers', label: '形成计划', className: 'col-number', sortKey: 'plansFormedCustomers' },
+      { key: 'actions_after_plan_customers', label: '计划后行动', className: 'col-number', sortKey: 'actionsAfterPlanCustomers' },
+      { key: 'overdue_manager_tasks', label: '主管逾期', className: 'col-number', sortKey: 'overdueManagerTasks' },
+      { key: 'escalated_manager_tasks', label: '已升级', className: 'col-number', sortKey: 'escalatedManagerTasks' },
+    ]);
+  }
+
+  function teamProgressDrilldownColumnDefinitions(kind = state.teamStatus.drilldown) {
+    if (kind === 'task') return teamSchemaColumns('team_progress_drilldown', [
+      { key: 'customer_id', label: '客户ID', required: true, className: 'col-id', sortKey: 'customerId' },
+      { key: 'task_reason', label: '主管待办', className: 'col-reason', sortKey: 'reason' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
+      { key: 'occurred_at', label: '触发时间', className: 'col-date', sortKey: 'occurredAt' },
+    ]);
+    if (kind === 'timeline') return teamSchemaColumns('team_progress_drilldown', [
+      { key: 'kind', label: '事实类型', required: true, className: 'col-status', sortKey: 'kind' },
+      { key: 'customer_id', label: '客户ID', className: 'col-id', sortKey: 'customerId' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'detail', label: '事实详情', className: 'col-detail', sortKey: 'detail' },
+      { key: 'occurred_at', label: '发生时间', className: 'col-date', sortKey: 'occurredAt' },
+    ]);
+    return teamSchemaColumns('team_progress_drilldown', [
+      { key: 'company', label: '客户', required: true, className: 'col-company', sortKey: 'companyName' },
+      { key: 'customer_id', label: '客户ID', className: 'col-id', sortKey: 'customerId' },
+      { key: 'owner', label: '负责人', className: 'col-owner', sortKey: 'ownerName' },
+      { key: 'country', label: '国家', className: 'col-country', sortKey: 'country' },
+      { key: 'stage', label: '阶段', className: 'col-status', sortKey: 'stage' },
+      { key: 'facts', label: '推进事实', className: 'col-detail', sortKey: 'facts' },
+    ]);
+  }
+
+  function teamCollaborationColumnDefinitions() {
+    return teamSchemaColumns('team_collaboration', [
+      { key: 'sales_user', label: '销售', required: true, className: 'col-owner', sortKey: 'salesUserName' },
+      { key: 'customer', label: '客户', required: true, className: 'col-company', sortKey: 'customerId' },
+      { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
+      { key: 'source', label: '来源', className: 'col-status', sortKey: 'source' },
+      { key: 'relation', label: '关系', className: 'col-status', sortKey: 'relationType' },
+      { key: 'problem', label: '问题', className: 'col-detail', sortKey: 'problem' },
+      { key: 'suggestion', label: '建议', className: 'col-detail', sortKey: 'suggestion' },
+      { key: 'outcome', label: '结果', className: 'col-detail', sortKey: 'outcome' },
+      { key: 'next_step', label: '下一步', className: 'col-detail', sortKey: 'nextStep' },
+      { key: 'created_at', label: '记录时间', className: 'col-date', sortKey: 'createdAt' },
+      { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
+    ]);
+  }
+
+  function teamListLayoutStorageKey(kind) {
+    return `tradepulse.listLayout.${kind}.${state.data?.user?.id || 'anonymous'}`;
+  }
+
+  function teamLayoutConfig(kind) {
+    const configs = {
+      team_progress_sales: {
+        stateKey: 'teamProgressSalesListLayout',
+        columns: teamProgressSalesColumnDefinitions,
+        panel: '#teamProgressSalesColumnSettingsPanel',
+        button: '#teamProgressSalesColumnSettings',
+        title: '销售推进汇总列设置',
+        sort: '#teamProgressSalesSort',
+        defaults: 'owner_asc',
+      },
+      team_progress_drilldown: {
+        stateKey: 'teamProgressDrilldownListLayout',
+        columns: teamProgressDrilldownColumnDefinitions,
+        panel: '#teamProgressDrilldownColumnSettingsPanel',
+        button: '#teamProgressDrilldownColumnSettings',
+        title: '推进明细列设置',
+        sort: '#teamProgressDrilldownSort',
+        defaults: 'occurred_desc',
+      },
+      team_collaboration: {
+        stateKey: 'teamCollaborationListLayout',
+        columns: teamCollaborationColumnDefinitions,
+        panel: '#teamCollaborationColumnSettingsPanel',
+        button: '#teamCollaborationColumnSettings',
+        title: '协作记录列设置',
+        sort: '#teamCollaborationSort',
+        defaults: 'created_desc',
+      },
+    };
+    return configs[kind];
+  }
+
+  function defaultTeamListLayout(kind) {
+    const config = teamLayoutConfig(kind);
+    const columns = config.columns();
+    return listWidget?.defaultPreferences
+      ? { ...listWidget.defaultPreferences(columns), sortPreset: config.defaults }
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: config.defaults };
+  }
+
+  function restoreTeamListLayout(kind) {
+    const config = teamLayoutConfig(kind);
+    if (!config) return;
+    const columns = config.columns();
+    state[config.stateKey] = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(teamListLayoutStorageKey(kind), undefined, columns)
+      : defaultTeamListLayout(kind);
+    state[config.stateKey] = { ...state[config.stateKey], sortPreset: state[config.stateKey].sortPreset || config.defaults };
+    const select = $(config.sort);
+    if (select) select.value = state[config.stateKey].sortPreset;
+    renderTeamListColumnSettings(kind);
+  }
+
+  function saveTeamListLayout(kind) {
+    const config = teamLayoutConfig(kind);
+    if (!config) return;
+    const columns = config.columns();
+    state[config.stateKey] = listWidget?.savePreferences
+      ? listWidget.savePreferences(teamListLayoutStorageKey(kind), state[config.stateKey], undefined, columns)
+      : state[config.stateKey];
+    renderTeamListColumnSettings(kind);
+  }
+
+  function renderTeamListColumnSettings(kind) {
+    const config = teamLayoutConfig(kind);
+    const host = $(config?.panel);
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: config.title, columns: config.columns(), preferences: state[config.stateKey],
+    });
+  }
+
+  function restoreTeamProgressSalesListLayout() { restoreTeamListLayout('team_progress_sales'); }
+  function restoreTeamProgressDrilldownListLayout() { restoreTeamListLayout('team_progress_drilldown'); }
+  function restoreTeamCollaborationListLayout() { restoreTeamListLayout('team_collaboration'); }
+  function saveTeamProgressSalesListLayout() { saveTeamListLayout('team_progress_sales'); }
+  function saveTeamProgressDrilldownListLayout() { saveTeamListLayout('team_progress_drilldown'); }
+  function saveTeamCollaborationListLayout() { saveTeamListLayout('team_collaboration'); }
+  function openTeamListColumnSettings(kind) {
+    const config = teamLayoutConfig(kind);
+    renderTeamListColumnSettings(kind);
+    $(config?.panel)?.classList.remove('hidden');
+    $(config?.button)?.setAttribute('aria-expanded', 'true');
+  }
+  function closeTeamListColumnSettings(kind) {
+    const config = teamLayoutConfig(kind);
+    $(config?.panel)?.classList.add('hidden');
+    $(config?.button)?.setAttribute('aria-expanded', 'false');
+  }
+  function resetTeamListLayout(kind) {
+    const config = teamLayoutConfig(kind);
+    state[config.stateKey] = defaultTeamListLayout(kind);
+    saveTeamListLayout(kind);
+    const select = $(config.sort);
+    if (select) select.value = config.defaults;
+    renderTeamSection();
+  }
+  function moveTeamListColumn(kind, key, direction) {
+    const config = teamLayoutConfig(kind);
+    const columns = config.columns();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state[config.stateKey], columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state[config.stateKey] = { ...state[config.stateKey], columnOrder: order };
+    saveTeamListLayout(kind);
+    renderTeamSection();
+  }
+  function toggleTeamListColumn(kind, key, visible) {
+    const config = teamLayoutConfig(kind);
+    const column = config.columns().find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state[config.stateKey].visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state[config.stateKey] = { ...state[config.stateKey], visibleColumns: [...current] };
+    saveTeamListLayout(kind);
+    renderTeamSection();
+  }
+
+  function teamSortText(value) { return String(value || '').toLocaleLowerCase(); }
+  function teamProgressSalesSortValue(row, preset) {
+    if (preset.startsWith('progress')) return Number(row.ratios?.progressRate || 0);
+    if (preset.startsWith('active')) return Number(row.counts?.activeCustomers || 0);
+    if (preset.startsWith('silent')) return Number(row.counts?.silentCustomers || 0);
+    return teamSortText(userById(row.salesUserId)?.name || row.salesUserId);
+  }
+  function sortedTeamProgressSalesRows(rows) {
+    const preset = state.teamProgressSalesListLayout?.sortPreset || 'owner_asc';
+    const direction = preset.endsWith('_desc') ? -1 : 1;
+    return [...rows].sort((left, right) => {
+      const result = (teamProgressSalesSortValue(left, preset) < teamProgressSalesSortValue(right, preset) ? -1
+        : teamProgressSalesSortValue(left, preset) > teamProgressSalesSortValue(right, preset) ? 1 : 0) * direction;
+      return result || String(left.salesUserId || '').localeCompare(String(right.salesUserId || ''));
+    });
+  }
+  function teamProgressDrilldownSortValue(row, preset) {
+    if (preset.startsWith('occurred')) return String(row.occurredAt || '');
+    if (preset.startsWith('status')) return teamSortText(managerTaskStatusLabels[row.taskStatus] || row.taskStatus || row.status);
+    if (preset.startsWith('owner')) return teamSortText(userById(row.ownerId || row.salesUserId)?.name || row.ownerId || row.salesUserId);
+    return teamSortText(row.companyName || row.customerId || row.kind);
+  }
+  function sortedTeamProgressDrilldownRows(rows) {
+    const preset = state.teamProgressDrilldownListLayout?.sortPreset || 'occurred_desc';
+    const direction = preset.endsWith('_asc') ? 1 : -1;
+    return [...rows].sort((left, right) => {
+      const a = teamProgressDrilldownSortValue(left, preset);
+      const b = teamProgressDrilldownSortValue(right, preset);
+      return (a < b ? -1 : a > b ? 1 : 0) * direction;
+    });
+  }
+  function teamCollaborationSortValue(row, preset) {
+    if (preset.startsWith('created')) return String(row.createdAt || '');
+    if (preset.startsWith('status')) return teamSortText(collaborationStatusLabels[row.status] || row.status);
+    if (preset.startsWith('source')) return teamSortText(row.source);
+    return teamSortText(row.customerId || row.salesUserId);
+  }
+  function sortedTeamCollaborationRows(rows) {
+    const preset = state.teamCollaborationListLayout?.sortPreset || 'created_desc';
+    const direction = preset.endsWith('_asc') ? 1 : -1;
+    return [...rows].sort((left, right) => {
+      const a = teamCollaborationSortValue(left, preset);
+      const b = teamCollaborationSortValue(right, preset);
+      return (a < b ? -1 : a > b ? 1 : 0) * direction;
+    });
+  }
+
   function teamFilterPayload(kind = 'progress') {
     const controller = kind === 'collaboration'
       ? state.teamStatus.collaborationController
@@ -7764,13 +8013,36 @@
     $('#teamProgressSummary').innerHTML = `<div class="team-progress-metrics">${progressEntries.slice(0, 4).map(progressCard).join('')}</div>
       <div class="team-progress-metrics team-progress-metrics-rest">${progressEntries.slice(4).map(progressCard).join('')}</div>
       <div class="team-ratio-strip">${Object.entries(teamRatioLabels).map(([key, label]) => `<span><b>${label}</b><strong>${Number(data.ratios?.[key] || 0).toFixed(1)}%</strong></span>`).join('')}</div>`;
-    $('#teamProgressSales').innerHTML = data.sales?.length ? data.sales.map(row => {
+    const salesColumns = teamProgressSalesColumnDefinitions();
+    const salesRows = sortedTeamProgressSalesRows(data.sales || []).map(row => {
       const user = userById(row.salesUserId);
-      return `<article class="team-progress-person">
-        <header><div class="person"><span class="avatar">${esc((user?.name || '销').slice(0, 1))}</span><div><strong>${esc(user?.name || row.salesUserId)}</strong><small>样本 ${Number(row.sample?.size || 0)}${row.sample?.unavailable ? ' · 样本不足' : ''}</small></div></div><span class="pill">推进率 ${Number(row.ratios?.progressRate || 0).toFixed(1)}%</span></header>
-        <dl><div><dt>真实推进</dt><dd>${Number(row.counts?.progressedCustomers || 0)}</dd></div><div><dt>持续沉默</dt><dd>${Number(row.counts?.silentCustomers || 0)}</dd></div><div><dt>反复延期</dt><dd>${Number(row.counts?.repeatedDeferredCustomers || 0)}</dd></div><div><dt>计划后行动</dt><dd>${Number(row.counts?.actionsAfterPlanCustomers || 0)}</dd></div></dl>
-      </article>`;
-    }).join('') : '<div class="empty">当前筛选下没有销售推进数据</div>';
+      return {
+        owner: `<div class="person"><span class="avatar">${esc((user?.name || '销').slice(0, 1))}</span><strong>${esc(user?.name || row.salesUserId)}</strong></div>`,
+        sample: `${Number(row.sample?.size || 0)}${row.sample?.unavailable ? ' · 样本不足' : ''}`,
+        progress_rate: `<strong>${Number(row.ratios?.progressRate || 0).toFixed(1)}%</strong>`,
+        progressed_customers: Number(row.counts?.progressedCustomers || 0),
+        silent_customers: Number(row.counts?.silentCustomers || 0),
+        repeated_deferred_customers: Number(row.counts?.repeatedDeferredCustomers || 0),
+        plans_formed_customers: Number(row.counts?.plansFormedCustomers || 0),
+        actions_after_plan_customers: Number(row.counts?.actionsAfterPlanCustomers || 0),
+        overdue_manager_tasks: Number(row.counts?.overdueManagerTasks || 0),
+        escalated_manager_tasks: Number(row.counts?.escalatedManagerTasks || 0),
+        _attrs: `data-team-sales-row="${esc(row.salesUserId)}"`,
+      };
+    });
+    const salesMarkup = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: salesColumns, rows: salesRows, preferences: state.teamProgressSalesListLayout,
+        attrs: 'data-list-page="team_progress_sales"', headerAttrs: 'class="team-progress-sales-list-head"',
+        emptyText: '当前筛选下没有销售推进数据',
+      })
+      : salesRows.length
+        ? table(salesColumns.map(column => column.label), salesRows.map(row => salesColumns.map(column => row[column.key])), 'data-list-page="team_progress_sales"')
+        : '<div class="empty">当前筛选下没有销售推进数据</div>';
+    $('#teamProgressSales').innerHTML = `<div class="data-table">${salesMarkup}</div>`;
+    const visibleSalesColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(salesColumns, state.teamProgressSalesListLayout) : salesColumns;
+    applyTableColumnClasses($('#teamProgressSales'), visibleSalesColumns.map(column => column.className || ''));
     const drilldown = data.drilldown || { customers: [], tasks: [], timeline: [] };
     $$('[data-team-progress-drilldown]').forEach(button => button.classList.toggle(
       'active', button.dataset.teamProgressDrilldown === state.teamStatus.drilldown,
@@ -7779,18 +8051,51 @@
       : state.teamStatus.drilldown === 'timeline' ? drilldown.timeline : drilldown.customers;
     const progressTotal = Number(data.pagination?.total ?? rows?.length ?? 0);
     const visibleRows = rows || [];
-    $('#teamProgressDrilldownList').innerHTML = visibleRows.length ? visibleRows.map(row => {
+    const drilldownColumns = teamProgressDrilldownColumnDefinitions(state.teamStatus.drilldown);
+    const drilldownRows = sortedTeamProgressDrilldownRows(visibleRows).map(row => {
       if (state.teamStatus.drilldown === 'customer') {
         const facts = [row.progressed && '有推进', row.deferred && '有延期',
           row.planned && '已形成计划', row.actedAfterPlan && '计划后已行动'].filter(Boolean);
-        return `<button class="team-drilldown-row" type="button" data-open-customer="${esc(row.accountId)}"><span><strong>${esc(row.companyName || row.customerId)}</strong><small>${esc(row.customerId)} · ${esc(userById(row.ownerId)?.name || row.ownerId || '未分配')}</small></span><span>${facts.map(label => `<i class="pill gray">${label}</i>`).join('') || '<i class="pill gray">持续沉默</i>'}</span></button>`;
+        return {
+          company: `<button class="text-button" type="button" data-open-customer="${esc(row.accountId)}">${esc(row.companyName || row.customerId)}</button>`,
+          customer_id: esc(row.customerId),
+          owner: esc(userById(row.ownerId)?.name || row.ownerId || '未分配'),
+          country: esc(row.country || '—'), stage: esc(row.stage || '—'),
+          facts: facts.length ? facts.map(label => `<span class="pill gray">${esc(label)}</span>`).join(' ') : '<span class="pill gray">持续沉默</span>',
+          _attrs: `data-team-drilldown-row="${esc(row.accountId)}"`,
+        };
       }
       if (state.teamStatus.drilldown === 'task') {
-        return `<button class="team-drilldown-row" type="button" data-manager-task-id="${esc(row.taskId)}"><span><strong>${esc(managerTaskReasonLabels[row.reason] || row.reason || '主管待办')}</strong><small>${esc(row.customerId)} · ${esc(userById(row.salesUserId)?.name || row.salesUserId)}</small></span><span class="pill ${row.status === 'overdue' || row.status === 'escalated' ? 'red' : 'gray'}">${esc(managerTaskStatusLabels[row.status] || row.status)}</span></button>`;
+        return {
+          customer_id: esc(row.customerId),
+          task_reason: `<button class="text-button" type="button" data-manager-task-id="${esc(row.taskId)}">${esc(managerTaskReasonLabels[row.reason] || row.reason || '主管待办')}</button>`,
+          owner: esc(userById(row.salesUserId)?.name || row.salesUserId || '未分配'),
+          status: `<span class="pill ${row.status === 'overdue' || row.status === 'escalated' ? 'red' : 'gray'}">${esc(managerTaskStatusLabels[row.status] || row.status || '—')}</span>`,
+          occurred_at: esc(shortDate(row.occurredAt, true)),
+          _attrs: `data-team-drilldown-row="${esc(row.taskId)}"`,
+        };
       }
       const kindLabels = { activity: '真实动作', deferred_plan: '暂未确定', next_plan: '形成计划', manager_task: '主管待办' };
-      return `<div class="team-drilldown-row"><span><strong>${esc(kindLabels[row.kind] || row.kind)}</strong><small>${esc(row.customerId)} · ${esc(row.detail || '')}</small></span><time>${esc(shortDate(row.occurredAt, true))}</time></div>`;
-    }).join('') : '<div class="empty">当前范围没有对应明细</div>';
+      return {
+        kind: esc(kindLabels[row.kind] || row.kind || '事实'), customer_id: esc(row.customerId),
+        owner: esc(userById(row.salesUserId)?.name || row.salesUserId || '未分配'),
+        detail: esc(row.detail || '—'), occurred_at: esc(shortDate(row.occurredAt, true)),
+        _attrs: `data-team-drilldown-row="${esc(row.eventId)}"`,
+      };
+    });
+    const drilldownMarkup = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: drilldownColumns, rows: drilldownRows, preferences: state.teamProgressDrilldownListLayout,
+        attrs: 'data-list-page="team_progress_drilldown"', headerAttrs: 'class="team-progress-drilldown-list-head"',
+        emptyText: '当前范围没有对应明细',
+      })
+      : drilldownRows.length
+        ? table(drilldownColumns.map(column => column.label), drilldownRows.map(row => drilldownColumns.map(column => row[column.key])), 'data-list-page="team_progress_drilldown"')
+        : '<div class="empty">当前范围没有对应明细</div>';
+    $('#teamProgressDrilldownList').innerHTML = `<div class="data-table">${drilldownMarkup}</div>`;
+    const visibleDrilldownColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(drilldownColumns, state.teamProgressDrilldownListLayout) : drilldownColumns;
+    applyTableColumnClasses($('#teamProgressDrilldownList'), visibleDrilldownColumns.map(column => column.className || ''));
     renderPagination('#teamProgressPagination', 'team_progress', {
       page: state.teamStatus.progressPage, pageSize: state.teamStatus.progressPageSize,
       total: progressTotal, loading: state.teamStatus.loading,
@@ -7838,17 +8143,39 @@
     const writeEnabled = state.teamStatus.writeEnabled && can('record_collaboration_support')
       && !state.data?.impersonation;
     $('#teamCollaborationAdd')?.classList.toggle('hidden', !writeEnabled);
-    $('#teamCollaborationList').innerHTML = rows.length ? rows.map(item => {
+    const collaborationColumns = teamCollaborationColumnDefinitions();
+    const tableRows = sortedTeamCollaborationRows(rows).map(item => {
       const sourceLabel = item.source === 'system' ? '系统事实' : '手工补记';
       const sourceClass = item.source === 'system' ? 'system' : 'manual';
       const actionable = writeEnabled && item.source === 'manual' && item.effective && !item.revoked;
-      return `<article class="team-collaboration-item ${item.effective === false ? 'superseded' : ''}">
-        <header><div><span class="team-source ${sourceClass}">${sourceLabel}</span><span class="pill ${item.status === 'escalated' ? 'red' : item.status === 'resolved' ? '' : 'gray'}">${esc(collaborationStatusLabels[item.status] || item.status)}</span></div><time>${esc(shortDate(item.createdAt, true))}</time></header>
-        <div class="team-collaboration-title"><strong>${esc(userById(item.salesUserId)?.name || item.salesUserId || '未指定销售')}</strong><span>${esc(item.customerId || '未关联客户')}</span></div>
-        <dl><div><dt>问题</dt><dd>${esc(item.problem || '—')}</dd></div><div><dt>建议</dt><dd>${esc(item.suggestion || '—')}</dd></div><div><dt>结果 / 下一步</dt><dd>${esc(item.outcome || item.nextStep || '待处理')}</dd></div></dl>
-        <footer><span>${esc(collaborationRelationLabels[item.relationType] || item.relationType)} · 操作人 ${esc(userById(item.actorId)?.name || item.actorId || '系统')}${item.supersedesEventId ? ` · 接续 ${esc(item.supersedesEventId)}` : ''}</span>${actionable ? `<div><button class="text-button" type="button" data-collaboration-supplement="${esc(item.eventId)}">补充</button><button class="text-button" type="button" data-collaboration-correct="${esc(item.eventId)}">更正</button><button class="text-button danger" type="button" data-collaboration-revoke="${esc(item.eventId)}">撤销</button></div>` : ''}</footer>
-      </article>`;
-    }).join('') : `<div class="empty">${state.teamStatus.loaded ? '当前筛选下没有协作事实' : '进入栏目后加载协作事实'}</div>`;
+      const actorId = String(item.actorId || '');
+      const actorLabel = userById(actorId)?.name || actorId || '系统';
+      return {
+        sales_user: esc(userById(item.salesUserId)?.name || item.salesUserId || '未指定销售'),
+        customer: esc(item.customerId || '未关联客户'),
+        status: `<span class="pill ${item.status === 'escalated' ? 'red' : item.status === 'resolved' ? '' : 'gray'}">${esc(collaborationStatusLabels[item.status] || item.status)}</span>`,
+        source: `<span class="team-source ${sourceClass}">${sourceLabel}</span>`,
+        relation: `${esc(collaborationRelationLabels[item.relationType] || item.relationType || '—')}<small class="subtle">操作人 ${esc(actorLabel)}${item.supersedesEventId ? ` · 接续 ${esc(item.supersedesEventId)}` : ''}</small>`,
+        problem: esc(item.problem || '—'), suggestion: esc(item.suggestion || '—'),
+        outcome: esc(item.outcome || '—'), next_step: esc(item.nextStep || '—'),
+        created_at: esc(shortDate(item.createdAt, true)),
+        actions: `${actionable ? `<button class="text-button" type="button" data-collaboration-supplement="${esc(item.eventId)}">补充</button><button class="text-button" type="button" data-collaboration-correct="${esc(item.eventId)}">更正</button><button class="text-button danger" type="button" data-collaboration-revoke="${esc(item.eventId)}">撤销</button>` : '<span class="subtle">—</span>'}`,
+        _attrs: `class="${item.effective === false ? 'superseded' : ''}" data-collaboration-row="${esc(item.eventId)}"`,
+      };
+    });
+    const collaborationMarkup = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns: collaborationColumns, rows: tableRows, preferences: state.teamCollaborationListLayout,
+        attrs: 'data-list-page="team_collaboration"', headerAttrs: 'class="team-collaboration-list-head"',
+        emptyText: state.teamStatus.loaded ? '当前筛选下没有协作事实' : '进入栏目后加载协作事实',
+      })
+      : tableRows.length
+        ? table(collaborationColumns.map(column => column.label), tableRows.map(row => collaborationColumns.map(column => row[column.key])), 'data-list-page="team_collaboration"')
+        : `<div class="empty">${state.teamStatus.loaded ? '当前筛选下没有协作事实' : '进入栏目后加载协作事实'}</div>`;
+    $('#teamCollaborationList').innerHTML = `<div class="data-table">${collaborationMarkup}</div>`;
+    const visibleCollaborationColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(collaborationColumns, state.teamCollaborationListLayout) : collaborationColumns;
+    applyTableColumnClasses($('#teamCollaborationList'), visibleCollaborationColumns.map(column => column.className || ''));
     renderPagination('#teamCollaborationPagination', 'team_collaboration', {
       page: state.teamStatus.collaborationPage,
       pageSize: state.teamStatus.collaborationPageSize,
@@ -14858,6 +15185,15 @@
       else closeManagerMetricsColumnSettings();
       return;
     }
+    for (const kind of ['team_progress_sales', 'team_progress_drilldown', 'team_collaboration']) {
+      const config = teamLayoutConfig(kind);
+      if (event.target.closest(config.button)) {
+        const panel = $(config.panel);
+        if (panel?.classList.contains('hidden')) openTeamListColumnSettings(kind);
+        else closeTeamListColumnSettings(kind);
+        return;
+      }
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
@@ -14888,6 +15224,12 @@
         moveManagerRisksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#managerMetricColumnSettingsPanel')) {
         moveManagerMetricsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#teamProgressSalesColumnSettingsPanel')) {
+        moveTeamListColumn('team_progress_sales', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#teamProgressDrilldownColumnSettingsPanel')) {
+        moveTeamListColumn('team_progress_drilldown', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#teamCollaborationColumnSettingsPanel')) {
+        moveTeamListColumn('team_collaboration', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -14908,6 +15250,9 @@
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) resetManagerTasksListLayout();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) resetManagerRisksListLayout();
       else if (event.target.closest('#managerMetricColumnSettingsPanel')) resetManagerMetricsListLayout();
+      else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) resetTeamListLayout('team_progress_sales');
+      else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) resetTeamListLayout('team_progress_drilldown');
+      else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) resetTeamListLayout('team_collaboration');
       else resetCustomerListLayout();
       return;
     }
@@ -14926,6 +15271,9 @@
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) closeManagerTasksColumnSettings();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) closeManagerRisksColumnSettings();
       else if (event.target.closest('#managerMetricColumnSettingsPanel')) closeManagerMetricsColumnSettings();
+      else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_sales');
+      else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) closeTeamListColumnSettings('team_progress_drilldown');
+      else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) closeTeamListColumnSettings('team_collaboration');
       else closeCustomerColumnSettings();
       return;
     }
@@ -15791,6 +16139,21 @@
       saveManagerMetricsListLayout();
       renderManagerMetrics();
     }
+    if (event.target.id === 'teamProgressSalesSort') {
+      state.teamProgressSalesListLayout = { ...state.teamProgressSalesListLayout, sortPreset: event.target.value };
+      saveTeamProgressSalesListLayout();
+      renderTeamProgress();
+    }
+    if (event.target.id === 'teamProgressDrilldownSort') {
+      state.teamProgressDrilldownListLayout = { ...state.teamProgressDrilldownListLayout, sortPreset: event.target.value };
+      saveTeamProgressDrilldownListLayout();
+      renderTeamProgress();
+    }
+    if (event.target.id === 'teamCollaborationSort') {
+      state.teamCollaborationListLayout = { ...state.teamCollaborationListLayout, sortPreset: event.target.value };
+      saveTeamCollaborationListLayout();
+      renderTeamCollaboration();
+    }
     if (event.target.name?.startsWith('permission__') && event.target.closest('#permissionGroupForm')) {
       refreshPermissionGroupSummary(event.target.closest('#permissionGroupForm'));
     }
@@ -15942,6 +16305,11 @@
       if (viewChanged && canonicalView === 'managerTasks') restoreManagerTasksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') restoreManagerRisksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') restoreManagerMetricsListLayout();
+      if (viewChanged && canonicalView === 'team') {
+        restoreTeamProgressSalesListLayout();
+        restoreTeamProgressDrilldownListLayout();
+        restoreTeamCollaborationListLayout();
+      }
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -16098,6 +16466,12 @@
         toggleManagerRisksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#managerMetricColumnSettingsPanel')) {
         toggleManagerMetricsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#teamProgressSalesColumnSettingsPanel')) {
+        toggleTeamListColumn('team_progress_sales', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#teamProgressDrilldownColumnSettingsPanel')) {
+        toggleTeamListColumn('team_progress_drilldown', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#teamCollaborationColumnSettingsPanel')) {
+        toggleTeamListColumn('team_collaboration', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
