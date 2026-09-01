@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 09:26:16`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-01 09:45:02`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `54950d9`（相对 origin/main ahead 285） |
-| 工作区 | 干净 |
-| 全量测试 | `node --test` 2071/2071 |
-| 核心测试 | `npm test` 1709/1709 |
+| HEAD | `bf5b40f`（相对 origin/main ahead 288） |
+| 工作区 | 有未提交改动 |
+| 全量测试 | `node --test` 2072/2072 |
+| 核心测试 | `npm test` 1710/1710 |
 | sales_crm.js | 12945 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-01-list-widget-maintenance-runs.md` |
+| 最近会话 | `2026-09-01-list-widget-correction-history.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -23,8 +23,8 @@
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 54 |
-| feat(...) | 50 |
-| docs(governance) | 133 |
+| feat(...) | 51 |
+| docs(governance) | 135 |
 | 其他 | 18 |
 
 ## 阶段 0：治理基础
@@ -164,7 +164,7 @@
 
 ## 阶段 E：前端 widgets
 
-> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录与维护运行记录（6001f61），用户/审计/更正后台列表继续按页面推进。
+> **进行中** — customerProfile 默认 widget view 已接线（29282df）；/development-workbench profile-only 只读兼容契约已锁定（e59bf22，浏览器运行时无写入仍待验证）；widget registry 已实现独立 per-widget mount host 隔离（8a86425）；profile-facts、drawer-facts、drawer-ai、customer-ai-station、master-profile、insight-section、next-step（含告警条）、timeline 抽为自包含 UMD widget，三源抽屉 facts/主档/状态条/时间线共用；identity/source tags 的 sourceTagMarkup 已抽为自包含 UMD widget（3adc1d1，customerTags 只读投影、去重/limit/source-category-name 转义，AI gate 由 app 注入）；List widget 已迁移 Dashboard、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research、Recon、不对口记录、Pipeline、Intake/lead_flow、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录与跟进更正历史只读列表（61a6572），用户/审计后台列表继续按页面推进。
 
 ### 已完成
 
@@ -199,12 +199,12 @@
 - [x] Insights 人工评价列表迁移（非 AI 字段 schema、独立用户布局偏好、服务端排序与人工评价动作）（`75a30b7`）
 - [x] 受保护客户目录迁移（授权人工字段 schema、用户布局偏好、安全服务端排序，保留导入/批次/冲突/导出/行操作）（`f1fe7d1`）
 - [x] 维护运行记录只读列表迁移（人工字段 schema、用户布局偏好、本地排序，保留 limit=20 与预览/执行契约）（`6001f61`）
+- [x] 跟进更正历史只读列表迁移（人工字段 schema、用户布局偏好、本地排序，保留筛选/分页与 target/proposal/review 审批流）（`61a6572`）
 - [x] Phase E 隔离浏览器预览 harness（临时 SQLite/loopback/随机端口/AI 关闭/fail-closed）（`dd650ba`）
 
 ### 待办
 
 - [ ] **frontend** 销售/经理页面真实浏览器验证：运行已建立的 Phase E preview harness，验证默认 customerProfile 与 profile-only 兼容入口（当前依赖缺失时 fail-closed）
-- [ ] **frontend** 跟进更正历史只读列表迁移；明确排除 AI 字段，保留既有筛选/分页与 target/proposal/review 审批流
 - [ ] **frontend** 用户/归档用户、审计/迁移复核列表迁移；先拆分 bootstrap 数据与高风险行操作边界
 - [ ] **frontend** 其余 widget 化：身份/业务画像/洞察/商务/回收状态的具体 body
 - [ ] **frontend** #customerDrawer 与完整资料共用同一 widget 集合（CRM 复杂 activity timeline 尚未下沉，剩余主体待评估）
