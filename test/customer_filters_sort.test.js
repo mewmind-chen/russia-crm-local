@@ -27,3 +27,24 @@ test('customer query rejects unknown JSON sort fields with authorization error',
     return true;
   });
 });
+
+test('customer query applies the same contact and recon gates to custom sorting', () => {
+  assert.throws(() => buildCustomerQuery({
+    sort: JSON.stringify([{ field: 'pool_email_raw', direction: 'asc' }]),
+  }, { canViewContacts: false, canViewRecon: true }), error => {
+    assert.equal(error.statusCode, 403);
+    assert.equal(error.code, 'SORT_NOT_AUTHORIZED');
+    return true;
+  });
+  assert.throws(() => buildCustomerQuery({
+    sort: JSON.stringify([{ field: 'pool_deep_report', direction: 'asc' }]),
+  }, { canViewContacts: true, canViewRecon: false }), error => {
+    assert.equal(error.statusCode, 403);
+    assert.equal(error.code, 'SORT_NOT_AUTHORIZED');
+    return true;
+  });
+  const allowed = buildCustomerQuery({
+    sort: JSON.stringify([{ field: 'pool_email_raw', direction: 'asc' }]),
+  }, { canViewContacts: true, canViewRecon: true });
+  assert.match(allowed.orderBy, /p\.email_raw/);
+});

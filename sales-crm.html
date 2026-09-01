@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260824-studio-deck-v1">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260824-studio-deck-v1">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260824-studio-deck-v1&rev=20260902-list-layout-v4">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260824-studio-deck-v1">
 </head>
 <body data-app="sales" data-theme="studio">
@@ -333,6 +333,13 @@
             <button id="customerProfileDataEdit" class="button secondary hidden" type="button">编辑客户资料</button>
           </div>
         </div>
+        <nav id="customerProfileTabs" class="customer-profile-tabs" aria-label="客户资料页签">
+          <button type="button" class="customer-profile-tab active" data-profile-tab="overview" aria-selected="true">概览</button>
+          <button type="button" class="customer-profile-tab" data-profile-tab="follow" aria-selected="false">跟进</button>
+          <button type="button" class="customer-profile-tab" data-profile-tab="contacts" aria-selected="false">联系人</button>
+          <button type="button" class="customer-profile-tab" data-profile-tab="recon" aria-selected="false">Recon</button>
+          <button type="button" class="customer-profile-tab" data-profile-tab="tags" aria-selected="false">标签</button>
+        </nav>
         <section id="customerAiStation" class="customer-ai-station hidden" aria-live="polite">
           <div class="customer-ai-station-head">
             <div><h3>AI 客户分析与销售资料包</h3></div>
@@ -1016,8 +1023,8 @@
   <script src="/sales-assets/source-tags-widget.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/widget-registry.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/next-action-time.js?v=20260824-studio-deck-v1"></script>
-  <script src="/sales-assets/list-widget.js?v=20260824-studio-deck-v1"></script>
-  <script src="/sales-assets/app.js?v=20260824-studio-deck-v1"></script>
+  <script src="/sales-assets/list-widget.js?v=20260824-studio-deck-v1&rev=20260902-list-settings-v2"></script>
+  <script src="/sales-assets/app.js?v=20260824-studio-deck-v1&rev=20260902-list-layout-v4"></script>
   <script>
     (function () {
       var KEY = 'tp-theme';

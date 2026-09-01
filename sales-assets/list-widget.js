@@ -36,6 +36,8 @@
       defaultVisible: source.defaultVisible !== false,
       className: String(source.className || '').trim(),
       width: source.width == null ? '' : String(source.width),
+      group: source.group == null ? '' : String(source.group).trim(),
+      section: source.section == null ? '' : String(source.section).trim(),
       order: Number.isFinite(Number(source.order)) ? Number(source.order) : index,
       render: typeof source.render === 'function' ? source.render : null,
     });
@@ -201,6 +203,30 @@
     return normalized;
   }
 
+  function columnGroupLabel(column) {
+    // 页面字段目录可提供明确分组；旧目录没有时仍给出一致、可读的默认分组。
+    if (column.group) return column.group;
+    if (column.section) return column.section;
+    if (column.key === 'pool' || column.key.indexOf('pool_') === 0) return '客户主档';
+    if (column.key === 'select' || column.key === 'actions') return '操作';
+    return '业务字段';
+  }
+
+  function groupColumnsForSettings(columns) {
+    const groups = [];
+    const byLabel = new Map();
+    columns.forEach(column => {
+      const label = columnGroupLabel(column);
+      if (!byLabel.has(label)) {
+        const group = { label, columns: [] };
+        byLabel.set(label, group);
+        groups.push(group);
+      }
+      byLabel.get(label).columns.push(column);
+    });
+    return groups;
+  }
+
   function renderColumnSettingsHtml({ columns = [], preferences = {}, title = '列设置' } = {}) {
     const normalized = normalizeColumns(columns);
     const resolved = resolveColumns(normalized, preferences);
@@ -210,6 +236,7 @@
     const sort = normalizeSort(preferences.sort, normalized);
     const sortByKey = new Map(sort.map((item, index) => [item.key, { ...item, rank: index + 1 }]));
     const sortableCount = normalized.filter(column => column.sortable).length;
+    const visibleCount = normalized.filter(column => visible.has(column.key) || column.required).length;
     const rankOptions = rank => [
       '<option value="">不排序</option>',
       ...Array.from({ length: sortableCount }, (_value, index) => {
@@ -217,22 +244,26 @@
         return `<option value="${value}"${rank === value ? ' selected' : ''}>第${value}优先</option>`;
       }),
     ].join('');
-    return `<div class="list-column-settings-head"><strong>${escapeHtml(title)}</strong><span class="subtle">只影响当前用户的列表显示</span></div>`
-      + `<div class="list-column-settings-list">${ordered.map((column, index) => {
+    const rowMarkup = (column, index) => {
         const checked = visible.has(column.key) || column.required;
         const disabled = column.required ? ' disabled' : '';
         const upDisabled = index === 0 ? ' disabled' : '';
         const downDisabled = index === ordered.length - 1 ? ' disabled' : '';
+        const core = column.required || column.defaultVisible;
         const selectedSort = sortByKey.get(column.key);
         const sortControls = column.sortable
           ? `<span class="list-column-setting-sort"><label>优先级<select data-list-sort-rank="${escapeHtml(column.key)}" aria-label="${escapeHtml(column.label)}排序优先级">${rankOptions(selectedSort?.rank || 0)}</select></label><label>方向<select data-list-sort-direction="${escapeHtml(column.key)}" aria-label="${escapeHtml(column.label)}排序方向"><option value="asc"${selectedSort?.direction !== 'desc' ? ' selected' : ''}>升序</option><option value="desc"${selectedSort?.direction === 'desc' ? ' selected' : ''}>降序</option></select></label></span>`
           : '<span class="list-column-setting-sort list-column-setting-sort-disabled">不可排序</span>';
-        return `<div class="list-column-setting" data-list-column-row="${escapeHtml(column.key)}">`
+        return `<div class="list-column-setting" data-list-column-row="${escapeHtml(column.key)}" data-list-column-core="${core ? 'true' : 'false'}" data-list-column-search-text="${escapeHtml(`${column.label} ${column.key}`.toLowerCase())}">`
           + `<label><input type="checkbox" data-list-column-toggle="${escapeHtml(column.key)}"${checked ? ' checked' : ''}${disabled}> <span>${escapeHtml(column.label)}</span></label>`
           + sortControls
           + `<span class="list-column-setting-actions"><button type="button" class="text-button" data-list-column-move="up" data-list-column-key="${escapeHtml(column.key)}"${upDisabled} aria-label="上移 ${escapeHtml(column.label)}">↑</button><button type="button" class="text-button" data-list-column-move="down" data-list-column-key="${escapeHtml(column.key)}"${downDisabled} aria-label="下移 ${escapeHtml(column.label)}">↓</button></span>`
           + '</div>';
-      }).join('')}</div>`
+      };
+    const groupedRows = groupColumnsForSettings(ordered).map(group => `<section class="list-column-settings-group" data-list-column-group="${escapeHtml(group.label)}"><div class="list-column-settings-group-head"><strong>${escapeHtml(group.label)}</strong><span class="subtle">${group.columns.length} 项</span></div>${group.columns.map(column => rowMarkup(column, ordered.indexOf(column))).join('')}</section>`).join('');
+    return `<div class="list-column-settings-head"><div><strong>${escapeHtml(title)}</strong><span class="subtle">只影响当前用户的列表显示</span></div><span class="list-column-selected-count" aria-live="polite">已选 ${visibleCount}/${normalized.length}</span></div>`
+      + '<div class="list-column-settings-tools"><label><span class="sr-only">搜索列</span><input type="search" data-list-column-search placeholder="搜索字段" autocomplete="off" aria-label="搜索列"></label><span class="list-column-settings-presets"><button type="button" class="text-button" data-list-column-preset="core">仅核心</button><button type="button" class="text-button" data-list-column-preset="all">显示全部</button></span></div>'
+      + `<div class="list-column-settings-list">${groupedRows}</div>`
       + '<div class="list-column-settings-help">可为多个字段设置优先级；未设置的字段不参与排序。相同值按稳定主键保持顺序。</div>'
       + '<div class="list-column-settings-footer"><button type="button" class="text-button" data-list-layout-reset>恢复默认</button><button type="button" class="button primary tiny" data-list-layout-close>完成</button></div>';
   }
@@ -268,6 +299,62 @@
     }), options.attrs || '', options.headerAttrs || '');
   }
 
+  function refreshColumnSettingsCount(panel) {
+    const count = panel?.querySelector?.('.list-column-selected-count');
+    if (!count) return;
+    const toggles = [...panel.querySelectorAll('[data-list-column-toggle]')];
+    count.textContent = `已选 ${toggles.filter(toggle => toggle.checked).length}/${toggles.length}`;
+  }
+
+  function filterColumnSettingsRows(panel, query) {
+    if (!panel?.querySelectorAll) return;
+    const needle = String(query || '').trim().toLowerCase();
+    panel.querySelectorAll('[data-list-column-row]').forEach(row => {
+      const haystack = String(row.dataset.listColumnSearchText || row.textContent || '').toLowerCase();
+      row.hidden = Boolean(needle && !haystack.includes(needle));
+    });
+    panel.querySelectorAll('[data-list-column-group]').forEach(group => {
+      group.hidden = [...group.querySelectorAll('[data-list-column-row]')].every(row => row.hidden);
+    });
+  }
+
+  function bindColumnSettingsInteractions() {
+    if (typeof document === 'undefined' || document.documentElement?.dataset.listWidgetBound) return;
+    document.documentElement.dataset.listWidgetBound = 'true';
+    document.addEventListener('input', event => {
+      const search = event.target?.closest?.('[data-list-column-search]');
+      if (!search) return;
+      filterColumnSettingsRows(search.closest('.list-column-settings'), search.value);
+    });
+    document.addEventListener('change', event => {
+      const toggle = event.target?.closest?.('[data-list-column-toggle]');
+      if (toggle) refreshColumnSettingsCount(toggle.closest('.list-column-settings'));
+    });
+    document.addEventListener('click', event => {
+      const preset = event.target?.closest?.('[data-list-column-preset]');
+      if (!preset) return;
+      const panel = preset.closest('.list-column-settings');
+      const mode = preset.dataset.listColumnPreset;
+      if (!panel || !['core', 'all'].includes(mode)) return;
+      event.preventDefault();
+      // The page owns persistence and refresh. Emit one semantic event instead
+      // of dispatching one change per checkbox (which would rerender the panel
+      // during the loop and leave a partially applied preset).
+      panel.querySelectorAll('[data-list-column-toggle]').forEach(toggle => {
+        const row = toggle.closest('[data-list-column-row]');
+        const shouldShow = mode === 'all' || toggle.disabled || row?.dataset.listColumnCore === 'true';
+        toggle.checked = shouldShow;
+      });
+      refreshColumnSettingsCount(panel);
+      preset.dispatchEvent(new CustomEvent('tradepulse:list-layout-preset', {
+        bubbles: true,
+        detail: { mode },
+      }));
+    });
+  }
+
+  bindColumnSettingsInteractions();
+
   return Object.freeze({
     escapeHtml,
     uniqueStrings,
@@ -282,6 +369,8 @@
     resolveColumns,
     loadPreferences,
     savePreferences,
+    columnGroupLabel,
+    groupColumnsForSettings,
     renderColumnSettingsHtml,
     renderTable,
   });

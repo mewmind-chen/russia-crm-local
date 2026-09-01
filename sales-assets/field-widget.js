@@ -56,11 +56,17 @@
   });
 
   // 返回 schema 驱动的可见列键（按旧渲染顺序），schema 缺失/空字段时返回 null 表示走回退路径。
-  function intakeColumnKeys(schema) {
+  function intakeColumnKeys(schema, options = {}) {
     if (!schema || !Array.isArray(schema.fields) || !schema.fields.length) return null;
     const visible = new Set(schema.fields.map(field => field.key));
-    return ['company', 'fit', 'contact', 'owner', 'status']
+    const legacy = ['company', 'fit', 'contact', 'owner', 'status']
       .filter(key => (INTAKE_COLUMN_FIELDS[key] || []).some(fieldKey => visible.has(fieldKey)));
+    if (!options.includeDynamic) return legacy;
+    // 客户主档字段以 pool_* 键直接成为可配置列；这让字段目录新增字段后，
+    // 不必再维护一份“列是否存在”的硬编码映射。
+    return [...legacy, ...schema.fields
+      .map(field => String(field.key || '').trim())
+      .filter(key => key.startsWith('pool_') && visible.has(key))];
   }
 
   // —— 客户资料分区渲染 ——

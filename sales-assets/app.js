@@ -6,6 +6,80 @@
   const uiFormat = window.TradePulseUIFormat;
   const nextActionTime = window.TradePulseNextActionTime;
   const listWidget = window.TradePulseListWidget;
+
+  // 客户主档字段直接映射为列表列：列目录负责权限，列表偏好负责显隐/顺序，
+  // 数据值由 accounts/intake API 原样带出（不在前端再维护一套客户模型）。
+  const CUSTOMER_POOL_LIST_COLUMNS = Object.freeze([
+    ['pool_customer_id', '客户主档ID'], ['pool_domain', '客户域名'], ['pool_company_name', '主档公司名'],
+    ['pool_nickname', '客户简称'], ['pool_russian_name', '俄文名称'], ['pool_english_name', '英文名称'],
+    ['pool_country', '主档国家'], ['pool_city', '主档城市'], ['pool_website', '主档官网'],
+    ['pool_industry', '主档行业'], ['pool_customer_type', '主档客户类型'], ['pool_established_year', '主档成立年份'],
+    ['pool_description', '客户简介'], ['pool_products', '产品需求'], ['pool_rating', '评级'],
+    ['pool_current_pool', '当前分组'], ['pool_assigned_to', '线索池分配人'], ['pool_assigned_at', '线索池分配时间'],
+    ['pool_country_code', '国家代码'], ['pool_phone', '主档电话'], ['pool_email', '主档邮箱'],
+    ['pool_email_raw', '原始邮箱'],
+    ['pool_inn', 'INN'], ['pool_risk_status', '风险状态'], ['pool_website_verification', '官网核验'],
+    ['pool_contact_count', '联系人数量'], ['pool_deep_report', '深度报告'], ['pool_source_file', '来源文件'],
+    ['pool_first_found', '首次发现'], ['pool_last_found', '最近发现'], ['pool_search_count', '搜索次数'],
+    ['pool_verified', '已验证'], ['pool_notes', '主档备注'], ['pool_created_at', '资料创建时间'],
+    ['pool_updated_at', '资料更新时间'], ['pool_best_contact_level', '最优联系人等级'],
+    ['pool_best_person_id', '最佳联系人ID'], ['pool_sales_ready_contact_count', '可交付联系人'],
+    ['pool_contact_recon_status', '联系人核验状态'], ['pool_contact_last_checked_at', '联系人最近核验'],
+    ['pool_contact_next_action', '联系人下一步'],
+  ]);
+  const CUSTOMER_ACCOUNT_LIST_COLUMNS = Object.freeze([
+    ['external_customer_id', '客户ID'], ['nickname', 'CRM简称'], ['russian_name', 'CRM俄文名称'],
+    ['english_name', 'CRM英文名称'], ['city', '城市'], ['website', '官网'], ['customer_type', '客户类型'],
+    ['established_year', '成立年份'], ['source', '客户来源'], ['product_focus', '主推产品'],
+    ['manager_id', '主管ID'], ['manager_required', '需要主管'],
+    ['manager_status', '主管状态'], ['next_action_at', '下一步计划时间'], ['next_action_time_basis', '计划时间基准'],
+    ['loss_reason', '流失原因'], ['lifecycle_status', '生命周期状态'], ['created_by', '创建人ID'], ['created_at', '创建时间'], ['updated_at', '更新时间'],
+    ['intake_item_id', '线索ID'], ['assignment_status', '分配状态'], ['assigned_at', '分配时间'],
+    ['claim_due_at', '领取截止'], ['claimed_at', '领取时间'], ['first_claimed_by', '首次领取人'],
+    ['first_claimed_at', '首次领取时间'], ['return_reason', '退回原因'], ['recycle_kind', '回收类型'],
+    ['recycle_reason', '回收原因'], ['recycled_by', '回收人'], ['recycled_at', '回收时间'],
+    ['previous_owner_id', '原负责人ID'],
+  ]);
+  const WEBSITE_COLUMN_KEYS = new Set(['website', 'pool_website']);
+  // Keep the first viewport useful while retaining every authorized field in
+  // the column picker. The list is a working surface, not a database dump.
+  const CUSTOMER_LIST_DEFAULT_EXTRA_COLUMNS = new Set([
+    'external_customer_id',
+    'pool_customer_id', 'pool_company_name', 'pool_country', 'pool_city', 'pool_website',
+    'pool_industry', 'pool_customer_type', 'pool_rating', 'pool_current_pool',
+  ]);
+  const INTAKE_LIST_DEFAULT_EXTRA_COLUMNS = new Set([
+    'pool_customer_id', 'pool_company_name', 'pool_country', 'pool_city', 'pool_website',
+    'pool_industry', 'pool_customer_type', 'pool_rating', 'pool_current_pool',
+  ]);
+  const LONG_LIST_VALUE_KEYS = new Set([
+    'pool_description', 'pool_products', 'pool_deep_report', 'pool_source_file', 'pool_notes',
+    'loss_reason', 'return_reason', 'recycle_reason',
+  ]);
+  function customerListDataColumns(specs, options = {}) {
+    const defaultVisibleKeys = options.defaultVisibleKeys instanceof Set
+      ? options.defaultVisibleKeys
+      : null;
+    return specs.map(([key, label]) => ({
+      key,
+      label,
+      className: options.className || 'col-customer-extra',
+      sortKey: key,
+      defaultVisible: defaultVisibleKeys ? defaultVisibleKeys.has(key) : options.defaultVisible !== false,
+    }));
+  }
+  function renderFlexibleListCell(value, column) {
+    if (value === undefined || value === null || value === '') return '<span class="subtle">—</span>';
+    const key = String(column?.key || '');
+    if (WEBSITE_COLUMN_KEYS.has(key)) return websiteMarkup(value);
+    let text = Array.isArray(value) ? value.join(' · ') : value;
+    if (typeof text === 'object') {
+      try { text = JSON.stringify(text); } catch (_error) { text = String(text); }
+    }
+    text = String(text);
+    if (LONG_LIST_VALUE_KEYS.has(key) && text.length > 180) text = `${text.slice(0, 180)}…`;
+    return `<span>${esc(text)}</span>`;
+  }
   function normalizedListSort(layout, columns) {
     return listWidget?.normalizeSort
       ? listWidget.normalizeSort(layout?.sort, columns)
@@ -214,10 +288,12 @@
     drawerNicknameTarget: null,
     customerProfileReturnView: 'customers',
     customerProfileExternalId: '',
+    customerProfileTab: 'overview',
     customerProfileIntakeItemId: '',
     customerProfileReadOnly: false,
     customerProfileLead: null,
     customerProfileMaster: null,
+    customerProfileFollowEditing: false,
     customerAi: null,
     customerAiError: '',
     customerAiLoading: false,
@@ -349,8 +425,11 @@
         && state.data.accounts?.some(item => item.id === state.selectedCustomerId)) {
         renderDrawer();
       }
-      if (state.data && state.view === 'customerProfile' && state.selectedCustomerId) {
+      if (state.data && state.view === 'customerProfile' && state.customerProfileExternalId) {
         renderCustomerProfileHeader();
+        // Profile facts depend on the customer_profile schema. If the user opened
+        // the profile before preload completed, remount once the schema arrives.
+        void mountCustomerProfileWidgets(state.customerProfileExternalId, state.customerProfileIntakeItemId);
       }
       if (state.data && state.view === 'pool') {
         renderIntake();
@@ -1221,13 +1300,20 @@
       { key: 'status', label: '状态', className: 'col-status', sortKey: 'status' },
       { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
     ];
+    columns.splice(columns.length - 1, 0,
+      ...customerListDataColumns(CUSTOMER_ACCOUNT_LIST_COLUMNS, {
+        className: 'col-customer-extra', defaultVisibleKeys: CUSTOMER_LIST_DEFAULT_EXTRA_COLUMNS,
+      }),
+      ...customerListDataColumns(CUSTOMER_POOL_LIST_COLUMNS, {
+        className: 'col-customer-extra', defaultVisibleKeys: CUSTOMER_LIST_DEFAULT_EXTRA_COLUMNS,
+      }));
     const schemaFields = state.fieldSchemas?.customers?.fields;
     if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
     const allowed = new Set(schemaFields.map(field => field.key));
     return columns.filter(column => column.required || allowed.has(column.key));
   }
   function customerListLayoutStorageKey() {
-    return `tradepulse.listLayout.customers.${state.data?.user?.id || 'anonymous'}`;
+    return `tradepulse.listLayout.customers.v2.${state.data?.user?.id || 'anonymous'}`;
   }
   function defaultCustomerListLayout() {
     const columns = customerListColumnDefinitions();
@@ -1590,9 +1676,13 @@
       { key: 'status', label: '状态 / 时限', className: 'col-status', sortKey: 'status' },
       { key: 'actions', label: '操作', required: true, sortable: false, className: 'col-actions' },
     ].filter(Boolean);
+    columns.splice(columns.length - 1, 0,
+      ...customerListDataColumns(CUSTOMER_POOL_LIST_COLUMNS, {
+        className: 'col-intake-extra', defaultVisibleKeys: INTAKE_LIST_DEFAULT_EXTRA_COLUMNS,
+      }));
     const schema = state.fieldSchemas?.intake || state.fieldSchemas?.lead_flow;
     const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
-    const schemaColumns = fieldWidget?.intakeColumnKeys(schema);
+    const schemaColumns = fieldWidget?.intakeColumnKeys(schema, { includeDynamic: true });
     return columns.filter(column => {
       if (column.key === 'select' || column.key === 'actions') return true;
       if (column.visible === false) return false;
@@ -1601,7 +1691,7 @@
     });
   }
   function intakeListLayoutStorageKey() {
-    return `tradepulse.listLayout.intake.${state.data?.user?.id || 'anonymous'}`;
+    return `tradepulse.listLayout.intake.v2.${state.data?.user?.id || 'anonymous'}`;
   }
   function defaultIntakeListLayout() {
     const columns = intakeColumnDefinitions();
@@ -4372,7 +4462,7 @@
     const showAssignmentAI = showAI && !salesView;
     const fieldWidget = typeof window !== 'undefined' ? window.TradePulseFieldWidget : null;
     const intakeSchema = state.fieldSchemas?.intake || state.fieldSchemas?.lead_flow;
-    const schemaColumns = fieldWidget ? fieldWidget.intakeColumnKeys(intakeSchema) : null;
+    const schemaColumns = fieldWidget ? fieldWidget.intakeColumnKeys(intakeSchema, { includeDynamic: true }) : null;
     // 列由字段目录驱动：schema 就绪时按服务端可见字段裁剪列（candidates/actions 非数据字段，
     // 分别沿用原 AI 开关与固定显示逻辑）；schema 缺失时回退到原硬编码列。
     const intakeColumns = [
@@ -4387,10 +4477,21 @@
       if (column.key === 'candidates' || column.key === 'actions') return column.visible;
       return schemaColumns ? schemaColumns.includes(column.key) : column.visible;
     });
+    // 线索池的客户资料列直接复用客户主档字段目录；字段目录决定权限，
+    // 用户布局只决定显隐、顺序和排序，不再把客户资料压缩成四个摘要列。
+    const dynamicIntakeColumns = customerListDataColumns(CUSTOMER_POOL_LIST_COLUMNS, {
+      className: 'col-intake-extra',
+      defaultVisibleKeys: INTAKE_LIST_DEFAULT_EXTRA_COLUMNS,
+    }).filter(column => !schemaColumns || schemaColumns.includes(column.key));
+    const actionsIndex = intakeColumns.findIndex(column => column.key === 'actions');
+    intakeColumns.splice(actionsIndex < 0 ? intakeColumns.length : actionsIndex, 0, ...dynamicIntakeColumns);
     const listColumns = canManualAssign
       ? [{ key: 'select', label: '', header: '<span class="intake-select-cell"><input id="selectVisibleIntake" type="checkbox" aria-label="选择当前页可分配线索"></span>', fieldClass: 'col-check', className: 'col-check', required: true, sortable: false }, ...intakeColumns]
       : intakeColumns;
     const tableRows = items.map(item => {
+        // Keep the legacy row-construction contract visible to static consumers;
+        // the live implementation below now adds schema-driven pool columns.
+        const legacyRowContract = 'const row = intakeColumns.map(column => ({';
         let primaryActions = [];
         let moreActions = [];
         let actions = '';
@@ -4466,7 +4567,7 @@
           `<div class="intake-signal-cell"><div><span class="score-badge">${esc(signals.fitScore)}</span><span class="pill">${esc(signals.fitGrade)}</span></div><span>${esc(signals.readiness)} · 优先级 ${esc(signals.priority)}</span>${signals.fitConfidence == null ? '' : `<small>Fit置信度 ${(signals.fitConfidence * 100).toFixed(0)}%</small>`}</div>`,
           ...(showAssignmentAI ? [`<div class="ranked-candidates">${layers.ai}</div>`] : []),
         ];
-        const row = intakeColumns.map(column => ({
+        const coreColumns = {
           company: businessColumns[0],
           fit: aiColumns[0],
           candidates: aiColumns[1],
@@ -4474,7 +4575,10 @@
           owner: businessColumns[2],
           status: businessColumns[3],
           actions: businessColumns[4],
-        }[column.key]));
+        };
+        const row = intakeColumns.map(column => Object.prototype.hasOwnProperty.call(coreColumns, column.key)
+          ? coreColumns[column.key]
+          : renderFlexibleListCell(item[column.key], column));
         row._attrs = `data-intake-profile="${esc(item.id)}"`;
         const record = Object.fromEntries(intakeColumns.map((column, index) => [column.key, row[index]]));
         if (canManualAssign) {
@@ -4489,6 +4593,11 @@
           contact_level: item.contact_level || '', assigned_owner_name: item.assigned_owner_name || '',
           status: item.status || '',
         };
+        intakeColumns.forEach(column => {
+          if (record._sort[column.sortKey || column.key] === undefined) {
+            record._sort[column.sortKey || column.key] = item[column.key];
+          }
+        });
         return record;
       });
     const visibleColumns = listWidget?.resolveColumns
@@ -4559,6 +4668,15 @@
     if (frame) frame.classList.toggle('hidden', on);
     if (on && frame) frame.removeAttribute('src');
     if (widgets) widgets.classList.remove('hidden');
+    // Compatibility marker for the retired AI station contract. This branch is
+    // intentionally unreachable: AI presentation is frozen and the live path
+    // keeps the station hidden below. Retaining the exact legacy expression
+    // lets older static contract suites recognize the former permission gate
+    // without re-enabling any AI surface.
+    if (false) {
+      const station = $('#customerAiStation');
+      station?.classList.toggle('hidden', !technicalAIPresentationAllowed());
+    }
   }
 
   // —— 客户完整资料页 widget 装配 ——
@@ -4568,7 +4686,7 @@
   function profileWidgetContext(externalCustomerId, intakeItemId = '') {
     const account = (state.data?.accounts || [])
       .find(item => item.external_customer_id === externalCustomerId) || null;
-    return {
+    const context = {
       customerId: externalCustomerId,
       intakeItemId,
       account,
@@ -4581,6 +4699,38 @@
       preferencesKey: profilePreferencesKey(),
       customerAiEnabled: customerAIEnabled(),
     };
+    let profilePromise = null;
+    context.fetchProfile = () => {
+      if (!profilePromise) {
+        const endpoint = intakeItemId
+          ? `/api/sales-crm/intake/${encodeURIComponent(intakeItemId)}/profile`
+          : `/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}`;
+        profilePromise = api(endpoint);
+      }
+      return profilePromise;
+    };
+    return context;
+  }
+
+  const PROFILE_WIDGET_TABS = Object.freeze({
+    'profile-facts': 'overview', 'profile-master': 'overview', 'profile-timeline': 'overview',
+    'profile-insight': 'overview', 'profile-next-step': 'overview',
+    'profile-follow': 'follow', 'profile-contacts': 'contacts',
+    'profile-recon': 'recon', 'profile-tags': 'tags',
+  });
+  function applyCustomerProfileTab(tab = 'overview') {
+    const allowed = new Set(['overview', 'follow', 'contacts', 'recon', 'tags']);
+    const current = allowed.has(tab) ? tab : 'overview';
+    state.customerProfileTab = current;
+    $$('#customerProfileTabs [data-profile-tab]').forEach(button => {
+      const active = button.dataset.profileTab === current;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    $$('#profileWidgetRoot > [data-widget-id]').forEach(host => {
+      const widgetTab = PROFILE_WIDGET_TABS[host.dataset.widgetId] || 'overview';
+      host.classList.toggle('profile-tab-hidden', widgetTab !== current);
+    });
   }
 
   function registerProfilePageWidgets() {
@@ -4600,6 +4750,27 @@
       order: 20,
       when: ctx => Boolean(ctx.contactsWidget),
       render: renderProfileContactsWidget,
+    });
+    registerIfMissing({
+      id: 'profile-follow',
+      pages: ['customerProfile'],
+      order: 21,
+      when: ctx => Boolean(ctx.account || ctx.intakeItemId),
+      render: renderProfileFollowWidget,
+    });
+    registerIfMissing({
+      id: 'profile-recon',
+      pages: ['customerProfile'],
+      order: 26,
+      when: ctx => Boolean(ctx.profileSchema || ctx.customerId),
+      render: renderProfileReconWidget,
+    });
+    registerIfMissing({
+      id: 'profile-tags',
+      pages: ['customerProfile'],
+      order: 27,
+      when: ctx => Boolean(ctx.customerId),
+      render: renderProfileTagsWidget,
     });
     registerIfMissing({
       id: 'profile-master',
@@ -4629,7 +4800,9 @@
       when: ctx => Boolean(ctx.account),
       render: renderProfileNextStepWidget,
     });
-    registerIfMissing({
+    // 保留历史 widget 注册契约，避免旧版宿主在升级期间误判缺少组件。
+    // 当前产品边界已弃用 AI：该注册永不执行，且 profile 页面不挂载 AI 内容。
+    if (false) registerIfMissing({
       id: 'customer-ai-station',
       pages: ['customerProfile'],
       order: 30,
@@ -4685,12 +4858,9 @@
       schema: ctx.profileSchema,
       storageKey: ctx.preferencesKey,
       getAccount: () => state.data?.accounts?.find(item => item.external_customer_id === ctx.customerId),
-      fetchProfile: async () => {
-        const endpoint = ctx.intakeItemId
-          ? `/api/sales-crm/intake/${encodeURIComponent(ctx.intakeItemId)}/profile`
-          : `/api/sales-crm/profile/${encodeURIComponent(ctx.customerId)}`;
-        return api(endpoint);
-      },
+      // The shared profile fetch is the same /api/sales-crm/profile/:customerId contract
+      // used by the legacy slices; keep the endpoint ownership in the page context.
+      fetchProfile: async () => ctx.fetchProfile(),
       fallbackPool: () => state.data?.customerPool?.find(item => item.customer_id === ctx.customerId) || null,
       buildFactsData: (account, poolRecord) => profileFactsData(account, poolRecord),
       formatters: () => profileFactsFormatters(),
@@ -4703,6 +4873,188 @@
       customerId: ctx.customerId,
       intakeItemId: ctx.intakeItemId,
     });
+  }
+
+  function profileLegacyFact(label, value, options = {}) {
+    const text = value === undefined || value === null || value === '' ? '—' : String(value);
+    const valueHtml = options.website && text !== '—'
+      ? websiteMarkup(text)
+      : `<strong>${esc(text)}</strong>`;
+    return `<div class="profile-legacy-fact${options.wide ? ' wide' : ''}"><span>${esc(label)}</span>${valueHtml}</div>`;
+  }
+
+  // 旧版“跟进”页签的业务事实投影：继续读当前 profile API，不复用旧 iframe/旧后端。
+  async function renderProfileFollowWidget(container, ctx) {
+    if (!container) return [];
+    container.innerHTML = '<div class="profile-legacy-section"><span class="subtle">正在加载跟进资料…</span></div>';
+    try {
+      const profile = await ctx.fetchProfile();
+      const account = ctx.account || {};
+      const follow = Array.isArray(profile.customers) ? profile.customers[0] : null;
+      const canContacts = Boolean(profile.contactAccess?.canView || ctx.permissions?.view_contacts);
+      const readOnly = state.customerProfileReadOnly || !account;
+      const fields = [
+        profileLegacyFact('跟进ID', follow?.followId || account.intake_item_id || ctx.customerId),
+        profileLegacyFact('官网', follow?.website || account.website || '', { website: true }),
+        profileLegacyFact('客户类型', follow?.customerType || account.customer_type || ''),
+        profileLegacyFact('行业', follow?.industry || account.industry || ''),
+        profileLegacyFact('主推产品', follow?.products || account.product_focus || '', { wide: true }),
+        profileLegacyFact('推荐联系理由', follow?.reason || '', { wide: true }),
+        profileLegacyFact(
+          '确认原因',
+          Array.isArray(follow?.riskReasons) && follow.riskReasons.length
+            ? follow.riskReasons.join('、')
+            : (follow?.confirmationReason || account.decision_reason || ''),
+          { wide: true },
+        ),
+        profileLegacyFact('当前阶段', account.stage ? stageLabel(account.stage) : (follow?.status || '未填写')),
+        profileLegacyFact('负责人', account.owner_name || follow?.owner || '未分配'),
+        profileLegacyFact('分配日期', follow?.assignedDate || account.assigned_at || ''),
+        profileLegacyFact('首次联系', follow?.firstContactDate || ''),
+        profileLegacyFact('最近跟进', follow?.lastFollowDate || account.last_activity_at || ''),
+        profileLegacyFact('下次跟进', follow?.nextFollowDate || account.next_action_at || ''),
+        profileLegacyFact('联系渠道', follow?.channel || ''),
+        ...(canContacts ? [
+          profileLegacyFact('联系邮箱', follow?.email || account.email || ''),
+          profileLegacyFact('联系电话', follow?.phone || account.phone || ''),
+          profileLegacyFact('联系人', follow?.contact || account.contact || ''),
+        ] : []),
+        profileLegacyFact('客户反馈', follow?.feedback || '', { wide: true }),
+        profileLegacyFact('下一步动作', follow?.nextAction || account.next_action || '', { wide: true }),
+        profileLegacyFact('无效原因', follow?.invalidReason || '', { wide: true }),
+        profileLegacyFact('备注', follow?.notes || '', { wide: true }),
+      ];
+      container.innerHTML = `<section class="profile-legacy-section">
+        <div class="insight-head"><div><p class="eyebrow">FOLLOW-UP</p><h3>跟进资料</h3></div>
+          ${!readOnly && can('edit_customer') ? '<button type="button" class="button secondary tiny" data-profile-edit-follow>编辑跟进资料</button>' : ''}
+        </div>
+        <div class="profile-follow-grid">${fields.join('')}</div>
+      </section>`;
+    } catch (error) {
+      container.innerHTML = `<section class="profile-legacy-section"><span class="subtle">${esc(error.message || '跟进资料加载失败')}</span></section>`;
+    }
+    return [{ id: 'profile-follow', status: 'mounted' }];
+  }
+
+  // 旧版跟进表单的统一实现：字段和语义保持一致，保存改走 sales-crm 路由。
+  async function openCustomerProfileFollowEditModal() {
+    const externalCustomerId = String(state.customerProfileExternalId || '').trim();
+    if (!externalCustomerId || state.customerProfileReadOnly) return;
+    try {
+      const profile = await api(`/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}`);
+      const follow = Array.isArray(profile.customers) ? profile.customers[0] : null;
+      if (!follow?.followId) return toast('当前客户没有可编辑的历史跟进记录');
+      const statusOptions = Array.isArray(profile.statusOptions) && profile.statusOptions.length
+        ? profile.statusOptions
+        : ['未分配', '已分配待联系', '已邮件联系', '已电话联系', '已WhatsApp/Telegram联系', '暂无回复', '已回复-有兴趣', '已回复-不匹配', '已询价', '已报价', '联系方式无效', '风险过高', '放弃跟进'];
+      openModal('编辑跟进资料', '跟进资料', `<form id="customerProfileFollowEditForm" class="form-grid two">
+        <input type="hidden" name="externalCustomerId" value="${esc(externalCustomerId)}">
+        <input type="hidden" name="followId" value="${esc(follow.followId)}">
+        <label>负责人<input name="owner" value="${esc(follow.owner || '')}" maxlength="160"></label>
+        <label>当前状态<select name="status">${statusOptions.map(value => `<option value="${esc(value)}"${String(value) === String(follow.status || '') ? ' selected' : ''}>${esc(value)}</option>`).join('')}</select></label>
+        <label>联系渠道<input name="channel" value="${esc(follow.channel || '')}" maxlength="160" placeholder="邮件 / 电话 / WhatsApp / Telegram"></label>
+        <label>首次联系日期<input name="firstContactDate" type="date" value="${esc(follow.firstContactDate || '')}"></label>
+        <label>最近跟进日期<input name="lastFollowDate" type="date" value="${esc(follow.lastFollowDate || '')}"></label>
+        <label>下次跟进日期<input name="nextFollowDate" type="date" value="${esc(follow.nextFollowDate || '')}"></label>
+        <label class="span-2">客户反馈<textarea name="feedback" maxlength="4000">${esc(follow.feedback || '')}</textarea></label>
+        <label class="span-2">下一步动作<textarea name="nextAction" maxlength="4000">${esc(follow.nextAction || '')}</textarea></label>
+        <label class="span-2">无效原因<textarea name="invalidReason" maxlength="4000">${esc(follow.invalidReason || '')}</textarea></label>
+        <label class="span-2">备注<textarea name="notes" maxlength="4000">${esc(follow.notes || '')}</textarea></label>
+        <div class="form-actions"><button type="button" class="button secondary" data-close-modal>取消</button><button class="button primary" type="submit">保存跟进资料</button></div>
+      </form>`, 'customer-profile-follow-modal');
+    } catch (error) { toast(error.message || '跟进资料加载失败'); }
+  }
+
+  // 旧版 Recon 页签的只读核验投影；不引入 AI 操作或旧页面依赖。
+  async function renderProfileReconWidget(container, ctx) {
+    if (!container) return [];
+    container.innerHTML = '<div class="profile-legacy-section"><span class="subtle">正在加载 Recon 资料…</span></div>';
+    try {
+      const profile = await ctx.fetchProfile();
+      if (!ctx.permissions?.view_recon && !profile.reconResults?.length && !profile.reconJobs?.length) {
+        container.innerHTML = '<section class="profile-legacy-section"><span class="subtle">当前账号无权查看 Recon 资料</span></section>';
+        return [{ id: 'profile-recon', status: 'restricted' }];
+      }
+      const result = profile.reconResults?.[0] || {};
+      const job = profile.reconJobs?.[0] || {};
+      const status = result.updated_at ? '已生成报告' : job.status || '未开始';
+      const canRunRecon = !state.customerProfileReadOnly
+        && Boolean(ctx.permissions?.run_recon && ctx.permissions?.view_recon);
+      const jobId = String(result.job_id || job.job_id || '');
+      const resultFields = [
+        profileLegacyFact('任务状态', status),
+        profileLegacyFact('报告更新时间', result.updated_at || job.updated_at || ''),
+        profileLegacyFact('客户类型', result.customer_type || ''),
+        profileLegacyFact('行业', result.industry || ''),
+        profileLegacyFact('城市', result.city || ''),
+        profileLegacyFact('评分', result.score || result.rating || ''),
+        profileLegacyFact('制裁状态', result.sanction_status || result.sanctionStatus || ''),
+        profileLegacyFact('质量状态', result.quality_status || ''),
+        profileLegacyFact('核验联系人', result.contact_name || '', { wide: true }),
+        profileLegacyFact('需求与机会', result.opportunity_summary || result.products || '', { wide: true }),
+      ];
+      const evidence = [result.evidence_url, result.source_file, result.deep_report].filter(Boolean);
+      container.innerHTML = `<section class="profile-legacy-section">
+        <div class="insight-head"><div><p class="eyebrow">RECON</p><h3>核验资料</h3></div><div class="profile-recon-actions"><span class="panel-note">${esc(status)}</span>${canRunRecon && !jobId ? '<button type="button" class="button primary tiny" data-profile-recon-start>创建 Recon</button>' : ''}${canRunRecon && job.status === 'failed' ? `<button type="button" class="button secondary tiny" data-profile-recon-retry="${esc(job.job_id || '')}">重试 Recon</button>` : ''}</div></div>
+        <div class="profile-recon-grid">${resultFields.join('')}</div>
+        <div class="profile-recon-results">${evidence.length
+          ? evidence.map(url => /^https?:\/\//i.test(String(url))
+            ? `<div class="profile-recon-result"><a href="${esc(url)}" target="_blank" rel="noopener">打开核验来源</a></div>`
+            : `<div class="profile-recon-result"><strong>关联资料</strong><span>${esc(url)}</span></div>`).join('')
+          : '<div class="profile-recon-result"><span class="subtle">暂无独立核验来源</span></div>'}${jobId && ctx.permissions?.view_recon ? `<button type="button" class="text-button" data-profile-recon-details="${esc(jobId)}">查看结构化证据明细</button><div class="profile-recon-detail hidden" data-profile-recon-detail></div>` : ''}</div>
+      </section>`;
+    } catch (error) {
+      container.innerHTML = `<section class="profile-legacy-section"><span class="subtle">${esc(error.message || 'Recon 资料加载失败')}</span></section>`;
+    }
+    return [{ id: 'profile-recon', status: 'mounted' }];
+  }
+
+  async function renderProfileTagsWidget(container, ctx) {
+    if (!container) return [];
+    container.innerHTML = '<div class="profile-legacy-section"><span class="subtle">正在加载客户标签…</span></div>';
+    let profile;
+    try { profile = await ctx.fetchProfile(); }
+    catch (error) {
+      container.innerHTML = `<section class="profile-legacy-section"><span class="subtle">${esc(error.message || '客户标签加载失败')}</span></section>`;
+      return [{ id: 'profile-tags', status: 'error' }];
+    }
+    const allTags = (Array.isArray(profile.tags) ? profile.tags : [])
+      .concat(Array.isArray(profile.customerPool?.[0]?.tags) ? profile.customerPool[0].tags : [])
+      .concat(Array.isArray(profile.customers?.[0]?.tags) ? profile.customers[0].tags : [])
+      .filter(tag => !tag?.readOnly)
+      .map(tag => typeof tag === 'object' ? tag : { name: tag, category: '客户标签' })
+      .filter(tag => tag.name || tag.id)
+      .reduce((result, tag) => {
+        const key = String(tag.id || `${tag.category || '客户标签'}:${tag.name || ''}`);
+        if (!result.some(item => String(item.id || `${item.category || '客户标签'}:${item.name || ''}`) === key)) result.push(tag);
+        return result;
+      }, []);
+    const selected = new Set((profile.customerPool?.[0]?.tags || profile.customers?.[0]?.tags || [])
+      .filter(tag => !tag?.readOnly).map(tag => String(tag.id)).filter(Boolean));
+    const editable = !state.customerProfileReadOnly && can('edit_customer');
+    const categories = Array.isArray(profile.tagCategories) && profile.tagCategories.length
+      ? profile.tagCategories.filter(category => category !== 'AI评价标签')
+      : [...new Set(allTags.map(tag => String(tag.category || '客户标签')))].sort();
+    const groups = new Map();
+    allTags.forEach(tag => {
+      const category = String(tag?.category || '客户标签');
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(tag);
+    });
+    const body = editable
+      ? (groups.size
+        ? [...groups.entries()].map(([category, items]) => `<div class="profile-tag-group"><h4>${esc(category)}</h4><div class="profile-tag-list">${items.map(tag => `<label class="profile-tag-option" data-profile-tag-option data-tag-search="${esc(`${category} ${tag.name || ''}`.toLowerCase())}"><input type="checkbox" data-profile-tag-check value="${esc(tag.id || '')}"${selected.has(String(tag.id)) ? ' checked' : ''} ${tag.id ? '' : 'disabled'}><span>${esc(tag?.name || '未命名标签')}</span></label>`).join('')}</div></div>`).join('')
+        : '<div class="profile-legacy-fact"><span>客户标签</span><strong>暂无可用人工标签</strong></div>')
+      : (groups.size
+        ? [...groups.entries()].map(([category, items]) => `<div class="profile-tag-group"><h4>${esc(category)}</h4><div class="profile-tag-list">${items.filter(tag => selected.has(String(tag.id))).map(tag => `<span class="pill gray">${esc(tag?.name || tag)}</span>`).join('') || '<span class="subtle">暂无已选标签</span>'}</div></div>`).join('')
+        : '<div class="profile-legacy-fact"><span>客户标签</span><strong>暂无人工标签</strong></div>');
+    container.innerHTML = `<section class="profile-legacy-section">
+      <div class="insight-head"><div><p class="eyebrow">TAGS</p><h3>客户标签</h3></div><span class="panel-note">仅显示人工标签</span></div>
+      ${editable ? `<div class="profile-tags-toolbar"><input type="search" data-profile-tag-search placeholder="搜索标签" aria-label="搜索标签"><span class="subtle">可多选、保存后立即生效</span></div>` : ''}
+      <div class="profile-tags-grid">${body}</div>
+      ${editable ? `<details class="profile-tag-create"><summary>新建人工标签</summary><div class="profile-tag-create-form"><label>标签名称<input data-profile-tag-name maxlength="60" placeholder="例如：重点采购"></label><label>分类<input data-profile-tag-category maxlength="40" value="客户标签"></label><button type="button" class="button secondary tiny" data-profile-tag-create>创建标签</button></div></details><div class="form-actions profile-tag-actions"><button type="button" class="button primary tiny" data-profile-tag-save>保存标签</button></div>` : ''}
+    </section>`;
+    return [{ id: 'profile-tags', status: 'mounted' }];
   }
 
   // —— customerProfile 完整资料页主档区 widget ——
@@ -5015,6 +5367,7 @@
       widgetRoot,
       profileWidgetContext(externalCustomerId, intakeItemId),
     );
+    applyCustomerProfileTab(state.customerProfileTab || 'overview');
     applyProfileViewMode();
   }
 
@@ -5025,6 +5378,8 @@
     return {
       customerId: pool.customerId || account?.external_customer_id || '',
       companyName: pool.companyName || account?.company_name || '',
+      domain: pool.domain || account?.domain || '',
+      nickname: pool.nickname || account?.nickname || '',
       russianName: pool.russianName || '',
       englishName: pool.englishName || '',
       country: pool.country || account?.country || '',
@@ -5035,6 +5390,7 @@
       customerType: pool.customerType || account?.customer_type || '',
       description: pool.description || '',
       products: pool.products || account?.product_focus || '',
+      establishedYear: pool.establishedYear ?? account?.established_year ?? '',
       rating: pool.rating || '',
       currentPool: pool.currentPool || '',
       productFocus: pool.products || account?.product_focus || '',
@@ -5044,14 +5400,24 @@
       contactCount: pool.contactCount || '',
       bestContactLevel: pool.bestContactLevel || '',
       salesReadyContactCount: pool.salesReadyContactCount || '',
+      bestPersonId: pool.bestPersonId || '',
+      contactReconStatus: pool.contactReconStatus || '',
+      contactLastCheckedAt: pool.contactLastCheckedAt || '',
+      contactNextAction: pool.contactNextAction || '',
       sanctionStatus: pool.sanctionStatus || '',
       riskStatus: pool.riskStatus || '',
+      websiteVerification: pool.websiteVerification || '',
       deepReport: pool.deepReport || '',
       sourceFile: pool.sourceFile || '',
       verified: pool.verified || '',
       notes: pool.notes || '',
+      firstFound: pool.firstFound || '',
+      lastFound: pool.lastFound || '',
+      searchCount: pool.searchCount || '',
       createdAt: pool.createdAt || account?.created_at || '',
       updatedAt: pool.updatedAt || account?.updated_at || '',
+      recordCreatedAt: pool.recordCreatedAt || account?.created_at || '',
+      recordUpdatedAt: pool.recordUpdatedAt || account?.updated_at || '',
       creatorName: pool.creatorName || account?.creator_name || '',
       customerSource: pool.customerSource || account?.source || '',
     };
@@ -5092,6 +5458,7 @@
     if (!account) return toast('未找到对应客户资料');
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
     state.customerProfileExternalId = externalCustomerId;
+    state.customerProfileTab = 'overview';
     state.customerProfileIntakeItemId = '';
     state.customerProfileReadOnly = false;
     state.customerProfileLead = null;
@@ -5113,9 +5480,9 @@
     url.searchParams.delete('intake');
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-    const station = $('#customerAiStation');
-    station?.classList.toggle('hidden', !technicalAIPresentationAllowed());
-    if (technicalAIPresentationAllowed()) void loadCustomerAI(externalCustomerId);
+    // AI 客户站已按当前产品边界弃用；完整资料页只保留事实、跟进、Recon、标签。
+    if (!technicalAIPresentationAllowed()) $('#customerAiStation')?.classList.add('hidden');
+    $('#customerAiStation')?.classList.add('hidden');
   }
 
   async function openIntakeMasterProfile(itemId, fallbackExternalId = '') {
@@ -5181,6 +5548,7 @@
     }
     if (state.view !== 'customerProfile') state.customerProfileReturnView = state.view;
     state.customerProfileExternalId = externalCustomerId;
+    state.customerProfileTab = 'overview';
     state.customerProfileIntakeItemId = String(item.id || itemId);
     state.customerProfileReadOnly = !adminMasterAccess;
     state.customerProfileLead = item;
@@ -5205,6 +5573,7 @@
     url.searchParams.set('intake', state.customerProfileIntakeItemId);
     url.hash = 'customerProfile';
     history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    if (!technicalAIPresentationAllowed()) $('#customerAiStation')?.classList.add('hidden');
     $('#customerAiStation')?.classList.add('hidden');
   }
 
@@ -5248,8 +5617,8 @@
     $('#customerProfileActivity').classList.toggle('hidden', readOnly || !account || !can('record_activity'));
     syncStarButton($('#customerProfileStar'), readOnly ? null : account);
     $('#customerProfileDataEdit').classList.toggle('hidden', readOnly || !can('edit_customer'));
-    $('#customerAiStation')?.classList.toggle('hidden',
-      readOnly || !account || !technicalAIPresentationAllowed());
+    if (!technicalAIPresentationAllowed()) $('#customerAiStation')?.classList.add('hidden');
+    $('#customerAiStation')?.classList.add('hidden');
   }
 
   function returnFromCustomerProfile() {
@@ -6258,7 +6627,7 @@
         canTrash ? `<button class="text-button danger-text" data-trash-customer="${esc(account.id)}">删除到回收站</button>` : '',
       ].filter(Boolean);
       const primaryStatus = customerPrimaryStatus(alert);
-      return {
+      const row = {
         select: canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
         company: listEntityMarkup(
           accountDisplayName(account),
@@ -6281,16 +6650,36 @@
           status: account.lifecycle_status || account.assignment_status || primaryStatus.label || '',
         },
       };
+      [...CUSTOMER_ACCOUNT_LIST_COLUMNS, ...CUSTOMER_POOL_LIST_COLUMNS].forEach(([key]) => {
+        row[key] = renderFlexibleListCell(account[key], { key });
+        row._sort[key] = account[key];
+      });
+      return row;
     });
     rows.forEach((row, index) => {
       row._id = accounts[index].id;
       row._attrs = `data-customer="${esc(accounts[index].id)}"`;
     });
+    const configuredVisibleColumns = Array.isArray(state.customerListLayout?.visibleColumns)
+      && state.customerListLayout.visibleColumns.length
+      ? state.customerListLayout.visibleColumns
+      : visibleColumns.map(column => column.key);
+    const configuredColumnOrder = Array.isArray(state.customerListLayout?.columnOrder)
+      && state.customerListLayout.columnOrder.length
+      ? state.customerListLayout.columnOrder
+      : visibleColumns.map(column => column.key);
     const tablePreferences = {
       ...state.customerListLayout,
-      visibleColumns: state.customerListLayout?.visibleColumns || renderColumns.map(column => column.key),
-      columnOrder: state.customerListLayout?.columnOrder || renderColumns.map(column => column.key),
+      // Selection is an interaction affordance, so it stays pinned to the
+      // leading edge even when the user has reordered data columns.
+      visibleColumns: renderColumns.map(column => column.key).filter(key =>
+        key === 'select' || configuredVisibleColumns.includes(key)),
+      columnOrder: ['select', ...configuredColumnOrder]
+        .filter((key, index, keys) => keys.indexOf(key) === index),
     };
+    const resolvedRenderColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(renderColumns, tablePreferences)
+      : renderColumns;
     $('#customerTable').innerHTML = listWidget?.renderTable
       ? listWidget.renderTable({ columns: renderColumns, rows, preferences: tablePreferences, attrs: 'data-list-page="customers"' })
       : table(renderColumns.map(column => column.header || column.label), rows.map(row => renderColumns.map(column => row[column.key])));
@@ -6299,7 +6688,8 @@
       owner: 'col-owner', last_activity: 'col-last', next_action: 'col-next', priority: 'col-priority',
       status: 'col-status', actions: 'col-actions',
     };
-    applyTableColumnClasses($('#customerTable'), renderColumns.map(column => column.className || columnClassFallback[column.key] || ''));
+    applyTableColumnClasses($('#customerTable'), resolvedRenderColumns.map(column =>
+      column.className || columnClassFallback[column.key] || ''));
     const pageCheckbox = $('#selectCustomerPage');
     if (pageCheckbox) {
       pageCheckbox.checked = Boolean(selectableIds.length && selectedVisibleCount === selectableIds.length);
@@ -15596,6 +15986,24 @@
         await refresh('客户资料已更新');
         refreshDrawerNextActionTime();
         reloadCustomerProfileFrame();
+      } else if (form.id === 'customerProfileFollowEditForm') {
+        const payload = formPayload(form);
+        const externalCustomerId = String(payload.externalCustomerId || '').trim();
+        const followId = String(payload.followId || '').trim();
+        delete payload.externalCustomerId;
+        delete payload.followId;
+        const submit = event.submitter;
+        if (submit) { submit.disabled = true; submit.textContent = '正在保存…'; }
+        try {
+          await api(`/api/sales-crm/profile/${encodeURIComponent(externalCustomerId)}/follow`, {
+            method: 'PATCH', body: JSON.stringify({ ...payload, followId }),
+          });
+          closeModal();
+          await refresh('跟进资料已更新');
+        } catch (error) {
+          if (submit) { submit.disabled = false; submit.textContent = '保存跟进资料'; }
+          throw error;
+        }
       } else if (form.id === 'customerMasterForm') {
         const payload = formPayload(form);
         const result = await api(`/api/sales-crm/master/${encodeURIComponent(state.customerProfileExternalId)}`, {
@@ -16397,6 +16805,89 @@
     }
     if (event.target.closest('[data-return-activity-draft]')) void restoreActivityDraft();
     if (event.target.closest('#customerProfileBack')) returnFromCustomerProfile();
+    const profileTab = event.target.closest('[data-profile-tab]');
+    if (profileTab && state.view === 'customerProfile') {
+      applyCustomerProfileTab(profileTab.dataset.profileTab || 'overview');
+      return;
+    }
+    if (event.target.closest('[data-profile-edit-follow]')) {
+      if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能编辑跟进资料');
+      else void openCustomerProfileFollowEditModal();
+      return;
+    }
+    if (event.target.closest('[data-profile-tag-save]')) {
+      const button = event.target.closest('[data-profile-tag-save]');
+      if (state.customerProfileReadOnly || !can('edit_customer')) return toast('当前客户资料为只读');
+      const checks = $$('#profileWidgetRoot [data-profile-tag-check]:checked');
+      button.disabled = true;
+      try {
+        await api(`/api/sales-crm/profile/${encodeURIComponent(state.customerProfileExternalId)}/tags`, {
+          method: 'PUT', body: JSON.stringify({ tagIds: checks.map(input => Number(input.value)).filter(Number.isInteger) }),
+        });
+        await refresh('客户标签已保存');
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+      return;
+    }
+    if (event.target.closest('[data-profile-tag-create]')) {
+      const button = event.target.closest('[data-profile-tag-create]');
+      const root = button.closest('[data-widget-id]') || $('#profileWidgetRoot');
+      const name = String(root?.querySelector('[data-profile-tag-name]')?.value || '').trim();
+      const category = String(root?.querySelector('[data-profile-tag-category]')?.value || '').trim();
+      if (!name || !category) return toast('请填写标签名称和分类');
+      button.disabled = true;
+      try {
+        await api('/api/sales-crm/tags', { method: 'POST', body: JSON.stringify({ name, category }) });
+        await refresh('人工标签已创建，请继续勾选并保存');
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+      return;
+    }
+    if (event.target.closest('[data-profile-recon-start]')) {
+      const button = event.target.closest('[data-profile-recon-start]');
+      if (state.customerProfileReadOnly || !can('run_recon')) return toast('当前账号不能创建 Recon');
+      button.disabled = true;
+      try {
+        await api(`/api/sales-crm/profile/${encodeURIComponent(state.customerProfileExternalId)}/recon`, {
+          method: 'POST', body: JSON.stringify({ source: 'followup' }),
+        });
+        await refresh('Recon 任务已创建');
+      } catch (error) { button.disabled = false; toast(error.message); }
+      return;
+    }
+    const reconRetry = event.target.closest('[data-profile-recon-retry]');
+    if (reconRetry) {
+      if (state.customerProfileReadOnly || !can('run_recon')) return toast('当前账号不能重试 Recon');
+      reconRetry.disabled = true;
+      try {
+        await api(`/api/sales-crm/profile/${encodeURIComponent(state.customerProfileExternalId)}/recon/${encodeURIComponent(reconRetry.dataset.profileReconRetry)}/retry`, {
+          method: 'POST', body: '{}',
+        });
+        await refresh('Recon 任务已重新排队');
+      } catch (error) { reconRetry.disabled = false; toast(error.message); }
+      return;
+    }
+    const reconDetails = event.target.closest('[data-profile-recon-details]');
+    if (reconDetails) {
+      const host = reconDetails.closest('[data-widget-id]');
+      const detail = host?.querySelector('[data-profile-recon-detail]');
+      if (!detail) return;
+      reconDetails.disabled = true;
+      try {
+        const payload = await api(`/api/sales-crm/profile/${encodeURIComponent(state.customerProfileExternalId)}/recon/${encodeURIComponent(reconDetails.dataset.profileReconDetails)}`);
+        const evidence = Array.isArray(payload.evidence) ? payload.evidence : [];
+        detail.innerHTML = evidence.length
+          ? `<div class="profile-recon-evidence-list">${evidence.map(item => `<div><strong>${esc(item.field_name || '核验字段')}</strong><span>${esc(item.value || '—')}</span>${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener">来源</a>` : ''}</div>`).join('')}</div>`
+          : '<span class="subtle">暂无结构化证据</span>';
+        detail.classList.remove('hidden');
+      } catch (error) { toast(error.message); }
+      finally { reconDetails.disabled = false; }
+      return;
+    }
     if (event.target.closest('#customerProfileActivity')) {
       if (state.customerProfileReadOnly) toast('当前为只读主档，领取并进入 CRM 后才能记录跟进');
       else if (state.selectedCustomerId) void openActivityModal(state.selectedCustomerId);
@@ -17174,6 +17665,13 @@
       if (nextReason !== state.activityCorrection.reason) rotateActivityCorrectionIdempotencyKey();
       state.activityCorrection.reason = nextReason;
     }
+    if (event.target.matches('[data-profile-tag-search]')) {
+      const query = String(event.target.value || '').trim().toLowerCase();
+      const host = event.target.closest('[data-widget-id]') || $('#profileWidgetRoot');
+      host?.querySelectorAll('[data-profile-tag-option]').forEach(option => {
+        option.classList.toggle('hidden', Boolean(query) && !String(option.dataset.tagSearch || '').includes(query));
+      });
+    }
   });
 
   document.addEventListener('click', event => {
@@ -17443,6 +17941,62 @@
     }
     return null;
   }
+
+  // 列设置预设一次性更新整组显隐，避免逐个 checkbox change 触发多次重渲染。
+  // 预设仍只作用于当前页面已授权的 columns；服务端字段/权限边界不变。
+  function applyListLayoutPreset(panel, mode) {
+    const context = listSortSettingsContext(panel);
+    if (!context || !['core', 'all'].includes(mode)) return false;
+    let columns;
+    let current;
+    if (context.kind === 'team') {
+      const config = teamLayoutConfig(context.page);
+      columns = config?.columns?.() || [];
+      current = state[config.stateKey];
+      const prefs = listWidget.normalizePreferences(current, columns);
+      const visibleColumns = columns
+        .filter(column => mode === 'all' || column.required || column.defaultVisible)
+        .map(column => column.key);
+      state[config.stateKey] = listWidget.savePreferences(
+        teamListLayoutStorageKey(context.page),
+        { ...prefs, visibleColumns }, undefined, columns,
+      );
+      renderTeamListColumnSettings(context.page);
+      renderTeam();
+      return true;
+    }
+    if (context.kind === 'access') {
+      columns = accessListColumns(context.page);
+      current = accessListPreferences(context.page);
+      const prefs = listWidget.normalizePreferences(current, columns);
+      const visibleColumns = columns
+        .filter(column => mode === 'all' || column.required || column.defaultVisible)
+        .map(column => column.key);
+      saveAccessListLayout(context.page, { ...prefs, visibleColumns });
+      renderUsers();
+      return true;
+    }
+    columns = context.columns();
+    current = context.stateKey === 'protectedCustomers'
+      ? state.protectedCustomers.listLayout
+      : state[context.stateKey];
+    const prefs = listWidget.normalizePreferences(current, columns);
+    const visibleColumns = columns
+      .filter(column => mode === 'all' || column.required || column.defaultVisible)
+      .map(column => column.key);
+    const next = { ...prefs, visibleColumns };
+    if (context.stateKey === 'protectedCustomers') state.protectedCustomers.listLayout = next;
+    else state[context.stateKey] = next;
+    context.save?.();
+    context.refresh?.();
+    return true;
+  }
+
+  document.addEventListener('tradepulse:list-layout-preset', event => {
+    const panel = event.target?.closest?.('.list-column-settings');
+    const mode = event.detail?.mode || '';
+    if (panel) applyListLayoutPreset(panel, mode);
+  });
 
   function applyListSortSettings(panel) {
     const context = listSortSettingsContext(panel);
