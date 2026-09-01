@@ -536,7 +536,22 @@
         <article class="panel manager-metric-panel">
           <div class="panel-head">
             <div><p class="eyebrow">团队复盘</p><h2>跟进计划执行情况</h2><p>团队总数与每位销售的数据使用同一授权范围和统计周期。</p></div>
-            <span id="managerMetricResultCount" class="panel-note"></span>
+            <div id="managerMetricToolbar" class="manager-metric-toolbar">
+              <span id="managerMetricResultCount" class="panel-note"></span>
+              <label class="sr-only" for="managerMetricSort">团队指标排序</label>
+              <select id="managerMetricSort" aria-label="团队指标排序">
+                <option value="actor_asc">销售名称正序</option>
+                <option value="actor_desc">销售名称倒序</option>
+                <option value="active_desc">开发客户数优先</option>
+                <option value="deferred_desc">延期客户数优先</option>
+                <option value="threshold_desc">主管关注数优先</option>
+                <option value="plan_rate_desc">计划形成率优先</option>
+                <option value="on_time_rate_desc">按时行动率优先</option>
+                <option value="review_first">需主管复盘优先</option>
+              </select>
+              <button id="managerMetricColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="managerMetricColumnSettingsPanel">列设置</button>
+              <div id="managerMetricColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="团队指标列设置"></div>
+            </div>
           </div>
           <div id="managerMetricList" class="data-table manager-metric-list" aria-live="polite"></div>
           <div id="managerMetricPagination" class="shared-pagination" data-pagination="manager_metrics"></div>

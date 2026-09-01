@@ -184,6 +184,24 @@ test('manager risks list uses shared widget with an independent user layout', ()
   ]);
 });
 
+test('manager metrics list uses shared widget while preserving drilldown metric actions', () => {
+  assert.match(html, /id="managerMetricSort"/);
+  assert.match(html, /id="managerMetricColumnSettings"/);
+  assert.match(html, /id="managerMetricColumnSettingsPanel"/);
+  assert.match(app, /managerMetricsListLayout/);
+  assert.match(app, /tradepulse\.listLayout\.manager_metrics/);
+  assert.match(app, /data-list-page="manager_metrics"/);
+  assert.match(app, /managerMetricsColumnDefinitions/);
+  assert.match(app, /sortedManagerMetricRows/);
+  assert.match(app, /data-manager-metric-kind=/);
+  assert.ok(fieldCatalog.listFieldPages().includes('manager_metrics'));
+  assert.deepEqual(fieldCatalog.FIELDS_CATALOG.manager_metrics.map(field => field.key), [
+    'actor', 'range_days', 'active_customers', 'deferred_customers', 'threshold_customers',
+    'planned_after_deferred', 'on_time_action', 'first_touch_silent',
+    'unimproved_after_intervention', 'review_status',
+  ]);
+});
+
 test('research people list uses the shared widget with per-user layout and authorized columns', () => {
   const schema = fieldCatalog.effectiveFieldSchema({
     pageKey: 'contacts',

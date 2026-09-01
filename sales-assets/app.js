@@ -117,6 +117,7 @@
     marketsSegmentsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     managerTasksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     managerRisksListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
+    managerMetricsListLayout: { visibleColumns: [], columnOrder: [], sort: [], sortPreset: '' },
     customerStarView: 'all',
     customerFilterMount: null,
     customerFilterController: null,
@@ -279,7 +280,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'recycle_bin', 'pipeline', 'alerts', 'notifications']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -2812,6 +2813,7 @@
       restoreMarketsSegmentsListLayout();
       restoreManagerTasksListLayout();
       restoreManagerRisksListLayout();
+      restoreManagerMetricsListLayout();
       restoreIntakeListLayout();
       restoreAlertsListLayout();
       restoreResearchPeopleListLayout();
@@ -7023,6 +7025,118 @@
       return (a < b ? -1 : a > b ? 1 : 0) * direction;
     });
   }
+  function managerMetricsColumnDefinitions() {
+    const columns = [
+      { key: 'actor', label: '销售', required: true, className: 'col-owner', sortKey: 'actorName' },
+      { key: 'range_days', label: '统计周期', className: 'col-date', sortKey: 'rangeDays' },
+      { key: 'active_customers', label: '当前开发客户', className: 'col-number', sortKey: 'activeCustomers' },
+      { key: 'deferred_customers', label: '延期客户', className: 'col-number', sortKey: 'deferredCustomers' },
+      { key: 'threshold_customers', label: '需要主管关注', className: 'col-number', sortKey: 'thresholdCustomers' },
+      { key: 'planned_after_deferred', label: '延期后形成计划', className: 'col-number', sortKey: 'plannedAfterDeferredCustomers' },
+      { key: 'on_time_action', label: '计划后按时行动', className: 'col-number', sortKey: 'onTimeActionCustomers' },
+      { key: 'first_touch_silent', label: '首次触达后未推进', className: 'col-number', sortKey: 'firstTouchSilentCustomers' },
+      { key: 'unimproved_after_intervention', label: '协助后未改善', className: 'col-number', sortKey: 'unimprovedAfterInterventionCustomers' },
+      { key: 'review_status', label: '复盘状态', required: true, className: 'col-status', sortKey: 'needsManagerReview' },
+    ];
+    const schemaFields = state.fieldSchemas?.manager_metrics?.fields;
+    if (!Array.isArray(schemaFields) || !schemaFields.length) return columns;
+    const allowed = new Set(schemaFields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function managerMetricsListLayoutStorageKey() {
+    return `tradepulse.listLayout.manager_metrics.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function defaultManagerMetricsListLayout() {
+    const columns = managerMetricsColumnDefinitions();
+    return listWidget?.defaultPreferences
+      ? { ...listWidget.defaultPreferences(columns), sortPreset: 'actor_asc' }
+      : { visibleColumns: columns.map(column => column.key), columnOrder: columns.map(column => column.key), sort: [], sortPreset: 'actor_asc' };
+  }
+  function restoreManagerMetricsListLayout() {
+    const columns = managerMetricsColumnDefinitions();
+    state.managerMetricsListLayout = listWidget?.loadPreferences
+      ? listWidget.loadPreferences(managerMetricsListLayoutStorageKey(), undefined, columns)
+      : defaultManagerMetricsListLayout();
+    const allowedSorts = ['actor_asc', 'actor_desc', 'active_desc', 'deferred_desc', 'threshold_desc', 'plan_rate_desc', 'on_time_rate_desc', 'review_first'];
+    if (!allowedSorts.includes(state.managerMetricsListLayout.sortPreset)) {
+      state.managerMetricsListLayout = { ...state.managerMetricsListLayout, sortPreset: 'actor_asc' };
+    }
+    if ($('#managerMetricSort')) $('#managerMetricSort').value = state.managerMetricsListLayout.sortPreset;
+    renderManagerMetricsColumnSettings();
+  }
+  function saveManagerMetricsListLayout() {
+    const columns = managerMetricsColumnDefinitions();
+    state.managerMetricsListLayout = listWidget?.savePreferences
+      ? listWidget.savePreferences(managerMetricsListLayoutStorageKey(), state.managerMetricsListLayout, undefined, columns)
+      : state.managerMetricsListLayout;
+    renderManagerMetricsColumnSettings();
+  }
+  function renderManagerMetricsColumnSettings() {
+    const host = $('#managerMetricColumnSettingsPanel');
+    if (!host || !listWidget?.renderColumnSettingsHtml) return;
+    host.innerHTML = listWidget.renderColumnSettingsHtml({
+      title: '团队指标列设置', columns: managerMetricsColumnDefinitions(), preferences: state.managerMetricsListLayout,
+    });
+  }
+  function closeManagerMetricsColumnSettings() {
+    $('#managerMetricColumnSettingsPanel')?.classList.add('hidden');
+    $('#managerMetricColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
+  function openManagerMetricsColumnSettings() {
+    renderManagerMetricsColumnSettings();
+    $('#managerMetricColumnSettingsPanel')?.classList.remove('hidden');
+    $('#managerMetricColumnSettings')?.setAttribute('aria-expanded', 'true');
+  }
+  function resetManagerMetricsListLayout() {
+    state.managerMetricsListLayout = defaultManagerMetricsListLayout();
+    saveManagerMetricsListLayout();
+    if ($('#managerMetricSort')) $('#managerMetricSort').value = 'actor_asc';
+    renderManagerMetrics();
+  }
+  function moveManagerMetricsListColumn(key, direction) {
+    const columns = managerMetricsColumnDefinitions();
+    const order = listWidget?.normalizePreferences
+      ? listWidget.normalizePreferences(state.managerMetricsListLayout, columns).columnOrder
+      : columns.map(column => column.key);
+    const index = order.indexOf(key);
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    state.managerMetricsListLayout = { ...state.managerMetricsListLayout, columnOrder: order };
+    saveManagerMetricsListLayout();
+    renderManagerMetrics();
+  }
+  function toggleManagerMetricsListColumn(key, visible) {
+    const columns = managerMetricsColumnDefinitions();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const current = new Set(state.managerMetricsListLayout.visibleColumns || []);
+    if (visible) current.add(key); else current.delete(key);
+    state.managerMetricsListLayout = { ...state.managerMetricsListLayout, visibleColumns: [...current] };
+    saveManagerMetricsListLayout();
+    renderManagerMetrics();
+  }
+  function managerMetricSortValue(row, preset) {
+    const count = key => Number(row.counts?.[key] || 0);
+    if (preset.startsWith('actor')) return String(row.actorName || row.actorId || '').toLocaleLowerCase();
+    if (preset.startsWith('active')) return count('activeCustomers');
+    if (preset.startsWith('deferred')) return count('deferredCustomers');
+    if (preset.startsWith('threshold')) return count('thresholdCustomers');
+    if (preset.startsWith('plan_rate')) return Number(row.ratios?.planFormationRate || 0);
+    if (preset.startsWith('on_time_rate')) return Number(row.ratios?.onTimeActionRate || 0);
+    if (preset === 'review_first') return row.needsManagerReview ? 0 : 1;
+    return String(row.actorId || '').toLocaleLowerCase();
+  }
+  function sortedManagerMetricRows(rows) {
+    const preset = state.managerMetricsListLayout?.sortPreset || 'actor_asc';
+    const direction = preset.endsWith('_desc') ? -1 : 1;
+    return [...rows].sort((left, right) => {
+      const a = managerMetricSortValue(left, preset);
+      const b = managerMetricSortValue(right, preset);
+      const result = (a < b ? -1 : a > b ? 1 : 0) * direction;
+      return result || String(left.actorId || '').localeCompare(String(right.actorId || ''));
+    });
+  }
 
   function renderManagerTasks() {
     const root = $('#managerTaskList');
@@ -7243,23 +7357,37 @@
         <div class="manager-metric-primary">${metricItems.slice(0, 4).map(metricCard).join('')}</div>
         <div class="manager-metric-secondary">${metricItems.slice(4).map(metricCard).join('')}</div>`;
     }
+    const visible = sortedManagerMetricRows(rows);
+    const columns = managerMetricsColumnDefinitions();
+    const tableRows = visible.map(row => ({
+      actor: `<div class="company-cell"><strong>${esc(row.actorName || row.actorId)}</strong><span>当前开发客户 ${Number(row.sampleSize || 0)}</span></div>`,
+      range_days: `近 ${Number(row.rangeDays)} 天`,
+      active_customers: managerMetricValueButton(row, 'activeCustomers', '当前开发客户', Number(row.counts?.activeCustomers || 0)),
+      deferred_customers: managerMetricValueButton(row, 'deferredCustomers', '延期客户', Number(row.counts?.deferredCustomers || 0), `${Number(row.ratios?.deferredCustomerRate || 0)}%`),
+      threshold_customers: managerMetricValueButton(row, 'thresholdCustomers', '需要主管关注', Number(row.counts?.thresholdCustomers || 0), `${Number(row.ratios?.anomalyCustomerRate || 0)}%`),
+      planned_after_deferred: managerMetricValueButton(row, 'plannedAfterDeferredCustomers', '延期后已形成计划', Number(row.counts?.plannedAfterDeferredCustomers || 0), `${Number(row.ratios?.planFormationRate || 0)}%`),
+      on_time_action: managerMetricValueButton(row, 'onTimeActionCustomers', '计划后按时行动', Number(row.counts?.onTimeActionCustomers || 0), `${Number(row.ratios?.onTimeActionRate || 0)}%`),
+      first_touch_silent: managerMetricValueButton(row, 'firstTouchSilentCustomers', '首次触达后未继续推进', Number(row.counts?.firstTouchSilentCustomers || 0)),
+      unimproved_after_intervention: managerMetricValueButton(row, 'unimprovedAfterInterventionCustomers', '协助后仍未改善', Number(row.counts?.unimprovedAfterInterventionCustomers || 0)),
+      review_status: row.needsManagerReview
+        ? `<span class="pill amber">需要主管复盘</span><small class="subtle">${esc(managerMetricAvailabilityCopy(row))}</small>`
+        : `<span class="pill gray">暂不判断整体风险</span><small class="subtle">${esc(managerMetricAvailabilityCopy(row))}</small>`,
+    }));
+    const visibleColumns = listWidget?.resolveColumns
+      ? listWidget.resolveColumns(columns, state.managerMetricsListLayout)
+      : columns;
+    const renderedTable = listWidget?.renderTable
+      ? listWidget.renderTable({
+        columns, rows: tableRows, preferences: state.managerMetricsListLayout,
+        attrs: 'data-list-page="manager_metrics"', headerAttrs: 'class="manager-metric-list-head"', emptyText: '暂无统计数据',
+      })
+      : table(visibleColumns.map(column => column.label), tableRows.map(row => visibleColumns.map(column => row[column.key])), 'data-list-page="manager_metrics"');
     root.innerHTML = meta.loading && !meta.loaded
       ? '<div class="empty">正在读取延期统计…</div>'
-      : rows.length
-        ? rows.map(row => `<article class="manager-metric-card">
-          <header><div><strong>${esc(row.actorName || row.actorId)}</strong><span>近 ${Number(row.rangeDays)} 天 · 当前开发客户 ${Number(row.sampleSize || 0)}</span></div>${row.needsManagerReview ? '<span class="pill amber">需要主管复盘</span>' : '<span class="pill gray">暂不判断整体风险</span>'}</header>
-          <div class="manager-metric-values">${[
-            managerMetricValueButton(row, 'activeCustomers', '当前开发客户', Number(row.counts?.activeCustomers || 0)),
-            managerMetricValueButton(row, 'deferredCustomers', '延期客户', Number(row.counts?.deferredCustomers || 0), `${Number(row.ratios?.deferredCustomerRate || 0)}%`),
-            managerMetricValueButton(row, 'thresholdCustomers', '需要主管关注', Number(row.counts?.thresholdCustomers || 0), `${Number(row.ratios?.anomalyCustomerRate || 0)}%`),
-            managerMetricValueButton(row, 'plannedAfterDeferredCustomers', '延期后已形成计划', Number(row.counts?.plannedAfterDeferredCustomers || 0), `${Number(row.ratios?.planFormationRate || 0)}%`),
-            managerMetricValueButton(row, 'onTimeActionCustomers', '计划后按时行动', Number(row.counts?.onTimeActionCustomers || 0), `${Number(row.ratios?.onTimeActionRate || 0)}%`),
-            managerMetricValueButton(row, 'firstTouchSilentCustomers', '首次触达后未继续推进', Number(row.counts?.firstTouchSilentCustomers || 0)),
-            managerMetricValueButton(row, 'unimprovedAfterInterventionCustomers', '协助后仍未改善', Number(row.counts?.unimprovedAfterInterventionCustomers || 0)),
-          ].join('')}</div>
-          <p><span class="subtle">${esc(managerMetricAvailabilityCopy(row))}</span></p>
-        </article>`).join('')
+      : visible.length
+        ? `<div class="data-table">${renderedTable}</div>`
         : `<div class="empty">${esc(meta.error || `近 ${state.managerMetricRange} 天暂无统计数据`)}</div>`;
+    applyTableColumnClasses(root, visibleColumns.map(column => column.className || ''));
     renderManagerRisks();
   }
 
@@ -14725,6 +14853,11 @@
       else closeManagerRisksColumnSettings();
       return;
     }
+    if (event.target.closest('#managerMetricColumnSettings')) {
+      if ($('#managerMetricColumnSettingsPanel')?.classList.contains('hidden')) openManagerMetricsColumnSettings();
+      else closeManagerMetricsColumnSettings();
+      return;
+    }
     const columnMove = event.target.closest('[data-list-column-move]');
     if (columnMove) {
       if (columnMove.closest('#dashboardCountryColumnSettingsPanel')) {
@@ -14753,6 +14886,8 @@
         moveManagerTasksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#managerRiskColumnSettingsPanel')) {
         moveManagerRisksListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#managerMetricColumnSettingsPanel')) {
+        moveManagerMetricsListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -14772,6 +14907,7 @@
       else if (event.target.closest('#notificationsColumnSettingsPanel')) resetNotificationsListLayout();
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) resetManagerTasksListLayout();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) resetManagerRisksListLayout();
+      else if (event.target.closest('#managerMetricColumnSettingsPanel')) resetManagerMetricsListLayout();
       else resetCustomerListLayout();
       return;
     }
@@ -14789,6 +14925,7 @@
       else if (event.target.closest('#notificationsColumnSettingsPanel')) closeNotificationsColumnSettings();
       else if (event.target.closest('#managerTaskColumnSettingsPanel')) closeManagerTasksColumnSettings();
       else if (event.target.closest('#managerRiskColumnSettingsPanel')) closeManagerRisksColumnSettings();
+      else if (event.target.closest('#managerMetricColumnSettingsPanel')) closeManagerMetricsColumnSettings();
       else closeCustomerColumnSettings();
       return;
     }
@@ -15649,6 +15786,11 @@
       saveManagerRisksListLayout();
       renderManagerRisks();
     }
+    if (event.target.id === 'managerMetricSort') {
+      state.managerMetricsListLayout = { ...state.managerMetricsListLayout, sortPreset: event.target.value };
+      saveManagerMetricsListLayout();
+      renderManagerMetrics();
+    }
     if (event.target.name?.startsWith('permission__') && event.target.closest('#permissionGroupForm')) {
       refreshPermissionGroupSummary(event.target.closest('#permissionGroupForm'));
     }
@@ -15799,6 +15941,7 @@
       if (viewChanged && canonicalView === 'notifications') restoreNotificationsListLayout();
       if (viewChanged && canonicalView === 'managerTasks') restoreManagerTasksListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') restoreManagerRisksListLayout();
+      if (viewChanged && canonicalView === 'managerMetrics') restoreManagerMetricsListLayout();
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -15953,6 +16096,8 @@
         toggleManagerTasksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#managerRiskColumnSettingsPanel')) {
         toggleManagerRisksListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#managerMetricColumnSettingsPanel')) {
+        toggleManagerMetricsListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else {
         toggleCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       }
