@@ -97,6 +97,15 @@ test('original workbench supports a profile-only customer page', () => {
   assert.match(workbenchHtml, /readOnly/);
 });
 
+test('workbench profile mode stays a read-only compatibility surface', () => {
+  // 只读入口：recon 启动按钮被“只读资料”标签替代，编辑/标签等可写入口在
+  // profile-only 页面无触发源（模态/编辑按钮不进入该布局）。
+  assert.match(workbenchHtml, /state\.profileAccess\?\.readOnly\?'<span class="tag">只读资料<\/span>'/);
+  assert.match(workbenchHtml, /profileAccess\?\.readOnly/);
+  assert.doesNotMatch(workbenchHtml, /profile-mode[\s\S]{0,600}saveBtn/);
+  assert.match(workbenchHtml, /renderRequestedCustomerError\(e\.message/);
+});
+
 test('complete customer data opens a non-sidebar profile page and returns to CRM', () => {
   const sidebar = sidebarMarkup();
   const masterHandler = appJs.match(/const master = event\.target\.closest\('\[data-open-master\]'\);[\s\S]*?\n    const stageJump =/)?.[0] || '';
