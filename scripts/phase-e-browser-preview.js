@@ -376,12 +376,26 @@ async function browserRoleSmoke(page, baseUrl, credentials) {
       const view = document.querySelector('#customerProfileView');
       const frame = document.querySelector('#customerProfileFrame');
       const root = document.querySelector('#profileWidgetRoot');
+      const widgetIds = [...(root?.querySelectorAll(':scope > [data-widget-id]') || [])]
+        .map(node => node.getAttribute('data-widget-id') || '')
+        .filter(Boolean);
+      const aiBusinessVisible = [...document.querySelectorAll('[data-ai-business]')].some(element => {
+        const style = getComputedStyle(element);
+        return !element.classList.contains('hidden')
+          && style.display !== 'none'
+          && style.visibility !== 'hidden';
+      });
       return {
         active: Boolean(view?.classList.contains('active')),
-        widgetHosts: root?.querySelectorAll(':scope > [data-widget-id]').length || 0,
+        widgetHosts: widgetIds.length,
+        widgetIds,
         frameSrc: frame?.getAttribute('src') || '',
         frameHidden: frame?.classList.contains('hidden') || false,
         title: document.querySelector('#customerProfileTitle')?.textContent || '',
+        sourceTagContainer: Boolean(document.querySelector('#customerProfileTags')),
+        sourceTagCount: document.querySelectorAll('#customerProfileTags .source-tag').length,
+        aiWidgetMounted: widgetIds.includes('customer-ai-station'),
+        aiBusinessVisible,
       };
     });
     if (profile.active && profile.widgetHosts > 0 && profile.title.trim()) break;
@@ -392,6 +406,12 @@ async function browserRoleSmoke(page, baseUrl, credentials) {
   }
   if (profile.frameSrc || !profile.frameHidden) {
     throw new Error(`${credentials.role} default customerProfile unexpectedly loaded the legacy iframe`);
+  }
+  if (!profile.sourceTagContainer) {
+    throw new Error(`${credentials.role} customerProfile is missing the source-tag host`);
+  }
+  if (profile.aiWidgetMounted || profile.aiBusinessVisible) {
+    throw new Error(`${credentials.role} customerProfile exposed an AI widget while AI is disabled`);
   }
 
   const profileOnlyResponse = await page.goto(

@@ -95,10 +95,34 @@ test('isolated environment replaces inherited DB and production paths with tempo
   }
 });
 
-test('missing browser dependency fails closed with an actionable message', () => {
-  const result = runScript(['--run', '--browser=playwright']);
-  assert.notEqual(result.status, 0);
-  assert.match(`${result.stdout}\n${result.stderr}`, /fail-closed|Playwright|playwright|locked/i);
-  assert.match(`${result.stdout}\n${result.stderr}`, /no fake-browser fallback|not declared|not locked/i);
+test('locked browser dependency is pinned and usable for the official harness', () => {
+  const status = harness.checkLockedBrowser('playwright');
+  assert.equal(status.ok, true, status.reason || 'playwright must be installed for Phase E');
+  assert.match(status.version, /^\d+\.\d+\.\d+$/);
+  const adapter = harness.loadBrowserAdapter('playwright');
+  assert.equal(adapter.name, 'playwright');
+  assert.equal(adapter.version, status.version);
 });
 
+test('an unavailable browser dependency still fails closed with an actionable message', () => {
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'phase-e-missing-browser-'));
+  try {
+    fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'phase-e-fixture' }));
+    fs.writeFileSync(path.join(packageRoot, 'package-lock.json'), JSON.stringify({
+      name: 'phase-e-fixture',
+      lockfileVersion: 3,
+      packages: { '': { name: 'phase-e-fixture' } },
+    }));
+    assert.throws(
+      () => harness.loadBrowserAdapter('playwright', packageRoot),
+      error => {
+        assert.equal(error.exitCode, 78);
+        assert.match(error.message, /fail-closed|Playwright|playwright|locked/i);
+        assert.match(error.message, /no fake-browser fallback|not declared|not locked/i);
+        return true;
+      },
+    );
+  } finally {
+    fs.rmSync(packageRoot, { recursive: true, force: true });
+  }
+});
