@@ -3,7 +3,7 @@
 更新时间：2026-09-01
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
 执行分支：`codex/frontend-widget-pilot@45594dd`（未合并）
-状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离与 identity/source tags UMD 已落地；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
+状态：路线图执行中；阶段 A/B/C/D 既有状态保持，阶段 E 当前为 widget 注册表、默认 customerProfile widget 视图、profile-only 只读兼容契约、独立 host 隔离、identity/source tags UMD，以及 List widget 协议与客户列表样板已落地；浏览器 sales/manager 双角色仍待验收，不宣称阶段 E 完成。
 
 ## 当前进度快照
 
@@ -14,7 +14,7 @@
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中（主体完成） | field catalog、schema 渲染、列表/形状白名单；范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`）；按页面权限→字段→筛选合同（`45e0c05`） | P1/P3 嵌套聚合与 S5 export 因泄漏风险暂缓；S6 bootstrap 审计为低价值；仅余可选 legacy customers 形状白名单 |
 | 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |
-| 阶段 E：前端 widgets | 注册表与默认视图已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；customerProfile 默认 widget 组合 | 独立隔离 preview harness 上的 sales/manager 浏览器双角色验收；其余 widget body 与兼容层继续收敛；CRM 复杂 activity timeline 评估；`app.js` 仍约 1.4 万行 |
+| 阶段 E：前端 widgets | 注册表、默认视图与 List widget 客户样板已落地，架构未完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；本轮 `list-widget.js` + customers 样板；customerProfile 默认 widget 组合 | 独立隔离 preview harness 上的 sales/manager 浏览器双角色验收；其余业务列表页迁移与 widget body/兼容层继续收敛；CRM 复杂 activity timeline 评估；`app.js` 仍约 1.4 万行 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
 | 阶段 G：兼容层收尾 | 未开始 | - | 等前述阶段稳定后执行 |
 
@@ -133,7 +133,7 @@
 ### 目标
 把“新壳 iframe + 旧版 `Index.html` 双用途页面”组合下的客户完整资料收敛为统一壳内的 widget 组合视图，并让整个前端变成“模块化、自由搭建、自由选择显示内容”的架构；所有业务列表页统一使用 List widget，后续前端 issue 只改对应 widget。
 
-### 现状（已核对代码，截至 `45594dd`；业务切片截至 `3adc1d1`）
+### 现状（已核对代码，截至 `c246360`；业务切片含 List widget 客户样板）
 - 正式入口 `/` 返回统一壳 `sales-crm.html`（`server.js:72`）；`/sales` 是 302 重定向到 `/`（`lib/sales_crm.js:5044`）。
 - `sales-crm.html#customerProfileView` 默认由 `sales-assets/widget-registry.js` 组装 customerProfile widget 集合；仅 `profileView=legacy` 显式回退到 `/development-workbench?...` iframe 兼容路径。
 - `/development-workbench` 由 `server.js` 返回旧版 `Index.html`；profile-only 路径已由 `e59bf22` 约束为只读兼容入口，旧工作台与兼容资料页仍按 query 区分。
@@ -144,7 +144,7 @@
 ### 关键动作
 1. **建立 Widget 注册表**：widget 元数据（id、页面、权限、开关、位置、顺序、加载方式），页面 = 注册表配置化组装；新增/隐藏内容只改配置。
 2. **Widget 化**：按功能拆独立 widget（身份、业务画像、联系人、洞察/评价、时间线、商务、下一步、回收状态、AI 区域等），每个 widget 自包含模板/状态/事件，对外只暴露 `render(container, ctx)`；以 `filter-component.js` 的 UMD 模式为范式。
-3. **统一列表 widget**：抽出共享的列 schema、列显隐/顺序编辑器、排序描述、用户偏好读写和表格渲染；覆盖所有业务列表页，页面只提供数据与授权 schema，不再复制列布局逻辑。
+3. **统一列表 widget**：已抽出共享的列 schema、列显隐/顺序编辑器、排序描述、用户偏好读写和表格渲染，并接入客户列表样板；后续覆盖其余业务列表页，页面只提供数据与授权 schema，不再复制列布局逻辑。
 4. **客户完整资料统一**：`#customerProfileView` 改为统一壳内的 widget 集合，直接消费 `getCustomerProfileData` 返回结构（客户/线索/回收三种来源复用同一集合）；`#customerDrawer` 与完整资料共用同一 widget 集合。
 5. **权限与开关裁剪**：widget 显隐沿用 `data-permission` / `data-ai-business` 等价机制 + bootstrap features。
 6. 统一视图通过验收后，`/development-workbench` 的 profile 模式与旧版 `Index.html` 收敛为只读/兼容入口（先确认现有使用方，再决定下线方式）；`/legacy`、`/tradelead-v2.html` 继续由 `CRM_ENABLE_LEGACY` 控制。
@@ -153,7 +153,7 @@
 
 ### 完成门
 - 客户完整资料不再加载 `/development-workbench` iframe。
-- 所有业务列表页均由统一 List widget 提供授权列显隐、列顺序、用户级布局偏好和升降序/多级排序；不同页面只提供各自数据与 schema。
+- 所有业务列表页均由统一 List widget 提供授权列显隐、列顺序、用户级布局偏好和升降序/多级排序；当前客户列表已完成样板，其他页面继续迁移；不同页面只提供各自数据与 schema。
 - 列表偏好不能绕过服务端权限、数据范围、筛选授权、导出权限或动作权限。
 - 联系人管理、评价/洞察、时间线、商务、下一步在统一视图中可用，三角色权限与脱敏行为与现状一致。
 - 关闭 AI 开关时 AI widget 不显示；开启时行为与现状一致。
@@ -208,7 +208,7 @@
 11. 阶段 C 次片：`5e992fe` 把 intake 页（`queryIntakeFlowPage`，intake/lead_flow）从递归黑名单切到新字段级白名单 `contactSafeIntakeRecord`（`CONTACT_SAFE_INTAKE_KEYS` 镜像黑名单保留的全部键；contact_*/evidence/report_url/decision_reason/return_reason 继续隐藏），等价 + API 行为契约锁定。全量 1949/1949 绿灯。续：通知/评估/bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
 12. 阶段 C 通知片：`1835f73` 把通知页（`listNotificationRows`）从递归黑名单切到新字段级白名单 `contactSafeNotificationRecord`（镜像黑名单保留的全部键；title/detail 属 CONTACT_KEYS，对无 view_contacts 一并剥离，忠实镜像），sales 收件人裁剪保持。全量 1952/1952 绿灯。续：evaluation/db bootstrap 黑名单路径评估、范围解释器统一、按页面合同。
 13. 阶段 C S3 形状：`38bfe7d` 建 timeline/auditLog 字段级白名单（timeline 剥 copy 字段、provenance 泄漏校验；audit 剥 action），等价/泄漏契约 3/3，为 S4/S6 可复用形状。S5（export）审计发现 users 形状经黑名单保留 password_hash/password_salt——判定暂缓（或先修合规）。全量 1955/1955 绿灯。续：S6（db bootstrap）→ S4（recycle-profile）。
-14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD 均已落地；目标前端/标签专项 `106/106`、core `npm test` `1670/1670`、全量 `node --test` `2031/2031`，`node --check`、AI boundary、治理 authority 与 diff check 通过。阶段 E 仍进行中，浏览器验收未执行。
+14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD、`c246360` List widget 协议与 customers 样板均已落地；List widget/字段目录专项 `27/27`、core `npm test` `1677/1677`、全量 `node --test` `2038/2038`，`node --check` 与 diff check 通过，AI boundary/治理 authority 将在本 checkpoint 复核。阶段 E 仍进行中，浏览器验收未执行。
 
 下一可执行动作：先建立上述隔离的 Phase E browser-preview harness，再做 sales/manager 双角色验收；其后才处理剩余复杂主体/activity timeline。
 
