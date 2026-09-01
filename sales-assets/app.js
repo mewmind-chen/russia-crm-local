@@ -1713,6 +1713,8 @@
     resetActivityCorrectionState();
     try {
       state.data = await api('/api/sales-crm/bootstrap', { timeoutMs: 15000 });
+      // 切换用户时丢弃上一身份的有效字段 schema，避免旧权限短暂影响列表布局。
+      state.fieldSchemas = {};
       void preloadFieldSchemas();
       const bootstrapReactions = bootstrapActivityReactions(state.data);
       renderAppVersionBadge();

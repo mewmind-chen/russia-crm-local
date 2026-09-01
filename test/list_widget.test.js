@@ -102,4 +102,5 @@ test('customer list has a server field-schema catalog separate from local layout
     'company', 'country_industry', 'stage', 'owner', 'last_activity', 'next_action', 'priority', 'status',
   ]);
   assert.match(app, /state\.fieldSchemas\?\.customers\?\.fields/);
+  assert.match(app, /state\.fieldSchemas = \{\};/);
 });
