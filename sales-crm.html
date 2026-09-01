@@ -257,7 +257,8 @@
           <div id="intakePagination" class="shared-pagination" data-pagination="intake"></div>
         </article>
         <article id="intakeBatchPanel" class="panel intake-batches">
-          <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div></div>
+          <div class="panel-head"><div><p class="eyebrow">IMPORT HISTORY</p><h2>每日入库批次</h2></div><div class="toolbar"><label>排序<select id="intakeBatchSort" aria-label="入库批次排序"><option value="batch_date_desc">最近批次</option><option value="batch_date_asc">最早批次</option><option value="source_asc">来源正序</option><option value="status_asc">状态正序</option></select></label><button id="intakeBatchColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="intakeBatchColumnSettingsPanel">列设置</button></div></div>
+          <div id="intakeBatchColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="入库批次列设置"></div>
           <div id="intakeBatchTable" class="data-table compact"></div>
         </article>
       </section>
@@ -782,14 +783,14 @@
               <div><p class="eyebrow">团队账号</p><h2>成员账号</h2><p>常用账号操作直接展示；个人权限只需选择允许或拒绝。</p></div>
               <span id="activeUserPanelCount" class="panel-note"></span>
             </div>
-            <div id="userTable" class="data-table access-user-table"></div>
+            <div class="toolbar"><label>排序<select id="usersListSort" aria-label="用户列表排序"><option value="name_asc">姓名正序</option><option value="name_desc">姓名倒序</option><option value="role_asc">角色正序</option><option value="status_desc">启用优先</option></select></label><button id="usersColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="usersColumnSettingsPanel">列设置</button><div id="usersColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="用户列表列设置"></div></div><div id="userTable" class="data-table access-user-table"></div>
           </article>
           <details class="panel access-panel archived-users-panel">
             <summary>
               <span><b>归档用户</b><small>历史业务记录继续保留，需要时可恢复账号。</small></span>
               <strong id="archivedUserPanelCount">0 人</strong>
             </summary>
-            <div id="archivedUserTable" class="data-table"></div>
+            <div class="toolbar"><label>排序<select id="archivedUsersListSort" aria-label="归档用户列表排序"><option value="archived_at_desc">最近归档</option><option value="archived_at_asc">最早归档</option><option value="name_asc">姓名正序</option></select></label><button id="archivedUsersColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="archivedUsersColumnSettingsPanel">列设置</button><div id="archivedUsersColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="归档用户列设置"></div></div><div id="archivedUserTable" class="data-table"></div>
           </details>
         </section>
 
@@ -797,8 +798,9 @@
           <article class="panel access-panel">
             <div class="panel-head">
               <div><p class="eyebrow">权限组</p><h2>权限组</h2><p>先用权限组建立角色基线，再为少数成员设置个人例外。</p></div>
-              <button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button>
+              <div class="toolbar"><label>排序<select id="permissionGroupsListSort" aria-label="权限组列表排序"><option value="group_asc">权限组正序</option><option value="role_asc">角色正序</option><option value="members_desc">成员数倒序</option></select></label><button id="permissionGroupsColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="permissionGroupsColumnSettingsPanel">列设置</button><button id="newPermissionGroupBtn" data-permission="manage_users" class="button secondary">新建权限组</button></div>
             </div>
+            <div id="permissionGroupsColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="权限组列表列设置"></div>
             <div id="permissionGroupTable" class="data-table"></div>
           </article>
           <article id="filterPermissionAdmin" class="panel access-panel filter-permission-admin">
@@ -859,7 +861,7 @@
               </div>
             </form>
           </article>
-          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
+          <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">MIGRATION REVIEW</p><h2>旧跟进待确认</h2></div><div class="toolbar"><label>排序<select id="migrationReviewListSort" aria-label="迁移复核列表排序"><option value="source_asc">旧记录正序</option><option value="owner_asc">原负责人正序</option><option value="reason_asc">原因正序</option></select></label><button id="migrationReviewColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="migrationReviewColumnSettingsPanel">列设置</button><div id="migrationReviewColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="迁移复核列设置"></div></div><span id="migrationReviewCount" class="panel-note"></span></div><div id="migrationReviewTable" class="data-table"></div></article>
           <article class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">操作记录</p><h2>关键操作审计</h2></div><div class="toolbar"><select id="auditSort" aria-label="审计排序"><option value="created_desc">最近优先</option><option value="created_asc">最早优先</option><option value="action_asc">动作正序</option><option value="operator_asc">操作人正序</option></select><button id="auditColumnSettings" class="button ghost" type="button" aria-expanded="false" aria-controls="auditColumnSettingsPanel">列设置</button><div id="auditColumnSettingsPanel" class="list-column-settings hidden" role="dialog" aria-label="审计列设置"></div><span class="panel-note">仅管理员可见</span></div></div><div id="auditTable" class="data-table"></div></article>
         </section>
       </section>

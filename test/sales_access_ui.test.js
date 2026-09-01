@@ -34,11 +34,34 @@ test('permission group panel sits beside the user and audit panels', () => {
 
 test('user table renders group column override counts and scoped actions', () => {
   const js = readAsset('sales-assets', 'app.js');
-  assert.match(js, /'用户', '角色', '权限组', '个人调整', '状态', '操作'/);
+  assert.match(js, /key: 'user', label: '用户'/);
+  assert.match(js, /key: 'permission_group', label: '权限组'/);
+  assert.match(js, /key: 'overrides', label: '个人调整'/);
+  assert.match(js, /data-list-page="users"/);
   assert.match(js, /data-edit-overrides/);
   assert.match(js, /data-reset-password/);
   assert.match(js, /data-start-impersonation/);
   assert.match(js, /manage_users/);
+});
+
+test('access list surfaces share per-user column settings and sorting without changing actions', () => {
+  const html = readAsset('sales-crm.html');
+  const js = readAsset('sales-assets', 'app.js');
+  for (const marker of [
+    'usersColumnSettings', 'archivedUsersColumnSettings',
+    'permissionGroupsColumnSettings', 'migrationReviewColumnSettings',
+    'usersListSort', 'archivedUsersListSort', 'permissionGroupsListSort', 'migrationReviewListSort',
+  ]) assert.match(html, new RegExp(`id="${marker}"`));
+  for (const page of ['users', 'archived_users', 'permission_groups', 'migration_review']) {
+    assert.match(js, new RegExp(`data-list-page="${page}"`));
+  }
+  assert.match(js, /function accessListStorageKey/);
+  assert.match(js, /tradepulse\.listLayout\.\$\{page\}/);
+  assert.match(js, /function moveAccessListColumn/);
+  assert.match(js, /function toggleAccessListColumn/);
+  assert.match(js, /function sortAccessListRows/);
+  assert.match(js, /data-restore-user/);
+  assert.match(js, /data-resolve-review/);
 });
 
 test('access administration separates account permissions and governance work', () => {

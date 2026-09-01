@@ -238,6 +238,11 @@
     maintenanceRunsListLayout: null,
     correctionHistoryListLayout: null,
     auditListLayout: null,
+    intakeBatchListLayout: null,
+    usersListLayout: null,
+    archivedUsersListLayout: null,
+    migrationReviewListLayout: null,
+    permissionGroupsListLayout: null,
     protectedCustomers: {
       items: [], total: 0, query: '', status: 'all', loaded: false, loading: false,
       page: 1, pageSize: 50, totalPages: 0, hasMore: false,
@@ -288,7 +293,7 @@
   // 和旧行为一致。preload 为异步，若首帧渲染早于 schema 到达，会先走硬编码回退，schema 落地后
   // 由 requestAnimationFrame 补一次稳态重绘（epoch 竞态保护），避免字段/列首次闪现后才收敛。
   let fieldSchemaRenderEpoch = 0;
-  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs', 'correction_history', 'audit']) {
+  async function preloadFieldSchemas(pageKeys = ['crm_drawer', 'intake', 'lead_flow', 'customer_profile', 'customers', 'contacts', 'recon', 'dashboard', 'markets_country', 'markets_cohort', 'markets_segments', 'manager_tasks', 'manager_risks', 'manager_metrics', 'team_progress_sales', 'team_progress_drilldown', 'team_collaboration', 'insights', 'protected_customers', 'recycle_bin', 'pipeline', 'alerts', 'notifications', 'maintenance_runs', 'correction_history', 'audit', 'users', 'archived_users', 'migration_review', 'intake_batches', 'permission_groups']) {
     const requestedKeys = pageKeys.slice();
     let loaded = 0;
     for (const pageKey of requestedKeys) {
@@ -357,6 +362,9 @@
         restoreTeamProgressDrilldownListLayout();
         restoreTeamCollaborationListLayout();
         renderTeamSection();
+      }
+      if (state.data && state.view === 'users') {
+        renderUsers();
       }
     });
   }
@@ -1637,6 +1645,66 @@
     saveIntakeListLayout();
     renderIntake();
   }
+  function intakeBatchColumns() {
+    const columns = [
+      { key: 'batch_date', label: '日期', required: true, sortKey: 'batch_date' },
+      { key: 'source', label: '来源', sortKey: 'source' },
+      { key: 'candidates', label: '候选', sortKey: 'candidates' },
+      { key: 'imported', label: '入库', sortKey: 'imported' },
+      { key: 'assigned', label: '已分配', sortKey: 'assigned' },
+      { key: 'skipped', label: '跳过', sortKey: 'skipped' },
+      { key: 'status', label: '状态', required: true, sortKey: 'status' },
+    ];
+    const fields = state.fieldSchemas?.intake_batches?.fields;
+    if (!Array.isArray(fields) || !fields.length) return columns;
+    const allowed = new Set(fields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return columns.filter(column => column.required || allowed.has(column.key));
+  }
+  function intakeBatchStorageKey() { return `tradepulse.listLayout.intake_batches.${state.data?.user?.id || 'anonymous'}`; }
+  function restoreIntakeBatchListLayout() {
+    const columns = intakeBatchColumns();
+    state.intakeBatchListLayout = listWidget.loadPreferences(intakeBatchStorageKey(), undefined, columns);
+    if (!['batch_date_desc', 'batch_date_asc', 'source_asc', 'status_asc'].includes(state.intakeBatchListLayout.sortPreset)) {
+      state.intakeBatchListLayout = { ...state.intakeBatchListLayout, sortPreset: 'batch_date_desc' };
+    }
+    if ($('#intakeBatchSort')) $('#intakeBatchSort').value = state.intakeBatchListLayout.sortPreset;
+    const host = $('#intakeBatchColumnSettingsPanel');
+    if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state.intakeBatchListLayout, title: '入库批次列设置' });
+  }
+  function saveIntakeBatchListLayout(preferences) {
+    const columns = intakeBatchColumns();
+    state.intakeBatchListLayout = listWidget.savePreferences(intakeBatchStorageKey(), preferences, undefined, columns);
+    restoreIntakeBatchListLayout();
+  }
+  function moveIntakeBatchListColumn(key, direction) {
+    const columns = intakeBatchColumns();
+    const prefs = listWidget.normalizePreferences(state.intakeBatchListLayout, columns);
+    const order = [...prefs.columnOrder];
+    const index = order.indexOf(key);
+    const next = index + (direction === 'up' ? -1 : 1);
+    if (index < 0 || next < 0 || next >= order.length) return;
+    [order[index], order[next]] = [order[next], order[index]];
+    saveIntakeBatchListLayout({ ...prefs, columnOrder: order });
+    renderIntake();
+  }
+  function toggleIntakeBatchListColumn(key, visible) {
+    const columns = intakeBatchColumns();
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const prefs = listWidget.normalizePreferences(state.intakeBatchListLayout, columns);
+    const visibleColumns = new Set(prefs.visibleColumns);
+    if (visible) visibleColumns.add(key); else visibleColumns.delete(key);
+    saveIntakeBatchListLayout({ ...prefs, visibleColumns: [...visibleColumns] });
+    renderIntake();
+  }
+  function resetIntakeBatchListLayout() {
+    saveIntakeBatchListLayout({ ...listWidget.defaultPreferences(intakeBatchColumns()), sortPreset: 'batch_date_desc' });
+    renderIntake();
+  }
+  function closeIntakeBatchColumnSettings() {
+    $('#intakeBatchColumnSettingsPanel')?.classList.add('hidden');
+    $('#intakeBatchColumnSettings')?.setAttribute('aria-expanded', 'false');
+  }
   function alertsColumnDefinitions() {
     const columns = [
       { key: 'urgency', label: '等级', className: 'col-urgency', sortKey: 'urgency' },
@@ -2842,6 +2910,11 @@
       restoreRecycleBinListLayout();
       restorePipelineListLayout();
       restoreNotificationsListLayout();
+      restoreIntakeBatchListLayout();
+      restoreAccessListLayout('users');
+      restoreAccessListLayout('archived_users');
+      restoreAccessListLayout('migration_review');
+      restoreAccessListLayout('permission_groups');
       if (!technicalAIPresentationAllowed()) state.customerFilters.evaluationTags = [];
       state.assistantRuntime = null;
       state.assistantRuntimeError = '';
@@ -4359,13 +4432,24 @@
         ? '选择当前页可分配线索'
         : '当前页没有可分配线索';
     }
-    $('#intakeBatchTable').innerHTML = table(
-      ['日期', '来源', '候选', '入库', '已分配', '跳过', '状态'],
-      intake.batches.map(batch => [
-        esc(batch.batch_date), esc(batch.source), batch.candidate_count, batch.imported_count, batch.assigned_count, batch.skipped_count,
-        `<span class="pill ${batch.status === 'done' ? '' : 'amber'}">${batch.status === 'done' ? '完成' : batch.status}</span>`,
-      ]),
-    );
+    const batchColumns = intakeBatchColumns();
+    const batchPrefs = state.intakeBatchListLayout || { ...listWidget.defaultPreferences(batchColumns), sortPreset: 'batch_date_desc' };
+    const batchRows = (intake.batches || []).map(batch => ({
+      batch_date: esc(batch.batch_date), source: esc(batch.source), candidates: batch.candidate_count,
+      imported: batch.imported_count, assigned: batch.assigned_count, skipped: batch.skipped_count,
+      status: `<span class="pill ${batch.status === 'done' ? '' : 'amber'}">${batch.status === 'done' ? '完成' : esc(batch.status)}</span>`,
+      _sort: { batch_date: batch.batch_date || '', source: batch.source || '', candidates: Number(batch.candidate_count || 0), imported: Number(batch.imported_count || 0), assigned: Number(batch.assigned_count || 0), skipped: Number(batch.skipped_count || 0), status: batch.status || '' },
+    }));
+    const sortPreset = batchPrefs.sortPreset || 'batch_date_desc';
+    const sortKey = sortPreset.startsWith('source') ? 'source' : sortPreset.startsWith('status') ? 'status' : 'batch_date';
+    const direction = sortPreset.endsWith('_asc') ? 1 : -1;
+    batchRows.sort((left, right) => {
+      const a = left._sort[sortKey]; const b = right._sort[sortKey];
+      const result = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'zh-CN', { numeric: true });
+      return result * direction;
+    });
+    batchRows.forEach(row => delete row._sort);
+    $('#intakeBatchTable').innerHTML = listWidget.renderTable({ columns: batchColumns, rows: batchRows, preferences: batchPrefs, attrs: 'data-list-page="intake_batches"', emptyText: '暂无入库批次' });
   }
 
   // 完整资料视图模式：默认走 widget 集合（统一壳），profileView=legacy 时回退
@@ -8856,6 +8940,104 @@
     $$('#segmentGrid .data-table').forEach(root => applyTableColumnClasses(root, visibleColumns.map(column => column.className || '')));
   }
 
+  const accessListLayoutMeta = Object.freeze({
+    users: Object.freeze({ stateKey: 'usersListLayout', panel: 'usersColumnSettingsPanel', button: 'usersColumnSettings', title: '用户列表列设置', sortId: 'usersListSort', defaultSort: 'name_asc', sorts: { name_asc: '姓名正序', name_desc: '姓名倒序', role_asc: '角色正序', status_desc: '启用优先' } }),
+    archived_users: Object.freeze({ stateKey: 'archivedUsersListLayout', panel: 'archivedUsersColumnSettingsPanel', button: 'archivedUsersColumnSettings', title: '归档用户列设置', sortId: 'archivedUsersListSort', defaultSort: 'archived_at_desc', sorts: { archived_at_desc: '最近归档', archived_at_asc: '最早归档', name_asc: '姓名正序' } }),
+    migration_review: Object.freeze({ stateKey: 'migrationReviewListLayout', panel: 'migrationReviewColumnSettingsPanel', button: 'migrationReviewColumnSettings', title: '迁移复核列设置', sortId: 'migrationReviewListSort', defaultSort: 'source_asc', sorts: { source_asc: '旧记录正序', owner_asc: '原负责人正序', reason_asc: '原因正序' } }),
+    permission_groups: Object.freeze({ stateKey: 'permissionGroupsListLayout', panel: 'permissionGroupsColumnSettingsPanel', button: 'permissionGroupsColumnSettings', title: '权限组列表列设置', sortId: 'permissionGroupsListSort', defaultSort: 'group_asc', sorts: { group_asc: '权限组正序', role_asc: '角色正序', members_desc: '成员数倒序' } }),
+  });
+  function accessListColumns(page) {
+    const fallback = {
+      users: [{ key: 'user', label: '用户', required: true, sortKey: 'name' }, { key: 'role', label: '角色', sortKey: 'role' }, { key: 'permission_group', label: '权限组', sortKey: 'permission_group' }, { key: 'overrides', label: '个人调整', sortKey: 'overrides' }, { key: 'status', label: '状态', sortKey: 'status' }, { key: 'actions', label: '操作', required: true, sortable: false }],
+      archived_users: [{ key: 'user', label: '用户', required: true, sortKey: 'name' }, { key: 'role', label: '角色', sortKey: 'role' }, { key: 'archived_at', label: '归档时间', sortKey: 'archived_at' }, { key: 'actions', label: '操作', required: true, sortable: false }],
+      migration_review: [{ key: 'source', label: '旧记录', required: true, sortKey: 'source' }, { key: 'owner', label: '原负责人', sortKey: 'owner' }, { key: 'reason', label: '原因', sortKey: 'reason' }, { key: 'assigned_owner', label: '分配销售', sortKey: 'assigned_owner', sortable: false }, { key: 'actions', label: '操作', required: true, sortable: false }],
+      permission_groups: [{ key: 'group', label: '权限组', required: true, sortKey: 'group' }, { key: 'role', label: '角色', sortKey: 'role' }, { key: 'permissions', label: '权限', sortKey: 'permissions' }, { key: 'members', label: '成员', sortKey: 'members' }, { key: 'actions', label: '操作', required: true, sortable: false }],
+    }[page] || [];
+    const fields = state.fieldSchemas?.[page]?.fields;
+    if (!Array.isArray(fields) || !fields.length) return fallback;
+    const allowed = new Set(fields.map(field => String(field.key || '').trim()).filter(Boolean));
+    return fallback.filter(column => column.required || allowed.has(column.key));
+  }
+  function accessListStorageKey(page) {
+    return `tradepulse.listLayout.${page}.${state.data?.user?.id || 'anonymous'}`;
+  }
+  function accessListPreferences(page) {
+    const meta = accessListLayoutMeta[page];
+    const columns = accessListColumns(page);
+    return state[meta.stateKey] || { ...listWidget.defaultPreferences(columns), sortPreset: meta.defaultSort };
+  }
+  function restoreAccessListLayout(page) {
+    const meta = accessListLayoutMeta[page];
+    if (!meta) return;
+    const columns = accessListColumns(page);
+    const preferences = listWidget.loadPreferences(accessListStorageKey(page), undefined, columns);
+    state[meta.stateKey] = { ...preferences, sortPreset: meta.sorts[preferences.sortPreset] ? preferences.sortPreset : meta.defaultSort };
+    const select = $(`#${meta.sortId}`);
+    if (select) select.value = state[meta.stateKey].sortPreset;
+    const host = $(`#${meta.panel}`);
+    if (host) host.innerHTML = listWidget.renderColumnSettingsHtml({ columns, preferences: state[meta.stateKey], title: meta.title });
+  }
+  function saveAccessListLayout(page, preferences) {
+    const meta = accessListLayoutMeta[page];
+    if (!meta) return;
+    const columns = accessListColumns(page);
+    state[meta.stateKey] = listWidget.savePreferences(accessListStorageKey(page), preferences, undefined, columns);
+    restoreAccessListLayout(page);
+  }
+  function openAccessListColumnSettings(page) {
+    const meta = accessListLayoutMeta[page];
+    if (!meta) return;
+    restoreAccessListLayout(page);
+    $(`#${meta.panel}`)?.classList.remove('hidden');
+    $(`#${meta.button}`)?.setAttribute('aria-expanded', 'true');
+  }
+  function closeAccessListColumnSettings(page) {
+    const meta = accessListLayoutMeta[page];
+    if (!meta) return;
+    $(`#${meta.panel}`)?.classList.add('hidden');
+    $(`#${meta.button}`)?.setAttribute('aria-expanded', 'false');
+  }
+  function moveAccessListColumn(page, key, direction) {
+    const columns = accessListColumns(page);
+    const prefs = listWidget.normalizePreferences(accessListPreferences(page), columns);
+    const order = [...prefs.columnOrder];
+    const index = order.indexOf(key);
+    const next = index + (direction === 'up' ? -1 : 1);
+    if (index < 0 || next < 0 || next >= order.length) return;
+    [order[index], order[next]] = [order[next], order[index]];
+    saveAccessListLayout(page, { ...prefs, columnOrder: order });
+    renderUsers();
+  }
+  function resetAccessListLayout(page) {
+    const meta = accessListLayoutMeta[page];
+    const columns = accessListColumns(page);
+    saveAccessListLayout(page, { ...listWidget.defaultPreferences(columns), sortPreset: meta.defaultSort });
+    renderUsers();
+  }
+  function toggleAccessListColumn(page, key, visible) {
+    const columns = accessListColumns(page);
+    const column = columns.find(item => item.key === key);
+    if (!column || column.required) return;
+    const prefs = listWidget.normalizePreferences(accessListPreferences(page), columns);
+    const visibleColumns = new Set(prefs.visibleColumns);
+    if (visible) visibleColumns.add(key); else visibleColumns.delete(key);
+    saveAccessListLayout(page, { ...prefs, visibleColumns: [...visibleColumns] });
+    renderUsers();
+  }
+  function accessListSortValue(page, row, key) {
+    const sort = row.__sort || {};
+    return String(sort[key] ?? '');
+  }
+  function sortAccessListRows(page, rows) {
+    const meta = accessListLayoutMeta[page];
+    const preset = accessListPreferences(page).sortPreset || meta.defaultSort;
+    const match = /^(.+)_(asc|desc)$/.exec(String(preset));
+    const key = match?.[1] || String(preset);
+    const rawDirection = match?.[2] || 'asc';
+    const direction = rawDirection === 'desc' ? -1 : 1;
+    const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+    return [...rows].sort((left, right) => collator.compare(accessListSortValue(page, left, key), accessListSortValue(page, right, key)) * direction);
+  }
   function renderUsers() {
     if (!can('view_users')) return;
     const canMutate = can('manage_users') && !state.data.impersonation;
@@ -8870,38 +9052,24 @@
     $('#accessArchivedUserCount').textContent = String(archivedUsers.length);
     $('#activeUserPanelCount').textContent = `${activeUsers.length} 个启用 · ${users.length} 个在职`;
     $('#archivedUserPanelCount').textContent = `${archivedUsers.length} 人`;
-    $('#userTable').innerHTML = table(
-      ['用户', '角色', '权限组', '个人调整', '状态', '操作'],
-      users.map(user => [
-        `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`,
-        `<span class="pill">${roleLabel(user.role)}</span>`,
-        esc(user.permissionGroupName || '—'),
-        user.permissionOverrideCount ? `<span class="chip">${user.permissionOverrideCount} 项调整</span>` : '<span class="id">无个人调整</span>',
-        `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
-        canMutate
-          ? `<div class="user-row-actions">
-              <button class="button secondary tiny" data-edit-user="${user.id}">编辑</button>
-              <button class="button secondary tiny" data-edit-overrides="${user.id}">权限</button>
-              ${user.id === state.data.user.id
-                ? '<span class="current-account-label">当前账号</span>'
-                : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>
-                  ${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}
-                  <button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>`}
-            </div>`
-          : '<span class="id">无变更权限</span>',
-      ]),
-    );
-    $('#archivedUserTable').innerHTML = table(
-      ['用户', '角色', '归档时间', '操作'],
-      archivedUsers.map(user => [
-        `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`,
-        `<span class="pill gray">${roleLabel(user.role)}</span>`,
-        shortDate(user.archivedAt, true),
-        canMutate
-          ? `<div class="assignment-actions"><button class="text-button" data-restore-user="${user.id}">恢复</button><button class="text-button danger-text" data-delete-user="${user.id}">永久删除</button></div>`
-          : '<span class="subtle">无变更权限</span>',
-      ]),
-    );
+    const userColumns = accessListColumns('users');
+    const archivedColumns = accessListColumns('archived_users');
+    const migrationColumns = accessListColumns('migration_review');
+    const userRows = sortAccessListRows('users', users.map(user => ({
+        user: `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`,
+        role: `<span class="pill">${roleLabel(user.role)}</span>`, permission_group: esc(user.permissionGroupName || '—'),
+        overrides: user.permissionOverrideCount ? `<span class="chip">${user.permissionOverrideCount} 项调整</span>` : '<span class="id">无个人调整</span>',
+        status: `<span class="pill ${user.active ? '' : 'gray'}">${user.active ? '启用' : '停用'}</span>`,
+        actions: canMutate ? `<div class="user-row-actions"><button class="button secondary tiny" data-edit-user="${user.id}">编辑</button><button class="button secondary tiny" data-edit-overrides="${user.id}">权限</button>${user.id === state.data.user.id ? '<span class="current-account-label">当前账号</span>' : `<button class="text-button" data-reset-password="${user.id}">修改密码</button>${['manager', 'sales'].includes(user.role) && user.active ? `<button class="text-button" data-start-impersonation="${user.id}">身份检查</button>` : ''}<button class="text-button danger-text" data-archive-user="${user.id}">归档账号</button>`}</div>` : '<span class="id">无变更权限</span>',
+        __sort: { name: user.name, role: roleLabel(user.role), permission_group: user.permissionGroupName || '', overrides: user.permissionOverrideCount || 0, status: user.active ? '1' : '0' },
+      })));
+    $('#userTable').innerHTML = listWidget.renderTable({ columns: userColumns, rows: userRows, preferences: state.usersListLayout || listWidget.defaultPreferences(userColumns), attrs: 'data-list-page="users"', emptyText: '暂无用户' });
+    const archivedRows = sortAccessListRows('archived_users', archivedUsers.map(user => ({
+        user: `<div class="list-entity"><div class="an">${esc(user.name)}</div><div class="id">${esc(user.email)}</div></div>`, role: `<span class="pill gray">${roleLabel(user.role)}</span>`, archived_at: shortDate(user.archivedAt, true),
+        actions: canMutate ? `<div class="assignment-actions"><button class="text-button" data-restore-user="${user.id}">恢复</button><button class="text-button danger-text" data-delete-user="${user.id}">永久删除</button></div>` : '<span class="subtle">无变更权限</span>',
+        __sort: { name: user.name, role: roleLabel(user.role), archived_at: user.archivedAt || '' },
+      })));
+    $('#archivedUserTable').innerHTML = listWidget.renderTable({ columns: archivedColumns, rows: archivedRows, preferences: state.archivedUsersListLayout || listWidget.defaultPreferences(archivedColumns), attrs: 'data-list-page="archived_users"', emptyText: '暂无归档用户' });
     switchAccessSection(state.accessSection);
     renderPermissionGroups(canMutate);
     if (state.filterPermissionAdmin) renderFilterPermissionAdmin();
@@ -8909,20 +9077,11 @@
     renderAuditList();
     const sales = state.data.users.filter(user => user.role === 'sales' && user.active);
     $('#migrationReviewCount').textContent = `${state.data.migrationReview?.length || 0} 条待确认`;
-    $('#migrationReviewTable').innerHTML = table(
-      ['旧记录','原负责人','原因','分配销售','操作'],
-      (state.data.migrationReview || []).map(review => {
+    const migrationRows = sortAccessListRows('migration_review', (state.data.migrationReview || []).map(review => {
         let payload = {}; try { payload = JSON.parse(review.payload_json || '{}'); } catch (_error) {}
-        return [
-          `<div class="company-cell"><strong>${esc(payload.company_name || review.source_id)}</strong><span>${esc(payload.customer_id || '')} · ${esc(review.source_id)}</span></div>`,
-          esc(payload.owner || '未分配'), esc(review.reason),
-          `<select data-review-owner="${esc(review.id)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select>`,
-          canMutate
-            ? `<button class="text-button" data-resolve-review="${esc(review.id)}">确认迁移</button>`
-            : '<span class="subtle">无变更权限</span>',
-        ];
-      }),
-    );
+        return { source: `<div class="company-cell"><strong>${esc(payload.company_name || review.source_id)}</strong><span>${esc(payload.customer_id || '')} · ${esc(review.source_id)}</span></div>`, owner: esc(payload.owner || '未分配'), reason: esc(review.reason), assigned_owner: `<select data-review-owner="${esc(review.id)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select>`, actions: canMutate ? `<button class="text-button" data-resolve-review="${esc(review.id)}">确认迁移</button>` : '<span class="subtle">无变更权限</span>', __sort: { source: payload.company_name || review.source_id || '', owner: payload.owner || '', reason: review.reason || '' } };
+      }));
+    $('#migrationReviewTable').innerHTML = listWidget.renderTable({ columns: migrationColumns, rows: migrationRows, preferences: state.migrationReviewListLayout || listWidget.defaultPreferences(migrationColumns), attrs: 'data-list-page="migration_review"', emptyText: '暂无待确认迁移' });
   }
 
   function auditColumns() { const columns = [{ key: 'created_at', label: '时间', required: true, sortKey: 'createdAt' }, { key: 'operator', label: '操作人' }, { key: 'action', label: '动作', required: true }, { key: 'object', label: '对象' }, { key: 'detail', label: '详情' }]; const fields = state.fieldSchemas?.audit?.fields; if (!Array.isArray(fields) || !fields.length) return columns; const allowed = new Set(fields.map(field => String(field.key || '').trim())); return columns.filter(column => column.required || allowed.has(column.key)); }
@@ -10887,16 +11046,16 @@
   function renderPermissionGroups(canMutate = can('manage_users') && !state.data.impersonation) {
     const root = $('#permissionGroupTable');
     if (!root) return;
-    root.innerHTML = table(
-      ['权限组', '角色', '权限', '成员', '操作'],
-      (state.data.permissionGroups || []).map(group => [
-        `<div class="company-cell"><strong>${esc(group.name)}</strong><span>${esc(group.description || '—')}</span></div>`,
-        `<span class="pill">${roleLabel(group.role)}</span>`,
-        `<span class="subtle">${Object.values(group.permissions || {}).filter(Boolean).length} 项允许</span>`,
-        `${group.memberCount} 人`,
-        canMutate ? `<button class="text-button" data-edit-group="${esc(group.id)}">编辑</button>` : '<span class="subtle">—</span>',
-      ]),
-    );
+    const columns = accessListColumns('permission_groups');
+    const rows = sortAccessListRows('permission_groups', (state.data.permissionGroups || []).map(group => ({
+      group: `<div class="company-cell"><strong>${esc(group.name)}</strong><span>${esc(group.description || '—')}</span></div>`,
+      role: `<span class="pill">${roleLabel(group.role)}</span>`,
+      permissions: `<span class="subtle">${Object.values(group.permissions || {}).filter(Boolean).length} 项允许</span>`,
+      members: `${Number(group.memberCount || 0)} 人`,
+      actions: canMutate ? `<button class="text-button" data-edit-group="${esc(group.id)}">编辑</button>` : '<span class="subtle">—</span>',
+      __sort: { group: group.name || '', role: roleLabel(group.role), permissions: Object.values(group.permissions || {}).filter(Boolean).length, members: Number(group.memberCount || 0) },
+    })));
+    root.innerHTML = listWidget.renderTable({ columns, rows, preferences: accessListPreferences('permission_groups'), attrs: 'data-list-page="permission_groups"', emptyText: '暂无权限组' });
   }
 
   function filterPermissionTarget() {
@@ -15515,6 +15674,22 @@
       return;
     }
     if (event.target.closest('#auditColumnSettings')) { const panel = $('#auditColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreAuditListLayout(); return; }
+    if (event.target.closest('#intakeBatchColumnSettings')) {
+      const panel = $('#intakeBatchColumnSettingsPanel');
+      panel?.classList.toggle('hidden');
+      event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden')));
+      restoreIntakeBatchListLayout();
+      return;
+    }
+    for (const page of ['users', 'archived_users', 'migration_review', 'permission_groups']) {
+      const meta = accessListLayoutMeta[page];
+      if (event.target.closest(`#${meta.button}`)) {
+        const panel = $(`#${meta.panel}`);
+        if (panel?.classList.contains('hidden')) openAccessListColumnSettings(page);
+        else closeAccessListColumnSettings(page);
+        return;
+      }
+    }
     if (event.target.closest('#maintenanceRunsColumnSettings')) {
       const panel = $('#maintenanceRunsColumnSettingsPanel'); panel?.classList.toggle('hidden'); event.target.setAttribute('aria-expanded', String(!panel?.classList.contains('hidden'))); restoreMaintenanceRunsListLayout();
       return;
@@ -15602,6 +15777,16 @@
         moveCorrectionHistoryListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else if (columnMove.closest('#auditColumnSettingsPanel')) {
         moveAuditListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#intakeBatchColumnSettingsPanel')) {
+        moveIntakeBatchListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#usersColumnSettingsPanel')) {
+        moveAccessListColumn('users', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#archivedUsersColumnSettingsPanel')) {
+        moveAccessListColumn('archived_users', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#migrationReviewColumnSettingsPanel')) {
+        moveAccessListColumn('migration_review', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
+      } else if (columnMove.closest('#permissionGroupsColumnSettingsPanel')) {
+        moveAccessListColumn('permission_groups', columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       } else {
         moveCustomerListColumn(columnMove.dataset.listColumnKey || '', columnMove.dataset.listColumnMove || '');
       }
@@ -15629,6 +15814,11 @@
       else if (event.target.closest('#protectedColumnSettingsPanel')) { state.protectedCustomers.listLayout = listWidget.defaultPreferences(protectedCustomerColumns()); listWidget.savePreferences(protectedListLayoutKey(), state.protectedCustomers.listLayout, undefined, protectedCustomerColumns()); renderProtectedColumnSettings(); renderProtectedCustomers(); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { state.maintenanceRunsListLayout = listWidget.defaultPreferences(maintenanceRunsColumns()); listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns()); restoreMaintenanceRunsListLayout(); renderMaintenanceRuns(); }
       else if (event.target.closest('#auditColumnSettingsPanel')) resetAuditListLayout();
+      else if (event.target.closest('#intakeBatchColumnSettingsPanel')) resetIntakeBatchListLayout();
+      else if (event.target.closest('#usersColumnSettingsPanel')) resetAccessListLayout('users');
+      else if (event.target.closest('#archivedUsersColumnSettingsPanel')) resetAccessListLayout('archived_users');
+      else if (event.target.closest('#migrationReviewColumnSettingsPanel')) resetAccessListLayout('migration_review');
+      else if (event.target.closest('#permissionGroupsColumnSettingsPanel')) resetAccessListLayout('permission_groups');
       else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) resetCorrectionHistoryListLayout();
       else resetCustomerListLayout();
       return;
@@ -15655,6 +15845,11 @@
       else if (event.target.closest('#protectedColumnSettingsPanel')) { $('#protectedColumnSettingsPanel')?.classList.add('hidden'); $('#protectedColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) { $('#maintenanceRunsColumnSettingsPanel')?.classList.add('hidden'); $('#maintenanceRunsColumnSettings')?.setAttribute('aria-expanded', 'false'); }
       else if (event.target.closest('#auditColumnSettingsPanel')) closeAuditColumnSettings();
+      else if (event.target.closest('#intakeBatchColumnSettingsPanel')) closeIntakeBatchColumnSettings();
+      else if (event.target.closest('#usersColumnSettingsPanel')) closeAccessListColumnSettings('users');
+      else if (event.target.closest('#archivedUsersColumnSettingsPanel')) closeAccessListColumnSettings('archived_users');
+      else if (event.target.closest('#migrationReviewColumnSettingsPanel')) closeAccessListColumnSettings('migration_review');
+      else if (event.target.closest('#permissionGroupsColumnSettingsPanel')) closeAccessListColumnSettings('permission_groups');
       else if (event.target.closest('#correctionHistoryColumnSettingsPanel')) closeCorrectionHistoryColumnSettings();
       else closeCustomerColumnSettings();
       return;
@@ -16523,6 +16718,18 @@
       renderManagerMetrics();
     }
     if (event.target.id === 'auditSort') { state.auditListLayout = { ...state.auditListLayout, sortPreset: event.target.value }; state.auditListLayout = listWidget.savePreferences(auditStorageKey(), state.auditListLayout, undefined, auditColumns()); renderAuditList(); }
+    if (event.target.id === 'intakeBatchSort') {
+      saveIntakeBatchListLayout({ ...state.intakeBatchListLayout, sortPreset: event.target.value });
+      renderIntake();
+    }
+    for (const page of ['users', 'archived_users', 'migration_review', 'permission_groups']) {
+      const meta = accessListLayoutMeta[page];
+      if (event.target.id === meta.sortId) {
+        const current = accessListPreferences(page);
+        saveAccessListLayout(page, { ...current, sortPreset: event.target.value });
+        renderUsers();
+      }
+    }
     if (event.target.id === 'maintenanceRunsSort') {
       state.maintenanceRunsListLayout = { ...state.maintenanceRunsListLayout, sortPreset: event.target.value };
       if (listWidget?.savePreferences) state.maintenanceRunsListLayout = listWidget.savePreferences(maintenanceRunsListStorageKey(), state.maintenanceRunsListLayout, undefined, maintenanceRunsColumns());
@@ -16686,7 +16893,10 @@
         restoreMarketsCohortListLayout();
         restoreMarketsSegmentsListLayout();
       }
-      if (viewChanged && canonicalView === 'pool') restoreIntakeListLayout();
+      if (viewChanged && canonicalView === 'pool') {
+        restoreIntakeListLayout();
+        restoreIntakeBatchListLayout();
+      }
       if (viewChanged && canonicalView === 'alerts') restoreAlertsListLayout();
       if (viewChanged && canonicalView === 'recon') restoreReconListLayout();
       if (viewChanged && canonicalView === 'recycleBin') restoreRecycleBinListLayout();
@@ -16701,6 +16911,12 @@
         restoreTeamProgressDrilldownListLayout();
         restoreTeamCollaborationListLayout();
       }
+      if (viewChanged && canonicalView === 'users') {
+        restoreAccessListLayout('users');
+        restoreAccessListLayout('archived_users');
+        restoreAccessListLayout('migration_review');
+        restoreAccessListLayout('permission_groups');
+      }
       if (viewChanged && canonicalView === 'managerMetrics') {
         state.managerMetricRange = 30;
         state.managerMetricDrilldown = null;
@@ -16713,7 +16929,13 @@
     if ($('#viewSub')) $('#viewSub').textContent = viewSubtitle(canonicalView);
     document.body.classList.toggle('customer-profile-active', canonicalView === 'customerProfile');
     document.body.classList.toggle('access-admin-active', canonicalView === 'users');
-    if (canonicalView === 'users') restoreAuditListLayout();
+    if (canonicalView === 'users') {
+      restoreAuditListLayout();
+      restoreAccessListLayout('users');
+      restoreAccessListLayout('archived_users');
+      restoreAccessListLayout('migration_review');
+      restoreAccessListLayout('permission_groups');
+    }
     if (canonicalView === 'pool') renderIntake();
       if (canonicalView === 'pool') {
         void initializeAuthorizedBusinessFilters('intake', { force: viewChanged });
@@ -16870,6 +17092,16 @@
       } else if (event.target.closest('#protectedColumnSettingsPanel')) {
         toggleProtectedCustomerListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#auditColumnSettingsPanel')) { const columns = auditColumns(); const prefs = listWidget.normalizePreferences(state.auditListLayout, columns); const visible = new Set(prefs.visibleColumns); const key = event.target.dataset.listColumnToggle || ''; if (event.target.checked) visible.add(key); else visible.delete(key); state.auditListLayout = listWidget.savePreferences(auditStorageKey(), { ...prefs, visibleColumns: [...visible] }, undefined, columns); renderAuditList();
+      } else if (event.target.closest('#intakeBatchColumnSettingsPanel')) {
+        toggleIntakeBatchListColumn(event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#usersColumnSettingsPanel')) {
+        toggleAccessListColumn('users', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#archivedUsersColumnSettingsPanel')) {
+        toggleAccessListColumn('archived_users', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#migrationReviewColumnSettingsPanel')) {
+        toggleAccessListColumn('migration_review', event.target.dataset.listColumnToggle || '', event.target.checked);
+      } else if (event.target.closest('#permissionGroupsColumnSettingsPanel')) {
+        toggleAccessListColumn('permission_groups', event.target.dataset.listColumnToggle || '', event.target.checked);
       } else if (event.target.closest('#maintenanceRunsColumnSettingsPanel')) {
         const columns = maintenanceRunsColumns(); const key = event.target.dataset.listColumnToggle || '';
         const prefs = listWidget.normalizePreferences(state.maintenanceRunsListLayout, columns); const visible = new Set(prefs.visibleColumns); if (event.target.checked) visible.add(key); else visible.delete(key);

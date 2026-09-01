@@ -515,3 +515,19 @@ test('notifications list uses the shared widget with per-user layout and server 
   assert.match(app, /listWidget\?\.renderTable[\s\S]*notification-grid/);
   assert.match(app, /params\.set\('sort', state\.notificationsListLayout\?\.sortPreset/);
 });
+
+test('access administration lists and import batches use independent user layouts', () => {
+  for (const pageKey of ['users', 'archived_users', 'migration_review', 'permission_groups', 'intake_batches']) {
+    const schema = fieldCatalog.effectiveFieldSchema({ pageKey, user: { role: 'admin' }, permissions: { view_users: true, manage_users: true }, features: {} });
+    assert.ok(schema.fields.length, `${pageKey} exposes a field catalog`);
+  }
+  assert.match(app, /data-list-page="users"/);
+  assert.match(app, /data-list-page="archived_users"/);
+  assert.match(app, /data-list-page="migration_review"/);
+  assert.match(app, /data-list-page="permission_groups"/);
+  assert.match(app, /data-list-page="intake_batches"/);
+  assert.match(app, /function restoreAccessListLayout/);
+  assert.match(app, /function restoreIntakeBatchListLayout/);
+  assert.match(app, /listWidget\.renderTable\(\{ columns, rows, preferences: accessListPreferences\('permission_groups'/);
+  assert.match(app, /listWidget\.renderTable\(\{ columns: batchColumns, rows: batchRows/);
+});
