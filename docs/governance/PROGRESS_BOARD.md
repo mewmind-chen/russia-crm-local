@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-01 17:48:41`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 01:50:28`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `7f0c1ef`（相对 origin/main ahead 342） |
+| HEAD | `1da025c`（相对 origin/main ahead 355） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2094/2094 |
-| 核心测试 | `npm test` 1732/1732 |
-| sales_crm.js | 13109 行 |
+| 全量测试 | `node --test` 2107/2107 |
+| 核心测试 | `npm test` 1745/1745 |
+| sales_crm.js | 11773 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-02-profile-entrypoint-slice.md` |
+| 最近会话 | `2026-09-02-stage-g-route-assembly.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 56 |
+| refactor(其他/通用) | 67 |
 | feat(...) | 57 |
-| docs(governance) | 175 |
+| docs(governance) | 177 |
 | 其他 | 24 |
 
 ## 阶段 0：治理基础
@@ -221,16 +221,16 @@
 
 ## 阶段 G：兼容层收尾
 
-> **进行中** — 已开始兼容层收尾：旧 HTML 入口的开关路由已完成等价装配抽取；后续再评估 sales_crm 路由/聚合收敛与完整 widget 组装。
+> **已完成** — 兼容层路由/入口装配已收敛：旧 HTML 入口、profile 资源、认证/账号、列表/读取、团队/主管、活动、受保护客户、bootstrap、业务写入与后台管理路由均由独立注册器装配；资料聚合、迁移复核、入库/评价和 AI 运行时等高耦合边界按审计保留原位。
 
 ### 已完成
 
 - [x] 旧入口 /legacy 与 /tradelead-v2.html 抽为独立可选装配，保持 CRM_ENABLE_LEGACY 与 canonical / 行为（`d615410`）
-
-### 待办
-
-- [ ] **compat** sales_crm 收敛为路由转发/聚合层
-- [ ] **compat** 旧入口收敛与 widget 全组装
+- [x] profile 资源与 development-workbench 权限分流抽为独立装配（`7d6e88a`）
+- [x] 团队/协作、联系人、页面入口与认证/账号路由注册器接线（`23b6365…bf1f114`）
+- [x] 读取/列表、主管、活动、受保护客户路由注册器接线（`fc5bfcd…4be94c3`）
+- [x] bootstrap、业务写入与后台管理/维护/筛选路由注册器接线（`077617b…f0ab815`）
+- [x] 高耦合资料聚合、迁移复核、密码、入库/评价与 AI 路由保留原位并记录边界（`审计结论`）
 
 ## 阶段门禁
 
