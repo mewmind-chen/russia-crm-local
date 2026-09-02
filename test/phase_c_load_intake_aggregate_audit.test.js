@@ -5,10 +5,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { adminFixture } = require('./helpers/permission_fixture');
-const { redactContactFields } = require('../lib/access_control');
+const { redactContactFields, redactIntakeAggregate } = require('../lib/access_control');
 
 const ROOT = path.resolve(__dirname, '..');
 const salesCrmSource = fs.readFileSync(path.join(ROOT, 'lib', 'sales_crm.js'), 'utf8');
+const salesCrmReadRoutesSource = fs.readFileSync(
+  path.join(ROOT, 'lib', 'sales_crm_read_routes.js'),
+  'utf8',
+);
 
 function functionSlice(sourceText, functionName, nextFunctionName) {
   const start = sourceText.indexOf(`function ${functionName}(`);
@@ -38,6 +42,8 @@ const SENSITIVE_MARKERS = Object.freeze({
   auditReason: 'P1P3-AUDIT-REASON-CONTACT',
   historyNotes: 'P1P3-HISTORY-NOTES-CONTACT',
   lastActivitySummary: 'P1P3-LAST-ACTIVITY-SUMMARY-CONTACT',
+  dynamicEmail: 'P1P3-DYNAMIC-EMAIL-CONTACT',
+  complementaryUnknown: 'P1P3-COMPLEMENTARY-UNKNOWN-CONTACT',
 });
 
 function insertNestedDecisionAndHistory(fx) {
@@ -60,16 +66,29 @@ function insertNestedDecisionAndHistory(fx) {
     JSON.stringify({
       available: true,
       confidence: 0.8,
-      rankedCandidates: [{ userId: 'U-OTHER', reasons: ['deterministic'] }],
+      rankedCandidates: [{
+        userId: 'U-OTHER',
+        reasons: ['deterministic'],
+        emailAddress: SENSITIVE_MARKERS.dynamicEmail,
+      }],
     }),
     JSON.stringify({
       disposition: 'manager_review',
       reason: SENSITIVE_MARKERS.ruleReason,
       notes: SENSITIVE_MARKERS.historyNotes,
+      nested: { phoneNumber: SENSITIVE_MARKERS.dynamicEmail },
     }),
     JSON.stringify({ ownerId: 'U-OTHER', reason: SENSITIVE_MARKERS.auditReason }),
     at,
   );
+  fx.db.prepare(`UPDATE crm_intake_items SET supplement_pending_json=? WHERE id='INTAKE-OTHER'`)
+    .run(JSON.stringify({
+      contact: true,
+      website: true,
+      industry: true,
+      unknownAlias: SENSITIVE_MARKERS.complementaryUnknown,
+      nested: { emailAddress: SENSITIVE_MARKERS.dynamicEmail },
+    }));
 }
 
 function topLevelProjection(raw, keys) {
@@ -102,6 +121,8 @@ test('P1/P3 loadIntakeState keeps an explicit nested-shape inventory', () => {
     'items[].complementaryInfo',
     'batches[]',
   ]);
+  assert.match(salesCrmSource, /const contactSafeIntake = payload => permissions\.view_contacts \? payload : redactIntakeAggregate\(payload\);/);
+  assert.match(salesCrmReadRoutesSource, /redactIntakeAggregate/);
 });
 
 test('a top-level whitelist would leak nested P1/P3 contact fields', () => {
@@ -148,7 +169,54 @@ test('a top-level whitelist would leak nested P1/P3 contact fields', () => {
   assert.notDeepEqual(unsafeProjection, redacted);
 });
 
-test('restricted P1/P3 endpoint recursively removes known contact keys but exposes the recorded residual', async t => {
+test('the intake aggregate contract recursively projects residual shapes', () => {
+  const projected = redactIntakeAggregate({
+    developmentHistory: {
+      accountId: 'CRM-OTHER',
+      lastActivitySummary: SENSITIVE_MARKERS.lastActivitySummary,
+      activityCount: 2,
+      nested: { notes: SENSITIVE_MARKERS.historyNotes },
+    },
+    complementaryInfo: {
+      contact: true,
+      website: true,
+      industry: false,
+      unknownAlias: SENSITIVE_MARKERS.complementaryUnknown,
+      nested: { emailAddress: SENSITIVE_MARKERS.dynamicEmail },
+    },
+    arbitration: {
+      ruleDecision: {
+        disposition: 'manager_review',
+        reason: SENSITIVE_MARKERS.ruleReason,
+        nested: { phoneNumber: SENSITIVE_MARKERS.dynamicEmail },
+      },
+      aiRecommendation: {
+        rankedCandidates: [{
+          userId: 'U-OTHER',
+          emailAddress: SENSITIVE_MARKERS.dynamicEmail,
+          reasons: ['deterministic'],
+        }],
+      },
+    },
+    assignmentAudit: [{
+      manualDecision: { ownerId: 'U-OTHER', reason: SENSITIVE_MARKERS.auditReason },
+    }],
+    supplement_pending_json: JSON.stringify({ emailAddress: SENSITIVE_MARKERS.dynamicEmail }),
+  });
+
+  assert.deepEqual(projected.developmentHistory, {
+    accountId: 'CRM-OTHER',
+    activityCount: 2,
+  });
+  assert.deepEqual(projected.complementaryInfo, { website: true, industry: false });
+  assert.equal(projected.arbitration.ruleDecision.reason, undefined);
+  assert.deepEqual(projected.arbitration.ruleDecision.nested, {});
+  assert.equal(projected.arbitration.aiRecommendation.rankedCandidates[0].emailAddress, undefined);
+  assert.equal(projected.assignmentAudit[0].manualDecision.reason, undefined);
+  assert.equal(projected.supplement_pending_json, undefined);
+});
+
+test('restricted P1/P3 endpoint recursively removes known and residual contact fields', async t => {
   const fx = await adminFixture({
     appOptions: { salesCrm: { aiStationsEnabled: true } },
   });
@@ -168,10 +236,21 @@ test('restricted P1/P3 endpoint recursively removes known contact keys but expos
     privilegedItem.developmentHistory.lastActivitySummary,
     SENSITIVE_MARKERS.lastActivitySummary,
   );
+  assert.equal(
+    privilegedItem.arbitration.aiRecommendation.rankedCandidates[0].emailAddress,
+    SENSITIVE_MARKERS.dynamicEmail,
+  );
+  assert.deepEqual(privilegedItem.complementaryInfo, {
+    contact: true,
+    website: true,
+    industry: true,
+    unknownAlias: SENSITIVE_MARKERS.complementaryUnknown,
+    nested: { emailAddress: SENSITIVE_MARKERS.dynamicEmail },
+  });
 
   // seededFixture's default manager cookie is U-WU, whose view_contacts grant is
   // explicitly denied while manage_intake remains available. This exercises the
-  // real P3 route-level redactContactFields(payload) boundary.
+  // real P3 route-level redactIntakeAggregate(payload) boundary.
   const restricted = await fx.request('/api/sales-crm/intake?page=1&pageSize=50', {
     cookie: fx.cookie,
   });
@@ -184,9 +263,13 @@ test('restricted P1/P3 endpoint recursively removes known contact keys but expos
   assert.equal(restrictedItem.developmentHistory.nested, undefined);
   assert.equal(
     restrictedItem.developmentHistory.lastActivitySummary,
-    SENSITIVE_MARKERS.lastActivitySummary,
-    'the current recursive blacklist leaves this compound narrative key visible',
+    undefined,
+    'the intake aggregate projection removes the compound narrative key',
   );
+  assert.deepEqual(restrictedItem.complementaryInfo, { website: true, industry: true });
+  assert.equal(restrictedItem.supplement_pending_json, undefined);
+  assert.equal(restrictedItem.arbitration.aiRecommendation.rankedCandidates[0].emailAddress, undefined);
+  assert.doesNotMatch(JSON.stringify(restrictedItem), /P1P3-(?:DYNAMIC-EMAIL|COMPLEMENTARY-UNKNOWN)-CONTACT/);
 
   // P1 bootstrap wraps the same loadIntakeState result; verify the shared
   // boundary instead of assuming the direct P3 route is representative.
@@ -207,6 +290,9 @@ test('restricted P1/P3 endpoint recursively removes known contact keys but expos
   assert.equal(restrictedBootstrapItem.arbitration.ruleDecision.reason, undefined);
   assert.equal(
     restrictedBootstrapItem.developmentHistory.lastActivitySummary,
-    SENSITIVE_MARKERS.lastActivitySummary,
+    undefined,
   );
+  assert.deepEqual(restrictedBootstrapItem.complementaryInfo, { website: true, industry: true });
+  assert.equal(restrictedBootstrapItem.supplement_pending_json, undefined);
+  assert.equal(restrictedBootstrapItem.arbitration.aiRecommendation.rankedCandidates[0].emailAddress, undefined);
 });

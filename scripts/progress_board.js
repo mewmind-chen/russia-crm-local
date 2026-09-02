@@ -243,7 +243,7 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层形状审计已完成，确认顶层白名单会泄漏嵌套字段；S5 export 仍按 users/password hash 风险暂缓。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；顶层白名单迁移仍按嵌套等价风险暂缓，S5 export 仍按 users/password hash 风险暂缓。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -257,9 +257,10 @@ function buildPhases(env) {
         ['access', '按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）', '45e0c05', ''],
         ['access', 'legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）', 'c595bf0', ''],
         ['access', 'P1/P3 loadIntakeState 深层形状审计（顶层白名单泄漏证据与残余 lastActivitySummary 风险）', '审计契约', ''],
+        ['access', 'P1/P3 递归脱敏合规边界（lastActivitySummary、complementaryInfo 任意 JSON、arbitration 深层字段）', '本次切片', ''],
       ],
       pending: [
-        ['access', 'P1/P3 白名单迁移与 S5 export 暂缓（P1/P3 需递归/合规修复；S5 需先处理 users 密码哈希）', '', ''],
+        ['access', 'P1/P3 顶层白名单迁移与 S5 export 暂缓（P1/P3 需独立逐形状等价评审；S5 需先处理 users 密码哈希）', '', ''],
       ],
     },
     {

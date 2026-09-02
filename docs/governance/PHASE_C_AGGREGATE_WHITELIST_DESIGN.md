@@ -1,7 +1,7 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
 日期：2026-08-30（P1/P3 复核：2026-09-02）
-状态：按切片执行中；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），P1/P3 嵌套审计已完成但迁移仍按本文边界暂缓
+状态：递归合规修复方案与契约已完成；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），P1/P3 顶层白名单迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
@@ -51,6 +51,25 @@
 `arbitration.ruleDecision.reason` 和 `assignmentAudit[].ruleDecision.reason` 会重新泄漏；
 这不是可接受的等价转换。当前 P1/P3 仍由 `redactContactFields` 递归兜底，不能以本轮
 审计结果宣称已完成字段级白名单化。
+
+### 2026-09-02 P1/P3 递归合规修复方案与契约
+
+本目标不把 P1/P3 改造成顶层字段白名单，而是在同一权限边界上增加专用的
+`redactIntakeAggregate` 递归投影。它只在无 `view_contacts` 的 P1/P3 读路径使用；有权限的
+响应保持原形状，AI 生产函数、存储格式和其他 payload 的 `redactContactFields` 语义均不变。
+
+| 风险面 | 允许的形状/字段 | 无 `view_contacts` 的规则 | 拒绝默认 | 契约证据 |
+|---|---|---|---|---|
+| `developmentHistory.lastActivitySummary` | 账户标识、阶段、回收状态、计数、最后活动时间/类型 | `developmentHistory` 采用显式元数据投影；`lastActivitySummary` 及其别名永不下发 | 未来新增的嵌套对象/叙事字段不随值复制进入响应 | `phase_c_load_intake_aggregate_audit`：哨兵摘要在 P1/P3 均被移除 |
+| `complementaryInfo`（含 `supplement_pending_json`） | 仅 `website`、`industry` 两个布尔补充标记 | 采用严格对象投影；`contact`、未知键、嵌套对象/数组、非布尔值全部丢弃；原始 JSON 字符串列同步不下发 | 任意未知 JSON 不递归保留，避免别名绕过 `CONTACT_KEYS` | 同一契约：未知别名/嵌套邮箱哨兵不可见，已知布尔标记保留 |
+| `arbitration` / `assignmentAudit[]` 动态后代 | 现有规则/人工/推荐对象及其结构化业务值 | 对每一层对象和数组递归访问；按规范化键移除 `CONTACT_KEYS`、`lastActivitySummary`、原始补充 JSON 和常见联系方式别名；非敏感未知键可保留，以避免改动 AI/规则生产者 | 禁止“只保留顶层键再原样复制”；敏感字段在任意深度都必须剥离 | 合成嵌套契约 + 真实 P1/P3 路由；`reason`/`notes`/`emailAddress`/`phoneNumber` 哨兵均不可见 |
+| `developmentTimeline[]`、`identityWarning`、`customerTags[]` | 既有结构化条目 | 继续走递归边界；已登记叙事键按既有规则剥离 | 不因本目标启动新的列表白名单迁移 | 既有 timeline/customer/tag 契约与本轮形状清单 |
+
+规则优先级固定为：权限判断 → 递归键裁剪 → 形状专用投影。投影返回新对象，不修改
+`loadIntakeState` 的源对象；空对象可以保留作为结构占位，但不得包含被拒字段或其原始值。
+P1 bootstrap 与 P3 直读路由必须调用同一 helper，确保没有单路由修复遗漏。该方案完成的是
+“无联系方式权限时不泄漏”的运行时边界与契约，不等同于 P1/P3 的顶层白名单迁移；后者仍需
+另行做逐形状等价评审。
 >
 > **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
 >
@@ -82,7 +101,7 @@
 // 已是空/门控(如 !view_contacts 时 contacts:[]) 的字段原样保留。
 ```
 
-候选函数（放进 `access_control.js`，按片添加）：`contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload` / `contactSafeExportPayload`（P2/P4/P5 各自的顶层字段→形状白名单）。P1/P3（loadIntakeState）**退出本设计**（见 §3 嵌套泄漏）——其 `redactContactFields` 调用保留，或在独立"递归逐形状白名单"子项目处理。
+候选函数（放进 `access_control.js`，按片添加）：`contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload` / `contactSafeExportPayload`（P2/P4/P5 各自的顶层字段→形状白名单）。P1/P3（loadIntakeState）**不做顶层白名单迁移**（见 §3 嵌套泄漏），改由本节定义的独立递归合规 helper 处理；其他聚合仍按各自形状审计后推进。
 
 等价测试策略：对真实端点行构造"同形状对象"，断言 `复合白名单(payload) deepEqual redactContactFields(payload)`；对每个新键集先单测等价，再组合。复合投影必须以"被保留键的嵌套值不泄漏 CONTACT_KEYS 子键"为前提。
 
@@ -95,7 +114,7 @@
 3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。产出可被 S4 复用。
 4. **S7 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 与 S5 被 §3 判定不建议转换）；范围解释器统一与按页面合约为下一主线。
 
-**暂缓**：P1/P3（loadIntakeState 嵌套泄漏）、S5（export 的 users 形状含 password_hash 暴露，需先修合规）。
+**暂缓**：P1/P3 顶层白名单迁移（递归合规修复已完成，仍需独立等价评审）、S5（export 的 users 形状含 password_hash 暴露，需先修合规）。
 
 依赖：S4→S3,S6（及 account/activity/commerce/insights 现有）；S6 独立。S4 与 S6 均可作为独立切片执行，S6 无前置。
 
@@ -105,6 +124,7 @@
 
 - **行为保持**：等价契约保证无 view_contacts 用户可见字段逐键一致；复合投影不得改变空字段/门控字段。
 - **嵌套泄漏（本轮发现的最高风险）**：凡白名单保留键的值为非空对象/数组，其内部 CONTACT_KEYS 子键会被泄漏（白名单不递归、黑名单递归）。每个新键集接线前必须做泄漏校验（扫描保留值中的 CONTACT_KEYS 子键）；泄漏则改回黑名单路径或建递归白名单。**P1/P3（loadIntakeState）因深度嵌套 AI/仲裁内容已在 §3 判定不建议转换。**
+- **P1/P3 递归边界**：无 `view_contacts` 时必须使用 `redactIntakeAggregate`；`developmentHistory` 与 `complementaryInfo` 走严格形状投影，arbitration/assignmentAudit 的每层后代走规范化递归裁剪。不得把该 helper 复用为其他 payload 的全局黑名单替代品。
 - **preserveAlertCopy**：alert 形状须核验 `contactSafeAlertsRecord` 与 `redactContactFields(payload,{preserveAlertCopy:true})` 等价，必要时为 alarm-copy 记录单列键集。
 - **红线**：不改 `ai_stations/**`、`assistant.js`/`task_center.js` 内调用；不改 AI 触发点。
 - 未全绿前不叠加下一阶段功能。
