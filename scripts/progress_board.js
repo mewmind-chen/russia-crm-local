@@ -249,7 +249,7 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；S4/P4 回收资料与共享完整资料逐形状风险矩阵、只读/权限/递归契约和复合迁移门禁已由 09665b5 收口；P1/P3 顶层及 S4/S6 复合白名单迁移仍按嵌套等价风险暂缓。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；S4/P4 回收资料与共享完整资料逐形状风险矩阵、只读/权限/递归契约和复合迁移门禁已由 09665b5 收口；S6/P2 Bootstrap/masterProfile 共享叶子矩阵、权限/递归契约与 recon 漂移门禁已由 3022dae 收口，establishedYear 叶子遗漏已修正；P1/P3 顶层及 S4/S6 复合白名单迁移仍按嵌套等价风险暂缓。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -267,6 +267,7 @@ function buildPhases(env) {
         ['access', 'S5/P5 export 凭据字段递归合规边界（password/token/session/secret 及嵌套 JSON）', 'ccc9bb5', ''],
         ['access', 'S7 剩余 redactContactFields 调用点审计与迁移边界契约（独立列表投影闭合；AI 红线冻结）', 'a57c44f', ''],
         ['access', 'S4/P4 recycle profile/master profile 逐形状安全契约与迁移门禁（高耦合复合保留）', '09665b5', ''],
+        ['access', 'S6/P2 Bootstrap/masterProfile 共享叶子逐形状契约与复合迁移门禁（establishedYear 修正；recon 漂移保留递归）', '3022dae', ''],
       ],
       pending: [
         ['access', 'P1/P3 顶层白名单迁移暂缓（需独立逐形状等价评审）', '', ''],
