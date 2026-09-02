@@ -28,6 +28,7 @@ const { auditIdentity } = require('./lib/impersonation');
 const { readExistingFileWithinRoot } = require('./lib/report_files');
 const { registerReleaseHealth } = require('./lib/release_health');
 const { registerLegacyEntrypoints } = require('./lib/legacy_entrypoints');
+const { registerServerPageEntrypoints } = require('./lib/page_entrypoints');
 const {
   registerProfileAssets,
   registerDevelopmentWorkbench,
@@ -74,9 +75,8 @@ app.use((req, res, next) => {
   next();
 });
 registerReleaseHealth(app);
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'sales-crm.html')));
+registerServerPageEntrypoints(app, { rootDir: __dirname });
 registerLegacyEntrypoints(app, { enabled: process.env.CRM_ENABLE_LEGACY, rootDir: __dirname });
-app.use('/shared-assets', express.static(path.join(__dirname, 'shared-assets')));
 registerProfileAssets(app, { rootDir: __dirname, requireUnifiedUser });
 registerSalesCrm(app, options.salesCrm || {});
 app.get('/api/session/capabilities', requireUnifiedUser, (req, res) => {
