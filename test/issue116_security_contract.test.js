@@ -9,6 +9,10 @@ const root = path.join(__dirname, '..');
 const crmHtml = fs.readFileSync(path.join(root, 'sales-crm.html'), 'utf8');
 const crmJs = fs.readFileSync(path.join(root, 'sales-assets', 'app.js'), 'utf8');
 const salesCrmSource = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
+const accountRoutesSource = fs.readFileSync(
+  path.join(root, 'lib', 'sales_crm_account_routes.js'),
+  'utf8',
+);
 
 function literalOccurrences(source, literal) {
   return source.split(literal).length - 1;
@@ -101,12 +105,12 @@ test('customer results are fetched through the server-side paginated accounts AP
     'the customer list must call GET /accounts instead of filtering the bootstrap snapshot',
   );
   assert.match(
-    salesCrmSource,
+    `${salesCrmSource}\n${accountRoutesSource}`,
     /app\.get\('\/api\/sales-crm\/accounts'/,
     'the paginated server endpoint must exist',
   );
   assert.match(
-    salesCrmSource,
+    `${salesCrmSource}\n${accountRoutesSource}`,
     /pageSize|page_size/,
     'the server implementation must expose bounded pagination',
   );

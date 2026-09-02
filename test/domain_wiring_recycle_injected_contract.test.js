@@ -7,6 +7,11 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
+const accountRoutesSource = fs.readFileSync(
+  path.join(root, 'lib', 'sales_crm_account_routes.js'),
+  'utf8',
+);
+const assembledSource = `${source}\n${accountRoutesSource}`;
 
 // 阶段 A 接线契约（B 组注入式批）：customer/recycle 的注入式错误构造函数
 // 必须从域模块 import（不内联），且所有调用点必须注入 { httpError: recycleError }
@@ -20,6 +25,6 @@ test('customer/recycle injected-error helpers are wired with httpError injection
   assert.doesNotMatch(source, /^function parseMismatchRecordKey\(/m);
   assert.doesNotMatch(source, /^function assertCustomerReturnEligible\(/m);
   // 全部调用点注入 httpError（validateRecycleReason 5 + assertEligible 3 + parseKey 1 + notFound 3 = 12）
-  const injections = (source.match(/\{ httpError: recycleError \}/g) || []).length;
+  const injections = (assembledSource.match(/\{ httpError: recycleError \}/g) || []).length;
   assert.ok(injections >= 12, `expected >=12 injected call sites, got ${injections}`);
 });
