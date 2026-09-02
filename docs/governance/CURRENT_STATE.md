@@ -11,11 +11,11 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@1ea7292`，阶段 G 路由装配与治理看板均已提交；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@HEAD`，阶段 G 路由装配与治理看板均已提交；实现回滚点为 `f0ab815`；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前实现回滚点：`f0ab815`（阶段 G 路由/入口装配收尾）；治理 HEAD：`1ea7292`。旧入口、profile 资源、认证/账号、联系人、团队/协作、页面入口、读取/列表、主管、活动、受保护客户、bootstrap、业务写入与后台管理/维护/筛选路由分别由独立注册器装配；`lib/sales_crm.js` 保留全局中间件、资料聚合及迁移复核/密码/入库/评价等高耦合边界。保持原注册顺序、权限/脱敏、数据库生命周期、错误响应和 API 路径不变。列表列设置和统一资料页行为保持既有实现；已提交、未部署。
+- 当前实现回滚点：`f0ab815`（阶段 G 路由/入口装配收尾）；治理文档与看板随 HEAD 持续更新。旧入口、profile 资源、认证/账号、联系人、团队/协作、页面入口、读取/列表、主管、活动、受保护客户、bootstrap、业务写入与后台管理/维护/筛选路由分别由独立注册器装配；`lib/sales_crm.js` 保留全局中间件、资料聚合及迁移复核/密码/入库/评价等高耦合边界。保持原注册顺序、权限/脱敏、数据库生命周期、错误响应和 API 路径不变。列表列设置和统一资料页行为保持既有实现；已提交、未部署。
 - 双基线已核验且保持一致：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`。生产目录仍只读；本次未执行生产验证或部署。
 - 当前验证摘要（2026-09-02）：`node --test`：全量 `2107/2107`；`npm test`：core `1745/1745`；阶段 G 路由专项与权限/脱敏回归 `56/56`，静态兼容契约修复回归 `16/16`。`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
 - 已提交的 Phase E browser acceptance（`583f314`）与本次隔离预览回归共同作为证据：客户全景 83 个授权列、线索池 47 个当前角色可见列，列设置分组/搜索/预设可用；customerProfile 挂载 9 个非 AI widget、五个页签可切换且默认不加载 legacy iframe。AI runtime、`lib/ai_stations/**`、`crm_ai_*` 和 `CRM_AI_*` 保持冻结；生产只读。
