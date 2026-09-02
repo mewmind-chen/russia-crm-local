@@ -1,11 +1,11 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
-日期：2026-08-30（P1/P3、S5/P5 复核：2026-09-02）
-状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`）；P1/P3 顶层白名单迁移仍按本文边界暂缓
+日期：2026-08-30（P1/P3、S5/P5、S7 复核：2026-09-02）
+状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`），S7 剩余 `redactContactFields` 调用点审计与迁移边界契约已完成（`a57c44f`）；P1/P3 顶层白名单迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
-> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界。三者均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
+> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界；S7 以矩阵和静态契约确认剩余复合调用点的保留/冻结决定。四者均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
 
 ## 1. 目标
 
@@ -109,6 +109,24 @@ S5/P5 的目标是让 `/api/sales-crm/export` 的 JSON 与 CSV 输出形成独�
 
 该切片完成的是 S5/P5 **凭据字段合规边界**，不等同于 P1/P3 顶层字段白名单迁移；后者继续按嵌套等价风险暂缓。
 
+### 2026-09-02 S7 剩余 `redactContactFields` 调用点审计
+
+S7 以 `test/phase_c_s7_redaction_boundary_contract.test.js`（`a57c44f`）和配套会话
+`docs/governance/sessions/2026-09-02-stage-c-s7-redaction-boundary-audit.md` 固化剩余调用点
+的字段风险矩阵。结论按形状而不是按函数名分类：
+
+- `listCustomerAccounts`、Research pool/recon、Pipeline、Alerts、Insights、通知等独立列表
+  已使用 `contactSafe*Record` 和来源权限门控；静态契约禁止回退到直接的通用递归 helper。
+- P1 `loadPayload`、P2 `getInitialData`、P4 `getCustomerProfileData`、P4 recycle profile
+  的外层仍是跨域复合对象，继续保留 `redactContactFields` 递归兜底；legacy customer 行、
+  timeline/audit、pool/recon 等已收口的叶子投影不改变。
+- P1/P3 intake 只使用 `redactIntakeAggregate` 处理动态仲裁、历史和补充 JSON；不把顶层键
+  集和值原样复制成白名单。S5 export 继续保持联系人投影后执行凭据递归投影。
+- `assistant.js` 与 `ai_stations/task_center.js` 的调用点是 AI 冻结红线，仅记录不迁移。
+
+因此 S7 没有新增可安全迁移的复合 payload；S4 recycle-profile、S6 bootstrap 和 P1/P3
+顶层白名单仍需独立的逐形状结构/等价/嵌套泄漏契约后再立项，不能由本轮审计自动开启。
+
 > **历史审计发现（2026-08-30）**：导出 payload 的 `users` 形状曾被判定可能保留 `password_hash/password_salt`（不在 CONTACT_KEYS）；该发现作为本轮修复动因保留，已不再作为当前暂缓项。export 的 corrections/proposals/activities 追加字段仍需遵守本节递归凭据边界。
 >
 > **S6（db bootstrap）审计结论（2026-08-30 实测，2026-09-02 切片完成）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。`customers` 已由 `c595bf0` 的 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 在 bootstrap/profile 两个路径显式投影并以结构/等价/泄漏/行为契约锁定；其余字段仍由原聚合黑名单兜底。结论：S6 的可选 legacy customers 残值已收口，但不等同于 P2 复合 bootstrap 全量白名单化。
@@ -151,7 +169,7 @@ S5/P5 的目标是让 `/api/sales-crm/export` 的 JSON 与 CSV 输出形成独�
 2. **S4 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（account/activity/commerce/timeline(S3)/insights + auditLog(S3) + recycle/profileAccess）；**被 `masterProfile`（`getCustomerProfileData` 巨型共享形状，含 people/recon）门控**——需先为 masterProfile 形状另立子设计（或复用 S6 的 people/recon 白名单）；接线 P4。
 3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。产出可被 S4 复用。
 4. **S5/P5 导出凭据字段合规（已完成 `ccc9bb5`）**：`redactExportCredentials` 对整个 JSON payload 递归删除凭据键，并检查嵌入式 JSON 文本；CSV 继续固定合法列映射，保留授权、范围、联系人和商务字段。
-5. **S7 收尾**：确认剩余 `redactContactFields` 调用点与高耦合边界均有独立审计（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 顶层迁移仍按 §3 暂缓）；范围解释器统一与按页面合约为下一主线。
+5. **S7 收尾（已完成 `a57c44f`）**：确认剩余 `redactContactFields` 调用点与高耦合边界均有独立审计；独立列表投影已闭合，AI 相关 `assistant.js`/`ai_stations/task_center.js` 保持红线，P1/P3 顶层迁移仍按 §3 暂缓。范围解释器统一与按页面合约为下一主线。
 
 **暂缓**：P1/P3 顶层白名单迁移（递归合规修复已完成，仍需独立逐形状等价评审）。
 
