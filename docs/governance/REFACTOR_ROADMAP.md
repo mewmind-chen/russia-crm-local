@@ -2,21 +2,21 @@
 
 更新时间：2026-09-02
 基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@HEAD`（未合并；实现回滚点 `f0ab815`）
-状态：路线图执行中；阶段 E 的 widget 与浏览器验收、阶段 G 的兼容入口和路由装配均已完成。阶段 G 保留资料聚合、迁移复核、密码、入库/评价及 AI 路由等高耦合边界原位；权限配置矩阵与事务预览/审核工作区仍为专用组件，AI 专用列表继续弃用冻结。
+执行分支：`codex/frontend-widget-pilot@HEAD`（未合并；Stage D 收口回滚点 `89e6509`，阶段 G 路由回滚点 `f0ab815`）
+状态：路线图执行中；阶段 E 的 widget 与浏览器验收、阶段 G 的兼容入口和路由装配均已完成，Stage D 的非 AI manager intervention / deferred plan 应用服务也已收口。阶段 G 保留资料聚合、迁移复核、密码、入库/评价及 AI 路由等高耦合边界原位；权限配置矩阵与事务预览/审核工作区仍为专用组件，AI 专用列表继续弃用冻结。
 
 ## 当前进度快照
 
 | 阶段 | 状态 | 已有证据 | 尚未完成 |
 |---|---|---|---|
 | 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录、滚动看板与会话记录 | 无 |
-| 阶段 A：后端结构化切分 | 接线恢复完成（41/44 已接入） | `lib/domains/` 44 个文件；41 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 约 11,773 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；资料/事务高耦合服务仍由后续阶段管理 |
+| 阶段 A：后端结构化切分 | 接线恢复完成（41/44 已接入） | `lib/domains/` 44 个文件；41 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 约 11,320 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；资料/事务高耦合服务按审计保留或单独立项 |
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中（主体完成） | field catalog、schema 渲染、列表/形状白名单；范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`）；按页面权限→字段→筛选合同（`45e0c05`） | P1/P3 嵌套聚合与 S5 export 因泄漏风险暂缓；S6 bootstrap 审计为低价值；仅余可选 legacy customers 形状白名单 |
-| 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |
+| 阶段 D：线索/任务/商业闭环 | 完成（非 AI 管理流程已收口） | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`）；`89e6509` 将 manager intervention / deferred plan 收口为独立应用服务并保留权限、幂等、事务、生命周期网关和审计语义 | 无新增范围；今日待办的 intake/manager receipt 继续保留既有事务边界 |
 | 阶段 E：前端 widgets | 完成门已通过：注册表、默认视图、全范围非 AI List widget（含用户级多级排序）、CRM 抽屉非 AI 注册表组合、复杂 activity timeline widget、旧入口兼容边界、隔离 preview harness 与 sales/manager 双角色浏览器验收均已落地；阶段 G 兼容装配随后完成 | `2d98eea` 注册表；`e59bf22` profile-only 只读兼容契约；`8a86425` 独立 host 隔离；`3adc1d1` identity/source tags UMD；`cd9f198` Markets 等多列表迁移；`b1fa1cc` manager_tasks；`807b56c` manager_risks；`ed40d76` manager_metrics；`a52e42b` Team 进度/协作列表；`75a30b7` Insights 人工评价列表；`f1fe7d1` 受保护客户目录；`6001f61` 维护运行记录；`61a6572` 跟进更正历史只读列表；`3e55b41` 审计只读列表；`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表；`79036e5` CRM 抽屉非 AI 区块注册表组合与默认 iframe 边界；`092d8a0` 复杂 activity timeline 条目 widget 化；`bc84567` 旧入口兼容边界锁定；`3b2fe24` Phase E harness 加强；`dd650ba` Phase E 隔离 preview harness；`549fdfd` 多级排序协议与服务端白名单收口；`062f31a` 项目锁定 Playwright 1.62.1 与缺失依赖 fail-closed 合同；`583f314` 浏览器验收断言与输出语义收口 | 阶段 E 与随后阶段 G 均已完成；继续维持 AI 冻结 |
 | 阶段 F：AI 零动作 | 持续遵守 | AI 内部未纳入本次重构 | 后续继续保持冻结 |
-| 阶段 G：兼容层收尾 | 已完成（保留高耦合边界） | `d615410`、`7d6e88a`、`23b6365…f0ab815` 完成旧入口、profile 资源、CRM 各路由组与后台管理装配；每组均有注册器契约/专项回归，路由顺序、权限、脱敏、错误响应保持等价 | 仅对资料聚合、迁移复核、密码、入库/评价和 AI 路由保留原位；若未来要继续拆，必须先完成独立审计 |
+| 阶段 G：兼容层收尾 | 已完成（保留高耦合边界） | `d615410`、`7d6e88a`、`23b6365…f0ab815` 完成旧入口、profile 资源、CRM 各路由组与后台管理装配；`2026-09-02-high-coupled-stage-d-audit.md` 完成高耦合边界审计；每组均有注册器契约/专项回归，路由顺序、权限、脱敏、错误响应保持等价 | 资料聚合、迁移复核、密码、入库/评价和 AI 路由按审计保留原位；继续拆分需另立 service contract 与专项审计 |
 
 阶段状态只用于导航，具体 Git、WIP 和测试数以 `CURRENT_STATE.md` 为准。
 
@@ -122,11 +122,18 @@
 - `crm_intake_*` 逻辑拆出并保留幂等/裁决/审计。
 - `next_action` 与 alerts 使用统一解释器。
 - RFQ / quote / order / action request 的事务边界显式化。
-- manager intervention 与 deferred plan 作为独立用例。
+- manager intervention 与 deferred plan 作为独立非 AI 应用用例，由 `lib/manager_workflows.js` 通过依赖注入组合授权、范围、生命周期网关、通知与审计。
 
 ### 完成门
 - 批量扫描、分配、领取、退回、报价、订单、下一步建议均可通过独立域测试验证。
-- 无必须依赖 `sales_crm.js` 内部私有状态。
+- manager intervention / deferred plan 不再依赖 `sales_crm.js` 内部私有状态；组合根只负责显式注入依赖。
+- `sales_crm.js` 保留今日待办 intake/manager receipt 的原事务边界，避免跨域事务拆分造成语义漂移。
+
+### 当前完成结论（2026-09-02）
+
+`89e6509` 完成了 Stage D 的非 AI 管理流程收口：`deferAccountPlan`、主管任务扫描/设置/详情、任务通知、主管干预动作、升级通知与审计均由 `lib/manager_workflows.js` 提供。`manager_tasks.js` 与 `deferred_plan.js` 继续负责低层 schema/event；既有路由、权限、范围、幂等、事务、错误码和生命周期网关保持不变。
+
+高耦合边界审计记录在 `docs/governance/sessions/2026-09-02-high-coupled-stage-d-audit.md`。资料聚合、profile 脱敏、迁移复核、入库扫描/动作、评价写入/重试、全局认证/审计策略、密码和 AI task middleware 均判定保留原位；这不是遗漏，而是本轮安全边界。
 
 ## 阶段 E：前端 widget 组合架构与客户完整资料统一
 
@@ -183,7 +190,7 @@
 
 ### 当前完成结论（2026-09-02）
 
-阶段 G 的兼容装配目标已完成。`server.js` 与 `lib/sales_crm.js` 的可安全抽取入口/路由已按职责拆为独立注册器，保留原注册顺序和行为：
+阶段 G 的兼容装配目标已完成。`server.js` 与 `lib/sales_crm.js` 的可安全抽取入口/路由已按职责拆为独立注册器，保留原注册顺序和行为；高耦合边界审计也已完成：
 
 - `lib/legacy_entrypoints.js`、`lib/profile_entrypoints.js`、`lib/page_entrypoints.js`：旧 HTML、profile 资源和页面入口。
 - `lib/sales_auth_routes.js`、`lib/sales_crm_account_routes.js`、`lib/sales_crm_contacts_routes.js`：认证、账号/回收和联系人。
@@ -192,7 +199,7 @@
 
 对应实现提交为 `d615410`、`7d6e88a`、`23b6365`、`0359cff`、`efb4da9`、`bf1f114`、`fc5bfcd`、`9804e0b`、`fb1b795`、`4be94c3`、`077617b`、`575cd23`、`f0ab815`。每个注册器均有路由矩阵契约或受影响域回归；阶段 G 收尾专项覆盖权限、脱敏、筛选、分页、导出、事务和 impersonation。
 
-独立审计确认以下边界暂留在 `sales_crm.js`：全局认证/审计/策略中间件、资料聚合与 profile 写入、迁移复核事务、密码修改、入库与评价写入，以及 AI task middleware/`registerAIStationRoutes`。这些边界共享大量私有状态、事务闭包或 AI 红线，继续抽取不属于本轮安全范围；不得据此恢复或新增 AI 功能。
+独立审计确认以下边界暂留在 `sales_crm.js`：全局认证/审计/策略中间件、资料聚合与 profile 写入、迁移复核事务、密码修改、入库与评价写入，以及 AI task middleware/`registerAIStationRoutes`。这些边界共享大量私有状态、事务闭包或 AI 红线，继续抽取不属于本轮安全范围；不得据此恢复或新增 AI 功能。Stage D 的非 AI manager intervention / deferred plan 已在 `89e6509` 独立收口，不改变上述保留结论。
 
 ## 阶段间门禁
 
@@ -223,6 +230,8 @@
 13. 阶段 C S3 形状：`38bfe7d` 建 timeline/auditLog 字段级白名单（timeline 剥 copy 字段、provenance 泄漏校验；audit 剥 action），等价/泄漏契约 3/3，为 S4/S6 可复用形状。S5（export）审计发现 users 形状经黑名单保留 password_hash/password_salt——判定暂缓（或先修合规）。全量 1955/1955 绿灯。续：S6（db bootstrap）→ S4（recycle-profile）。
 14. 阶段 E 最新恢复点：`e59bf22` profile-only 只读兼容契约、`8a86425` 独立 widget host 隔离、`3adc1d1` identity/source tags UMD、`c246360` List widget 协议、`ed40d76` 主管指标列表、`a52e42b` Team 三类业务列表、`75a30b7` Insights 人工评价列表、`f1fe7d1` 受保护客户目录、`6001f61` 维护运行记录、`61a6572` 跟进更正历史、`3e55b41` 审计只读列表、`8d1bb05` 账号/归档/权限组/迁移复核/入库批次列表、`79036e5` CRM 抽屉非 AI 注册表组合与默认 iframe 边界、`092d8a0` 复杂 activity timeline 条目 widget 化、`549fdfd` 用户级多级排序与服务端白名单、`062f31a` 项目锁定 Playwright 1.62.1、`583f314` browser acceptance 断言均已落地；本轮列表/排序定向 `67/67`、逐页面 JSON 字段烟测全部通过，Phase E harness contract `5/5`、core `npm test` `1726/1726`、全量 `node --test` `2088/2088`、Playwright manager/sales 隔离验收退出码 0，`node --check`、diff check、治理权威与 AI 边界门禁均通过；权限配置矩阵、事务预览/审核工作区明确为专用组件；AI 功能弃用冻结。阶段 E 完成门已通过，生产未启动或写入。
 
-下一可执行动作：保持 `f0ab815` 作为阶段 G 路由装配回滚点，继续维持 AI 功能弃用冻结；如需进一步缩小 `sales_crm.js`，先对资料聚合、迁移复核、入库/评价等高耦合边界进行独立审计，再单独立项。列表迁移、用户级多级排序、CRM 抽屉非 AI 注册表组合、复杂 activity timeline 展示层与浏览器验收均已完成。
+下一可执行动作：保持 `89e6509` 作为 Stage D 非 AI 管理流程回滚点、`f0ab815` 作为阶段 G 路由装配回滚点，继续维持 AI 功能弃用冻结。若要继续缩小 `sales_crm.js`，必须先为已审计的资料聚合、迁移复核、入库/评价等边界建立独立 service contract，并单独立项；本轮不再机械拆分。列表迁移、用户级多级排序、CRM 抽屉非 AI 注册表组合、复杂 activity timeline 展示层与浏览器验收均已完成。
+
+15. 2026-09-02 高耦合边界审计与 Stage D 收口：`89e6509` 将 manager intervention / deferred plan 收口为独立非 AI 应用服务，既有 manager API 权限、范围、幂等、事务、错误码和生命周期网关语义保持；资料聚合、profile 脱敏、迁移复核、入库扫描/动作、评价写入/重试、全局认证/审计策略、密码和 AI task middleware 均按审计保留原位。当前 core `npm test` `1748/1748`、全量 `node --test` `2110/2110`；详见 `docs/governance/sessions/2026-09-02-high-coupled-stage-d-audit.md`。
 
 未全绿前不新增阶段 A–E 的功能或拆分范围。

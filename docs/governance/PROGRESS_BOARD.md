@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-02 01:54:28`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 06:19:47`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `ab54711`（相对 origin/main ahead 361） |
+| HEAD | `89e6509`（相对 origin/main ahead 363） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2107/2107 |
-| 核心测试 | `npm test` 1745/1745 |
-| sales_crm.js | 11773 行 |
+| 全量测试 | `node --test` 2110/2110 |
+| 核心测试 | `npm test` 1748/1748 |
+| sales_crm.js | 11320 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-02-stage-g-route-assembly.md` |
+| 最近会话 | `2026-09-02-high-coupled-stage-d-audit.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,9 +22,9 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 67 |
+| refactor(其他/通用) | 68 |
 | feat(...) | 57 |
-| docs(governance) | 183 |
+| docs(governance) | 184 |
 | 其他 | 24 |
 
 ## 阶段 0：治理基础
@@ -149,7 +149,7 @@
 
 ## 阶段 D：线索/任务/商业闭环
 
-> **进行中** — intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环领域边界已成（1d15546/f5c650e/24aa67e/b4cfdfc）。
+> **已完成** — intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环与非 AI manager intervention / deferred plan 应用服务均已收口，既有权限、幂等、事务、生命周期网关和审计语义保持。
 
 ### 已完成
 
@@ -157,10 +157,7 @@
 - [x] planning/alerts/risk/streak/today_task 域模块接线恢复（`7328b51…5c23b32`）
 - [x] commerce 域模块接线恢复（rules/write/action_request 级联）（`a853a16…b4cfdfc`）
 - [x] 商业闭环成型：action_request 事务边界 + 行级写 + 金额/币种/毛利校验 + commitQuote/commitOrder 域服务（`1d15546…b4cfdfc`）
-
-### 待办
-
-- [ ] **commerce** 独立用例（manager intervention / deferred plan）不在闭环内，后续评估
+- [x] 非 AI manager intervention / deferred plan 独立应用服务（注入授权、范围、生命周期网关、通知与审计）（`89e6509`）
 
 ## 阶段 E：前端 widgets
 

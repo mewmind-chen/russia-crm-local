@@ -264,17 +264,16 @@ function buildPhases(env) {
     {
       id: 'D',
       title: '阶段 D：线索/任务/商业闭环',
-      status: 'wip',
-      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环领域边界已成（1d15546/f5c650e/24aa67e/b4cfdfc）。',
+      status: 'done',
+      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环与非 AI manager intervention / deferred plan 应用服务均已收口，既有权限、幂等、事务、生命周期网关和审计语义保持。',
       done: [
         ['intake', 'intake/assignment/decision/query/owner 域模块接线恢复', '48ba93c…8a0ee7d', ''],
         ['planning', 'planning/alerts/risk/streak/today_task 域模块接线恢复', '7328b51…5c23b32', ''],
         ['commerce', 'commerce 域模块接线恢复（rules/write/action_request 级联）', 'a853a16…b4cfdfc', ''],
         ['commerce', '商业闭环成型：action_request 事务边界 + 行级写 + 金额/币种/毛利校验 + commitQuote/commitOrder 域服务', '1d15546…b4cfdfc', ''],
+        ['manager', '非 AI manager intervention / deferred plan 独立应用服务（注入授权、范围、生命周期网关、通知与审计）', '89e6509', ''],
       ],
-      pending: [
-        ['commerce', '独立用例（manager intervention / deferred plan）不在闭环内，后续评估', '', ''],
-      ],
+      pending: [],
     },
     {
       id: 'E',
