@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-02 06:20:17`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 09:45:03`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `e603822`（相对 origin/main ahead 364） |
+| HEAD | `ddc393f`（相对 origin/main ahead 368） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2110/2110 |
-| 核心测试 | `npm test` 1748/1748 |
+| 全量测试 | `node --test` 2114/2114 |
+| 核心测试 | `npm test` 1752/1752 |
 | sales_crm.js | 11320 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-02-high-coupled-stage-d-audit.md` |
+| 最近会话 | `2026-09-02-stage-c-legacy-customers.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -22,10 +22,10 @@
 |---|---|
 | refactor(state) 状态写收敛 | 10 |
 | refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 68 |
+| refactor(其他/通用) | 69 |
 | feat(...) | 57 |
-| docs(governance) | 185 |
-| 其他 | 24 |
+| docs(governance) | 187 |
+| 其他 | 25 |
 
 ## 阶段 0：治理基础
 
@@ -127,7 +127,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表与 S3 timeline/auditLog 形状已白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 与 S5 export 仍按嵌套泄漏/密码哈希风险暂缓。
 
 ### 已完成
 
@@ -141,10 +141,10 @@
 - [x] 范围解释器等价契约：accountScope ≡ buildAccessContext（`2ca107b`）
 - [x] 范围解释器代码级统一：共享 accountVisibilityScope（`f2056e5`）
 - [x] 按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）（`45e0c05`）
+- [x] legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）（`c595bf0`）
 
 ### 待办
 
-- [ ] **access** 可选残值：legacy customers 形状白名单（S6 审计确认其余联系形状已源头门控）
 - [ ] **access** P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）
 
 ## 阶段 D：线索/任务/商业闭环
@@ -207,6 +207,7 @@
 - [x] 复杂 CRM activity timeline 条目 widget 化（宿主注入权限/溯源回调，保留 inline fallback）（`092d8a0`）
 - [x] 旧入口兼容边界锁定：统一根路径为 canonical，/legacy 与 /tradelead-v2.html 仅在 CRM_ENABLE_LEGACY=true 时开放（`bc84567`）
 - [x] Phase E sales/manager 浏览器验收（Playwright 1.62.1、默认 widget/无 iframe、source-tag 宿主、AI 关闭、profile-only 只读）（`062f31a…583f314`）
+- [x] Phase E preview 首帧竞态修复（widget host/iframe 隐藏/空 src 三条件稳定采样）（`dc51fed`）
 
 ## 阶段 F：AI 零动作
 

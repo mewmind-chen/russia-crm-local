@@ -323,6 +323,7 @@ function buildPhases(env) {
         ['frontend', '复杂 CRM activity timeline 条目 widget 化（宿主注入权限/溯源回调，保留 inline fallback）', '092d8a0', ''],
         ['frontend', '旧入口兼容边界锁定：统一根路径为 canonical，/legacy 与 /tradelead-v2.html 仅在 CRM_ENABLE_LEGACY=true 时开放', 'bc84567', ''],
         ['frontend', 'Phase E sales/manager 浏览器验收（Playwright 1.62.1、默认 widget/无 iframe、source-tag 宿主、AI 关闭、profile-only 只读）', '062f31a…583f314', ''],
+        ['frontend', 'Phase E preview 首帧竞态修复（widget host/iframe 隐藏/空 src 三条件稳定采样）', 'dc51fed', ''],
       ],
       pending: [],
     },
