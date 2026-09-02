@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-02 15:30:43`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 15:54:56`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `4b3236f`（相对 origin/main ahead 388） |
+| HEAD | `205329c`（相对 origin/main ahead 391） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2135/2135 |
-| 核心测试 | `npm test` 1773/1773 |
-| sales_crm.js | 11325 行 |
+| 全量测试 | `node --test` 2139/2139 |
+| 核心测试 | `npm test` 1777/1777 |
+| sales_crm.js | 11335 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-02-stage-c-s6-bootstrap-audit.md` |
+| 最近会话 | `2026-09-02-stage-c-s4-master-profile-proof.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -24,8 +24,8 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 70 |
 | feat(...) | 57 |
-| docs(governance) | 202 |
-| 其他 | 29 |
+| docs(governance) | 204 |
+| 其他 | 30 |
 
 ## 阶段 0：治理基础
 
@@ -127,7 +127,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；S4/P4 回收资料与共享完整资料逐形状风险矩阵、只读/权限/递归契约和复合迁移门禁已由 09665b5 收口；S6/P2 Bootstrap/masterProfile 共享叶子矩阵、权限/递归契约与 recon 漂移门禁已由 3022dae 收口，establishedYear 叶子遗漏已修正；P1/P3 顶层及 S4/S6 复合白名单迁移仍按嵌套等价风险暂缓。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；S4/P4 回收资料与共享完整资料逐形状风险矩阵、只读/权限/递归契约和复合迁移门禁已由 09665b5 收口；S6/P2 Bootstrap/masterProfile 共享叶子矩阵、权限/递归契约与 recon 漂移门禁已由 3022dae 收口，establishedYear 叶子遗漏已修正；S4/P4 masterProfile/people/recon 来源门、路由后追加字段复裁剪和 recycle_reason 敏感键契约已由 343f166 收口；P1/P3 顶层及 S4/S6 复合白名单迁移仍按嵌套等价风险暂缓。
 
 ### 已完成
 
@@ -148,6 +148,7 @@
 - [x] S7 剩余 redactContactFields 调用点审计与迁移边界契约（独立列表投影闭合；AI 红线冻结）（`a57c44f`）
 - [x] S4/P4 recycle profile/master profile 逐形状安全契约与迁移门禁（高耦合复合保留）（`09665b5`）
 - [x] S6/P2 Bootstrap/masterProfile 共享叶子逐形状契约与复合迁移门禁（establishedYear 修正；recon 漂移保留递归）（`3022dae`）
+- [x] S4/P4 masterProfile/people/recon 逐形状权限/递归契约与 profile 路由后处理复裁剪（recycle_reason 收口；复合迁移仍门控）（`343f166`）
 
 ### 待办
 
