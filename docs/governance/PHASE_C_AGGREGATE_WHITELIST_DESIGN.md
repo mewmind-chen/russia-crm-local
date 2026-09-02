@@ -1,11 +1,11 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
-日期：2026-08-30（P1/P3 复核：2026-09-02）
-状态：递归合规修复方案与契约已完成；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），P1/P3 顶层白名单迁移仍按本文边界暂缓
+日期：2026-08-30（P1/P3、S5/P5 复核：2026-09-02）
+状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`）；P1/P3 顶层白名单迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
-> 当前实现注记（2026-09-02）：本轮只完成 S6 中 legacy `customers` 行这一扁平联系承载形状。`getInitialData` bootstrap 与 `getCustomerProfileData` profile 在无 `view_contacts` 时均显式使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`，`tags` 另有嵌套白名单与泄漏契约。P1/P3 深度嵌套 intake-state 与 S5 export users/password hash 未纳入本轮，不能据此宣称整个复合 payload 已白名单化。
+> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界。三者均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
 
 ## 1. 目标
 
@@ -70,8 +70,46 @@
 P1 bootstrap 与 P3 直读路由必须调用同一 helper，确保没有单路由修复遗漏。该方案完成的是
 “无联系方式权限时不泄漏”的运行时边界与契约，不等同于 P1/P3 的顶层白名单迁移；后者仍需
 另行做逐形状等价评审。
->
-> **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
+
+### 2026-09-02 S5/P5 导出凭据字段合规修复
+
+S5/P5 的目标是让 `/api/sales-crm/export` 的 JSON 与 CSV 输出形成独立、与联系人权限正交的凭据安全边界。历史审计发现已记录为风险证据；本轮在不改变导出授权、范围和合法业务字段的前提下完成最小修复（`ccc9bb5`）。
+
+#### 导出字段风险矩阵
+
+| 形状 | 真实来源/组装 | 风险 | 合规规则 | 合法保留范围 |
+|---|---|---|---|---|
+| `users[]` | `sales_users` + `hydrateUsersPermissions` | 原始行含 `password_hash/password_salt`，未来新增凭据列可能随 `SELECT *` 进入 | 现有显式用户 DTO + 复合 payload 递归凭据投影；无论 `view_users` 或 `view_contacts` 均删除凭据键 | `id/email/name/role/active/archived/permissionGroupId/permissions/createdAt` |
+| `customers[]` | `crm_accounts` 动态列 + customer pool/负责人别名 | 动态列扩展可能携带 token/secret 等运行时材料 | 保留既有账户查询、范围和联系人投影；随后递归移除凭据键 | 客户、阶段、负责人、国家/行业、排序/状态等既有授权字段 |
+| `contacts[]` | `crm_account_contacts` `SELECT *`，仅 `view_contacts` 非空 | 有联系人权限不等于有凭据权限；未来列或动态 JSON 可能携带 credential | 联系人权限仍由原逻辑门控；凭据投影对所有角色无条件生效 | 已授权联系人业务字段；联系人本身不因本切片被额外裁剪 |
+| `activities[]` | `crm_activities` `SELECT *` + `publicActivityRecords`/provenance | 活动追加列、嵌入式 JSON 或溯源字段可能绕过用户行 DTO | 对对象/数组任意深度裁剪；对 JSON 文本中的对象/数组递归处理；不改变更正/范围语义 | 活动、客户关联、有效状态、更正关联和非敏感业务元数据 |
+| `activityCorrections[]` / `activityCorrectionProposals[]` | 更正表行经范围判断后重组 | 追加字段或历史 JSON 可能包含 token/session/secret | 保持双方客户可见性、审批人和原因的既有规则；输出前统一凭据投影 | 已授权关系端点、状态、审批/更正业务字段 |
+| `rfqs[]` / `quotes[]` / `orders[]` | 各商务表 `SELECT *` | 动态列扩展可能引入密钥、会话或内部 credential | 递归移除凭据键，不改变客户范围和金额/币种/毛利字段 | RFQ、报价、订单及其金额、币种、阶段关联 |
+| `evaluations[]` | `crm_manager_evaluations` `SELECT *`，AI 开关另有既有裁剪 | 评价扩展列可能携带 secret；AI 开关不能替代凭据边界 | 先执行既有 AI/联系人规则，再无条件递归凭据投影 | 既有人工评价字段；AI 开关语义不变 |
+| CSV（客户/活动） | `exportCrmCsv` 固定表头与行映射 | 未来若从 JSON 动态取列，可能把凭据列写入文件 | 只使用现有合法表头/字段；上游 JSON 已经过凭据投影；公式注入防护保持 | 客户 CSV 与活动 CSV 既有列、筛选和范围 |
+
+#### 凭据递归投影契约
+
+`lib/access_control.js` 的 `redactExportCredentials(value)` 是导出专用安全边界：
+
+1. 适用于整个 payload，而不是仅 `users`；即使调用者同时拥有 `export_data`、`view_users`、`view_contacts`，凭据键也不得返回。
+2. 键名先规范化，再移除 `password/passphrase/passwd`、`token`、`session`、`secret`、`credential`、`authorization`、`cookie`、`apiKey`、`privateKey`、`encryptionKey`、`salt` 等单复合别名（含 hash/salt/json/header 等后缀）。
+3. 对对象和数组递归访问；对形如 JSON object/array 的 TEXT 值也递归解析。只有确实移除了嵌套凭据时才重新序列化，未命中的 JSON 文本保持原字节。
+4. 凭据字段直接删除，不以 `[REDACTED]` 占位，避免 JSON/CSV 出现字段名或秘密值；非敏感未知业务键保留，保证 export 合法字段和既有范围行为不变。
+5. 联系人权限裁剪先按原合同执行，凭据投影随后执行；两者正交。CSV 仍由固定列映射生成，不启动其他 payload 的顶层白名单迁移。
+
+#### 契约与证据
+
+`test/phase_c_export_credential_contract.test.js` 覆盖：
+
+- 对象、数组、嵌套 JSON 文本、双重编码 JSON 的凭据键递归删除，且源对象不被修改；普通 `tokenCount`/`secretary` 等非凭据业务键保留；
+- admin JSON/客户 CSV/活动 CSV 保留客户、活动、RFQ、报价、订单等合法字段，并验证密码哈希、salt、token、session、secret、API key 哨兵均不可见；
+- 授权非 admin 用户验证客户范围、联系人空数组、商务字段和 JSON/CSV 凭据边界；
+- 空范围 JSON/CSV 仍返回既有空数组/表头；无 `export_data` 仍返回 403；静态契约确认投影接在 `exportCrmData` 聚合边界。
+
+该切片完成的是 S5/P5 **凭据字段合规边界**，不等同于 P1/P3 顶层字段白名单迁移；后者继续按嵌套等价风险暂缓。
+
+> **历史审计发现（2026-08-30）**：导出 payload 的 `users` 形状曾被判定可能保留 `password_hash/password_salt`（不在 CONTACT_KEYS）；该发现作为本轮修复动因保留，已不再作为当前暂缓项。export 的 corrections/proposals/activities 追加字段仍需遵守本节递归凭据边界。
 >
 > **S6（db bootstrap）审计结论（2026-08-30 实测，2026-09-02 切片完成）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。`customers` 已由 `c595bf0` 的 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 在 bootstrap/profile 两个路径显式投影并以结构/等价/泄漏/行为契约锁定；其余字段仍由原聚合黑名单兜底。结论：S6 的可选 legacy customers 残值已收口，但不等同于 P2 复合 bootstrap 全量白名单化。
 
@@ -101,22 +139,23 @@ P1 bootstrap 与 P3 直读路由必须调用同一 helper，确保没有单路�
 // 已是空/门控(如 !view_contacts 时 contacts:[]) 的字段原样保留。
 ```
 
-候选函数（放进 `access_control.js`，按片添加）：`contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload` / `contactSafeExportPayload`（P2/P4/P5 各自的顶层字段→形状白名单）。P1/P3（loadIntakeState）**不做顶层白名单迁移**（见 §3 嵌套泄漏），改由本节定义的独立递归合规 helper 处理；其他聚合仍按各自形状审计后推进。
+候选函数（放进 `access_control.js`，按片添加）：`contactSafeBootstrapPayload` / `contactSafeRecycleProfilePayload`（P2/P4 各自的顶层字段→形状白名单）。P1/P3（loadIntakeState）**不做顶层白名单迁移**（见 §3 嵌套泄漏），改由 `redactIntakeAggregate` 处理；P5 export 先由 `redactExportCredentials` 形成凭据边界，是否建立业务字段白名单另行逐形状审计。
 
 等价测试策略：对真实端点行构造"同形状对象"，断言 `复合白名单(payload) deepEqual redactContactFields(payload)`；对每个新键集先单测等价，再组合。复合投影必须以"被保留键的嵌套值不泄漏 CONTACT_KEYS 子键"为前提。
 
-## 5. 切片拆分（依赖 DAG，已排除 P1/P3/P5）
+## 5. 切片拆分（依赖 DAG，已排除 P1/P3 顶层迁移）
 
 按"形状先于组合"原则，先建被复用的形状白名单，再建复合投影；每片执行前先用 §3 泄漏校验确认该形状嵌套安全。
 
 1. **S3 timeline + audit 形状（已完成 `38bfe7d`）**：`contactSafeTimelineRecord`（12 键，title/summary/next_action/outcome 属 CONTACT_KEYS 被剥，provenance 纯结构已泄漏校验）+ `contactSafeAuditLogRecord`（剥 action）+ 等价/泄漏契约 3/3。
 2. **S4 recycle-profile 复合**：`contactSafeRecycleProfilePayload`（account/activity/commerce/timeline(S3)/insights + auditLog(S3) + recycle/profileAccess）；**被 `masterProfile`（`getCustomerProfileData` 巨型共享形状，含 people/recon）门控**——需先为 masterProfile 形状另立子设计（或复用 S6 的 people/recon 白名单）；接线 P4。
 3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。产出可被 S4 复用。
-4. **S7 收尾**：确认 `lib/` 无剩余 `redactContactFields`（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 与 S5 被 §3 判定不建议转换）；范围解释器统一与按页面合约为下一主线。
+4. **S5/P5 导出凭据字段合规（已完成 `ccc9bb5`）**：`redactExportCredentials` 对整个 JSON payload 递归删除凭据键，并检查嵌入式 JSON 文本；CSV 继续固定合法列映射，保留授权、范围、联系人和商务字段。
+5. **S7 收尾**：确认剩余 `redactContactFields` 调用点与高耦合边界均有独立审计（AI 相关 `assistant.js`/`ai_stations/task_center.js` 红线除外；P1/P3 顶层迁移仍按 §3 暂缓）；范围解释器统一与按页面合约为下一主线。
 
-**暂缓**：P1/P3 顶层白名单迁移（递归合规修复已完成，仍需独立等价评审）、S5（export 的 users 形状含 password_hash 暴露，需先修合规）。
+**暂缓**：P1/P3 顶层白名单迁移（递归合规修复已完成，仍需独立逐形状等价评审）。
 
-依赖：S4→S3,S6（及 account/activity/commerce/insights 现有）；S6 独立。S4 与 S6 均可作为独立切片执行，S6 无前置。
+依赖：S4→S3,S6（及 account/activity/commerce/insights 现有）；S5 独立；S6 独立。S4、S5、S6 均可作为独立切片执行。
 
 每片完成定义：契约测试（结构 + 等价 + 行为）绿 → 受影响域专项 → 全量 `node --test` → core → `git diff --check` → 更新 CURRENT_STATE + session → 独立提交。
 
@@ -125,6 +164,7 @@ P1 bootstrap 与 P3 直读路由必须调用同一 helper，确保没有单路�
 - **行为保持**：等价契约保证无 view_contacts 用户可见字段逐键一致；复合投影不得改变空字段/门控字段。
 - **嵌套泄漏（本轮发现的最高风险）**：凡白名单保留键的值为非空对象/数组，其内部 CONTACT_KEYS 子键会被泄漏（白名单不递归、黑名单递归）。每个新键集接线前必须做泄漏校验（扫描保留值中的 CONTACT_KEYS 子键）；泄漏则改回黑名单路径或建递归白名单。**P1/P3（loadIntakeState）因深度嵌套 AI/仲裁内容已在 §3 判定不建议转换。**
 - **P1/P3 递归边界**：无 `view_contacts` 时必须使用 `redactIntakeAggregate`；`developmentHistory` 与 `complementaryInfo` 走严格形状投影，arbitration/assignmentAudit 的每层后代走规范化递归裁剪。不得把该 helper 复用为其他 payload 的全局黑名单替代品。
+- **S5/P5 凭据边界**：`exportCrmData` 在联系人投影之后必须调用 `redactExportCredentials`；该 helper 对有 `view_contacts` 的导出同样生效，凭据键与 JSON 嵌套凭据不得因角色或格式差异出现在 JSON/CSV。不得以本切片名义启动其他复合 payload 的顶层业务白名单迁移。
 - **preserveAlertCopy**：alert 形状须核验 `contactSafeAlertsRecord` 与 `redactContactFields(payload,{preserveAlertCopy:true})` 等价，必要时为 alarm-copy 记录单列键集。
 - **红线**：不改 `ai_stations/**`、`assistant.js`/`task_center.js` 内调用；不改 AI 触发点。
 - 未全绿前不叠加下一阶段功能。

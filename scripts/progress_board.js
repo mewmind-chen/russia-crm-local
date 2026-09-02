@@ -149,8 +149,14 @@ function wiredDomainModules() {
 
 function parseTestCounts() {
   const source = fs.readFileSync(path.join(GOV_DIR, 'CURRENT_STATE.md'), 'utf8');
-  const full = source.match(/`node --test`：全量 `(\d+)\/(\d+)`/);
-  const core = source.match(/`npm test`：(?:全量 )?core `(\d+)\/(\d+)`/);
+  const summary = source.split('\n').find(line => line.includes('当前验证摘要')) || '';
+  const currentFull = summary.match(/`node --test`(?:：)?\s*(?:全量\s*)?`(\d+)\/(\d+)`/);
+  const currentCore = summary.match(/`npm test`(?:：)?\s*(?:全量\s*)?core\s*`(\d+)\/(\d+)`/);
+  // CURRENT_STATE 保留历史 checkpoint；若当前摘要格式变化，退回最后一个匹配。
+  const fullMatches = [...source.matchAll(/`node --test`：全量 `(\d+)\/(\d+)`/g)];
+  const coreMatches = [...source.matchAll(/`npm test`：(?:全量 )?core `(\d+)\/(\d+)`/g)];
+  const full = currentFull || fullMatches.at(-1);
+  const core = currentCore || coreMatches.at(-1);
   return {
     full: full ? `${full[1]}/${full[2]}` : '—',
     core: core ? `${core[1]}/${core[2]}` : '—',
@@ -243,7 +249,7 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；顶层白名单迁移仍按嵌套等价风险暂缓，S5 export 仍按 users/password hash 风险暂缓。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；P1/P3 顶层白名单迁移仍按嵌套等价风险暂缓。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -258,9 +264,10 @@ function buildPhases(env) {
         ['access', 'legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）', 'c595bf0', ''],
         ['access', 'P1/P3 loadIntakeState 深层形状审计（顶层白名单泄漏证据与残余 lastActivitySummary 风险）', '审计契约', ''],
         ['access', 'P1/P3 递归脱敏合规边界（lastActivitySummary、complementaryInfo 任意 JSON、arbitration 深层字段）', 'f2ec235', ''],
+        ['access', 'S5/P5 export 凭据字段递归合规边界（password/token/session/secret 及嵌套 JSON）', 'ccc9bb5', ''],
       ],
       pending: [
-        ['access', 'P1/P3 顶层白名单迁移与 S5 export 暂缓（P1/P3 需独立逐形状等价评审；S5 需先处理 users 密码哈希）', '', ''],
+        ['access', 'P1/P3 顶层白名单迁移暂缓（需独立逐形状等价评审）', '', ''],
       ],
     },
     {
