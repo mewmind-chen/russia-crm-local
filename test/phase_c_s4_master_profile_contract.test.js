@@ -69,9 +69,9 @@ test('S4/P4 profile and intake routes re-apply contact redaction after appending
   }
   assert.match(salesCrmSource, /function redactProfileResponse\(value, user, payload\)/);
   assert.match(salesCrmSource, /const tagged = redactUnauthorizedProfileTags\(value, user, payload\)/);
-  assert.match(salesCrmSource, /hasPermission\(user, 'view_contacts'\) \? tagged : redactContactFields\(tagged\)/);
-  assert.match(profile, /return permissions\.view_contacts \? payload : redactContactFields\(payload\);/);
-  assert.match(recycle, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactFields\(payload\);/);
+  assert.match(salesCrmSource, /hasPermission\(user, 'view_contacts'\) \? tagged : redactContactDynamicFields\(tagged\)/);
+  assert.match(profile, /return permissions\.view_contacts \? payload : redactContactDynamicFields\(payload\);/);
+  assert.match(recycle, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactDynamicFields\(payload\);/);
   assert.match(accessSource, /function redactContactFields\(/);
 });
 

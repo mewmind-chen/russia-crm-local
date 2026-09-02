@@ -45,7 +45,7 @@ test('S6/P2 getInitialData keeps the bootstrap assembly and every source gate ex
     /const stats = getStats\(visibleCustomers, customerPool, reconJobs\)/,
     /templates,/, /reconJobs, reconResults, tags,/, /prospectTasks: prospect\.tasks,/,
     /prospectCandidates: prospect\.candidates,/, /prospectSources: prospect\.sources,/,
-    /return permissions\.view_contacts \? payload : redactContactFields\(payload\);/,
+    /return permissions\.view_contacts \? payload : redactContactDynamicFields\(payload\);/,
   ]) assert.match(initialData, pattern, `getInitialData missing ${pattern}`);
 
   assert.match(serverSource, /app\.get\('\/api\/initial', \(req, res\) =>/);
@@ -189,6 +189,6 @@ test('S6/P2 keeps the bootstrap composite on recursive redaction until all leaf 
   assert.match(designSource, /S6[\s\S]*contactSafeBootstrapPayload/);
   assert.match(designSource, /masterProfile[\s\S]*people[\s\S]*recon/);
   assert.match(designSource, /复合迁移|复合白名单/);
-  assert.match(initialData, /return permissions\.view_contacts \? payload : redactContactFields\(payload\);/);
+  assert.match(initialData, /return permissions\.view_contacts \? payload : redactContactDynamicFields\(payload\);/);
   assert.doesNotMatch(accessSource, /function contactSafeBootstrapPayload\(/);
 });

@@ -45,7 +45,7 @@ test('S4/P4 profile and recycle payloads keep every shape in an explicit assembl
     /timeline\s*:/, /insights\s*:/, /auditLog\s*,/, /recycle\s*:/,
     /profileAccess\s*:/, /actions\s*:/,
   ]) assert.match(recycle, pattern, `recycle payload missing ${pattern}`);
-  assert.match(recycle, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactFields\(payload\);/);
+  assert.match(recycle, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactDynamicFields\(payload\);/);
 
   // The loader is a separate authorization boundary and delegates only after
   // live recycle scope/lifecycle validation.

@@ -42,12 +42,12 @@ test('S7 redaction inventory has explicit decisions for every remaining producti
   assert.match(initialData, /reconResults = reconResults\.map\(contactSafeReconRecord\)/);
   assert.match(initialData, /const contactReconJobs = permissions\.view_contacts/);
   assert.match(initialData, /const people = permissions\.view_contacts/);
-  assert.match(initialData, /return permissions\.view_contacts \? payload : redactContactFields\(payload\);/);
+  assert.match(initialData, /return permissions\.view_contacts \? payload : redactContactDynamicFields\(payload\);/);
   assert.match(customerProfile, /legacyCustomers\.map\(contactSafeCustomerRecord\)/);
   assert.match(customerProfile, /reconResults = reconResults\.map\(contactSafeReconRecord\)/);
   assert.match(customerProfile, /const contactReconJobs = permissions\.view_contacts/);
   assert.match(customerProfile, /const people = permissions\.view_contacts/);
-  assert.match(customerProfile, /return permissions\.view_contacts \? payload : redactContactFields\(payload\);/);
+  assert.match(customerProfile, /return permissions\.view_contacts \? payload : redactContactDynamicFields\(payload\);/);
 
   // P4 recycle profile composes master profile, account, activity, commerce,
   // timeline, insight, audit and action state; it remains one high-coupled
@@ -56,11 +56,11 @@ test('S7 redaction inventory has explicit decisions for every remaining producti
   for (const key of ['account', 'activities', 'rfqs', 'quotes', 'orders', 'timeline', 'insights', 'auditLog', 'recycle', 'profileAccess']) {
     assert.match(recycleProfile, new RegExp(`\\b${key}\\s*[:,]`), `recycle profile missing ${key} shape`);
   }
-  assert.match(recycleProfile, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactFields\(payload\);/);
+  assert.match(recycleProfile, /return hasPermission\(user, 'view_contacts'\) \? payload : redactContactDynamicFields\(payload\);/);
 
   // S5 is the sole remaining specialized export boundary: contact projection
   // runs first, followed by the credential projection for every role/format.
-  assert.match(exportBody, /const contactSafePayload = contactsAllowed \? payload : redactContactFields\(payload\);/);
+  assert.match(exportBody, /const contactSafePayload = contactsAllowed \? payload : redactContactDynamicFields\(payload\);/);
   assert.match(exportBody, /return redactExportCredentials\(contactSafePayload\);/);
 });
 
