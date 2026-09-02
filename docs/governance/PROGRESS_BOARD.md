@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-02 13:33:34`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 14:02:27`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,13 +8,13 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `ca2f7fa`（相对 origin/main ahead 379） |
+| HEAD | `2f2c380`（相对 origin/main ahead 382） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2123/2123 |
-| 核心测试 | `npm test` 1761/1761 |
+| 全量测试 | `node --test` 2126/2126 |
+| 核心测试 | `npm test` 1764/1764 |
 | sales_crm.js | 11325 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
-| 最近会话 | `2026-09-02-stage-c-s5-export-credentials.md` |
+| 最近会话 | `2026-09-02-stage-c-s7-redaction-boundary-audit.md` |
 
 ## 提交分布（origin/main..HEAD）
 
@@ -24,8 +24,8 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 70 |
 | feat(...) | 57 |
-| docs(governance) | 196 |
-| 其他 | 26 |
+| docs(governance) | 198 |
+| 其他 | 27 |
 
 ## 阶段 0：治理基础
 
@@ -127,7 +127,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；P1/P3 顶层白名单迁移仍按嵌套等价风险暂缓。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；P1/P3 顶层白名单迁移仍按嵌套等价风险暂缓。
 
 ### 已完成
 
@@ -145,6 +145,7 @@
 - [x] P1/P3 loadIntakeState 深层形状审计（顶层白名单泄漏证据与残余 lastActivitySummary 风险）（`审计契约`）
 - [x] P1/P3 递归脱敏合规边界（lastActivitySummary、complementaryInfo 任意 JSON、arbitration 深层字段）（`f2ec235`）
 - [x] S5/P5 export 凭据字段递归合规边界（password/token/session/secret 及嵌套 JSON）（`ccc9bb5`）
+- [x] S7 剩余 redactContactFields 调用点审计与迁移边界契约（独立列表投影闭合；AI 红线冻结）（`a57c44f`）
 
 ### 待办
 
