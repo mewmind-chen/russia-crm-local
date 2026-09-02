@@ -399,7 +399,12 @@ async function browserRoleSmoke(page, baseUrl, credentials) {
         aiBusinessVisible,
       };
     });
-    if (profile.active && profile.widgetHosts > 0 && profile.title.trim()) break;
+    // Widget registration and the iframe compatibility cleanup complete in
+    // separate microtasks. Wait for both halves of the default-mode contract
+    // before sampling, otherwise the first paint can look like a legacy iframe
+    // even though the widget mount is still in flight.
+    if (profile.active && profile.widgetHosts > 0 && profile.title.trim()
+      && profile.frameHidden && !profile.frameSrc) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!profile?.active || profile.widgetHosts === 0 || !profile.title.trim()) {
