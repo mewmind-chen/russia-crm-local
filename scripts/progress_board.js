@@ -257,7 +257,7 @@ function buildPhases(env) {
         ['access', '按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）', '45e0c05', ''],
         ['access', 'legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）', 'c595bf0', ''],
         ['access', 'P1/P3 loadIntakeState 深层形状审计（顶层白名单泄漏证据与残余 lastActivitySummary 风险）', '审计契约', ''],
-        ['access', 'P1/P3 递归脱敏合规边界（lastActivitySummary、complementaryInfo 任意 JSON、arbitration 深层字段）', '本次切片', ''],
+        ['access', 'P1/P3 递归脱敏合规边界（lastActivitySummary、complementaryInfo 任意 JSON、arbitration 深层字段）', 'f2ec235', ''],
       ],
       pending: [
         ['access', 'P1/P3 顶层白名单迁移与 S5 export 暂缓（P1/P3 需独立逐形状等价评审；S5 需先处理 users 密码哈希）', '', ''],
