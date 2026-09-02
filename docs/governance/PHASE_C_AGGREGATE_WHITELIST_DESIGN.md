@@ -1,11 +1,11 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
 日期：2026-08-30（P1/P3、S5/P5、S7、S4/P4、S6/P2 复核：2026-09-02）
-状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`），S7 剩余 `redactContactFields` 调用点审计与迁移边界契约已完成（`a57c44f`），S4/P4 回收资料与共享完整资料逐形状风险矩阵/只读契约/迁移门禁已完成（`09665b5`），S6/P2 Bootstrap 与 masterProfile 共享叶子审计及复合迁移门禁已完成（本轮契约）；P1/P3 顶层白名单及 S4/S6 复合迁移仍按本文边界暂缓
+状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`），S7 剩余 `redactContactFields` 调用点审计与迁移边界契约已完成（`a57c44f`），S4/P4 回收资料与共享完整资料逐形状风险矩阵/只读契约/迁移门禁已完成（`09665b5`），S6/P2 Bootstrap 与 masterProfile 共享叶子审计及复合迁移门禁已完成（`3022dae`），本轮补齐 S4/P4 masterProfile/people/recon 逐形状权限/递归契约并修复 profile 路由后追加字段边界（`343f166`）；P1/P3 顶层白名单及 S4/S6 复合迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
-> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界；S7 以矩阵和静态契约确认剩余复合调用点的保留/冻结决定；S6/P2 进一步锁定 Bootstrap 的 customer/pool 叶子投影、recon 动态漂移和 people/contact 计数源头门控。上述切片均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层及 S4/S6 复合迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
+> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界；S7 以矩阵和静态契约确认剩余复合调用点的保留/冻结决定；S6/P2 进一步锁定 Bootstrap 的 customer/pool 叶子投影、recon 动态漂移和 people/contact 计数源头门控；S4/P4 本轮补齐 shared masterProfile、people、recon 的来源/权限/递归行为契约，并让 profile/intake 路由在追加自有字段后重新执行联系人边界，同时把 `recycle_reason` 纳入递归敏感键。上述切片均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层及 S4/S6 复合迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
 
 ## 1. 目标
 
@@ -213,6 +213,54 @@ S6/P2 以 `test/phase_c_s6_bootstrap_contract.test.js` 和本节矩阵核验
 masterProfile/people/recon 逐形状契约复用，但不能自动开启 S4/S6 复合迁移；P1/P3 顶层白名单和
 AI 行为继续冻结。
 
+### 2026-09-02 S4/P4 masterProfile/people/recon 逐形状证明与路由后处理修复
+
+本轮以 `test/phase_c_s4_master_profile_contract.test.js`（`343f166`）补齐
+`getCustomerProfileData` 共享 `masterProfile` 的 people/recon 形状、普通 profile/intake 路由
+追加字段，以及 recycle composite 的权限行为契约。目标是证明每个来源形状的权限与递归边界，
+而不是把尚未稳定的复合对象改成顶层白名单。
+
+| 形状 | 真实来源/权限门 | 主要风险 | 递归投影与决定 |
+|---|---|---|---|
+| `masterProfile` 外层 | `getCustomerProfileData` 先过外部客户范围；`view_contacts` 控制 customer/people/contact jobs/contacts，`view_recon` 控制 recon；普通 profile/intake 路由随后追加 route-owned 字段 | 跨普通 profile、intake、recycle 复用；路由追加字段可能绕过函数内部已经执行的边界 | 保留复合外层 `redactContactFields`；路由统一经 `redactProfileResponse` 在所有追加完成后再次裁剪；不创建 `contactSafe*ProfilePayload` |
+| `people[]` | `person_candidates` `SELECT pc.*` + `methods_summary`，仅 `view_contacts` 查询；无权限固定 `[]` | `SELECT *` 扩列，`methods_summary` 拼接真实联系方式 | 源头空数组门控；有权限保留原形状；动态列未形成稳定键集，不进入复合白名单 |
+| `contactReconJobs[]` | `contact_recon_jobs` `SELECT *`，仅 `view_contacts` 查询；无权限固定 `[]` | `result_json`、worker/目标角色和未来列可携带联系方式或内部叙事 | 源头空数组门控；有权限保留原形状；继续由复合外层兜底，不迁移 |
+| `reconJobs[]` | `recon_jobs` `SELECT *`，`view_recon` 查询；无权限固定 `[]` | `error`/输出及未来动态列可包含叙事或内部材料 | `view_recon` 先门控，随后无联系人权限仍递归剥离 `error` 等 CONTACT_KEYS；raw 动态键阻塞复合等价 |
+| `reconResults[]` | `recon_results` `SELECT *`，`view_recon` 查询；无 `view_contacts` 使用 `contactSafeReconRecord` | `contact_classification`、`missing_steps`、`evidence_url`、`artifacts_json` 等 raw 漂移键及 JSON 文本 | 继续严格叶子投影 + 外层递归；已授权用户保留 raw 形状；漂移键使 composite whitelist 继续门控 |
+| route-owned `insights.evaluations` / `account` / `recycle` | profile 路由在共享函数返回后追加 evaluations/access；recycle builder 追加 account/recycle 元数据后再返回 | 追加的 evaluation narrative/AI 列、`account.recycle_reason` 可能绕过早期裁剪 | `redactProfileResponse` 对 profile/intake 统一重跑联系人边界；`recyclereason` 纳入规范化敏感键，受限 recycle 不返回 reason；不改变评价/AI 生产逻辑 |
+
+#### 递归规则与行为证据
+
+规则顺序固定为：权限/范围判断 → 叶子专用投影或源头空数组门控 → 所有 route-owned 字段
+追加完成后再执行递归联系人裁剪。投影只返回新对象，不修改查询行；有 `view_contacts` 的
+响应保持 people/contact jobs、recon raw 字段和 evaluation 文案原形状，无该权限的响应保留
+业务结构但移除联系方式、联系人叙事和回收原因。
+
+四个契约覆盖：
+
+1. 静态锁定 profile/intake 两条路由都调用 `redactProfileResponse`，且共享函数与 recycle
+   builder 的最终边界仍存在；
+2. 受限 profile（`view_insights`/`view_recon` 有、`view_contacts` 无）验证 people/contact
+   jobs 为空、pool/customer/recon 联系字段与 recon job error 不可见，并验证路由追加的
+   evaluationText/AI 叙事不会重新出现；
+3. admin 形状验证 people/contact jobs、recon email/artifacts、evaluation 文案仍按既有授权
+   返回；
+4. 受限 recycle composite 验证只读/source、people/recon/evaluation 门控以及
+   `account.recycle_reason`/`recycle.reason` 均被移除。
+
+专项结果：`node --test test/phase_c_s4_master_profile_contract.test.js` **4/4**；相关
+S4/S6/S7 与已有 account whitelist 回归均通过。该修复只收紧联系人递归边界，不修改 AI
+运行时、AI 专用 UI、数据生产或生产目录。
+
+#### 迁移结论
+
+masterProfile 的 people 源头门控、recon 的权限/叶子投影和 profile 路由后处理边界已完成
+逐形状证明；这不等同于整个 S4 composite 的白名单等价。`people`/`contactReconJobs`/`reconJobs`
+仍依赖 `SELECT *`，raw `reconResults` 仍存在与通用黑名单的稳定键集漂移，account/commerce/
+timeline 的动态后代也未闭合。因此继续不创建或接线 `contactSafeRecycleProfilePayload`，
+保留 `buildRecycleAccountProfile`、`getCustomerProfileData` 的外层递归边界；下一步只能推进
+account/commerce/timeline 的独立动态字段证明。
+
 新白名单一律按既定范式推导：先对真实端点行跑 `redactContactFields` → 得"黑名单保留键集"，据此建白名单键集，再用等价契约锁定；**凡白名单键的值为非空对象/数组，须校验该嵌套值的 CONTACT_KEYS 子键是否泄漏，泄漏则改归黑名单路径或建递归白名单**。
 
 ## 4. 复合投影设计
@@ -233,8 +281,8 @@ AI 行为继续冻结。
 按"形状先于组合"原则，先建被复用的形状白名单，再建复合投影；每片执行前先用 §3 泄漏校验确认该形状嵌套安全。
 
 1. **S3 timeline + audit 形状（已完成 `38bfe7d`）**：`contactSafeTimelineRecord`（12 键，title/summary/next_action/outcome 属 CONTACT_KEYS 被剥，provenance 纯结构已泄漏校验）+ `contactSafeAuditLogRecord`（剥 action）+ 等价/泄漏契约 3/3。
-2. **S4 recycle-profile 复合（审计完成，迁移仍门控）**：`09665b5` 已完成 account/activity/commerce/timeline(S3)/insights/auditLog(S3)/recycle/profileAccess/actions 与 masterProfile 的逐形状风险矩阵、权限/只读/递归契约；**仍被 `masterProfile`（`getCustomerProfileData` 巨型共享形状，含 people/recon）及动态 account/commerce/timeline 后代门控**。在完整结构/逐键等价/嵌套泄漏契约通过前，不创建或接线 `contactSafeRecycleProfilePayload`；接线 P4 暂缓。
-3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。产出可被 S4 复用。
+2. **S4 recycle-profile 复合（审计完成，迁移仍门控）**：`09665b5` 已完成 account/activity/commerce/timeline(S3)/insights/auditLog(S3)/recycle/profileAccess/actions 与 masterProfile 的逐形状风险矩阵、权限/只读/递归契约；`343f166` 又完成 masterProfile/people/recon 的来源门、路由后追加字段复裁剪和 `recycle_reason` 敏感键契约；**仍被动态 account/commerce/timeline 后代与 raw recon/SELECT * people 的复合等价门控**。在完整结构/逐键等价/嵌套泄漏契约通过前，不创建或接线 `contactSafeRecycleProfilePayload`；接线 P4 暂缓。
+3. **S6 db bootstrap 复合**：people/prospect 键集（泄漏校验）+ `contactSafeBootstrapPayload`；接线 P2。S4/P4 已完成的 people/recon 来源门控与动态漂移证据可复用，但不能替代 bootstrap 全量复合等价证明。
 4. **S5/P5 导出凭据字段合规（已完成 `ccc9bb5`）**：`redactExportCredentials` 对整个 JSON payload 递归删除凭据键，并检查嵌入式 JSON 文本；CSV 继续固定合法列映射，保留授权、范围、联系人和商务字段。
 5. **S7 收尾（已完成 `a57c44f`）**：确认剩余 `redactContactFields` 调用点与高耦合边界均有独立审计；独立列表投影已闭合，AI 相关 `assistant.js`/`ai_stations/task_center.js` 保持红线，P1/P3 顶层迁移仍按 §3 暂缓。范围解释器统一与按页面合约为下一主线。
 
