@@ -13,6 +13,10 @@ const accountRoutesSource = fs.readFileSync(
   path.join(root, 'lib', 'sales_crm_account_routes.js'),
   'utf8',
 );
+const bootstrapRoutesSource = fs.readFileSync(
+  path.join(root, 'lib', 'sales_crm_bootstrap_routes.js'),
+  'utf8',
+);
 
 function literalOccurrences(source, literal) {
   return source.split(literal).length - 1;
@@ -92,7 +96,7 @@ test('business filters load an authorized server schema into the shared componen
     'the shared component asset must be loaded by the CRM page',
   );
   assert.match(
-    salesCrmSource,
+    `${salesCrmSource}\n${bootstrapRoutesSource}`,
     /app\.get\('\/api\/sales-crm\/filter-schema\/:pageKey'/,
   );
   assert.match(salesCrmSource, /effectiveFilterSchemaFor\(/);
