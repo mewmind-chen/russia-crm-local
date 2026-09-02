@@ -243,7 +243,7 @@ function buildPhases(env) {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
       status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表与 S3 timeline/auditLog 形状已白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。',
+      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 与 S5 export 仍按嵌套泄漏/密码哈希风险暂缓。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -255,9 +255,9 @@ function buildPhases(env) {
         ['access', '范围解释器等价契约：accountScope ≡ buildAccessContext', '2ca107b', ''],
         ['access', '范围解释器代码级统一：共享 accountVisibilityScope', 'f2056e5', ''],
         ['access', '按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）', '45e0c05', ''],
+        ['access', 'legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）', 'c595bf0', ''],
       ],
       pending: [
-        ['access', '可选残值：legacy customers 形状白名单（S6 审计确认其余联系形状已源头门控）', '', ''],
         ['access', 'P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）', '', ''],
       ],
     },

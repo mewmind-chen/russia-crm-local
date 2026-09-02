@@ -11,13 +11,13 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@HEAD`，阶段 G 路由装配与高耦合边界审计均已提交；Stage D 非 AI 管理流程收口提交为 `89e6509`，阶段 G 路由回滚点仍为 `f0ab815`；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@HEAD`，阶段 G 路由装配与高耦合边界审计均已提交；本轮 Stage C legacy customers 安全字段收口提交为 `c595bf0`，Phase E 预览首帧竞态修复为 `dc51fed`；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
-- 当前实现回滚点：`89e6509`（Stage D 非 AI manager intervention / deferred plan 应用服务收口）；阶段 G 路由/入口装配回滚点仍为 `f0ab815`。治理文档与看板随 HEAD 持续更新。旧入口、profile 资源、认证/账号、联系人、团队/协作、页面入口、读取/列表、主管、活动、受保护客户、bootstrap、业务写入与后台管理/维护/筛选路由分别由独立注册器装配；`lib/sales_crm.js` 保留全局中间件、资料聚合及迁移复核/密码/入库/评价等高耦合边界。保持原注册顺序、权限/脱敏、数据库生命周期、错误响应和 API 路径不变。列表列设置和统一资料页行为保持既有实现；已提交、未部署。
+- 当前实现回滚点：`c595bf0`（Stage C legacy customers 字段级白名单；`dc51fed` 为浏览器验收 harness 稳定性修复）；阶段 G 路由/入口装配回滚点仍为 `f0ab815`，Stage D 非 AI manager intervention / deferred plan 回滚点为 `89e6509`。治理文档与看板随 HEAD 持续更新。旧入口、profile 资源、认证/账号、联系人、团队/协作、页面入口、读取/列表、主管、活动、受保护客户、bootstrap、业务写入与后台管理/维护/筛选路由分别由独立注册器装配；`lib/sales_crm.js` 保留全局中间件、资料聚合及迁移复核/密码/入库/评价等高耦合边界。保持原注册顺序、权限/脱敏、数据库生命周期、错误响应和 API 路径不变。列表列设置和统一资料页行为保持既有实现；已提交、未部署。
 - 双基线已核验且保持一致：远端 `origin/main`、生产 `current/.release-sha` 与 `state/state.json.lastSuccessfulSha` 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574`。生产目录仍只读；本次未执行生产验证或部署。
-- 当前验证摘要（2026-09-02）：`node --test`：全量 `2110/2110`；`npm test`：core `1748/1748`；Stage D manager workflow contract `3/3`，阶段 G 路由专项与权限/脱敏回归 `56/56`，静态兼容契约修复回归 `16/16`。`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
+- 当前验证摘要（2026-09-02）：`node --test`：全量 `2114/2114`；`npm test`：core `1752/1752`；Stage C legacy customer whitelist contract `4/4`，阶段 G 路由专项与权限/脱敏回归、浏览器验收相关回归均通过。`npm run phase:e:browser-preview` 在隔离 SQLite、loopback、AI 关闭环境下 Playwright `1.62.1` 双角色通过（默认 widget、无 legacy iframe、profile-only 只读）；`npm run check:governance-authority`、`npm run check:ai-boundary`、`node --check` 与 `git diff --check` 均通过。AI runtime、AI 专用 UI 与生产目录继续保持冻结/只读。
 - 已提交的 Phase E browser acceptance（`583f314`）与本次隔离预览回归共同作为证据：客户全景 83 个授权列、线索池 47 个当前角色可见列，列设置分组/搜索/预设可用；customerProfile 挂载 9 个非 AI widget、五个页签可切换且默认不加载 legacy iframe。AI runtime、`lib/ai_stations/**`、`crm_ai_*` 和 `CRM_AI_*` 保持冻结；生产只读。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
@@ -44,6 +44,8 @@
 - `575cd23`：阶段 G 业务写入/导出/commerce/impersonation 路由注册器接线；通过分段注册保持原路由顺序。
 - `f0ab815`：阶段 G 后台管理、数据维护、权限组与筛选权限路由注册器接线；19 条路由矩阵契约与专项权限回归通过。
 - `89e6509`：完成高耦合边界审计，并将 Stage D 的 manager intervention / deferred plan 收口为独立非 AI 应用服务；通过依赖注入复用授权、范围、生命周期网关、通知与审计，保留既有路由、幂等、事务、错误码和数据库生命周期；资料聚合、迁移复核、入库/评价等高耦合边界按审计原位保留。全量 `node --test` `2110/2110`、core `npm test` `1748/1748`。
+- `c595bf0`：阶段 C legacy `customers` 安全字段收口；新增 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 与标签嵌套白名单，bootstrap/profile 两个 `db.js` 返回路径在无 `view_contacts` 时显式投影，保留业务/状态字段并剥离 email/phone/contact 及联系叙事。新增结构、blacklist≡whitelist、嵌套泄漏与双端行为契约；AI、生产、高耦合资料边界零改动。
+- `dc51fed`：修复 Phase E 浏览器验收 harness 的首帧竞态；等待 widget host、iframe 隐藏和空 `src` 同时成立后再采样，避免把合法的 widget 挂载中间态误报为 legacy iframe。隔离 SQLite/loopback/AI 关闭环境下 Playwright 双角色验收通过。
 - `062f31a`：按用户授权在 `after` 项目精确锁定 `playwright@1.62.1`，更新浏览器 harness 依赖契约；安装 Chromium 到用户缓存目录，不触碰生产或 AI。
 - `583f314`：Phase E browser acceptance harness 输出改为定义范围内验收语义，并增加 widget ID、source-tag 宿主、AI widget/AI 标记隐藏断言；manager/sales 双角色真实浏览器验证通过。证据见 `docs/governance/sessions/2026-09-01-phase-e-browser-acceptance.md`。
 - `bc84567`：锁定旧入口兼容边界；运行时验证统一根路径为 canonical，`CRM_ENABLE_LEGACY` 关闭时 `/legacy` 与 `/tradelead-v2.html` 返回 404，开启时两者继续提供兼容页面；未删除旧页面，后续由阶段 G 路由装配切片继续保留兼容。
@@ -161,7 +163,7 @@
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；当前 `sales_crm.js` 约 11,773 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
-- 阶段 C 权限/筛选/字段：**推进中（主体完成）**——字段目录 + 白名单投影已存在；`78e698b`（accounts）/`5e992fe`（intake）/`1835f73`（通知）列表路径白名单化；`38bfe7d` S3 形状（timeline/auditLog）；`2ca107b` 范围解释器等价契约；`45e0c05` 权限→字段→筛选合同（schema 不泄漏、联系人筛选对无 view_contacts 缺席、账户白名单剥联系人字段）；`f2056e5` 范围解释器代码级统一（共享 `accountVisibilityScope`，同时修复空 WHERE 子句 bug——老 schema 缺 `lifecycle_status`/`is_test_data` 列时 `WHERE` 空子句非法，以 `1=1` 为基底保证合法）。大聚合设计三轮审计（P1/P3 嵌套泄漏、S5 users 密码哈希、S6 联系形状源头门控）均入册。剩余仅：可选残值（legacy customers 形状白名单）。
+- 阶段 C 权限/筛选/字段：**推进中（安全字段收口完成）**——字段目录 + 白名单投影已存在；`78e698b`（accounts）/`5e992fe`（intake）/`1835f73`（通知）列表路径、`38bfe7d` S3 形状（timeline/auditLog）与 `c595bf0` legacy customers bootstrap/profile 行均已字段级白名单化；`2ca107b` 范围解释器等价契约；`45e0c05` 权限→字段→筛选合同（schema 不泄漏、联系人筛选对无 view_contacts 缺席、账户白名单剥联系人字段）；`f2056e5` 范围解释器代码级统一（共享 `accountVisibilityScope`，同时修复空 WHERE 子句 bug——老 schema 缺 `lifecycle_status`/`is_test_data` 列时 `WHERE` 空子句非法，以 `1=1` 为基底保证合法）。P1/P3 loadIntakeState 与 S5 export 仍按嵌套泄漏/密码哈希风险暂缓，不在本目标范围内。
 - 阶段 D 线索/任务/商业闭环：**推进中**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、`addQuote`/`addOrder` 完整编排下沉（`b4cfdfc` commitQuote/commitOrder 域服务）均已显式化。剩余：manager intervention 与 deferred plan 为**独立用例**（不在 commerce 闭环内）；前端状态解释器统一与阶段 E/G 待后续。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 阶段 G 兼容层：**完成门通过**——旧入口与 profile 资源兼容、CRM 各路由组注册器、后台管理/维护/筛选装配均已独立化；全局中间件、资料聚合、迁移复核、密码、入库/评价等高耦合路由保留原位，AI 路由零动作。每个切片有独立提交和契约/专项回归。
@@ -169,7 +171,7 @@
 
 ## 6. 下一步允许动作
 
-1. 保持 `f0ab815` 及治理提交作为阶段 G 回滚点；如继续修改代码，先重跑全量与治理门禁。
+1. 保持 `c595bf0`/`dc51fed` 及治理提交作为本轮回滚点，`f0ab815` 继续作为阶段 G 路由回滚点；如继续修改代码，先重跑全量与治理门禁。
 2. 阶段 G 后续只做高耦合边界的独立审计，不在无证据时迁移资料聚合、迁移复核、入库/评价或 AI 路由。
 3. 不 push、不 merge、不部署，生产继续只读。
 
