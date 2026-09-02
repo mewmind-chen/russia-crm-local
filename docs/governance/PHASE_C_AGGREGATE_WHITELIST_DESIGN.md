@@ -1,9 +1,11 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
 日期：2026-08-30
-状态：设计草案（待逐片执行）
+状态：按切片执行中；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），其余高风险聚合仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
+
+> 当前实现注记（2026-09-02）：本轮只完成 S6 中 legacy `customers` 行这一扁平联系承载形状。`getInitialData` bootstrap 与 `getCustomerProfileData` profile 在无 `view_contacts` 时均显式使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`，`tags` 另有嵌套白名单与泄漏契约。P1/P3 深度嵌套 intake-state 与 S5 export users/password hash 未纳入本轮，不能据此宣称整个复合 payload 已白名单化。
 
 ## 1. 目标
 
@@ -29,7 +31,7 @@
 >
 > **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
 >
-> **S6（db bootstrap）审计结论（2026-08-30 实测）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。**`customers` 是唯一未覆盖的联系承载形状**。结论：S6 主要是 belt-and-suspenders 低价值加固（联系数据已在源头收敛），非暴露缺口；`customers` 可单独立一 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 形状片（含 leakage 校验），但不阻塞主线。
+> **S6（db bootstrap）审计结论（2026-08-30 实测，2026-09-02 切片完成）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。`customers` 已由 `c595bf0` 的 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 在 bootstrap/profile 两个路径显式投影并以结构/等价/泄漏/行为契约锁定；其余字段仍由原聚合黑名单兜底。结论：S6 的可选 legacy customers 残值已收口，但不等同于 P2 复合 bootstrap 全量白名单化。
 
 | 形状 | 现有白名单 | 需新建立 | 可行性 |
 |---|---|---|---|

@@ -33,11 +33,10 @@
 - `npm test`：core `1752/1752` 通过。
 - `npm run check:governance-authority`：通过。
 - `npm run check:ai-boundary`：通过（210 files checked）。
-- `node --check lib/access_control.js lib/db.js test/phase_c_customer_whitelist_contract.test.js scripts/phase-e-browser-preview.js`：通过。
+- `node --check`（上述 4 个变更 JS 逐文件执行）：通过。
 - `git diff --check`：通过。
 - `npm run phase:e:browser-preview`：Playwright `1.62.1` 在隔离 SQLite、loopback、AI 关闭环境下 manager/sales 双角色通过；默认 customerProfile 挂载 9 个 widget、无 legacy iframe，profile-only 入口只读且无保存动作；生产未触碰。
 
 ## 结论与后续边界
 
 legacy `customers` 这一 S6 可选残值已收口，Stage C 安全字段目标完成。P1/P3 `loadIntakeState` 的深度嵌套内容与 S5 export 的 users/password hash 风险仍按设计文档暂缓；不因本轮结果扩大范围。未 push、未 merge、未部署。
-
