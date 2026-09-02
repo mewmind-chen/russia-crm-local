@@ -157,7 +157,7 @@
 
 ## 5. 当前阶段判断
 
-- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交基线为 `f0ab815`；`d615410`、`7d6e88a` 及其后的 11 个 `refactor(compat)` 切片完成旧入口、profile、页面、认证/账号、读取/列表、团队/主管、活动、受保护客户、bootstrap、业务写入与后台管理路由的等价装配抽取。资料聚合、迁移复核、密码、入库/评价和 AI 路由经独立审计判定为高耦合边界，保留原位并记录原因。治理文档与看板随后同步；不恢复、不新增或迁移 AI 功能，不触碰生产。
+- **当前恢复点（2026-09-02，优先于本节以下历史阶段叙述）**：已提交实现基线为 `ccc9bb5`；`f0ab815` 继续作为阶段 G 路由回滚点。其前 `d615410`、`7d6e88a` 及后续 11 个 `refactor(compat)` 切片完成旧入口、profile、页面、认证/账号、读取/列表、团队/主管、活动、受保护客户、bootstrap、业务写入与后台管理路由的等价装配抽取；本轮 `ccc9bb5` 再完成 S5/P5 导出凭据递归边界。资料聚合、迁移复核、密码、入库/评价和 AI 路由经独立审计判定为高耦合边界，保留原位并记录原因。治理文档与看板随后同步；不恢复、不新增或迁移 AI 功能，不触碰生产。
 - 阶段 0 治理基础：已建立；2026-08-29 已迁移到新根目录并完成校准。
 - 前端字段目录/widget 试点：widget 注册表已落地，customerProfile 默认使用 widget 组合视图；legacy iframe 仅由 `profileView=legacy` 显式兼容回退，profile-only workbench 已收敛为只读兼容入口；identity/source tags 已抽为 UMD widget；通用 `list-widget.js` 已用于 Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、主管任务/风险/指标、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表，支持授权字段目录、列显隐/顺序、用户级偏好和排序预设。CRM 抽屉复杂 activity timeline 条目已由 `timeline-widget.js` 渲染，权限/溯源判断留在 app.js。权限配置矩阵与事务预览/审核工作区为专用组件；AI 功能弃用冻结。阶段 E 完成门已通过，当前切片已提交。
 - 后端领域拆分：`lib/domains/` 44 个文件；审计确认 WIP 回退了其在 `sales_crm.js` 的全部引用；接线恢复后 41 个域模块已接线（生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
