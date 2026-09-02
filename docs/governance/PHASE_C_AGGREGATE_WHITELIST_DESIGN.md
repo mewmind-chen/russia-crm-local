@@ -1,11 +1,11 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
-日期：2026-08-30（P1/P3、S5/P5、S7、S4/P4 复核：2026-09-02）
-状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`），S7 剩余 `redactContactFields` 调用点审计与迁移边界契约已完成（`a57c44f`），S4/P4 回收资料与共享完整资料逐形状风险矩阵/只读契约/迁移门禁已完成（`09665b5`）；P1/P3 顶层白名单及 S4/S6 复合迁移仍按本文边界暂缓
+日期：2026-08-30（P1/P3、S5/P5、S7、S4/P4、S6/P2 复核：2026-09-02）
+状态：P1/P3 递归合规修复方案与契约已完成；S6 legacy customers 行已收口（`c595bf0`），S5/P5 导出凭据字段边界已收口（`ccc9bb5`），S7 剩余 `redactContactFields` 调用点审计与迁移边界契约已完成（`a57c44f`），S4/P4 回收资料与共享完整资料逐形状风险矩阵/只读契约/迁移门禁已完成（`09665b5`），S6/P2 Bootstrap 与 masterProfile 共享叶子审计及复合迁移门禁已完成（本轮契约）；P1/P3 顶层白名单及 S4/S6 复合迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
-> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界；S7 以矩阵和静态契约确认剩余复合调用点的保留/冻结决定。四者均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
+> 当前实现注记（2026-09-02）：S6 legacy `customers` 行使用 `CONTACT_SAFE_CUSTOMER_ROW_KEYS`；P1/P3 深度嵌套 intake-state 使用 `redactIntakeAggregate`；S5/P5 export 使用 `redactExportCredentials` 作为独立凭据边界；S7 以矩阵和静态契约确认剩余复合调用点的保留/冻结决定；S6/P2 进一步锁定 Bootstrap 的 customer/pool 叶子投影、recon 动态漂移和 people/contact 计数源头门控。上述切片均不是整个复合 payload 的顶层白名单迁移：P1/P3 顶层及 S4/S6 复合迁移仍按嵌套等价风险暂缓，export 的合法业务字段/联系人权限继续由原有查询和联系人投影负责。
 
 ## 1. 目标
 
@@ -152,26 +152,66 @@ orders、timeline、insights、auditLog、recycle、profileAccess/actions 组合
 全部后代尚未完成稳定键集与递归等价证明。因此不创建或接线
 `contactSafeRecycleProfilePayload`，继续保留 builder/profile 的外层递归黑名单；已证明的
 `contactSafe*Record` 仅作为叶子边界复用。S4 完成的是风险矩阵和门禁契约，不是运行时白名单
-迁移；P1/P3 顶层和 S6 复合迁移同样不能由本轮自动开启。
+迁移；P1/P3 顶层和 S6 复合迁移同样不能由本轮自动开启。S6/P2 后续已完成 bootstrap
+逐形状审计，但其 recon 动态键集漂移和 people/masterProfile 等共享复合的等价前置仍未闭合，
+因此仍由本节的“复合迁移门禁”覆盖。
 
 > **历史审计发现（2026-08-30）**：导出 payload 的 `users` 形状曾被判定可能保留 `password_hash/password_salt`（不在 CONTACT_KEYS）；该发现作为本轮修复动因保留，已不再作为当前暂缓项。export 的 corrections/proposals/activities 追加字段仍需遵守本节递归凭据边界。
 >
-> **S6（db bootstrap）审计结论（2026-08-30 实测，2026-09-02 切片完成）**：两个 bootstrap 聚合（`db.js:1564`/`1707`）里真正携带联系数据的形状**均已在源头门控为空**：`people`/`contactReconJobs`/`contactQualityStats` 仅 `view_contacts` 时查询（无权限为空数组）、`customerPool`/`reconResults` 已分别经 `contactSafePoolRecord`/`contactSafeReconRecord` 白名单。剩余 `redactContactFields` 对抗的是 `customers`（legacy customers 表，含 email/phone/contact）、`reconJobs`、`templates`、`tags` 及纯配置标量。`customers` 已由 `c595bf0` 的 `CONTACT_SAFE_CUSTOMER_ROW_KEYS` 在 bootstrap/profile 两个路径显式投影并以结构/等价/泄漏/行为契约锁定；其余字段仍由原聚合黑名单兜底。结论：S6 的可选 legacy customers 残值已收口，但不等同于 P2 复合 bootstrap 全量白名单化。
+### 2026-09-02 S6/P2 Bootstrap 与 masterProfile 共享叶子逐形状审计
 
-| 形状 | 现有白名单 | 需新建立 | 可行性 |
-|---|---|---|---|
-| account rows | ✅ `contactSafeAccountRecord` | | ✅ 扁平 |
-| pool rows | ✅ `contactSafePoolRecord` | | ✅ 扁平 |
-| recon rows | ✅ `contactSafeReconRecord` | | ✅ 扁平 |
-| evaluation rows（insights） | ✅ `contactSafeInsightsRecord`（需核验 evaluation payload 键集） | | ✅ 扁平 |
-| alert rows（alarm copy） | ✅ `contactSafeAlertsRecord`（需核验 preserveAlertCopy ≡） | | ✅ 需专项核验 |
-| activity rows | ✅ `contactSafeActivityRecord` | | ✅ 扁平 |
-| commerce rows（rfq/quote/order） | ✅ `contactSafeCommerceRecord` | | ✅ 扁平 |
-| timeline rows（activity+account 混合） | ✅ activity 白名单（需核验 timeline 特有键） | | ⚠ 需补键核验 |
-| **intake-state items（P1/P3）** | ❌ | ❌ **不建议**（深度嵌套泄漏） | ⛔ 保留黑名单或递归子项目 |
-| intake-state settings/stats/batches | ❌ | ⚠ 仅 P3 不经 enrichment 时扁平 | ⚠ 待定 |
-| master profile | ❌ | ✅ 推导键集 | ⚠ 需核验 |
-| people / prospect rows | ❌ | ✅ 推导键集（仅 P2） | ⚠ 需核验嵌套 |
+S6/P2 以 `test/phase_c_s6_bootstrap_contract.test.js` 和本节矩阵核验
+`db.js:getInitialData`（`/api/initial`）的全部返回形状，并记录其对 P4
+`masterProfile` 可复用的叶子结论。该切片只修正了一个确定的叶子字段遗漏：
+`contactSafePoolRecord` 现在保留 `establishedYear`，使其与已组装的 pool 行在该安全业务字段上
+保持等价；没有创建或接线 `contactSafeBootstrapPayload`。
+
+| 形状 | 真实来源/组装 | 权限与来源门控 | 动态/嵌套风险 | 当前决定 |
+|---|---|---|---|---|
+| `customers[]` | `SELECT * FROM customers` → `buildCustomer` → `attachTags` | `view_customers` 查询；无 `view_contacts` 用 `contactSafeCustomerRecord`，tags 再做嵌套投影 | legacy 表可扩列；状态/联系叙事键混合，tags 是唯一嵌套值 | 已有叶子白名单与递归黑名单逐键等价；保留，不外推到复合 payload |
+| `customerPool[]` | `CUSTOMER_POOL_PROFILE_SELECT` → `buildPoolCustomer` → `attachTags` | `view_pool` 查询；无 `view_contacts` 用 `contactSafePoolRecord`；CRM/负责人补充仍受范围门控 | 查询含多张表最新 recon/sanction join；pool 行未来可扩列 | `establishedYear` 已补入允许键；已组装行可等价，原始 join 行仍不作为复合白名单输入 |
+| `reconJobs[]` | `SELECT * FROM recon_jobs` | `view_recon` 源头门控；无 `view_recon` 固定 `[]` | `SELECT *`；error/output 路径及未来列可能含叙事、内部材料 | 无独立投影；由外层递归 `redactContactFields` 保留，暂不迁移 |
+| `reconResults[]` | `SELECT * FROM recon_results` | `view_recon` 源头门控；无 `view_contacts` 使用 `contactSafeReconRecord` | raw 行含 `contact_classification`、`missing_steps`、`evidence_url`、`artifacts_json` 等键；通用黑名单与严格白名单可见键集不一致，且 JSON 文本可能含未知联系方式 | 专用叶子继续 fail-closed 丢弃上述漂移键；记录为等价阻塞，不开启 bootstrap 复合迁移 |
+| `contactReconJobs[]` | `SELECT * FROM contact_recon_jobs` | 仅 `view_contacts` 查询，无权限为空数组 | `result_json`、目标角色和 worker 字段可扩展，联系人集中在动态 JSON/状态列 | 以源头空数组门控为安全边界；不在本轮建立新白名单 |
+| `people[]` | `SELECT pc.*` + `methods_summary` | 仅 `view_contacts` 查询，无权限为空数组 | `SELECT *`，`methods_summary` 拼接真实联系方式，后续列可继续扩展 | 以源头空数组门控为安全边界；等待独立 people 形状契约 |
+| `contactQualityStats` | 由已查询的 `people`/`contactReconJobs` 计算 | 仅 `view_contacts` 返回计数；无权限固定 `{}` | 计数反映联系人数据规模，不能由通用递归裁剪推导等价 | 保留源头门控；不把计数对象并入复合白名单证明 |
+| `prospectTasks[]` | `prospect_tasks` → `buildProspectTask` | `use_prospect_agent` 才调用 `listProspectState`，按 `created_by` 限定 | query、industry/product focus、error 等叙事字段；该能力邻接 AI 红线 | 保留既有权限与最终递归裁剪；不改 AI、不新建 prospect 白名单 |
+| `prospectCandidates[]` | `prospect_candidates` → `buildProspectCandidate` | 同上，任务 owner 范围 | description/products/need/sell/contact/decision/sourceSummary 等字段均可携带联系方式 | 作为动态叙事形状记录为 blocker；不外推为安全叶子 |
+| `prospectSources[]` | `prospect_sources` → `buildProspectSource` | 同上，任务 owner 范围 | title/url/snippet 可能是联系人或外链，且 URL/文本值不是键级递归可证明 | 保留最终递归裁剪；不在 AI 冻结范围内新增行为 |
+| `tags[]` | `SELECT * FROM tags` → `buildTag` | `view_development` 才返回 | 查询可扩列；自定义 tag 的 name/category 值可承载任意业务文本 | `buildTag` 已固定输出扁平键，但值语义未完成联系方式证明；保留外层递归 |
+| `templates[]` | `SELECT * FROM templates` | `view_development` 才返回 | `SELECT *` 与英文/俄文模板文本是动态字符串，不能用键名证明文本不含联系方式 | 保留外层递归；不建立模板白名单 |
+| `stats` | `getStats(visibleCustomers, customerPool, reconJobs)` 派生 | 使用已授权/已投影的 customers、pool、reconJobs | `byOwner/byType/byPool` 是动态 map；统计值依赖叶子权限和过滤结果 | 作为派生标量/映射保留；需组合行为证明，不单独迁移 |
+| bootstrap payload 外层 | `{user, customers, customerPool, stats, ...}` 统一组装 | `/api/initial` 由 `view_development` policy 保护 | 多域混合，未来新增顶层键可绕过单一白名单；源对象生命周期由 db close 保证 | 继续 `permissions.view_contacts ? payload : redactContactFields(payload)`；`contactSafeBootstrapPayload` 门禁未满足 |
+
+### S6/P2 叶子等价与角色行为证据
+
+契约覆盖四类证据：
+
+1. customer 和组装后的 pool 行逐键验证 `contactSafe*Record(row) deepEqual redactContactFields(row)`，
+   并验证 tags/`establishedYear` 不被意外丢失；
+2. raw `recon_results` 明确验证严格 projection 与通用黑名单的键集漂移，锁定
+   `contact_classification`、`missing_steps`、`evidence_url`、`artifacts_json` 为迁移阻塞键，且
+   投影结果本身再次经过黑名单不会产生新敏感后代；
+3. 无 `view_contacts` 的受限 manager 仍看到客户、pool、recon 的业务结构，contactReconJobs、
+   people、contactQualityStats 源头为空，prospect 叙事字段和 recon 动态字段不泄漏；有权限的
+   sales、manager、admin 仍分别保持既有范围和联系人可见性；
+4. 静态契约锁定 `getInitialData` 的权限/查询/投影顺序、`/api/initial` 的
+   `view_development` policy，以及没有 `contactSafeBootstrapPayload`。
+
+### S6/P2 迁移门禁决定
+
+当前不具备 bootstrap 复合白名单前置条件。原因不是 customer/pool 叶子无法投影，而是：
+
+- raw `recon_results` 的严格白名单与通用递归黑名单已经出现可证明的键集漂移；
+- `reconJobs`、`contactReconJobs`、`people`、`templates` 和 prospect 形状依赖 `SELECT *` 或
+  动态文本/JSON，尚未完成未知后代的递归等价证明；
+- `contactQualityStats` 是联系人规模派生对象，依赖源头门控，不能按通用递归输出直接推导；
+- stats、tags 和外层 user/options 是跨权限、跨域聚合，未来新增字段会改变复合形状。
+
+因此继续保留 `getInitialData` 的外层 `redactContactFields`，保留已证明的 customer/pool/recon
+源头/叶子边界，不新增 `contactSafeBootstrapPayload`。S6/P2 的审计结果可供下一阶段 S4
+masterProfile/people/recon 逐形状契约复用，但不能自动开启 S4/S6 复合迁移；P1/P3 顶层白名单和
+AI 行为继续冻结。
 
 新白名单一律按既定范式推导：先对真实端点行跑 `redactContactFields` → 得"黑名单保留键集"，据此建白名单键集，再用等价契约锁定；**凡白名单键的值为非空对象/数组，须校验该嵌套值的 CONTACT_KEYS 子键是否泄漏，泄漏则改归黑名单路径或建递归白名单**。
 
