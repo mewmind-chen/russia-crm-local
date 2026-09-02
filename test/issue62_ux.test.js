@@ -8,7 +8,8 @@ const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'sales-crm.html'), 'utf8');
 const js = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
-const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8');
+const backend = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm.js'), 'utf8')
+  + fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales_crm_business_write_routes.js'), 'utf8');
 const access = fs.readFileSync(path.join(__dirname, '..', 'lib', 'access_control.js'), 'utf8');
 
 test('Issue #62 funnel drill-down remains while unified pool defaults to all', () => {

@@ -17,6 +17,10 @@ const bootstrapRoutesSource = fs.readFileSync(
   path.join(root, 'lib', 'sales_crm_bootstrap_routes.js'),
   'utf8',
 );
+const adminRoutesSource = fs.readFileSync(
+  path.join(root, 'lib', 'sales_crm_admin_routes.js'),
+  'utf8',
+);
 
 function literalOccurrences(source, literal) {
   return source.split(literal).length - 1;
@@ -128,7 +132,7 @@ test('management routes are explicit and export reuses the authorized filter val
     "app.patch('/api/sales-crm/filter-permissions/definitions/:filterKey'",
   ]) {
     assert.match(
-      salesCrmSource,
+      `${salesCrmSource}\n${adminRoutesSource}`,
       new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
       `missing management route ${route}`,
     );

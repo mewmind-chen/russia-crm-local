@@ -10,7 +10,8 @@ const app = fs.readFileSync(path.join(ROOT, 'sales-assets', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(ROOT, 'sales-crm.html'), 'utf8');
 const access = fs.readFileSync(path.join(ROOT, 'lib', 'access_control.js'), 'utf8');
 const metrics = fs.readFileSync(path.join(ROOT, 'lib', 'manager_metrics.js'), 'utf8');
-const routes = fs.readFileSync(path.join(ROOT, 'lib', 'sales_crm.js'), 'utf8');
+const routes = fs.readFileSync(path.join(ROOT, 'lib', 'sales_crm.js'), 'utf8')
+  + fs.readFileSync(path.join(ROOT, 'lib', 'sales_crm_manager_routes.js'), 'utf8');
 
 function block(source, start, end) {
   const from = source.indexOf(start);
