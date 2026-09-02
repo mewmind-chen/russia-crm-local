@@ -9,8 +9,8 @@
 
 | 阶段 | 状态 | 已有证据 | 尚未完成 |
 |---|---|---|---|
-| 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录 | 本轮治理 checkpoint 待提交 |
-| 阶段 A：后端结构化切分 | 接线恢复完成（41/44 已接入） | `lib/domains/` 44 个文件；41 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 12,945 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；聚合文件仍超 1.2 万行 |
+| 阶段 0：治理基础 | 已完成并迁移 | 治理文档、前后基线、新根目录、滚动看板与会话记录 | 无 |
+| 阶段 A：后端结构化切分 | 接线恢复完成（41/44 已接入） | `lib/domains/` 44 个文件；41 个域模块已接入（13 个接线切片、24 契约断言），sales_crm.js 约 11,773 行 | 仅剩 identity/index、identity/middleware、filter/index 三个模块按用户裁定保持内联/精简；资料/事务高耦合服务仍由后续阶段管理 |
 | 阶段 B：状态真源 | 业务侧完成 | 全部写点收敛到 state_write/collaboration_write 网关（9 切片，含 updateAccount profile 编辑 `aabe4d9`），零裸写；§4 强化已落地 assertQuoteTransition/assertFirstOrderTransition 守卫（`0ae90af`）、assertAccountStateContract 状态契约不变量守卫（`9186a6d`，recycled/returned）并接入回收/恢复完整视图写点（`da34bc2`）、projectNextAction time_basis 维度（`cb6c6e4`）、buildAlerts 告警路径（`754d023`）、buildTeamReport 报告路径（`c4bba3f`）与 pipelineActionKeys 动作键路径（`fe77fb4`）消费投影；state DTO 边界已收敛（pipeline 行不再附加，`6b88d74`）；smoke 种子收敛（`929b8c1`） | AI 写点收敛（红线，仅评估）、状态解释器统一消费（前端侧） |
 | 阶段 C：权限/筛选/字段 | 推进中（主体完成） | field catalog、schema 渲染、列表/形状白名单；范围解释器等价契约（`2ca107b`）与代码级统一（`f2056e5`）；按页面权限→字段→筛选合同（`45e0c05`） | P1/P3 嵌套聚合与 S5 export 因泄漏风险暂缓；S6 bootstrap 审计为低价值；仅余可选 legacy customers 形状白名单 |
 | 阶段 D：线索/任务/商业闭环 | 商业闭环成型 | intake/assignment/planning/commerce 已抽取接线；RFQ→quote→order 事务、行写、校验与 commit 服务已显式化（`1d15546…b4cfdfc`） | manager intervention / deferred plan 是闭环外独立用例，后续评估 |

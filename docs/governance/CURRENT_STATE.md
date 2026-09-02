@@ -115,13 +115,13 @@
 
 接线索计（详见 `sessions/2026-08-29-state-write-convergence.md`）：审计确认 `92c3879` 的内联回退覆盖了 `lib/domains/` **全部模块**在 `sales_crm.js` 的引用（非此前文档所记"部分"）。接线恢复后 41 个域模块已接线（`sales_crm.js` 等生产代码直接 require 40 个 + `action_request` 经 `commerce/write` 域间接线传递闭包），仅剩 3 个按用户裁定保持内联/精简（`identity/index`、`identity/middleware`、`filter/index`）。
 
-规模变化仅表示已经开始拆分，不代表单体拆分完成：
+规模变化用于记录兼容装配收敛，不代表所有业务服务已拆为独立域：
 
 - `origin/main` 的 `lib/sales_crm.js`：13,758 行。
-- 当前提交态 `092d8a0`：`lib/sales_crm.js` 12,945 行；`sales-assets/app.js` 17,646 行。
-- 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）仍待验收。
+- 当前实现回滚点 `f0ab815`：`lib/sales_crm.js` 11,773 行；`sales-assets/app.js` 17,646 行。
+- 客户完整资料默认由 widget 注册表组装；仅 `profileView=legacy` 显式保留 `/development-workbench` iframe 兼容回退；profile-only workbench 为只读兼容入口。浏览器双角色（sales/manager）验收已完成。
 
-因此当前结论是：重构已经实质推进，但仍处于渐进迁移中，不能描述为“拆分完成”或“可合并”。
+因此当前结论是：阶段 G 的兼容入口/路由装配已完成；整体重构仍按阶段 B/C/D 的既有路线渐进迁移，不能描述为整体“拆分完成”或“可合并”。
 
 ## 3. 已提交 WIP 收敛（2026-08-29）
 
