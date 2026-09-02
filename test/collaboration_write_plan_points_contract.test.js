@@ -14,13 +14,17 @@ const {
 
 const root = path.join(__dirname, '..');
 const salesCrmSource = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
+const managerWorkflowSource = fs.readFileSync(
+  path.join(root, 'lib', 'manager_workflows.js'),
+  'utf8',
+);
 
 const PLAN_ONLY = [/applyAccountPlanPatch\(/];
 const MANAGER = [/applyManagerStatusPatch\(/];
 
 test('deferring a plan clears the account plan through the plan gateway', () => {
   assertNoColumns(
-    functionSlice(salesCrmSource, 'deferAccountPlan', 'scopedManagerAccount'),
+    functionSlice(managerWorkflowSource, 'deferAccountPlan', 'recordExplicitPlanIfEnabled'),
     PLAN_COLUMNS,
     PLAN_ONLY,
     'deferAccountPlan',

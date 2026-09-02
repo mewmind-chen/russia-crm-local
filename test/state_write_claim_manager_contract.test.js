@@ -14,18 +14,22 @@ const {
 
 const root = path.join(__dirname, '..');
 const salesCrmSource = fs.readFileSync(path.join(root, 'lib', 'sales_crm.js'), 'utf8');
+const managerWorkflowSource = fs.readFileSync(
+  path.join(root, 'lib', 'manager_workflows.js'),
+  'utf8',
+);
 
 const STATE = [/applyAccountStatePatch\(/];
 const STATE_AND_PLAN = [/applyAccountStatePatch\(/, /applyAccountPlanPatch\(/];
 
 test('claiming an intake item routes assignment and first-touch plan through the gateways', () => {
-  const body = functionSlice(salesCrmSource, 'manageIntake', 'deferAccountPlan');
+  const body = functionSlice(salesCrmSource, 'manageIntake', 'todayTaskRequestSpec');
   assertNoColumns(body, STATE_COLUMNS, STATE, 'manageIntake claim');
   assertNoColumns(body, PLAN_COLUMNS, [/applyAccountPlanPatch\(/], 'manageIntake claim');
 });
 
 test('manager task change routes stage, plan, and assignment writes through the gateways', () => {
-  const body = functionSlice(salesCrmSource, 'managerTaskChange', 'resolveManagerTaskAction');
+  const body = functionSlice(managerWorkflowSource, 'managerTaskChange', 'resolveManagerTaskAction');
   assertNoColumns(body, STATE_COLUMNS, STATE_AND_PLAN, 'managerTaskChange');
   assertNoColumns(body, PLAN_COLUMNS, STATE_AND_PLAN, 'managerTaskChange');
 });
