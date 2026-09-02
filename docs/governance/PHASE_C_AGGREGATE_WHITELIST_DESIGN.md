@@ -1,7 +1,7 @@
 # 阶段 C：大聚合 payload 白名单化设计
 
-日期：2026-08-30
-状态：按切片执行中；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），其余高风险聚合仍按本文边界暂缓
+日期：2026-08-30（P1/P3 复核：2026-09-02）
+状态：按切片执行中；S6 legacy customers 行已于 2026-09-02 收口（`c595bf0`），P1/P3 嵌套审计已完成但迁移仍按本文边界暂缓
 范围：将剩余的 `redactContactFields`（CONTACT_KEYS 递归黑名单）调用点收敛为字段级白名单
 纪律：每片 = 契约测试先行（结构 + 等价 + 行为）→ 实现 → 专项/全量 → 提交；等价以"blacklist≡whitelist 逐键 deepEqual"锁定
 
@@ -28,6 +28,29 @@
 > **关键发现（2026-08-30 S1 审计）**：`loadIntakeState`（P1/P3）的 items 经 `queryIntakeFlowPage` 之外的 enrichment 带**深度嵌套内容**——`arbitration`（ruleDecision 含 `reason`、aiRecommendation、rankedCandidates、history 带 `actorName`+嵌套 aiRecommendation）、`developmentHistory`、`signals`（AI）、`customerTags`、`identityWarning`。黑名单是**递归**剥离（在每层嵌套内剥 CONTACT_KEYS，如 `arbitration.ruleDecision.reason`、`history.notes`、`developmentHistory.summary`）；字段级白名单是**保留顶层键、值原样拷贝**——会对嵌套对象内的 contact 子字段**泄漏**。
 >
 > **结论**：P1/P3（loadIntakeState items）**不适合作顶层白名单**——忠实转换需要按每个嵌套形状各建递归白名单，复杂度等同黑名单且无简化收益；强行顶层白名单违反"不泄漏联系方式"合规不变量。**P1/P3 不建议本设计推进**（或需另立"递归逐形状白名单"独立子项目）。其余路径（P4/P5 的 account/activity/commerce/timeline/evaluations 为扁平行）可安全白名单化。
+
+### 2026-09-02 P1/P3 审计复核
+
+审计契约位于 `test/phase_c_load_intake_aggregate_audit.test.js`，以真实
+`GET /api/sales-crm/intake` 响应和合成嵌套行同时验证 `loadIntakeState` 的形状边界：
+
+| 返回路径 | 真实来源/组装点 | 无 `view_contacts` 时的观察 | 白名单决策 |
+|---|---|---|---|
+| `items[].arbitration.ruleDecision` | `crm_intake_decisions.rule_decision_json` | `reason`/`notes` 等已知 CONTACT_KEYS 递归剥离 | 不能只保留 `arbitration` 顶层键；需逐形状递归投影 |
+| `items[].arbitration.aiRecommendation.rankedCandidates[]` | 仲裁 JSON + 负责人名称补全 | 数组及未知子键原样保留，已知键按黑名单递归处理 | 继续保留黑名单；AI 面不改 |
+| `items[].assignmentAudit[].ruleDecision` | `intakeDecisionHistory` 历史数组 | 嵌套 `reason`/`notes` 递归剥离 | 与 `arbitration` 同一高耦合形状，暂缓 |
+| `items[].developmentTimeline[]` | `intakeDevelopmentHistory` 的 timeline | `summary`/`next_action` 等已知叙事键剥离 | 不能把数组作为顶层白名单值原样复制 |
+| `items[].developmentHistory` | 账户、活动、RFQ/报价/订单聚合 | `lastActivitySummary` 不是当前 CONTACT_KEYS，含联系人叙事的值会原样保留（已用哨兵值复现） | 记录为残余高风险；先另立合规修复，再谈白名单迁移 |
+| `items[].identityWarning` | `publicLeadIdentityWarning` | 当前固定结构为公开核验提示 | 可保留，但不能推导整个 item 白名单 |
+| `items[].customerTags[]` | `customer_tags`/`tags` 查询 | 当前字段固定；未来标签列会随值复制进入 payload | 需要独立标签形状投影，不能复用 intake 行白名单 |
+| `items[].signals.fit/readiness` | AI station 结果的固定摘要 | 由既有 AI 开关决定是否出现；本轮不改 AI | AI 红线，保持原位 |
+| `items[].complementaryInfo` | `supplement_pending_json` 任意 JSON | 递归黑名单只认识已登记键，未知别名仍可能保留 | 需要形状约束/递归白名单子项目 |
+| `batches[]` | `SELECT * FROM crm_intake_batches` | 当前为扁平行，未来新增列会自动进入 | 不与嵌套 item 合并投影 |
+
+复核还证明：若按黑名单保留的顶层键集合直接做“顶层白名单 + 值原样复制”，
+`arbitration.ruleDecision.reason` 和 `assignmentAudit[].ruleDecision.reason` 会重新泄漏；
+这不是可接受的等价转换。当前 P1/P3 仍由 `redactContactFields` 递归兜底，不能以本轮
+审计结果宣称已完成字段级白名单化。
 >
 > **S5（export）补充发现（2026-08-30 实测）**：导出 payload 的 `users` 数组（仅 `view_users` 时非空）为 sales_users 行，黑名单**保留 `password_hash`/`password_salt`**（不在 CONTACT_KEYS）——忠实镜像白名单将把密码哈希列入显式键集，属合规隐患；改行为则破坏等价。**S5 暂缓**：与 P1/P3 同样判定"保留黑名单"，或需先修 users 形状的密码列暴露（另立合规修复切片，先经用户裁定）。export 的 corrections/proposals/activities 追加字段亦需各自键集推导，非纯复用。
 >

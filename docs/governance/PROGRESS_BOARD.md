@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-02 09:49:30`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-02 12:32:50`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,10 +8,10 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `e8df54e`（相对 origin/main ahead 370） |
+| HEAD | `679517b`（相对 origin/main ahead 371） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2114/2114 |
-| 核心测试 | `npm test` 1752/1752 |
+| 全量测试 | `node --test` 2117/2117 |
+| 核心测试 | `npm test` 1755/1755 |
 | sales_crm.js | 11320 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
 | 最近会话 | `2026-09-02-stage-c-legacy-customers.md` |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 69 |
 | feat(...) | 57 |
-| docs(governance) | 189 |
+| docs(governance) | 190 |
 | 其他 | 25 |
 
 ## 阶段 0：治理基础
@@ -127,7 +127,7 @@
 
 ## 阶段 C：权限/筛选/字段
 
-> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 与 S5 export 仍按嵌套泄漏/密码哈希风险暂缓。
+> **进行中** — field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层形状审计已完成，确认顶层白名单会泄漏嵌套字段；S5 export 仍按 users/password hash 风险暂缓。
 
 ### 已完成
 
@@ -142,10 +142,11 @@
 - [x] 范围解释器代码级统一：共享 accountVisibilityScope（`f2056e5`）
 - [x] 按页面权限→字段→筛选合同（sensitive/filter/whitelist 一致性）（`45e0c05`）
 - [x] legacy customers bootstrap/profile 字段级白名单（CONTACT_SAFE_CUSTOMER_ROW_KEYS，tags 泄漏校验）（`c595bf0`）
+- [x] P1/P3 loadIntakeState 深层形状审计（顶层白名单泄漏证据与残余 lastActivitySummary 风险）（`审计契约`）
 
 ### 待办
 
-- [ ] **access** P1/P3 loadIntakeState 与 S5 export 暂缓（嵌套泄漏 / users 密码哈希暴露，见设计）
+- [ ] **access** P1/P3 白名单迁移与 S5 export 暂缓（P1/P3 需递归/合规修复；S5 需先处理 users 密码哈希）
 
 ## 阶段 D：线索/任务/商业闭环
 
