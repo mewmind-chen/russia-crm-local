@@ -1,15 +1,15 @@
 # TradePulse 重构路线图
 
 更新时间：2026-09-03
-基线：`origin/main@57c4c42a89e7730545b726b29fd932c5bfb20574`
-执行分支：`codex/frontend-widget-pilot@HEAD`（当前候选由 preflight 实时解析；未合并；Stage D 收口回滚点 `89e6509`，阶段 G 路由回滚点 `f0ab815`）
+基线：`origin/main`（执行时实时核验；本次授权发布证据为 `81812031dbbd904e7cc9aefa6ce1606401572c61`）
+执行分支：`codex/frontend-widget-pilot@HEAD`（候选已合并并部署；Stage D 收口回滚点 `89e6509`，阶段 G 路由回滚点 `f0ab815`）
 状态：路线图进入非 AI、非生产收尾大目标的最终门禁阶段；阶段 B/D 状态投影与 manager/deferred/today-task 一致性复核已由 `b25ad55` 锁定，Stage C raw/递归字段契约由 `e10793c` 闭合，阶段 D 的业务闭环、阶段 E 的 widget/浏览器验收、阶段 G 的兼容入口和路由装配均已完成。后续仅维护冻结边界、重跑门禁和记录新风险；资料聚合、迁移复核、密码、入库/评价及 AI 路由仍按审计原位，权限配置矩阵与事务预览/审核工作区仍为专用组件，AI 专用列表继续弃用冻结。
 
-> **上线前准备目标（2026-09-03）**：形成可审计、可复现、可回滚的 release candidate，但不执行正式上线。清单、preflight、非 AI 验收矩阵和只读数据保护 runbook 见 [`docs/release/2026-09-03-release-preparation.md`](../release/2026-09-03-release-preparation.md)。依赖修复候选已在 Express 4 上验证 audit=0；当前仍因候选尚未发布到 `origin/main` 维持 NO-GO。
+> **上线前准备目标（2026-09-03）**：形成可审计、可复现、可回滚的 release candidate 并完成授权发布。清单、preflight、非 AI 验收矩阵和数据保护 runbook 及执行证据见 [`docs/release/2026-09-03-release-preparation.md`](../release/2026-09-03-release-preparation.md)。Express 4 受控依赖修复已随 `8181203` 部署，audit=0。
 
 ## 当前进度快照
 
-> 上线前准备当前下一步：Express 4 transitive overrides 已完成兼容性、回归和 audit=0 验证；审阅后让候选进入 `origin/main`，再重跑完整 preflight。生产 UAT、备份/schema dry-run、部署与回滚另立授权目标。
+> 上线前准备已收尾：Express 4 transitive overrides 完成兼容性、回归和 audit=0 验证；候选已进入 `origin/main`，完整 preflight 为 GO，生产健康/备份副本/schema dry-run/回滚夹具均已核验。后续仅对新的 schema、迁移或高耦合拆分另立授权目标。
 
 | 阶段 | 状态 | 已有证据 | 尚未完成 |
 |---|---|---|---|

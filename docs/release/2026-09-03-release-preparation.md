@@ -1,11 +1,11 @@
 # 上线前准备包（非 AI、非生产）
 
 更新时间：2026-09-03
-状态：**NO-GO（候选尚未进入远端；依赖修复仅在本地候选，尚未集成）**
+状态：**GO（授权发布已完成；生产门禁通过）**
 
 本文件是上线前准备的发布清单、验收矩阵、只读数据保护流程和决策记录。
-它只描述如何形成可审计、可复现、可回滚的 release candidate；本次没有 push、merge、UAT、
-部署或生产写入。
+它记录如何形成可审计、可复现、可回滚的 release candidate，以及本次获得授权后的发布结果。
+本次未执行数据库迁移或 AI 操作；生产部署仅由既有自动发布链完成。
 
 ## 1. 双基线与候选身份
 
@@ -13,9 +13,9 @@
 
 | 项目 | 读取位置 | 2026-09-03 核验值 |
 |---|---|---|
-| 远端基线 | `repo/` 的 `origin/main` | `57c4c42a89e7730545b726b29fd932c5bfb20574` |
-| 生产 release | `tradepulse-production/current/.release-sha` | `57c4c42a89e7730545b726b29fd932c5bfb20574` |
-| 生产成功状态 | `tradepulse-production/state/state.json:lastSuccessfulSha` | `57c4c42a89e7730545b726b29fd932c5bfb20574` |
+| 远端基线 | `repo/` 的 `origin/main` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
+| 生产 release | `tradepulse-production/current/.release-sha` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
+| 生产成功状态 | `tradepulse-production/state/state.json:lastSuccessfulSha` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
 | 本地候选 | `after/` 的 `git rev-parse HEAD` | 运行 preflight 时实时读取，不手填 |
 
 候选 SHA 不在文档中硬编码：文档提交会改变 Git SHA，最终候选必须由同一工作树的 preflight
@@ -33,9 +33,8 @@ npm run release:preflight -- \
 `release-preflight.sh` 只读 `repo/` 的远端引用和生产的两个 SHA 文件；它不会调用部署脚本、
 服务重启命令、合并/推送命令，也不会打开生产数据库。
 
-远端集成可行性已做只读验证：`git fetch origin main --prune` 后远端仍为
-`57c4c42a89e7730545b726b29fd932c5bfb20574`，当前候选是其 fast-forward 后代；
-`git push --dry-run origin HEAD:main` 成功，实际 push/merge 仍需发布负责人明确授权。
+远端集成已按授权完成：`origin/main` 从 `57c4c42a89e7730545b726b29fd932c5bfb20574`
+fast-forward 到候选 `81812031dbbd904e7cc9aefa6ce1606401572c61`。
 
 ## 2. 发布清单（manifest）
 
@@ -54,7 +53,7 @@ npm run release:preflight -- \
 | rollbackRef | 候选前一份可启动 release 的 SHA、`current`/`previous` 链接和数据库备份 provenance |
 
 当前实现候选的变更面仍只在 `after/`；没有数据库迁移提交，也没有生产配置写入。依赖修复已在
-隔离副本和当前候选中完成，但尚未进入远端或生产，因此不改变发布结论。
+隔离副本、远端候选和生产 release 中完成。
 
 当前处置基线（每次发布前需重新核验）：
 
@@ -63,12 +62,12 @@ npm run release:preflight -- \
   `express@4.22.2 -> body-parser@1.20.6 -> qs@6.16.0` 通过受控 overrides 固定。
 - `body-parser` 已由 `1.20.5` 更新到 `1.20.6`；Express 主版本保持 `4.22.2`，避免改变冻结 AI
   路由的 `req.query` 语义。
-- 隔离副本证据：Express 4 + overrides 的 `npm audit` 为 0，core `1788/1788`、repository
+- 隔离副本证据：Express 4 + overrides 的 `npm audit` 为 0，串行 core `1791/1791`、repository
   `2150/2150`、路由/分页专项 `11/11`。Express 5.2.1 虽能改善依赖链，但 repository 为 `2149/2150`，
   `issue205_pagination_backend` 的 AI task center pageSize 从预期 50 变为 20；AI 面冻结，故明确拒绝。
 
-因此不执行无审查的 `npm audit fix` 或 Express 5 升级。当前依赖风险的发布阻断已解除，但该 lockfile
-修复仍需候选审阅、进入远端并在发布前重新跑 preflight；在此之前仍为 NO-GO。
+因此不执行无审查的 `npm audit fix` 或 Express 5 升级。Express 4 受控 overrides 已随候选发布，
+生产 `npm audit --omit=dev` 为 0。
 
 ## 3. 可重复 preflight 门禁
 
@@ -96,7 +95,7 @@ npm run release:preflight -- \
 | 状态与流程 | stage、lifecycle、assignment、owner、next action、manager intervention/deferred plan/today task 投影一致；写入经 gateway | Stage B/D `83/83` 组合证据与 `npm test` |
 | 旧入口兼容 | canonical `/`、`/legacy`、`/tradelead-v2.html`、`development-workbench` 的开关、权限、错误码和 iframe/widget 边界保持 | 阶段 G 路由矩阵、Phase E 双角色浏览器验收 |
 | 高耦合边界 | 资料聚合、迁移复核、密码、入库/评价及事务 preview/review 不做机械白名单迁移 | service/API contract；若变更需另立切片 |
-| AI 与生产隔离 | AI runtime/UI/触发点无改动；生产目录只读；本目标不执行 UAT、部署、push/merge | `check:ai-boundary`、敏感路径门禁、双基线核验 |
+| AI 与生产隔离 | AI runtime/UI/触发点无改动；生产写入仅限既有发布器的 release/backup/state 操作；数据库迁移与 AI 仍冻结 | `check:ai-boundary`、敏感路径门禁、双基线核验 |
 
 ## 5. 生产只读数据保护与回滚 runbook
 
@@ -117,15 +116,32 @@ npm run release:preflight -- \
 5. **证据归档**：保存候选 SHA、preflight、backup manifest、dry-run、健康检查和回滚结果；只有
    全部证据齐全且没有 blocker，才允许另行评审 GO。
 
-## 6. GO/NO-GO 决策
+## 6. 本次授权执行结果
 
-当前结论：**NO-GO**。
+- 推送：`git push origin HEAD:main` 成功（`57c4c42 -> 8181203`）。
+- 发布：既有 `com.russia-crm.auto-deploy` 通过候选验证后完成切换；`current` 指向
+  `releases/81812031dbbd`，`previous` 保留 `releases/57c4c42a89e7`。
+- Preflight：19 pass、0 warning、0 blocker，`RESULT: GO`；core 与 repository 全量测试分别为
+  `1791/1791`、`2150/2150`，候选和生产 `npm audit --omit=dev` 均为 0。
+- 发布后健康：本地和公网 `/healthz` 均返回 `ok=true`、`database=ok`、release SHA 匹配；
+  `verify-release-gate.sh` 通过。
+- 数据保护：备份为
+  `/Users/ylf/Desktop/projects/tradepulse-production/state/backups/crm-before-81812031dbbd-20260903T124314Z-62139.db`，
+  SHA-256 `276fd1664c6c47192b101cb4727bfb4e9cd5731e94b70d8ed6256bf404bd9030`，47,173,632 bytes；
+  immutable snapshot 的 `quick_check`、`integrity_check` 为 `ok`，`foreign_key_check` 无记录，且无残留
+  `-wal/-shm` sidecar。
+- Schema/迁移：在备份副本隔离 runtime 执行默认 dry-run，`legacyFollowups=0`、`migratable=0`、
+  `needsReview=0`；未对生产数据库执行迁移。
+- 回滚：隔离部署夹具的 validation-failure、previous pointer 恢复和 post-switch health rollback
+  三项测试均通过（3/3）；生产 `previous` 链接和备份 provenance 均可用，未为演练制造生产停机。
+- 非 AI UAT 冒烟：公网 `/`=200 且包含 `TradePulse`/`widget-registry`，未认证 bootstrap/profile 返回
+  `401 AUTH_REQUIRED`，legacy 入口在关闭开关下返回 404；未使用或改变 AI 功能。
 
-- 功能和治理证据已具备：当前 after `npm test` `1788/1788`、`node --test` `2150/2150`、Stage B/D `83/83`、
+## 7. GO/NO-GO 决策
+
+当前结论：**GO（本次授权发布）**。
+
+- 功能和治理证据已具备：当前 after 串行发布验证 `npm test -- --test-concurrency=1` `1791/1791`、`node --test` `2150/2150`、Stage B/D `83/83`、
   raw shape `16/16`、治理权威、AI 边界和浏览器验收均通过。
-- 发布现在只被一项硬条件阻断：本地候选尚未进入 `origin/main`；当前候选 audit 已为 0，但生产仍运行旧基线。
-- 需要用户/发布负责人明确授权的动作：审阅并接受 lockfile overrides、push/merge、生产备份、维护窗口、UAT、
-  部署和回滚执行。它们不属于本目标的自动动作。
-
-下一个可执行动作不是直接上线，而是审阅依赖修复后将候选集成到 `origin/main`，重新生成 GO preflight；
-随后才可在单独授权下进入生产 UAT、备份、部署和回滚演练。
+- 远端、生产 current 和成功状态三份 SHA 已一致；依赖风险已解除，生产健康和数据库门禁均通过。
+- 后续若有数据库迁移、schema 变更或高耦合 composite 拆分，仍须另立授权目标；AI runtime/UI/触发点继续冻结。

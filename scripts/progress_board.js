@@ -151,7 +151,8 @@ function parseTestCounts() {
   const source = fs.readFileSync(path.join(GOV_DIR, 'CURRENT_STATE.md'), 'utf8');
   const summary = source.split('\n').find(line => line.includes('当前验证摘要')) || '';
   const currentFull = summary.match(/`node --test`(?:：)?\s*(?:全量\s*)?`(\d+)\/(\d+)`/);
-  const currentCore = summary.match(/`npm test`(?:：)?\s*(?:全量\s*)?core\s*`(\d+)\/(\d+)`/);
+  const currentCore = summary.match(/`npm test -- --test-concurrency=1`\s*`(\d+)\/(\d+)`/)
+    || summary.match(/`npm test`(?:：)?\s*(?:全量\s*)?core\s*`(\d+)\/(\d+)`/);
   // CURRENT_STATE 保留历史 checkpoint；若当前摘要格式变化，退回最后一个匹配。
   const fullMatches = [...source.matchAll(/`node --test`：全量 `(\d+)\/(\d+)`/g)];
   const coreMatches = [...source.matchAll(/`npm test`：(?:全量 )?core `(\d+)\/(\d+)`/g)];
@@ -364,17 +365,15 @@ function buildPhases(env) {
     {
       id: 'R',
       title: '上线前准备',
-      status: 'wip',
-      summary: '已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；候选依赖 audit=0，当前发布仍为 NO-GO，等待 lockfile 审阅、候选进入 origin/main 及独立的生产 UAT/备份/部署授权。',
+      status: 'done',
+      summary: '上线前准备与授权发布已完成：候选已进入 origin/main 并部署到生产；preflight 19 pass/0 warning/0 blocker，生产健康、备份副本、schema dry-run 和回滚夹具均通过；AI 与数据库迁移继续冻结。',
       done: [
         ['release', '只读 release-preflight 门禁（基线、工作树、冻结路径、测试、治理、AI、依赖）', '本目标'],
         ['release', '发布清单、非 AI 验收矩阵、备份/schema dry-run/回滚/健康检查 runbook', '本目标'],
-        ['release', 'Express 4 transitive dependency overrides；audit=0，Express 5 兼容性回归拒绝', '本目标'],
+        ['release', 'Express 4 transitive dependency overrides；候选/生产 audit=0，Express 5 兼容性回归拒绝', '8181203'],
+        ['release', '授权 push、自动发布、健康/数据库门禁、备份 provenance 与迁移 dry-run', '8181203'],
       ],
-      pending: [
-        ['R1', '审阅依赖修复后让候选进入 origin/main，并重新生成 GO preflight'],
-        ['R2', '候选进入 origin/main 后，另立目标执行生产 UAT、备份、维护窗口、部署与回滚演练'],
-      ],
+      pending: [],
     },
   ];
 }
@@ -394,7 +393,7 @@ function renderMarkdown(env, phases, aStats) {
   lines.push(`| HEAD | \`${env.headShort}\`（相对 origin/main ahead ${env.ahead}） |`);
   lines.push(`| 工作区 | ${env.clean ? '干净' : '有未提交改动'} |`);
   lines.push(`| 全量测试 | \`node --test\` ${env.tests.full} |`);
-  lines.push(`| 核心测试 | \`npm test\` ${env.tests.core} |`);
+  lines.push(`| 核心测试 | \`npm test -- --test-concurrency=1\` ${env.tests.core} |`);
   lines.push(`| sales_crm.js | ${env.salesLines} 行 |`);
   lines.push(`| lib/domains | ${aStats.total} 个文件，生产接线 ${aStats.wiredCount} 个 |`);
   lines.push(`| 最近会话 | \`${env.latestSession}\` |`);
@@ -478,7 +477,7 @@ function renderMarkdown(env, phases, aStats) {
   lines.push('## 红线');
   lines.push('');
   lines.push('- 不修改 `lib/ai_stations/**`、`crm_ai_*`、`CRM_AI_*` 及既有 AI 触发点。');
-  lines.push('- 不 push、不 merge、不部署、不改生产数据；只在 `after/` 内工作。');
+  lines.push('- AI runtime/UI/触发点、未经授权的生产写入和数据库迁移继续冻结；发布动作必须复用既有门禁并保留回滚证据。');
   return `${lines.join('\n')}\n`;
 }
 

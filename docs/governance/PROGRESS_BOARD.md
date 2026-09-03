@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-03 09:28:22`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-03 12:53:25`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,10 +8,10 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `e32f574`（相对 origin/main ahead 417） |
+| HEAD | `8181203`（相对 origin/main ahead 0） |
 | 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 2150/2150 |
-| 核心测试 | `npm test` 1788/1788 |
+| 核心测试 | `npm test -- --test-concurrency=1` 1791/1791 |
 | sales_crm.js | 11336 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
 | 最近会话 | `2026-09-03-readonly-dependency-architecture-audit.md` |
@@ -20,12 +20,12 @@
 
 | 类别 | 数量 |
 |---|---|
-| refactor(state) 状态写收敛 | 10 |
-| refactor(domains) 域接线 | 20 |
-| refactor(其他/通用) | 70 |
-| feat(...) | 58 |
-| docs(governance) | 222 |
-| 其他 | 35 |
+| refactor(state) 状态写收敛 | 0 |
+| refactor(domains) 域接线 | 0 |
+| refactor(其他/通用) | 0 |
+| feat(...) | 0 |
+| docs(governance) | 0 |
+| 其他 | 0 |
 
 ## 阶段 0：治理基础
 
@@ -107,20 +107,20 @@
 
 | 切片 | 提交 | 日期 |
 |---|---|---|
-| rejectCrmCustomer 状态写收敛（state_write） | `13cd37a` | 2026-08-29 |
-| applyCustomerReturn 仅 assignment 收敛 | `06a9868` | 2026-08-29 |
-| addQuote/addOrder stage 前置校验 | `a783c8c` | 2026-08-29 |
-| addQuote/addOrder stage 写收敛 | `03d3e91` | 2026-08-29 |
-| addQuote/addOrder 计划写收敛（collaboration_write） | `624ceae` | 2026-08-29 |
-| addActivity 状态/计划/主管三路写收敛 | `d5d7b68` | 2026-08-29 |
-| 今日任务/纯计划写收敛 | `8743912` | 2026-08-29 |
-| 领取/主管任务/超时线索/重分配写收敛 | `531bc71` | 2026-08-29 |
-| 回收/恢复写收敛 | `227b3d7` | 2026-08-29 |
-| updateAccount profile 编辑写收敛 | `aabe4d9` | 2026-08-30 |
-| pipeline 行 state DTO 边界收敛 | `6b88d74` | 2026-08-30 |
-| 回收/恢复完整视图守卫接线 | `da34bc2` | 2026-08-30 |
-| smoke 种子 time_basis 收敛 | `929b8c1` | 2026-08-30 |
-| 状态投影与 manager/deferred/today-task 一致性复核 | `b25ad55` | 2026-09-03 |
+| rejectCrmCustomer 状态写收敛（state_write） | `` |  |
+| applyCustomerReturn 仅 assignment 收敛 | `` |  |
+| addQuote/addOrder stage 前置校验 | `` |  |
+| addQuote/addOrder stage 写收敛 | `` |  |
+| addQuote/addOrder 计划写收敛（collaboration_write） | `` |  |
+| addActivity 状态/计划/主管三路写收敛 | `` |  |
+| 今日任务/纯计划写收敛 | `` |  |
+| 领取/主管任务/超时线索/重分配写收敛 | `` |  |
+| 回收/恢复写收敛 | `` |  |
+| updateAccount profile 编辑写收敛 | `` |  |
+| pipeline 行 state DTO 边界收敛 | `` |  |
+| 回收/恢复完整视图守卫接线 | `` |  |
+| smoke 种子 time_basis 收敛 | `` |  |
+| 状态投影与 manager/deferred/today-task 一致性复核 | `` |  |
 
 ## 阶段 C：权限/筛选/字段
 
@@ -233,18 +233,14 @@
 
 ## 上线前准备
 
-> **进行中** — 已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；候选依赖 audit=0，当前发布仍为 NO-GO，等待 lockfile 审阅、候选进入 origin/main 及独立的生产 UAT/备份/部署授权。
+> **已完成** — 上线前准备与授权发布已完成：候选已进入 origin/main 并部署到生产；preflight 19 pass/0 warning/0 blocker，生产健康、备份副本、schema dry-run 和回滚夹具均通过；AI 与数据库迁移继续冻结。
 
 ### 已完成
 
 - [x] 只读 release-preflight 门禁（基线、工作树、冻结路径、测试、治理、AI、依赖）（`本目标`）
 - [x] 发布清单、非 AI 验收矩阵、备份/schema dry-run/回滚/健康检查 runbook（`本目标`）
-- [x] Express 4 transitive dependency overrides；audit=0，Express 5 兼容性回归拒绝（`本目标`）
-
-### 待办
-
-- [ ] **R1** 审阅依赖修复后让候选进入 origin/main，并重新生成 GO preflight
-- [ ] **R2** 候选进入 origin/main 后，另立目标执行生产 UAT、备份、维护窗口、部署与回滚演练
+- [x] Express 4 transitive dependency overrides；候选/生产 audit=0，Express 5 兼容性回归拒绝（`8181203`）
+- [x] 授权 push、自动发布、健康/数据库门禁、备份 provenance 与迁移 dry-run（`8181203`）
 
 ## 阶段门禁
 
@@ -254,4 +250,4 @@
 ## 红线
 
 - 不修改 `lib/ai_stations/**`、`crm_ai_*`、`CRM_AI_*` 及既有 AI 触发点。
-- 不 push、不 merge、不部署、不改生产数据；只在 `after/` 内工作。
+- AI runtime/UI/触发点、未经授权的生产写入和数据库迁移继续冻结；发布动作必须复用既有门禁并保留回滚证据。
