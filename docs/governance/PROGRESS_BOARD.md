@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-03 06:55:07`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-03 08:32:49`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,7 +8,7 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `75e7fc3`（相对 origin/main ahead 404） |
+| HEAD | `36b5cca`（相对 origin/main ahead 405） |
 | 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 2148/2148 |
 | 核心测试 | `npm test` 1786/1786 |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 70 |
 | feat(...) | 57 |
-| docs(governance) | 214 |
+| docs(governance) | 215 |
 | 其他 | 33 |
 
 ## 阶段 0：治理基础
@@ -230,6 +230,20 @@
 - [x] 读取/列表、主管、活动、受保护客户路由注册器接线（`fc5bfcd…4be94c3`）
 - [x] bootstrap、业务写入与后台管理/维护/筛选路由注册器接线（`077617b…f0ab815`）
 - [x] 高耦合资料聚合、迁移复核、密码、入库/评价与 AI 路由保留原位并记录边界（`审计结论`）
+
+## 上线前准备
+
+> **进行中** — 已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；当前发布仍为 NO-GO，等待候选进入 origin/main、依赖风险决策及独立的生产 UAT/备份/部署授权。
+
+### 已完成
+
+- [x] 只读 release-preflight 门禁（基线、工作树、冻结路径、测试、治理、AI、依赖）（`本目标`）
+- [x] 发布清单、非 AI 验收矩阵、备份/schema dry-run/回滚/健康检查 runbook（`本目标`）
+
+### 待办
+
+- [ ] **R1** 依赖 high/moderate 风险完成修复或明确风险接受，并重新生成 GO preflight
+- [ ] **R2** 候选进入 origin/main 后，另立目标执行生产 UAT、备份、维护窗口、部署与回滚演练
 
 ## 阶段门禁
 

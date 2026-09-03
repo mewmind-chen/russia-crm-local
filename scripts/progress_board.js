@@ -361,6 +361,20 @@ function buildPhases(env) {
       ],
       pending: [],
     },
+    {
+      id: 'R',
+      title: '上线前准备',
+      status: 'wip',
+      summary: '已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；当前发布仍为 NO-GO，等待候选进入 origin/main、依赖风险决策及独立的生产 UAT/备份/部署授权。',
+      done: [
+        ['release', '只读 release-preflight 门禁（基线、工作树、冻结路径、测试、治理、AI、依赖）', '本目标'],
+        ['release', '发布清单、非 AI 验收矩阵、备份/schema dry-run/回滚/健康检查 runbook', '本目标'],
+      ],
+      pending: [
+        ['R1', '依赖 high/moderate 风险完成修复或明确风险接受，并重新生成 GO preflight'],
+        ['R2', '候选进入 origin/main 后，另立目标执行生产 UAT、备份、维护窗口、部署与回滚演练'],
+      ],
+    },
   ];
 }
 

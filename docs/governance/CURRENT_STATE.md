@@ -5,6 +5,18 @@
 
 > 本文档是重构进度的滚动真源。远端基线以 `git fetch origin --prune` 后的 `origin/main` 为准；重构实现状态以 `after/` 的 Git、工作区和测试结果为准。
 
+## 上线前准备大目标（2026-09-03）
+
+当前工作已进入上线前准备，而不是上线执行：`scripts/release-preflight.sh` 与
+`npm run release:preflight` 已建立可重复的只读候选门禁，发布清单、非 AI 验收矩阵及备份/schema
+dry-run/回滚/健康检查 runbook 见 [`docs/release/2026-09-03-release-preparation.md`](../release/2026-09-03-release-preparation.md)。
+门禁会核验 `after` 候选、`repo/origin/main`、生产 `current/.release-sha` 和
+`state.json.lastSuccessfulSha`，并阻止 AI/生产数据/secret 路径变更。
+
+当前发布结论保持 **NO-GO**：功能与治理测试已有绿灯，但本地候选尚未进入远端 `origin/main`，且
+`npm audit --omit=dev` 仍报告 1 high、3 moderate；本目标不执行依赖升级、push/merge、UAT、部署或
+生产写入。生产目录仍只读，AI runtime/UI/触发点继续冻结。
+
 ## 1. 当前工作区
 
 | 角色 | 绝对路径 | Git 状态 | 用途 |

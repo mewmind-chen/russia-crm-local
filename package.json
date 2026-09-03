@@ -8,6 +8,7 @@
     "phase:e:browser-preview": "node scripts/phase-e-browser-preview.js --run",
     "check:ai-boundary": "node scripts/check-ai-boundary.js",
     "check:governance-authority": "node scripts/check-governance-authority.js",
+    "release:preflight": "bash scripts/release-preflight.sh",
     "board": "node scripts/progress_board.js",
     "board:watch": "node scripts/progress_board.js --watch",
     "start": "node server.js",

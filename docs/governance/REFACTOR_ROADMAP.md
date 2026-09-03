@@ -5,6 +5,8 @@
 执行分支：`codex/frontend-widget-pilot@e7280ed`（未合并；Stage D 收口回滚点 `89e6509`，阶段 G 路由回滚点 `f0ab815`）
 状态：路线图进入非 AI、非生产收尾大目标的最终门禁阶段；阶段 B/D 状态投影与 manager/deferred/today-task 一致性复核已由 `b25ad55` 锁定，Stage C raw/递归字段契约由 `e10793c` 闭合，阶段 D 的业务闭环、阶段 E 的 widget/浏览器验收、阶段 G 的兼容入口和路由装配均已完成。后续仅维护冻结边界、重跑门禁和记录新风险；资料聚合、迁移复核、密码、入库/评价及 AI 路由仍按审计原位，权限配置矩阵与事务预览/审核工作区仍为专用组件，AI 专用列表继续弃用冻结。
 
+> **上线前准备目标（2026-09-03）**：形成可审计、可复现、可回滚的 release candidate，但不执行正式上线。清单、preflight、非 AI 验收矩阵和只读数据保护 runbook 见 [`docs/release/2026-09-03-release-preparation.md`](../release/2026-09-03-release-preparation.md)。当前候选因尚未发布到 `origin/main` 及 `npm audit` 的 1 high/3 moderate 维持 NO-GO。
+
 ## 当前进度快照
 
 | 阶段 | 状态 | 已有证据 | 尚未完成 |
