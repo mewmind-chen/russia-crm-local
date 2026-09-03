@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 中心 clone | `/Users/ylf/Desktop/projects/tradepulse-refactor/repo` | `main@57c4c42`，跟踪 `origin/main`，干净 | fetch、分支和 worktree 管理 |
 | 重构前 | `/Users/ylf/Desktop/projects/tradepulse-refactor/before` | `baseline/pre-refactor@57c4c42`，干净 | 只读前后对照 |
-| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@HEAD`，阶段 G 路由装配与高耦合边界审计均已提交；Stage C S7 剩余递归脱敏调用点审计契约为 `a57c44f`；S4/P4 回收资料与共享完整资料逐形状契约为 `09665b5`，治理会话为 `8c1198b`；S6/P2 Bootstrap/masterProfile 共享叶子契约为 `3022dae`；S4/P4 masterProfile/people/recon 逐形状契约与 profile 路由后处理修复为 `343f166`；account/commerce/timeline 动态对象、数组和 JSON 文本递归边界为 `e030900`；raw recon/people/prospect/templates 形状契约与 template 显式 builder 为 `e10793c`；Stage B/D 状态投影、经理介入/延期计划/今日待办一致性契约为 `b25ad55`，会话记录为 `2026-09-03-stage-b-d-consistency.md`；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
+| 重构后/开发中 | `/Users/ylf/Desktop/projects/tradepulse-refactor/after` | `codex/frontend-widget-pilot@HEAD`，阶段 G 路由装配与高耦合边界审计均已提交；Stage C S7 剩余递归脱敏调用点审计契约为 `a57c44f`；S4/P4 回收资料与共享完整资料逐形状契约为 `09665b5`，治理会话为 `8c1198b`；S6/P2 Bootstrap/masterProfile 共享叶子契约为 `3022dae`；S4/P4 masterProfile/people/recon 逐形状契约与 profile 路由后处理修复为 `343f166`；account/commerce/timeline 动态对象、数组和 JSON 文本递归边界为 `e030900`；raw recon/people/prospect/templates 形状契约与 template 显式 builder 为 `e10793c`；Stage B/D 状态投影、经理介入/延期计划/今日待办一致性契约为 `b25ad55`，治理会话为 `2026-09-03-stage-b-d-consistency.md`；依赖/架构只读审计与 R-016 校准记录为 `2026-09-03-readonly-dependency-architecture-audit.md`；工作区仅保留未跟踪 `.impeccable/` 工具目录 | 当前唯一重构开发入口 |
 
 - 远程：`https://github.com/mewmind-chen/russia-crm-local.git`
 - 当前 `origin/main`：`57c4c42a89e7730545b726b29fd932c5bfb20574`
@@ -21,7 +21,7 @@
 - 已提交的 Phase E browser acceptance（`583f314`）与本次隔离预览回归共同作为证据：客户全景 83 个授权列、线索池 47 个当前角色可见列，列设置分组/搜索/预设可用；customerProfile 挂载 9 个非 AI widget、五个页签可切换且默认不加载 legacy iframe。AI runtime、`lib/ai_stations/**`、`crm_ai_*` 和 `CRM_AI_*` 保持冻结；生产只读。
 - 旧目录 `/Users/ylf/Desktop/projects/tradepulse-development` 只保留为迁移来源，不再作为当前权威路径。
 - 用户新增目标（2026-09-01）：所有业务列表页统一支持按用户配置列显隐、列顺序、升降序/多级排序和布局偏好；配置只能在服务端授权字段范围内生效，不引入智能内容或推荐功能。本轮已完成通用协议、Dashboard 国家快照、Markets 国家矩阵/分配批次/细分报表、manager_tasks、manager_risks、manager_metrics、Team 进度/协作、customers、Research People、Research Recon、不对口记录、Pipeline、Intake/lead_flow 及入库批次、Alerts/今日待办、通知中心、Insights 人工评价列表、受保护客户目录、维护运行记录、跟进更正历史、审计只读列表、用户/归档用户/权限组/迁移复核列表迁移。权限配置矩阵与事务预览/审核工作区保留专用组件边界；AI 功能全部弃用冻结，不新增、不恢复、不迁移 AI 行为。
-- 收尾大目标的治理证据：`e10793c` 补齐 raw recon/people/prospect/templates 的未知列、源头权限、显式 builder 与真实角色契约；`b25ad55` 锁定 Stage B/D 状态投影和 manager/deferred/today-task 一致性；`docs/governance/API_CONTRACTS.md` 已形成非 AI 核心 API 的方法/权限/范围/字段/错误/幂等/兼容矩阵；`RISK_REGISTER.md` 新增 raw shape、API 漂移、双基线和高耦合拆分风险。资料聚合、迁移复核、入库/评价、认证/密码等边界继续按 service contract 原位保留。
+- 收尾大目标的治理证据：`e10793c` 补齐 raw recon/people/prospect/templates 的未知列、源头权限、显式 builder 与真实角色契约；`b25ad55` 锁定 Stage B/D 状态投影和 manager/deferred/today-task 一致性；只读依赖/架构审计已记录 `npm audit --omit=dev` 的 1 high/3 moderate 并决定暂不升级；`docs/governance/API_CONTRACTS.md` 已形成非 AI 核心 API 的方法/权限/范围/字段/错误/幂等/兼容矩阵；`RISK_REGISTER.md` 新增 raw shape、API 漂移、双基线和高耦合拆分风险。资料聚合、迁移复核、入库/评价、认证/密码等边界继续按 service contract 原位保留。
 
 ## 2. 已提交的重构进度
 
