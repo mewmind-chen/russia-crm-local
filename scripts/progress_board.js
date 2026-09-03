@@ -188,6 +188,7 @@ function phaseBSlices(commits) {
     ['drop the state DTO from pipeline rows to match account boundary', 'B11', 'pipeline 行 state DTO 边界收敛'],
     ['assert state contract on merged views in recycle/restore paths', 'B12', '回收/恢复完整视图守卫接线'],
     ['align production smoke fixture with §4.3 plan semantics', 'B13', 'smoke 种子 time_basis 收敛'],
+    ['lock stage b d consistency boundaries', 'B14', '状态投影与 manager/deferred/today-task 一致性复核'],
   ];
   return map.map(([match, id, title]) => {
     const found = commits.find(commit => commit.subject.includes(match));
@@ -238,18 +239,16 @@ function buildPhases(env) {
     {
       id: 'B',
       title: '阶段 B：状态真源',
-      status: 'wip',
-      summary: '§1 写点收敛完成门达成（含 updateAccount profile 编辑 aabe4d9，lib/ 对状态/计划/主管列零裸写）；§4 强化完成（守卫/投影/读路径收敛，含 assertAccountStateContract 接入回收/恢复 da34bc2）；state DTO 边界已收敛（pipeline 行不再附加，6b88d74）；smoke 种子收敛 929b8c1；契约测试 66 断言。',
+      status: 'done',
+      summary: '§1 写点收敛与 §4 守卫/投影/读路径均已完成（含 updateAccount、回收/恢复、pipeline DTO 与 smoke time_basis）；`b25ad55` 进一步锁定前端 raw-field contract、manager/deferred/today-task 边界与共享投影。AI next_action 写点属于冻结红线，不作为待办。',
       sliceTable: 'B',
-      pending: [
-        ['B-P1', 'AI next_action 写点（红线，仅评估）；last_activity_at 归属已明确为活动溯源', '', ''],
-      ],
+      pending: [],
     },
     {
       id: 'C',
       title: '阶段 C：权限/筛选/字段',
-      status: 'wip',
-      summary: 'field catalog、schema 渲染、白名单投影已提交；accounts/intake/通知列表、S3 timeline/auditLog 形状与 legacy customers bootstrap/profile 行均已字段级白名单化；范围解释器等价契约（2ca107b）与代码级统一（f2056e5）、按页面权限→字段→筛选合同（45e0c05）均已落地。P1/P3 loadIntakeState 深层审计与递归脱敏合规修复已完成；S5/P5 export 凭据字段递归边界已由 ccc9bb5 收口；S7 剩余 redactContactFields 调用点已完成矩阵与迁移边界契约，独立列表投影已闭合、AI 红线冻结；S4/P4 回收资料与共享完整资料逐形状风险矩阵、只读/权限/递归契约和复合迁移门禁已由 09665b5 收口；S6/P2 Bootstrap/masterProfile 共享叶子矩阵、权限/递归契约与 recon 漂移门禁已由 3022dae 收口，establishedYear 叶子遗漏已修正；S4/P4 masterProfile/people/recon 来源门、路由后追加字段复裁剪和 recycle_reason 敏感键契约已由 343f166 收口；P1/P3 顶层及 S4/S6 复合白名单迁移仍按嵌套等价风险暂缓。',
+      status: 'done',
+      summary: 'field catalog、schema 渲染、白名单投影、权限→字段→筛选合同与各形状递归脱敏均已闭合；`e10793c` 补齐 raw recon/people/prospect/templates 未知列、源头权限和显式 builder。P1/P3 及 S4/S6 顶层复合白名单迁移按嵌套等价门禁明确冻结，不计为遗漏。',
       done: [
         ['field', '字段目录与 schema 驱动显示（5 提交）', '7a26074…077c88c', ''],
         ['access', 'contact-restricted 白名单投影（access_control 直连）', '9607123…6d7e540', ''],
@@ -269,16 +268,15 @@ function buildPhases(env) {
         ['access', 'S4/P4 recycle profile/master profile 逐形状安全契约与迁移门禁（高耦合复合保留）', '09665b5', ''],
         ['access', 'S6/P2 Bootstrap/masterProfile 共享叶子逐形状契约与复合迁移门禁（establishedYear 修正；recon 漂移保留递归）', '3022dae', ''],
         ['access', 'S4/P4 masterProfile/people/recon 逐形状权限/递归契约与 profile 路由后处理复裁剪（recycle_reason 收口；复合迁移仍门控）', '343f166', ''],
+        ['access', 'raw recon/people/prospect/templates 未知列、源头权限、自由文本与显式 builder 形状契约（复合迁移保持冻结）', 'e10793c', ''],
       ],
-      pending: [
-        ['access', 'P1/P3 顶层白名单迁移暂缓（需独立逐形状等价评审）', '', ''],
-      ],
+      pending: [],
     },
     {
       id: 'D',
       title: '阶段 D：线索/任务/商业闭环',
       status: 'done',
-      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环与非 AI manager intervention / deferred plan 应用服务均已收口，既有权限、幂等、事务、生命周期网关和审计语义保持。',
+      summary: 'intake/assignment/planning/commerce 域模块已抽取并接线；RFQ→quote→order 商业闭环与非 AI manager intervention / deferred plan 应用服务均已收口，`b25ad55` 验证状态投影、经理介入/延期计划/今日待办边界一致，既有权限、幂等、事务、生命周期网关和审计语义保持。',
       done: [
         ['intake', 'intake/assignment/decision/query/owner 域模块接线恢复', '48ba93c…8a0ee7d', ''],
         ['planning', 'planning/alerts/risk/streak/today_task 域模块接线恢复', '7328b51…5c23b32', ''],
@@ -430,12 +428,14 @@ function renderMarkdown(env, phases, aStats) {
         lines.push(`| ${slice.title} | \`${slice.commit}\` | ${slice.date} |`);
       }
       lines.push('');
-      lines.push('### 待办');
-      lines.push('');
-      for (const [id, title, _commit] of phase.pending) {
-        lines.push(`- [ ] **${id}** ${title}`);
+      if (phase.pending.length) {
+        lines.push('### 待办');
+        lines.push('');
+        for (const [id, title, _commit] of phase.pending) {
+          lines.push(`- [ ] **${id}** ${title}`);
+        }
+        lines.push('');
       }
-      lines.push('');
       continue;
     }
     if (phase.done.length) {
@@ -493,11 +493,15 @@ function renderHtml(env, phases, aStats) {
       for (const slice of env.phaseB) {
         body += `<div class="row"><span class="ok">[x]</span><span class="title">${esc(slice.title)}</span><span class="commit">${esc(slice.commit)}</span></div>`;
       }
-      body += '</div><div class="pending">';
-      for (const [id, title] of phase.pending) {
-        body += `<div class="row"><span class="no">[ ]</span><span class="title"><b>${esc(id)}</b> ${esc(title)}</span></div>`;
+      if (phase.pending.length) {
+        body += '</div><div class="pending">';
+        for (const [id, title] of phase.pending) {
+          body += `<div class="row"><span class="no">[ ]</span><span class="title"><b>${esc(id)}</b> ${esc(title)}</span></div>`;
+        }
+        body += '</div>';
+      } else {
+        body += '</div>';
       }
-      body += '</div>';
     }
     if (phase.done && phase.done.length) {
       body += '<div class="done-list">';
