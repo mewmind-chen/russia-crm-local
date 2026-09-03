@@ -33,6 +33,10 @@ npm run release:preflight -- \
 `release-preflight.sh` 只读 `repo/` 的远端引用和生产的两个 SHA 文件；它不会调用部署脚本、
 服务重启命令、合并/推送命令，也不会打开生产数据库。
 
+远端集成可行性已做只读验证：`git fetch origin main --prune` 后远端仍为
+`57c4c42a89e7730545b726b29fd932c5bfb20574`，当前候选是其 fast-forward 后代；
+`git push --dry-run origin HEAD:main` 成功，实际 push/merge 仍需发布负责人明确授权。
+
 ## 2. 发布清单（manifest）
 
 候选报告必须包含以下字段，缺一不可：
