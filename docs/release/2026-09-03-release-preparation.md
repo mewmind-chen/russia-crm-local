@@ -26,7 +26,8 @@ cd /Users/ylf/Desktop/projects/tradepulse-refactor/after
 CANDIDATE_SHA="$(git rev-parse HEAD)"
 npm run release:preflight -- \
   --candidate-sha "$CANDIDATE_SHA" \
-  --report "/absolute/path/to/release-preflight-${CANDIDATE_SHA}.log"
+  --report "/absolute/path/to/release-preflight-${CANDIDATE_SHA}.log" \
+  --audit-report "/absolute/path/to/npm-audit-${CANDIDATE_SHA}.json"
 ```
 
 `release-preflight.sh` 只读 `repo/` 的远端引用和生产的两个 SHA 文件；它不会调用部署脚本、
@@ -59,10 +60,11 @@ npm run release:preflight -- \
 
 1. 候选 SHA、`origin/main`、生产两个 SHA 和祖先关系；候选未发布到 `origin/main` 时阻断。
 2. `after/` 工作树清洁（预先存在的 `.impeccable/` 工具目录不计入业务变更）。
-3. 相对远端的变更清单，阻止 AI、生产数据、secret 路径，提示 package manifest 变更。
+3. 输出相对远端的完整变更清单，阻止 AI、生产数据、secret 路径，提示 package manifest 变更。
 4. committed/working-tree `git diff --check`、JavaScript `node --check`、治理权威和 AI 边界。
 5. `npm test` 与串行 `node --test` 全量套件；`--skip-tests` 永远只能得到 NO-GO。
-6. `npm audit --omit=dev --json`；high/critical 阻断，moderate 形成警告并要求处置记录。
+6. `npm audit --omit=dev --json`；high/critical 阻断，moderate 形成警告并要求处置记录；用
+   `--audit-report` 将原始 JSON 另存到非生产目录。
 
 报告结尾只有 `RESULT: GO` 或 `RESULT: NO-GO`。NO-GO 报告仍是有效证据，必须保留 blockers，
 不能用“测试通过”覆盖发布阻断。

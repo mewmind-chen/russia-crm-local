@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CENTRAL_REPO="${TRADEPULSE_CENTRAL_REPO:-$ROOT/../repo}"
 PRODUCTION_ROOT="${TRADEPULSE_PRODUCTION_ROOT:-/Users/ylf/Desktop/projects/tradepulse-production}"
 REPORT_PATH=""
+AUDIT_REPORT_PATH=""
 SKIP_TESTS=0
 
 usage() {
@@ -16,6 +17,7 @@ Usage: scripts/release-preflight.sh [options]
 Options:
   --candidate-sha SHA  Require this full SHA to be the current HEAD.
   --report FILE        Also write the result to this absolute file.
+  --audit-report FILE  Also save the raw npm audit JSON to this absolute file.
   --skip-tests         Skip npm test and node --test (never a GO result).
   -h, --help           Show this help.
 
@@ -44,6 +46,11 @@ while (( $# > 0 )); do
       REPORT_PATH="$2"
       shift 2
       ;;
+    --audit-report)
+      (( $# >= 2 )) || fail_usage '--audit-report requires a value'
+      AUDIT_REPORT_PATH="$2"
+      shift 2
+      ;;
     --skip-tests)
       SKIP_TESTS=1
       shift
@@ -60,8 +67,18 @@ done
 
 if [[ -n "$REPORT_PATH" ]]; then
   [[ "$REPORT_PATH" == /* ]] || fail_usage '--report must be absolute'
+  case "$REPORT_PATH" in
+    "$PRODUCTION_ROOT"|"$PRODUCTION_ROOT"/*) fail_usage '--report must not target the production root' ;;
+  esac
   mkdir -p "$(dirname "$REPORT_PATH")" || exit 1
   exec > >(tee "$REPORT_PATH") 2>&1
+fi
+if [[ -n "$AUDIT_REPORT_PATH" ]]; then
+  [[ "$AUDIT_REPORT_PATH" == /* ]] || fail_usage '--audit-report must be absolute'
+  case "$AUDIT_REPORT_PATH" in
+    "$PRODUCTION_ROOT"|"$PRODUCTION_ROOT"/*) fail_usage '--audit-report must not target the production root' ;;
+  esac
+  mkdir -p "$(dirname "$AUDIT_REPORT_PATH")" || exit 1
 fi
 
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/tradepulse-release-preflight.XXXXXX")" || exit 1
@@ -166,6 +183,8 @@ fi
 changed_file="$tmp_dir/changed-files.txt"
 if [[ "$remote_sha" =~ $full_sha_re && "$candidate_sha" =~ $full_sha_re ]] && git -C "$ROOT" diff --name-only "$remote_sha...$candidate_sha" > "$changed_file" 2>/dev/null; then
   pass_check 'release candidate change set can be enumerated against remote main'
+  printf 'Changed files (remote main...candidate):\n'
+  sed -n '1,400p' "$changed_file"
 else
   block_check 'release candidate change set cannot be enumerated against remote main'
   : > "$changed_file"
@@ -241,6 +260,13 @@ if npm --prefix "$ROOT" audit --omit=dev --json > "$audit_log" 2>&1; then
   audit_exit=0
 else
   audit_exit=$?
+fi
+if [[ -n "$AUDIT_REPORT_PATH" ]]; then
+  if cp "$audit_log" "$AUDIT_REPORT_PATH"; then
+    pass_check 'raw npm audit JSON was saved outside the production root'
+  else
+    block_check 'raw npm audit JSON could not be saved'
+  fi
 fi
 audit_counts="$(node -e 'const fs=require("fs"); const p=process.argv[1]; try { const j=JSON.parse(fs.readFileSync(p,"utf8")); const v=(j.metadata&&j.metadata.vulnerabilities)||{}; process.stdout.write([v.info||0,v.low||0,v.moderate||0,v.high||0,v.critical||0].join(" ")); } catch (_) {}' "$audit_log" 2>/dev/null || true)"
 if [[ "$audit_counts" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then

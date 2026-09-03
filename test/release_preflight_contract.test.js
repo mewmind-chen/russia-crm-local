@@ -14,6 +14,8 @@ test('release preflight is a read-only, repeatable release-candidate contract', 
   assert.match(source, /origin\/main/);
   assert.match(source, /\.release-sha/);
   assert.match(source, /lastSuccessfulSha/);
+  assert.match(source, /--audit-report/);
+  assert.match(source, /must not target the production root/);
   assert.match(source, /check:governance-authority/);
   assert.match(source, /check:ai-boundary/);
   assert.match(source, /npm --prefix \"\$ROOT\" test/);
@@ -35,5 +37,6 @@ test('release preflight exposes help and passes shell syntax validation', () => 
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /--candidate-sha/);
   assert.match(help.stdout, /--report/);
+  assert.match(help.stdout, /--audit-report/);
   assert.match(help.stdout, /--skip-tests/);
 });
