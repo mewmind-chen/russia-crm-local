@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-03 08:53:50`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-03 09:25:06`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,10 +8,10 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `79b62c9`（相对 origin/main ahead 414） |
+| HEAD | `e5f5fbe`（相对 origin/main ahead 415） |
 | 工作区 | 有未提交改动 |
-| 全量测试 | `node --test` 2148/2148 |
-| 核心测试 | `npm test` 1786/1786 |
+| 全量测试 | `node --test` 2150/2150 |
+| 核心测试 | `npm test` 1788/1788 |
 | sales_crm.js | 11336 行 |
 | lib/domains | 44 个文件，生产接线 41 个 |
 | 最近会话 | `2026-09-03-readonly-dependency-architecture-audit.md` |
@@ -24,7 +24,7 @@
 | refactor(domains) 域接线 | 20 |
 | refactor(其他/通用) | 70 |
 | feat(...) | 58 |
-| docs(governance) | 220 |
+| docs(governance) | 221 |
 | 其他 | 34 |
 
 ## 阶段 0：治理基础
@@ -239,10 +239,11 @@
 
 - [x] 只读 release-preflight 门禁（基线、工作树、冻结路径、测试、治理、AI、依赖）（`本目标`）
 - [x] 发布清单、非 AI 验收矩阵、备份/schema dry-run/回滚/健康检查 runbook（`本目标`）
+- [x] Express 4 transitive dependency overrides；audit=0，Express 5 兼容性回归拒绝（`本目标`）
 
 ### 待办
 
-- [ ] **R1** 依赖 high/moderate 风险完成修复或明确风险接受，并重新生成 GO preflight
+- [ ] **R1** 审阅依赖修复后让候选进入 origin/main，并重新生成 GO preflight
 - [ ] **R2** 候选进入 origin/main 后，另立目标执行生产 UAT、备份、维护窗口、部署与回滚演练
 
 ## 阶段门禁

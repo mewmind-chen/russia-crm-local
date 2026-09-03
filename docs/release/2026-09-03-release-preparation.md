@@ -1,7 +1,7 @@
 # 上线前准备包（非 AI、非生产）
 
 更新时间：2026-09-03
-状态：**NO-GO（候选尚未进入远端，依赖高风险尚未处置）**
+状态：**NO-GO（候选尚未进入远端；依赖修复仅在本地候选，尚未集成）**
 
 本文件是上线前准备的发布清单、验收矩阵、只读数据保护流程和决策记录。
 它只描述如何形成可审计、可复现、可回滚的 release candidate；本次没有 push、merge、UAT、
@@ -49,10 +49,22 @@ npm run release:preflight -- \
 | dependencyAudit | `npm audit --omit=dev --json` 原始报告、处置决定和回归证据 |
 | rollbackRef | 候选前一份可启动 release 的 SHA、`current`/`previous` 链接和数据库备份 provenance |
 
-当前实现候选的变更面仍只在 `after/`；没有数据库迁移提交，也没有生产配置写入。
-依赖风险已知但尚未消除：`fast-uri` 链为 1 high，`qs`/`body-parser`/`express` 链为 3 moderate。
-此前的只读评估决定暂不盲目升级；因此本 manifest 的发布结论必须保持 NO-GO，直到完成兼容回归
-并获得明确风险接受或修复证据。
+当前实现候选的变更面仍只在 `after/`；没有数据库迁移提交，也没有生产配置写入。依赖修复已在
+隔离副本和当前候选中完成，但尚未进入远端或生产，因此不改变发布结论。
+
+当前处置基线（每次发布前需重新核验）：
+
+- `fast-uri` 高风险来自 `ajv@8.20.0` 的间接依赖；锁文件由 `3.1.4` 固定到 `3.1.7`。
+- `qs` 的两个 moderate advisories 覆盖 `>=2.2.5 <6.16.0` 与 `>=6.14.2 <=6.15.3`；
+  `express@4.22.2 -> body-parser@1.20.6 -> qs@6.16.0` 通过受控 overrides 固定。
+- `body-parser` 已由 `1.20.5` 更新到 `1.20.6`；Express 主版本保持 `4.22.2`，避免改变冻结 AI
+  路由的 `req.query` 语义。
+- 隔离副本证据：Express 4 + overrides 的 `npm audit` 为 0，core `1788/1788`、repository
+  `2150/2150`、路由/分页专项 `11/11`。Express 5.2.1 虽能改善依赖链，但 repository 为 `2149/2150`，
+  `issue205_pagination_backend` 的 AI task center pageSize 从预期 50 变为 20；AI 面冻结，故明确拒绝。
+
+因此不执行无审查的 `npm audit fix` 或 Express 5 升级。当前依赖风险的发布阻断已解除，但该 lockfile
+修复仍需候选审阅、进入远端并在发布前重新跑 preflight；在此之前仍为 NO-GO。
 
 ## 3. 可重复 preflight 门禁
 
@@ -105,11 +117,11 @@ npm run release:preflight -- \
 
 当前结论：**NO-GO**。
 
-- 功能和治理证据已具备：此前 `npm test` `1786/1786`、`node --test` `2148/2148`、Stage B/D `83/83`、
+- 功能和治理证据已具备：当前 after `npm test` `1788/1788`、`node --test` `2150/2150`、Stage B/D `83/83`、
   raw shape `16/16`、治理权威、AI 边界和浏览器验收均通过。
-- 发布仍被两项硬条件阻断：本地候选尚未进入 `origin/main`；生产依赖审计仍有 1 high 和 3 moderate。
-- 需要用户/发布负责人明确授权的动作：依赖修复或风险接受、push/merge、生产备份、维护窗口、UAT、
+- 发布现在只被一项硬条件阻断：本地候选尚未进入 `origin/main`；当前候选 audit 已为 0，但生产仍运行旧基线。
+- 需要用户/发布负责人明确授权的动作：审阅并接受 lockfile overrides、push/merge、生产备份、维护窗口、UAT、
   部署和回滚执行。它们不属于本目标的自动动作。
 
-下一个可执行动作不是直接上线，而是在依赖风险决策明确后，重新生成干净工作树的 preflight 报告；
-只有报告为 GO 且候选已审阅，才进入单独的发布执行目标。
+下一个可执行动作不是直接上线，而是审阅依赖修复后将候选集成到 `origin/main`，重新生成 GO preflight；
+随后才可在单独授权下进入生产 UAT、备份、部署和回滚演练。

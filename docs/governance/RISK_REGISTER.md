@@ -19,9 +19,9 @@
 | R-013 | 当前 5 个未提交 WIP 文件撤回部分 domain/白名单接线 | 已提交重构被局部反向内联，责任边界混乱 | 已发生 | 先确认意图并恢复 12 个失败，不新增切片 |
 | R-014 | 分支相对主线 ahead 62 且未集成 | 一次性 review/merge 风险高，可能与后续 main 漂移 | 已确认 | 绿灯后按逻辑切片审计提交和依赖，再制定集成策略 |
 | R-015 | 新根目录尚无独立 runtime | 启动服务时可能误用旧数据库或未知配置 | 已确认 | 运行浏览器验证前在新根目录显式创建 runtime 并记录 DB 路径 |
-| R-016 | 当前生产依赖 `npm audit --omit=dev` 报 1 high、3 moderate（`fast-uri` 经 `ajv`；`qs`/`body-parser`/`express` 链） | 解析器/请求查询字符串存在已知安全风险；升级可能改变运行时或锁文件 | 已确认，已完成只读依赖链评估，未升级 | 维持当前 lock；另立依赖升级切片，须有兼容性、回归和回滚证据后再处理 |
+| R-016 | 生产基线依赖 `npm audit --omit=dev` 曾报 1 high、3 moderate（`fast-uri` 经 `ajv`；`qs`/`body-parser`/`express` 链） | 解析器/请求查询字符串存在已知安全风险；主版本升级可能改变冻结 AI 路由语义 | 候选已在 Express 4 上以受控 overrides 修复，audit=0；生产旧基线仍未改变 | 审阅 `body-parser@1.20.6`、`qs@6.16.0`、`fast-uri@3.1.7` lockfile 与全量回归；候选集成前不得宣称生产已修复 |
 | R-017 | `SELECT *`/动态 JSON/自由文本随 schema 漂移 | raw recon、contact-recon、prospect、template 或复合资料可能越权/泄漏 | 已分级：templates/prospect 已显式 shape；recon/people/contact-recon 按权限或专用投影；复合保持冻结 | 每次新增动态列先补风险矩阵和真实角色契约；无 blacklist≡whitelist 证据不得迁移顶层 composite |
 | R-018 | API 契约与路由策略漂移 | 前端/兼容入口可能误用权限、范围、错误码或幂等语义 | 已补 `API_CONTRACTS.md` 非 AI 核心矩阵；AI 路由冻结 | 新接口先登记方法/权限/范围/字段/错误/幂等/兼容，再写代码和专项测试 |
 | R-019 | 远端与生产双基线漂移 | 以错误版本判断重构进度或误触生产 | 当前三份 SHA 均为 `57c4c42a89e7730545b726b29fd932c5bfb20574` | 每个进度/计划/发布前重新核验 `repo/origin/main`、生产 release 和 state；不一致即暂停 |
 | R-020 | 高耦合边界被机械拆分 | 资料聚合、迁移复核、入库/评价、认证/密码事务或脱敏语义回归 | 已补 service/API contract；原位保留 | 仅在独立 service contract + 故障回滚 + 逐角色等价证据齐全后另立切片；本目标不拆 |
-| R-021 | 上线候选尚未发布且生产依赖存在已知漏洞 | 误把本地功能绿灯当作可上线，或在无兼容证据时升级依赖引入回归 | 已建立只读 preflight；当前 NO-GO（候选未进 `origin/main`；1 high/3 moderate） | 先由发布负责人决定依赖修复或风险接受；候选进入远端后重新跑全量 preflight、UAT、备份/schema dry-run 和回滚演练；本目标不 push/merge/deploy |
+| R-021 | 上线候选尚未发布，生产仍停留在旧依赖基线 | 误把本地 audit=0 当作生产已修复，或未审阅 lockfile 就集成 | 已建立只读 preflight；当前 NO-GO（候选未进 `origin/main`；候选 audit=0，生产旧基线） | 发布负责人审阅 overrides 并授权 push/merge；候选进入远端后重新跑全量 preflight、UAT、备份/schema dry-run 和回滚演练；本目标不 push/merge/deploy |

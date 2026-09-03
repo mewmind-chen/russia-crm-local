@@ -84,6 +84,11 @@
     "express": "^4.21.0",
     "tldts": "7.4.10"
   },
+  "overrides": {
+    "body-parser": "1.20.6",
+    "fast-uri": "3.1.7",
+    "qs": "6.16.0"
+  },
   "engines": {
     "node": ">=18"
   },
