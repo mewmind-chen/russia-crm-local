@@ -161,7 +161,21 @@ test('descriptor table renderer keeps raw cell actions and row attributes', () =
   assert.match(markup, /data-customer="c1"/);
   assert.match(markup, /<strong>Acme<\/strong>/);
   assert.match(markup, /<button>打开<\/button>/);
+  assert.match(markup, /<td data-label="客户"><strong>Acme<\/strong><\/td>/);
+  assert.match(markup, /<td data-label="操作"><button>打开<\/button><\/td>/);
   assert.doesNotMatch(markup, /负责人/);
+});
+
+test('array table renderer can provide mobile labels without changing cell markup', () => {
+  const markup = widget.renderTable(
+    ['客户', '操作'],
+    [['Acme', '<button>打开</button>']],
+    'data-list-page="customers"',
+    '',
+    ['客户', '操作'],
+  );
+  assert.match(markup, /<td data-label="客户">Acme<\/td>/);
+  assert.match(markup, /<td data-label="操作"><button>打开<\/button><\/td>/);
 });
 
 test('descriptor table renderer preserves an optional header row attribute', () => {

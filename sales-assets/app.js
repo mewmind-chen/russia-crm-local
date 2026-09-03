@@ -3528,7 +3528,8 @@
   }
   function table(headers, rows, attrs = '') {
     if (!rows.length) return '<div class="empty">暂无符合条件的数据</div>';
-    return `<table ${attrs}><thead><tr>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const labels = headers.map(item => String(item ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+    return `<table ${attrs}><thead><tr>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map((cell, index) => `<td data-label="${esc(labels[index] || '')}">${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   function applyTableColumnClasses(container, columnClasses = []) {

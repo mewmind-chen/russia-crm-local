@@ -1888,3 +1888,609 @@ body[data-theme="deck"] .tp-filter-clear{
   color:var(--text-primary);
   border-color:var(--border-default);
 }
+
+/* Mobile workbench refinement: preserve every authorized field without forcing
+   the high-frequency customer lists into a clipped desktop table. */
+@media (max-width: 700px) {
+  body[data-app="sales"] .main {
+    padding-inline: 12px;
+    padding-bottom: 24px;
+    overflow-x: clip;
+  }
+
+  body[data-app="sales"] .topbar {
+    gap: 9px;
+    padding-block: 10px;
+  }
+
+  body[data-app="sales"] .topbar > div:not(.top-actions) {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  body[data-app="sales"] .topbar h1,
+  body[data-app="sales"] .topbar .view-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body[data-app="sales"] .top-actions {
+    display: grid;
+    grid-template-columns: minmax(84px, auto) 40px repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  body[data-app="sales"] .top-actions .theme-switcher,
+  body[data-app="sales"] .top-actions .theme-switcher select,
+  body[data-app="sales"] .top-actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body[data-app="sales"] .top-actions .theme-switcher select {
+    padding-inline: 8px 24px;
+    text-overflow: ellipsis;
+  }
+
+  body[data-app="sales"] .top-actions .button {
+    padding-inline: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #poolView .studio-pills-row {
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  #poolView #intakeTabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  #poolView #intakeTabs::-webkit-scrollbar,
+  .customer-profile-tabs::-webkit-scrollbar,
+  #poolView .intake-kpi-primary::-webkit-scrollbar,
+  #poolView .intake-kpi-secondary::-webkit-scrollbar {
+    display: none;
+  }
+
+  #poolView #intakeTabs button {
+    flex: 0 0 auto;
+    min-height: 40px;
+  }
+
+  #poolView .studio-pills-tools {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  #poolView .studio-pills-tools .button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  #poolView .intake-kpi-primary,
+  #poolView .intake-kpi-secondary {
+    overflow: visible;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #poolView .intake-list-toolbar,
+  #customersView .customer-list-toolbar {
+    display: grid;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+    overflow: visible;
+  }
+
+  #poolView .intake-list-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #poolView .intake-list-toolbar .list-sort-control {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  #poolView .intake-list-toolbar .list-sort-control select,
+  #customersView .customer-list-toolbar > select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #poolView .intake-list-toolbar #intakeColumnSettings,
+  #customersView .customer-list-toolbar #customerColumnSettings {
+    grid-column: 2;
+    align-self: end;
+    min-width: 0;
+  }
+
+  #poolView .intake-list-toolbar .toolbar-count,
+  #customersView .customer-list-toolbar .toolbar-count {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #customersView .customer-list-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #customersView .customer-list-toolbar .customer-star-view {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  #customersView .customer-list-toolbar > select {
+    grid-column: 1;
+  }
+
+  #customersView .customer-list-toolbar #customerExportBtn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  #poolView .intake-list-toolbar .list-column-settings,
+  #customersView .customer-list-toolbar .list-column-settings {
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+    max-height: min(74dvh, 620px);
+  }
+
+  #poolView .intake-batches .panel-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #poolView .intake-batches .panel-head > .toolbar {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    justify-content: space-between;
+  }
+
+  #poolView .intake-batches .panel-head > .toolbar select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Convert the two customer-facing high-frequency tables into labelled
+     cards. The table semantics remain intact for keyboard and screen readers. */
+  #intakeTable,
+  #customerTable,
+  #intakeBatchTable {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  #intakeTable.is-horizontally-overflowing,
+  #customerTable.is-horizontally-overflowing,
+  #intakeBatchTable.is-horizontally-overflowing {
+    padding-bottom: 0;
+  }
+
+  #intakeTable.show-horizontal-scroll-hint::after,
+  #customerTable.show-horizontal-scroll-hint::after,
+  #intakeBatchTable.show-horizontal-scroll-hint::after {
+    display: none;
+  }
+
+  #intakeTable > table,
+  #customerTable > table,
+  #intakeBatchTable > table {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto !important;
+    border: 0;
+  }
+
+  #intakeTable > table > thead,
+  #customerTable > table > thead,
+  #intakeBatchTable > table > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  #intakeTable > table > tbody,
+  #customerTable > table > tbody,
+  #intakeBatchTable > table > tbody {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    background: var(--surface-subtle);
+  }
+
+  #intakeTable > table > tbody > tr,
+  #customerTable > table > tbody > tr,
+  #intakeBatchTable > table > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    background: var(--surface-panel);
+    box-shadow: 0 1px 2px rgba(20, 35, 32, .04);
+  }
+
+  #intakeTable > table > tbody > tr:hover,
+  #customerTable > table > tbody > tr:hover,
+  #intakeBatchTable > table > tbody > tr:hover {
+    background: var(--surface-panel);
+  }
+
+  #intakeTable > table > tbody > tr > td,
+  #customerTable > table > tbody > tr > td,
+  #intakeBatchTable > table > tbody > tr > td {
+    display: grid;
+    grid-template-columns: minmax(76px, 30%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    min-width: 0;
+    width: auto !important;
+    max-width: none;
+    padding: 0 !important;
+    border: 0 !important;
+    color: var(--text-primary);
+    white-space: normal !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere;
+  }
+
+  #intakeTable > table > tbody > tr > td::before,
+  #customerTable > table > tbody > tr > td::before,
+  #intakeBatchTable > table > tbody > tr > td::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  #intakeTable > table > tbody > tr > td[data-label=""],
+  #customerTable > table > tbody > tr > td[data-label=""] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #intakeTable > table > tbody > tr > td[data-label=""]::before,
+  #customerTable > table > tbody > tr > td[data-label=""]::before {
+    display: none;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-check,
+  #customerTable > table > tbody > tr > td.col-check {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-height: 20px;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-check::before,
+  #customerTable > table > tbody > tr > td.col-check::before {
+    display: none;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-company,
+  #customerTable > table > tbody > tr > td.col-company,
+  #intakeBatchTable > table > tbody > tr > td:first-child {
+    display: block;
+    padding-bottom: 4px !important;
+    border-bottom: 1px solid var(--border-default) !important;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-company::before,
+  #customerTable > table > tbody > tr > td.col-company::before,
+  #intakeBatchTable > table > tbody > tr > td:first-child::before {
+    display: none;
+  }
+
+  #intakeTable .col-company,
+  #customerTable .col-company {
+    position: static;
+    left: auto;
+    z-index: auto;
+    background: transparent;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  #intakeTable .col-customer-extra,
+  #customerTable .col-customer-extra {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    white-space: normal;
+  }
+
+  #intakeTable .col-customer-extra span,
+  #customerTable .col-customer-extra span,
+  #intakeTable .col-company .list-entity .an,
+  #intakeTable .col-company .list-entity .id,
+  #customerTable .col-company .list-entity .an,
+  #customerTable .col-company .list-entity .id {
+    display: block;
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-actions,
+  #customerTable > table > tbody > tr > td.col-actions {
+    display: block;
+    padding-top: 4px !important;
+    border-top: 1px solid var(--border-default) !important;
+  }
+
+  #intakeTable > table > tbody > tr > td.col-actions::before,
+  #customerTable > table > tbody > tr > td.col-actions::before {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  #intakeTable .col-actions,
+  #customerTable .col-actions {
+    position: static;
+    right: auto;
+    z-index: auto;
+    background: transparent;
+    box-shadow: none;
+    white-space: normal;
+  }
+
+  #intakeTable .col-actions .assignment-actions,
+  #customerTable .col-actions .assignment-actions {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #intakeTable .col-actions .button,
+  #intakeTable .col-actions .text-button,
+  #customerTable .col-actions .button,
+  #customerTable .col-actions .text-button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #intakeBatchTable > table > tbody > tr > td[data-label="操作"] {
+    display: block;
+    padding-top: 4px !important;
+    border-top: 1px solid var(--border-default) !important;
+  }
+
+  #intakeBatchTable > table > tbody > tr > td[data-label="操作"]::before {
+    display: block;
+    margin-bottom: 6px;
+  }
+}
+
+/* Profile facts use two columns on desktop and stack below on mobile. */
+.profile-widget-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-widget-section h3 {
+  grid-column: 1 / -1;
+}
+
+.profile-widget-section .fact {
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 700px) {
+  body.customer-profile-active[data-app="sales"] .top-actions {
+    display: none !important;
+  }
+
+  body.customer-profile-active .main {
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 12px;
+    overflow: hidden;
+  }
+
+  body.customer-profile-active .view {
+    padding-top: 0;
+  }
+
+  .customer-profile-view.active {
+    height: calc(100dvh - 71px);
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .customer-profile-toolbar {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 10px;
+    min-height: 0;
+    padding: 12px 0;
+  }
+
+  .customer-profile-toolbar > #customerProfileBack {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 44px;
+    padding-inline: 7px;
+  }
+
+  .customer-profile-toolbar > div:not(.customer-profile-actions) {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .customer-profile-toolbar h2 {
+    max-width: 100%;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .customer-profile-toolbar #customerProfileIdentity {
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .customer-profile-toolbar #customerProfileTags {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .customer-profile-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    gap: 8px;
+  }
+
+  .customer-profile-actions .button {
+    flex: 1 1 160px;
+    min-width: 0;
+    width: auto;
+    white-space: normal;
+  }
+
+  .customer-profile-actions .star-button {
+    flex: 0 0 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .customer-profile-tabs {
+    min-height: 50px;
+    gap: 3px;
+    padding: 6px 0;
+    margin: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .customer-profile-tab {
+    min-height: 38px;
+    padding-inline: 12px;
+    flex: 0 0 auto;
+  }
+
+  body.profile-widgets-only .customer-profile-widgets {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .profile-widget-host {
+    gap: 10px;
+    padding: 12px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .profile-widget-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .profile-widget-section h3 {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  .profile-widget-section .fact {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    min-width: 0;
+  }
+
+  .profile-widget-section .fact span {
+    margin-bottom: 0;
+  }
+
+  .profile-widget-section .fact strong,
+  .profile-widget-section .fact a {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .profile-widget-preference-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .profile-widget-preference-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-widget-preference-actions .button {
+    min-width: 0;
+    width: 100%;
+    min-height: 40px;
+    white-space: normal;
+  }
+
+  .profile-widget-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .profile-widget-head > .button {
+    max-width: 100%;
+  }
+}

@@ -268,12 +268,12 @@
       + '<div class="list-column-settings-footer"><button type="button" class="text-button" data-list-layout-reset>恢复默认</button><button type="button" class="button primary tiny" data-list-layout-close>完成</button></div>';
   }
 
-  function renderTable(input, rows, attrs = '', headerAttrs = '') {
+  function renderTable(input, rows, attrs = '', headerAttrs = '', cellLabels = []) {
     // 兼容现有 table(headers, rows, attrs)；新页面可传 { columns, rows, attrs }。
     if (Array.isArray(input)) {
       const headers = input;
       if (!rows?.length) return '<div class="empty">暂无符合条件的数据</div>';
-      return `<table ${attrs}><thead><tr${headerAttrs ? ` ${headerAttrs}` : ''}>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      return `<table ${attrs}><thead><tr${headerAttrs ? ` ${headerAttrs}` : ''}>${headers.map(item => `<th>${item}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr${row._attrs ? ` ${row._attrs}` : ''}>${row.map((cell, index) => `<td${cellLabels[index] !== undefined ? ` data-label="${escapeHtml(cellLabels[index])}"` : ''}>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
     const options = input || {};
     const columns = resolveColumns(options.columns || [], options.preferences || {});
@@ -296,7 +296,7 @@
       const source = sortedRecords[index];
       if (source?._attrs) row._attrs = source._attrs;
       return row;
-    }), options.attrs || '', options.headerAttrs || '');
+    }), options.attrs || '', options.headerAttrs || '', columns.map(column => column.label));
   }
 
   function refreshColumnSettingsCount(panel) {
