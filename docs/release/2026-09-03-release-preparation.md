@@ -62,7 +62,7 @@ npm run release:preflight -- \
 2. `after/` 工作树清洁（预先存在的 `.impeccable/` 工具目录不计入业务变更）。
 3. 输出相对远端的完整变更清单，阻止 AI、生产数据、secret 路径，提示 package manifest 变更。
 4. committed/working-tree `git diff --check`、JavaScript `node --check`、治理权威和 AI 边界。
-5. `npm test` 与串行 `node --test` 全量套件；`--skip-tests` 永远只能得到 NO-GO。
+5. `npm test` 与项目标准并发模式的 `node --test` 全量套件；`--skip-tests` 永远只能得到 NO-GO。
 6. `npm audit --omit=dev --json`；high/critical 阻断，moderate 形成警告并要求处置记录；用
    `--audit-report` 将原始 JSON 另存到非生产目录。
 
