@@ -155,7 +155,7 @@
 
 此前 12 个全量失败已在一轮修复（ownerless return 前端兼容、lifecycle state projection 契约、contact whitelist 兼容导出）。
 
-当前测试结论是“绿灯”。阶段 G 路由/权限专项与静态兼容契约均通过；S4/P4 回收/共享完整资料逐形状、权限/只读、叶子等价与迁移门禁契约 `4/4`；本轮 masterProfile/people/recon 契约 `4/4`；S6/P2 `5/5`；S7 剩余脱敏调用点矩阵与独立列表投影契约 `3/3`；core `npm test` `1777/1777`、全量 `node --test` `2139/2139`。治理权威、AI 边界、语法与差异门禁均已复核通过。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
+当前测试结论是“绿灯”。阶段 G 路由/权限专项与静态兼容契约均通过；S4/P4 回收/共享完整资料逐形状、权限/只读、叶子等价与迁移门禁契约 `4/4`；masterProfile/people/recon 契约 `4/4`；S6/P2 `5/5`；S7 剩余脱敏调用点矩阵与独立列表投影契约 `3/3`；account/commerce/timeline 动态字段契约 `4/4`；core `npm test` `1781/1781`、全量 `node --test` `2143/2143`。治理权威、AI 边界、语法与差异门禁均已复核通过。旧文档中的其他测试数字只属于历史 checkpoint，不能作为当前完成证据。
 
 ## 5. 当前阶段判断
 
@@ -166,19 +166,20 @@
 - 阶段 A 接线恢复：**13 个切片全部完成**——44 个域模块中 41 个已重新接入（纯函数 drop-in + 注入式错误构造经调用点注入保持语义）；当前 `sales_crm.js` 约 11,773 行；仅剩 3 个模块按用户裁定不接线。
 - 阶段 B 状态真源：**全部完成门达成**——§1 写点收敛（`lib/` 对 `crm_accounts` 状态/计划/主管列零裸写，含 `updateAccount` `aabe4d9`）、§4 强化（前置校验 `0ae90af`、不变量守卫 `9186a6d` + 回收/恢复接线 `da34bc2`、time_basis 投影 `cb6c6e4`、告警/报告/pipeline 读路径投影消费 `754d023`/`c4bba3f`/`fe77fb4`）、边界收敛（pipeline 行移除 state DTO `6b88d74`）、种子收敛（生产冒烟夹具补 time_basis `929b8c1`）。契约 §4 不变量均已由契约测试锁定。**红线内（不改）**：AI `next_action` 采纳写点（`lib/ai_stations/next_action.js`，`time_basis='utc'` 语义正确）+ `last_activity_at` 归属为活动溯源。阶段 B 业务侧收尾，剩余项仅涉 AI 红线评估与前端状态解释器。
 - 阶段 C 权限/筛选/字段：**推进中（安全字段与递归边界已收口）**——字段目录 + 白名单投影已存在；`78e698b`（accounts）/`5e992fe`（intake）/`1835f73`（通知）列表路径、`38bfe7d` S3 形状（timeline/auditLog）与 `c595bf0` legacy customers bootstrap/profile 行均已字段级白名单化；`2ca107b` 范围解释器等价契约；`45e0c05` 权限→字段→筛选合同；`f2056e5` 范围解释器代码级统一并修复空 WHERE 子句。`f2ec235` 已用 `redactIntakeAggregate` 收口 P1/P3 的 `lastActivitySummary`、`complementaryInfo` 未知 JSON 与 arbitration/assignmentAudit 深层联系方式；`ccc9bb5` 再用 `redactExportCredentials` 收口 S5/P5 JSON/CSV 的 password/token/session/secret 等递归凭据字段；`a57c44f` 完成剩余 `redactContactFields` 调用点矩阵与迁移边界契约，确认独立列表投影已闭合、高耦合复合边界保留、AI 调用点冻结排除；`09665b5` 完成 S4/P4 回收资料与共享完整资料逐形状风险矩阵、权限/只读/递归等价契约及复合迁移门禁；`3022dae` 完成 S6/P2 Bootstrap/masterProfile 共享叶子矩阵、来源/权限/递归契约和角色行为验证，修正 `customerPool.establishedYear` 叶子遗漏，并锁定 raw recon 动态键漂移为复合迁移 blocker；`343f166` 完成 S4/P4 masterProfile/people/recon 的来源/权限/递归逐形状契约，修复 profile/intake 路由后追加字段复裁剪，并将 `recycle_reason` 纳入敏感键边界；`e030900` 完成 account/commerce/timeline 动态对象、数组和 JSON 文本的权限后递归边界，受限路径不再让字符串化 JSON 穿透。P1/P3 顶层白名单迁移及 S4/S6 复合迁移仍按稳定键集/嵌套等价风险暂缓；不改变 AI 或高耦合资料边界。
-- 阶段 D 线索/任务/商业闭环：**推进中**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、`addQuote`/`addOrder` 完整编排下沉（`b4cfdfc` commitQuote/commitOrder 域服务）均已显式化。剩余：manager intervention 与 deferred plan 为**独立用例**（不在 commerce 闭环内）；前端状态解释器统一与阶段 E/G 待后续。
+- 阶段 D 线索/任务/商业闭环：**完成（非 AI 管理流程已收口）**——intake/assignment/planning/commerce 域模块已抽取并接线；商业闭环 action request 事务边界（`1d15546`）、RFQ/quote/order 行级写（`f5c650e`）、金额/币种/毛利校验（`24aa67e`）、`addQuote`/`addOrder` 完整编排下沉（`b4cfdfc` commitQuote/commitOrder 域服务）以及非 AI manager intervention/deferred plan 应用服务（`89e6509`）均已显式化。今日待办和 manager receipt 继续保留既有事务边界；本收尾目标只核验其契约，不重复拆分。
 - 状态、权限与白名单：state DTO 按用户裁定收敛为直读裸字段；白名单投影改为 `access_control` 直连。
 - 阶段 G 兼容层：**完成门通过**——旧入口与 profile 资源兼容、CRM 各路由组注册器、后台管理/维护/筛选装配均已独立化；全局中间件、资料聚合、迁移复核、密码、入库/评价等高耦合路由保留原位，AI 路由零动作。每个切片有独立提交和契约/专项回归。
 - 生产部署/UAT：本轮未执行，不得从本地结果推断生产状态。
 
 ## 6. 下一步允许动作
 
-1. 保持 `e030900`（S4/P4 account/commerce/timeline 动态 JSON 递归边界）、`343f166`（masterProfile/people/recon 逐形状契约与路由后处理复裁剪）、`3022dae`（S6/P2 Bootstrap/masterProfile 共享叶子契约）、`ccc9bb5`（S5/P5 导出凭据边界）、`a57c44f`（S7 剩余调用点审计契约）、`09665b5`（S4/P4 回收/共享完整资料逐形状契约）、`f2ec235`（P1/P3 递归边界）、`c595bf0`/`dc51fed` 及治理提交作为本轮回滚点，`f0ab815` 继续作为阶段 G 路由回滚点；如继续修改代码，先重跑全量与治理门禁。
-2. 阶段 G 后续只做高耦合边界的独立审计，不在无证据时迁移资料聚合、迁移复核、入库/评价或 AI 路由。
-3. P1/P3 递归合规边界已由 `redactIntakeAggregate` 收口；继续保持该 helper 仅用于 P1/P3 无 `view_contacts` 读路径，不新增顶层白名单或扩大到其他 payload，直至完成独立逐形状等价评审。
-4. S5/P5 导出必须在联系人权限投影之后统一执行 `redactExportCredentials`；该边界对 admin/非 admin、JSON/CSV 和 `view_contacts` 均生效。不得把本切片扩大为其他复合 payload 的顶层业务白名单迁移。
-5. S7 矩阵中已关闭的独立列表形状继续使用各自 `contactSafe*Record` 与来源权限门控；S4/P4 masterProfile/people/recon 的来源/权限/递归证明已完成，account、commerce、timeline 动态对象/数组/JSON 文本边界已由 `e030900` 收口，但 `SELECT *` 稳定键集、自由文本和复合等价仍未闭合。S4/P4 与 S6/P2 的复合 payload 在完整结构/等价/嵌套泄漏证明前不迁移；P1/P2/P4 外层、recycle profile 及 AI 红线不因“已审计”自动迁移。
-6. 不 push、不 merge、不部署，生产继续只读。
+1. 保持 `e030900`（S4/P4 account/commerce/timeline 动态 JSON 递归边界）、`343f166`（masterProfile/people/recon 逐形状契约与路由后处理复裁剪）、`3022dae`（S6/P2 Bootstrap/masterProfile 共享叶子契约）、`ccc9bb5`（S5/P5 导出凭据边界）、`a57c44f`（S7 剩余调用点审计契约）、`09665b5`（S4/P4 回收/共享完整资料逐形状契约）、`f2ec235`（P1/P3 递归边界）、`c595bf0`/`dc51fed` 及治理提交作为回滚点，`f0ab815` 继续作为阶段 G 路由回滚点；收尾大目标按 `2026-09-03-refactor-closure-inventory.md` 分阶段推进。
+2. 对 raw recon/people/prospect/templates、`SELECT *`/公共 spread 和动态 JSON/自由文本后代完成逐形状风险矩阵与契约；仅证据充分的独立叶子允许白名单迁移，顶层 composite 继续门控。
+3. 阶段 G 后续只为资料聚合、迁移复核、入库/评价、认证/密码等高耦合边界补 service/API contract 与最小回归，不做机械拆分。
+4. P1/P3 递归合规边界继续由 `redactIntakeAggregate` 收口；不得新增顶层白名单或扩大 helper 到其他 payload，直至完成独立逐形状等价评审。
+5. S5/P5 导出必须在联系人权限投影之后统一执行 `redactExportCredentials`；该边界对 admin/非 admin、JSON/CSV 和 `view_contacts` 均生效。
+6. S4/P4 与 S6/P2 的复合 payload 在完整结构/等价/嵌套泄漏证明前不迁移；AI、生产/UAT、部署、push、merge 和三个按裁定内联模块继续冻结。
+7. 不 push、不 merge、不部署，生产继续只读。
 
 > 以下编号内容是历史执行轨迹，仅作审计证据，不覆盖上面的当前恢复点和下一步。
 2. 阶段 A 接线恢复：**已完成**——44 个域模块中 41 个已重新接入，仅剩 `identity/index`、`identity/middleware`、`filter/index` 三个按用户裁定保持内联/精简。后续如需继续减单体，可评估已漂移模块或转入阶段 B 收尾。
