@@ -405,7 +405,38 @@ test('profile-facts widget renders facts html and preference bar honoring hidden
   });
   assert.match(barHtml, /identity_region/);
   assert.match(barHtml, /隐藏 identity_region/);
-  assert.doesNotMatch(barHtml, /contact_channels/);
+  // 已隐藏区块仍须保留在偏好条中，并提供“显示”恢复入口。
+  assert.match(barHtml, /contact_channels/);
+  assert.match(barHtml, /显示 contact_channels/);
+  assert.match(barHtml, /data-profile-sections-show-all/);
+});
+
+test('profile-facts preference bar keeps every section recoverable when all facts are hidden', () => {
+  const schema = {
+    fields: [
+      { key: 'name', label: '名称', section: 'identity_region' },
+      { key: 'email', label: '邮箱', section: 'contact_channels' },
+    ],
+  };
+  const fieldWidget = {
+    profileSections: (inputSchema, preferences) => (inputSchema.fields || [])
+      .reduce((sections, field) => {
+        const section = field.section || 'other';
+        if (preferences?.hiddenSections?.includes(section)) return sections;
+        if (!sections.some(item => item.section === section)) {
+          sections.push({ section, label: section, fields: [] });
+        }
+        return sections;
+      }, []),
+  };
+  const html = factsWidget.renderPreferenceBarHtml({
+    fieldWidget,
+    schema,
+    preferences: { hiddenSections: ['identity_region', 'contact_channels'] },
+  });
+  assert.match(html, /显示 identity_region/);
+  assert.match(html, /显示 contact_channels/);
+  assert.match(html, /显示全部/);
 });
 
 test('profile-facts widget render mounts facts + bar into a container and binds toggle re-render', async () => {

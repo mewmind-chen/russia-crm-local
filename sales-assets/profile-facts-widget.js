@@ -71,26 +71,30 @@
     return fieldWidget.renderProfileFacts({ schema, data, formatters, preferences });
   }
 
-  // 区块显隐偏好条（HTML 字符串，纯函数）；无可见区块时返回 ''。
+  // 区块显隐偏好条（HTML 字符串，纯函数）；无可配置区块时返回 ''。
   function renderPreferenceBarHtml({ fieldWidget, schema, preferences = {} }) {
     if (!fieldWidget || typeof fieldWidget.profileSections !== 'function') return '';
-    const sections = fieldWidget.profileSections(schema, preferences);
+    // 偏好条必须列出完整 schema 区块。若把 hiddenSections 传给
+    // profileSections，已隐藏区块会从按钮列表一并消失，用户就无法恢复。
+    const sections = fieldWidget.profileSections(schema, {});
     if (!sections.length) return '';
+    const hiddenSections = new Set(normalizeProfilePreferences(preferences).hiddenSections);
     return `<div class="profile-widget-preference-head"><strong>字段显示偏好</strong><span class="subtle">仅隐藏当前视图区块，不影响权限或数据下发</span></div><div class="profile-widget-preference-actions">${sections.map(section => {
-      const hidden = preferences.hiddenSections?.includes(section.section);
-      return `<button class="button secondary tiny" type="button" data-profile-section-toggle="${escapeHtml(section.section)}">${hidden ? '显示' : '隐藏'} ${escapeHtml(section.label)}</button>`;
-    }).join('')}</div>`;
+      const hidden = hiddenSections.has(section.section);
+      return `<button class="button secondary tiny" type="button" aria-pressed="${hidden ? 'true' : 'false'}" data-profile-section-toggle="${escapeHtml(section.section)}">${hidden ? '显示' : '隐藏'} ${escapeHtml(section.label)}</button>`;
+    }).join('')}<button class="button secondary tiny" type="button" data-profile-sections-show-all>显示全部</button></div>`;
   }
 
   function placeholderBarHtml() {
     return '';
   }
 
-  function toggleLabel(button) {
+  function toggleLabel(button, hidden) {
     const text = button.textContent || '';
     button.textContent = text.includes('隐藏')
       ? text.replace('隐藏', '显示')
       : text.replace('显示', '隐藏');
+    button.setAttribute?.('aria-pressed', hidden ? 'true' : 'false');
   }
 
   // 把 facts + 偏好条挂进 container，并在 container 上自持区段显隐点击事件。
@@ -138,12 +142,19 @@
       host.push({ id: 'preferences', status: barHtml ? 'mounted' : 'empty' });
       if (barHtml) {
         bar.addEventListener('click', event => {
+          const showAll = event.target.closest?.('[data-profile-sections-show-all]');
+          if (showAll) {
+            const next = defaultPreferences();
+            savePreferences(storageKey, next, storage);
+            if (typeof ctx.onSectionsChanged === 'function') ctx.onSectionsChanged(next);
+            return;
+          }
           const toggle = event.target.closest?.('[data-profile-section-toggle]');
           if (!toggle) return;
           const section = String(toggle.dataset.profileSectionToggle || '').trim();
           if (!section) return;
           const next = toggleSection(storageKey, section, storage);
-          toggleLabel(toggle);
+          toggleLabel(toggle, next.hiddenSections.includes(section));
           if (typeof ctx.onSectionsChanged === 'function') ctx.onSectionsChanged(next);
         });
       }
