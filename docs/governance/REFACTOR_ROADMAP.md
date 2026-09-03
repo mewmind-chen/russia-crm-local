@@ -7,6 +7,8 @@
 
 > **上线前准备目标（2026-09-03）**：形成可审计、可复现、可回滚的 release candidate 并完成授权发布。清单、preflight、非 AI 验收矩阵和数据保护 runbook 及执行证据见 [`docs/release/2026-09-03-release-preparation.md`](../release/2026-09-03-release-preparation.md)。Express 4 受控依赖修复已随 `8181203` 部署，audit=0。
 
+> **最近发布核验优先**（2026-09-03）：文档/看板刷新基线 `0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6` 已进入 `origin/main` 并完成生产自动发布；`current`/`previous` 与健康、备份、迁移干跑和回滚证据已复核。上行 `8181203` 作为代码候选发布证据保留。
+
 ## 当前进度快照
 
 > 上线前准备已收尾：Express 4 transitive overrides 完成兼容性、回归和 audit=0 验证；候选已进入 `origin/main`，完整 preflight 为 GO，生产健康/备份副本/schema dry-run/回滚夹具均已核验。后续仅对新的 schema、迁移或高耦合拆分另立授权目标。

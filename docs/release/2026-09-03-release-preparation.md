@@ -1,4 +1,4 @@
-# 上线前准备包（非 AI、非生产）
+# 上线前准备与授权发布包（非 AI、无数据库迁移）
 
 更新时间：2026-09-03
 状态：**GO（授权发布已完成；生产门禁通过）**
@@ -13,9 +13,9 @@
 
 | 项目 | 读取位置 | 2026-09-03 核验值 |
 |---|---|---|
-| 远端基线 | `repo/` 的 `origin/main` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
-| 生产 release | `tradepulse-production/current/.release-sha` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
-| 生产成功状态 | `tradepulse-production/state/state.json:lastSuccessfulSha` | 执行时实时读取（本次授权发布证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
+| 远端基线 | `repo/` 的 `origin/main` | 执行时实时读取（最近核验：`0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6`；代码候选证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
+| 生产 release | `tradepulse-production/current/.release-sha` | 执行时实时读取（最近核验：`0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6`；代码候选证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
+| 生产成功状态 | `tradepulse-production/state/state.json:lastSuccessfulSha` | 执行时实时读取（最近核验：`0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6`；代码候选证据：`81812031dbbd904e7cc9aefa6ce1606401572c61`） |
 | 本地候选 | `after/` 的 `git rev-parse HEAD` | 运行 preflight 时实时读取，不手填 |
 
 候选 SHA 不在文档中硬编码：文档提交会改变 Git SHA，最终候选必须由同一工作树的 preflight
@@ -99,7 +99,7 @@ fast-forward 到候选 `81812031dbbd904e7cc9aefa6ce1606401572c61`。
 
 ## 5. 生产只读数据保护与回滚 runbook
 
-以下步骤是未来获得明确生产授权后的操作清单，本次只固化路径和验收条件，没有执行：
+以下步骤是标准生产数据保护与回滚清单；本次已按授权执行，实际结果见 §6。后续涉及数据库迁移或 schema 变化时，仍须重新获得专项授权：
 
 1. **备份**：先停止写入口并使用 approved backup 目录；对显式数据库路径执行 SQLite online
    backup，记录备份文件的绝对路径、SHA-256、size、mtime、inode/device、`quick_check`、
@@ -136,6 +136,8 @@ fast-forward 到候选 `81812031dbbd904e7cc9aefa6ce1606401572c61`。
   三项测试均通过（3/3）；生产 `previous` 链接和备份 provenance 均可用，未为演练制造生产停机。
 - 非 AI UAT 冒烟：公网 `/`=200 且包含 `TradePulse`/`widget-registry`，未认证 bootstrap/profile 返回
   `401 AUTH_REQUIRED`，legacy 入口在关闭开关下返回 404；未使用或改变 AI 功能。
+- 最终文档/看板刷新提交 `0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6` 已进入 `origin/main` 并完成自动发布；
+  当前 `current` 指向 `releases/0afbacd3dc87`，`previous` 保留 `releases/47b72c21a619`。
 
 ## 7. GO/NO-GO 决策
 

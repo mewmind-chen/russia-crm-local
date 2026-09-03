@@ -25,3 +25,5 @@
 | R-019 | 远端与生产双基线漂移 | 以错误版本判断重构进度或误触生产 | 已解除：2026-09-03 三份 SHA 均为 `81812031dbbd904e7cc9aefa6ce1606401572c61` | 每个进度/计划/发布前重新核验 `repo/origin/main`、生产 release 和 state；不一致即暂停 |
 | R-020 | 高耦合边界被机械拆分 | 资料聚合、迁移复核、入库/评价、认证/密码事务或脱敏语义回归 | 已补 service/API contract；原位保留 | 仅在独立 service contract + 故障回滚 + 逐角色等价证据齐全后另立切片；本目标不拆 |
 | R-021 | 上线候选尚未发布，生产仍停留在旧依赖基线 | 误把本地 audit=0 当作生产已修复，或未审阅 lockfile 就集成 | 已解除：候选 `81812031dbbd904e7cc9aefa6ce1606401572c61` 已推送、部署；preflight 19 pass/0 warning/0 blocker，生产 audit=0 | 后续依赖或 schema 变化重新走完整 preflight、UAT、备份/dry-run 和回滚证据；AI 与未经授权的生产写入继续冻结 |
+
+> R-019/R-021 最近核验补充（2026-09-03）：文档/看板刷新基线 `0afbacd3dc87afa4bb7edbcabd6fff0f40079aa6` 已完成自动发布，三份 live SHA 一致；`8181203` 仍是依赖修复代码候选的历史证据。
