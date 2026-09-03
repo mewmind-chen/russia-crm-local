@@ -1,6 +1,6 @@
 # TradePulse 重构进度看板
 
-> 自动生成于 `2026-09-03 09:25:06`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
+> 自动生成于 `2026-09-03 09:25:22`；运行 `npm run board` 手动重新生成，每个切片收尾自动更新。
 > 数据源：git 提交（origin/main..HEAD）、lib/ 代码扫描、CURRENT_STATE.md、sessions/。
 
 ## 总览
@@ -8,7 +8,7 @@
 | 指标 | 当前值 |
 |---|---|
 | 分支 | `codex/frontend-widget-pilot` |
-| HEAD | `e5f5fbe`（相对 origin/main ahead 415） |
+| HEAD | `2e8c6fe`（相对 origin/main ahead 416） |
 | 工作区 | 有未提交改动 |
 | 全量测试 | `node --test` 2150/2150 |
 | 核心测试 | `npm test` 1788/1788 |
@@ -25,7 +25,7 @@
 | refactor(其他/通用) | 70 |
 | feat(...) | 58 |
 | docs(governance) | 221 |
-| 其他 | 34 |
+| 其他 | 35 |
 
 ## 阶段 0：治理基础
 
@@ -233,7 +233,7 @@
 
 ## 上线前准备
 
-> **进行中** — 已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；当前发布仍为 NO-GO，等待候选进入 origin/main、依赖风险决策及独立的生产 UAT/备份/部署授权。
+> **进行中** — 已形成非 AI、非生产的 release candidate 准备包与可重复只读 preflight；候选依赖 audit=0，当前发布仍为 NO-GO，等待 lockfile 审阅、候选进入 origin/main 及独立的生产 UAT/备份/部署授权。
 
 ### 已完成
 
