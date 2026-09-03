@@ -225,6 +225,14 @@ test('deployment validation uses an isolated test runtime', () => {
   assert.doesNotMatch(deployScript, /source .*shared\/\.env/);
 });
 
+test('core test runner forwards node test flags used by deployment validation', () => {
+  const runner = readProjectFile('scripts', 'run-core-tests.js');
+
+  assert.match(runner, /const nodeTestArgs = runnerArgs\.filter\(arg => arg !== '--ai' && arg !== '--list'\)/);
+  assert.match(runner, /spawnSync\(process\.execPath, \['--test', \.\.\.nodeTestArgs, \.\.\.selected\]/);
+  assert.match(runner, /--test-concurrency=1/);
+});
+
 test('atomic current switching is portable across macOS and Linux', () => {
   const deployScript = readProjectFile('scripts', 'deploy-from-github.sh');
 

@@ -86,8 +86,13 @@ function listTestFiles() {
 }
 
 function main() {
-  const onlyAi = process.argv.includes('--ai');
-  const listOnly = process.argv.includes('--list');
+  const runnerArgs = process.argv.slice(2);
+  const onlyAi = runnerArgs.includes('--ai');
+  const listOnly = runnerArgs.includes('--list');
+  // Keep the selector flags local to this wrapper, but pass every other
+  // argument through to node --test. The deployment validator relies on
+  // --test-concurrency=1 to avoid resource contention in the full suite.
+  const nodeTestArgs = runnerArgs.filter(arg => arg !== '--ai' && arg !== '--list');
 
   const all = listTestFiles();
   const classified = all.map((file) => ({ file, kind: classifyTestFile(file) }));
@@ -109,7 +114,7 @@ function main() {
     process.exit(onlyAi ? 0 : 1);
   }
 
-  const result = spawnSync(process.execPath, ['--test', ...selected], {
+  const result = spawnSync(process.execPath, ['--test', ...nodeTestArgs, ...selected], {
     cwd: ROOT,
     stdio: 'inherit',
   });
