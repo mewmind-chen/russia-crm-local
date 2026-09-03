@@ -233,7 +233,7 @@ if (( SKIP_TESTS == 1 )); then
   block_check 'full test suites were explicitly skipped; a skipped preflight can never be GO'
 else
   run_check 'npm test (core/non-AI suite)' core-tests.log npm --prefix "$ROOT" test
-  run_check 'node --test (repository suite)' repository-tests.log bash -c 'cd "$1" && node --test --test-concurrency=1' _ "$ROOT"
+  run_check 'node --test (repository suite)' repository-tests.log bash -c 'cd "$1" && node --test' _ "$ROOT"
 fi
 
 audit_log="$tmp_dir/npm-audit.json"
