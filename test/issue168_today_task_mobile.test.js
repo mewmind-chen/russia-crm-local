@@ -56,12 +56,13 @@ test('mobile task cards contain the full decision context and one real action', 
     assert.match(card, new RegExp(copy));
   }
   assert.match(card, /urgencyLabel/);
-  assert.match(card, /accountDisplayName/);
+  assert.match(card, /todayTaskCustomerMarkup\(item, account\)/);
   assert.match(card, /todayTaskContext\(item, account\)/);
   assert.match(card, /todayTaskActionMarkup\(item\)/);
   assert.match(card, /data-intake-profile=/);
   assert.match(card, /data-customer=/);
   const desktop = block(app, 'function renderAlerts()', 'function notificationAccount');
+  assert.match(desktop, /todayTaskCustomerMarkup\(item, account\)/);
   assert.match(desktop, /todayTaskContext\(item, account\)/);
 });
 

@@ -158,6 +158,7 @@ test('successful actions refresh bootstrap and the authorized alert page while r
   assert.match(loader, /summary:\s*result\.summary \|\| result\.meta\?\.summary/);
 
   const render = block(app, 'function renderAlerts()', 'function notificationAccount');
+  assert.match(render, /todayTaskCustomerMarkup\(item, account\)/);
   assert.match(render, /const summary = meta\.summary \|\| \{\}/);
   assert.match(render, /summary\.objects \?\? summary\.objectCount \?\? summary\.total \?\? meta\.total/);
   assert.match(render, /summary\.reasons \?\? summary\.reasonCount \?\? summary\.totalReasons/);
