@@ -118,7 +118,7 @@ test('complete customer data opens a non-sidebar profile page and returns to CRM
   assert.doesNotMatch(masterHandler, /switchView\('pool'\)/);
   assert.match(appJs, /function openCustomerProfile\(externalCustomerId\)/);
   assert.match(appJs, /profile=1[\s\S]*?customer=\$\{encodeURIComponent\(externalCustomerId\)\}/);
-  assert.match(appJs, /searchParams\.set\('customer', externalCustomerId\)/);
+  assert.match(appJs, /customerProfileHref\(externalCustomerId\)/);
   assert.match(appJs, /state\.selectedCustomerId = account\.id/);
   assert.match(appJs, /#customerProfileDataEdit/);
   assert.match(appJs, /function returnFromCustomerProfile\(\)/);

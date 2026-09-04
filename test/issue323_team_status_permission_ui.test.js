@@ -20,7 +20,7 @@ function functionBlock(source, name, nextName) {
 test('team status navigation uses the same view_team permission as its route and backend', () => {
   assert.match(
     html,
-    /<button data-view="team" data-permission="view_team">[\s\S]*?<span>团队状态<\/span><\/button>/,
+    /<a href="\/#team" data-view="team" data-permission="view_team">[\s\S]*?<span>团队状态<\/span><\/a>/,
   );
   assert.match(app, /team:\s*'view_team'/);
   assert.match(access, /'GET \/team-status':\s*\{ permissions:\s*\['view_team'\] \}/);
@@ -36,7 +36,7 @@ test('all permission-controlled navigation entries match their route permission 
     markets: 'view_markets', users: 'view_users', maintenance: 'manage_data_maintenance',
   };
   const actual = Object.fromEntries([...html.matchAll(
-    /<button data-view="([^"]+)" data-permission="([^"]+)"/g,
+    /<a href="\/#(?:[^"?]+)" data-view="([^"]+)" data-permission="([^"]+)"/g,
   )].map(match => [match[1], match[2]]));
   assert.deepEqual(actual, expected);
 });

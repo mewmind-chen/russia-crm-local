@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 
 const APP_JS = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.js'), 'utf8');
+const APP_CSS = fs.readFileSync(path.join(__dirname, '..', 'sales-assets', 'app.css'), 'utf8');
 
 function functionSlice(name, nextName) {
   const start = APP_JS.indexOf(`function ${name}(`);
@@ -76,6 +77,12 @@ test('Issue #344: intake state and role branches keep only real actions', () => 
   assert.match(intake, /data-intake-action="return"/);
   assert.match(intake, /data-intake-action="reject"/);
   assert.match(intake, /data-intake-unassign=/);
+  assert.match(intake, /primaryActions = \[\s*`<button class="button primary tiny" data-intake-action="claim"/);
+  assert.match(intake, /moreActions = \[\s*`<button class="text-button" data-intake-action="return"[\s\S]*?data-intake-action="reject"/);
+  assert.match(APP_JS, /const INTAKE_LIST_DEFAULT_EXTRA_COLUMNS = new Set\(\);/);
+  assert.match(APP_JS, /key: 'candidates',[\s\S]*?defaultVisible: false/);
+  assert.match(APP_CSS, /\.row-more-menu\{position:absolute/);
+  assert.match(APP_CSS, /\.data-table tbody tr:last-child \.row-more-menu\{top:auto;bottom:/);
   assert.match(intake, /item\.assignable === false|intakeItemAssignable\(item\)/);
   assert.doesNotMatch(intake, /⋯\s*\$\{overflow\.length\}|…\s*\$\{overflow\.length\}|\.\.\.\s*\$\{overflow\.length\}/u);
 });

@@ -29,7 +29,7 @@ test('approved semantic tokens and typography define the CRM shell', () => {
   ]) assert.match(css.toLowerCase(), new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(css, /h1\{[^}]*font-size:21px/);
   assert.match(css, /\.topbar\{[^}]*min-height:52px/);
-  assert.match(css, /body\[data-app="sales"\] \.nav button\.active\{[^}]*background:var\(--brand-subtle\)/);
+  assert.match(css, /body\[data-app="sales"\] \.nav button\.active,body\[data-app="sales"\] \.nav a\.active\{[^}]*background:var\(--brand-subtle\)/);
   assert.match(css, /\.panel-head \.eyebrow,[^{]*\.section-intro \.eyebrow\{display:none\}/);
   assert.match(css, /\.data-table th\{[^}]*font-size:11px/);
   assert.match(css, /\.data-table td\{[^}]*font-size:12\.5px/);
@@ -213,14 +213,14 @@ test('list rows use V3 two-line entity language and overflow actions', () => {
   assert.match(js, /closest\([^)]*summary[^)]*details/);
 
   const pipeline = slice('renderPipeline', 'pipelineStayMarkup');
-  assert.match(pipeline, /listEntityMarkup\(/);
+  assert.match(pipeline, /customerEntityMarkup\(/);
   assert.match(pipeline, /rowActionCluster\(/);
   assert.match(js, /停留 \$\{days\} 天/);
   assert.doesNotMatch(pipeline, /pipeline-fact-note/);
   assert.doesNotMatch(pipeline, /company-star-line/);
 
   const customers = slice('renderCustomers', 'loadRecycleBin');
-  assert.match(customers, /listEntityMarkup\(/);
+  assert.match(customers, /customerEntityMarkup\(/);
   assert.match(customers, /assignment-actions/);
   assert.doesNotMatch(customers, /创建人：/);
   assert.doesNotMatch(customers, /websiteMarkup\(account\.website/);
@@ -229,7 +229,7 @@ test('list rows use V3 two-line entity language and overflow actions', () => {
   const intake = slice('renderIntake', 'customerProfileFrameUrl');
   assert.match(intake, /listEntityMarkup\(/);
   assert.match(intake, /listChipMarkup\(/);
-  assert.match(intake, /data-open-customer="\$\{item\.crm_customer_id\}"/);
+  assert.match(intake, /data-open-customer="\$\{esc\(item\.crm_customer_id\)\}"/);
   assert.doesNotMatch(intake, /具名联系人与联系方式完备/);
   assert.doesNotMatch(intake, /productChipMarkup\(/);
   assert.doesNotMatch(intake, /websiteMarkup\(item\.website\)/);
