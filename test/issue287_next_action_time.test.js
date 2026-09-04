@@ -80,7 +80,7 @@ test('drawer timer refreshes only each minute and follows drawer and page visibi
   assert.match(appSource, /function startDrawerNextActionTimer\(\)/);
   assert.match(lifecycle, /setInterval\(refreshDrawerNextActionTime, 60 \* 1000\)/);
   assert.doesNotMatch(lifecycle, /setInterval\([^,]+,\s*1000\)/);
-  assert.match(appSource, /function closeDrawer\(\)\s*\{\s*stopDrawerNextActionTimer\(\);/);
+  assert.match(appSource, /function closeDrawer\([^)]*\)\s*\{[\s\S]*?stopDrawerNextActionTimer\(\);/);
   assert.match(appSource, /renderDrawer\(\)[\s\S]*?startDrawerNextActionTimer\(\);\s*\n\s*\}/);
   assert.match(appSource, /document\.addEventListener\('visibilitychange',[\s\S]*?stopDrawerNextActionTimer\(\)[\s\S]*?startDrawerNextActionTimer\(\)/);
   assert.match(appSource, /state\.drawerOwner\.startsWith\('crm:'\)/);
@@ -182,7 +182,7 @@ function executableDrawerLifecycle() {
     'drawerFactMarkup', 'customerAiSection', 'can', 'canReturnCustomer',
     'canRejectCustomer', 'renderActivityTimelineItem', 'nextActionTimeMarkup',
     'accountStageOf', 'managerStateDisplay', 'registerProfilePageWidgets', 'drawerFactsContext',
-    'masterProfileSectionHtml', 'nextStepHtml', 'alertStepHtml', 'alertDetailsHtml',
+    'masterProfileSectionHtml', 'customerProfileHref', 'nextStepHtml', 'alertStepHtml', 'alertDetailsHtml',
     'timelineSectionHtml', 'activityTimelineItemsHtml',
   ];
   const identity = value => String(value || '');
@@ -195,6 +195,7 @@ function executableDrawerLifecycle() {
     account => account?.stage || account?.state?.stage?.key || '',
     () => {},
     () => ({ drawerFactsWidget: null, fieldWidget: null, schema: null, data: {}, formatters: {}, fallback: [] }),
+    () => '', identity,
     () => '',
     () => '',
     () => '',

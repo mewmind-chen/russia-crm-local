@@ -49,10 +49,11 @@ test('identity conflict detail is a business workbench, not audit UI', () => {
 test('supplement actions render only on the resolved link_existing card', () => {
   const source = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   const detailMarkup = Function(
-    'esc', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state', 'pendingNavigationMarkup',
+    'esc', 'websiteMarkup', 'duplicateFacts', 'protectedConflictSupplementFlags', 'protectedWritesAvailable', 'state', 'pendingNavigationMarkup',
     `${source}; return protectedConflictDetailMarkup;`,
   )(
     value => String(value),
+    value => String(value || ''),
     () => '<dl class="duplicate-review-facts"></dl>',
     () => '联系人、官网',
     () => true,
@@ -103,10 +104,11 @@ test('supplement actions render only on the resolved link_existing card', () => 
 test('pending decision options allow managers to confirm compared records are distinct', () => {
   const source = section(app, 'function protectedConflictIdentityRecords', 'function duplicateEvidenceMarkup');
   const decisionMarkup = Function(
-    'esc', 'duplicateFacts', 'protectedWritesAvailable',
+    'esc', 'websiteMarkup', 'duplicateFacts', 'protectedWritesAvailable',
     `${source}; return protectedConflictDecisionMarkup;`,
   )(
     value => String(value),
+    value => String(value || ''),
     items => `<dl class="duplicate-review-facts">${items.map(([label, value]) => `${label}:${value}`).join('|')}</dl>`,
     () => true,
   );
