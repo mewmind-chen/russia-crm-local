@@ -105,7 +105,7 @@ test('renderIntake builds column classes from the same conditions as its headers
 
 test('CSS pins the action columns and short columns on both pages', () => {
   assert.match(css, /#customerTable[^{]*\.col-actions\{[^}]*width:190px/);
-  assert.match(css, /#intakeTable[^{]*\.col-actions\{[^}]*width:180px/);
+  assert.match(css, /#intakeTable[^{]*\.col-actions\{[^}]*width:148px/);
   assert.match(css, /#customerTable[^{]*\.col-priority\{[^}]*width:56px/);
   assert.match(css, /#customerTable[^{]*\.col-status\{[^}]*width:104px/);
   assert.match(css, /\.col-actions\{[^}]*white-space:nowrap/);

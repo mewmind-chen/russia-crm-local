@@ -48,10 +48,10 @@
     'pool_customer_id', 'pool_company_name', 'pool_country', 'pool_city', 'pool_website',
     'pool_industry', 'pool_customer_type', 'pool_rating', 'pool_current_pool',
   ]);
-  const INTAKE_LIST_DEFAULT_EXTRA_COLUMNS = new Set([
-    'pool_customer_id', 'pool_company_name', 'pool_country', 'pool_city', 'pool_website',
-    'pool_industry', 'pool_customer_type', 'pool_rating', 'pool_current_pool',
-  ]);
+  // The identity cell already carries the useful customer summary. Keep the
+  // full authorized field set available in column settings without widening
+  // the high-frequency pool list by default.
+  const INTAKE_LIST_DEFAULT_EXTRA_COLUMNS = new Set();
   const LONG_LIST_VALUE_KEYS = new Set([
     'pool_description', 'pool_products', 'pool_deep_report', 'pool_source_file', 'pool_notes',
     'loss_reason', 'return_reason', 'recycle_reason',
@@ -709,7 +709,49 @@
   function hostLabel(value) {
     return uiFormat.website(value)?.label || '';
   }
-  function listEntityMarkup(name, metaParts = [], extra = '') {
+  function listEntityWebsiteMarkup(value) {
+    const site = uiFormat.website(value);
+    return site
+      ? `<a class="list-entity-website tp-website" href="${esc(site.href)}" target="_blank" rel="noopener">${esc(site.label)}${uiFormat.icon('external')}</a>`
+      : '';
+  }
+  function internalNavigationHref(view, { customer = '', intake = '', leadView = '', hashParams = {} } = {}) {
+    const url = new URL(location.href);
+    url.pathname = '/';
+    url.search = '';
+    if (customer) url.searchParams.set('customer', customer);
+    if (intake) url.searchParams.set('intake', intake);
+    if (leadView) url.searchParams.set('leadView', leadView);
+    const hash = new URLSearchParams();
+    Object.entries(hashParams || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && String(value) !== '') hash.set(key, value);
+    });
+    url.hash = `${view}${hash.toString() ? `?${hash.toString()}` : ''}`;
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+  function customerDrawerHref(customerId, view = state.view || 'customers') {
+    return internalNavigationHref(view === 'customerProfile' ? 'customers' : view, { customer: customerId });
+  }
+  function customerProfileHref(externalCustomerId, intakeItemId = '') {
+    return internalNavigationHref('customerProfile', {
+      customer: externalCustomerId,
+      intake: intakeItemId,
+    });
+  }
+  function intakeDrawerHref(itemId, view = state.view || 'pool') {
+    return internalNavigationHref(view === 'customerProfile' ? 'pool' : view, { intake: itemId });
+  }
+  function mismatchRecordHref(recordKey) {
+    return internalNavigationHref('recycleBin', { hashParams: { record: recordKey } });
+  }
+  function customerEntityMarkup(account, metaParts = [], extra = '', view = state.view) {
+    if (!account?.id) return listEntityMarkup(accountDisplayName(account), metaParts, extra);
+    return listEntityMarkup(accountDisplayName(account), metaParts, extra, {
+      href: customerDrawerHref(account.id, view),
+      attrs: `data-open-customer="${esc(account.id)}"`,
+    });
+  }
+  function listEntityMarkup(name, metaParts = [], extra = '', link = null) {
     const display = String(name || '').trim();
     const meta = (Array.isArray(metaParts) ? metaParts : [metaParts])
       .map(part => String(part || '').trim())
@@ -721,7 +763,10 @@
       })
       .filter(Boolean)
       .join(' · ');
-    return `<div class="list-entity"><div class="an tp-company-anchor">${esc(name)}</div>${
+    const title = link?.href
+      ? `<a class="an tp-company-anchor internal-detail-link" href="${esc(link.href)}" ${link.attrs || ''}>${esc(name)}</a>`
+      : `<div class="an tp-company-anchor">${esc(name)}</div>`;
+    return `<div class="list-entity">${title}${
       meta ? `<div class="id">${esc(meta)}</div>` : ''}${extra || ''}</div>`;
   }
   function listChipMarkup(account, limit = 2) {
@@ -1670,7 +1715,7 @@
         : null,
       { key: 'company', label: '线索资料 / 客户标签', required: true, className: 'col-company', sortKey: 'company_name' },
       { key: 'fit', label: 'Fit / readiness / 优先级', className: 'col-fit', sortKey: 'fit_score', visible: showAI },
-      { key: 'candidates', label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name', visible: showAssignmentAI },
+      { key: 'candidates', label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name', visible: showAssignmentAI, defaultVisible: false },
       { key: 'contact', label: '联系质量 / 联系人', className: 'col-contact', sortKey: 'contact_level' },
       { key: 'owner', label: canViewAssignmentDecisions() ? '负责人 / 阻断原因' : '负责人', className: 'col-owner', sortKey: 'assigned_owner_name' },
       { key: 'status', label: '状态 / 时限', className: 'col-status', sortKey: 'status' },
@@ -3143,9 +3188,13 @@
         toast(unauthorizedViewMessage(requestedView));
       }
       if (requestedView === 'customerProfile') {
-        if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId);
+        if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId, { updateUrl: false });
         else if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
         else switchView('customers');
+      } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed'].includes(requestedView) && requestedAllowed) {
+        openIntakeProfile(requestedIntakeItemId, { updateUrl: false });
+      } else if (requestedCustomerId && requestedAllowed) {
+        openCustomer(requestedCustomerId, { updateUrl: false });
       }
       return true;
     } catch (error) {
@@ -3179,8 +3228,8 @@
       $$('#nav [data-view="users"], #nav [data-view="protectedCustomers"], #nav [data-view="maintenance"], #newUserBtn, #newPermissionGroupBtn').forEach(el => el.classList.add('hidden'));
     }
     $$('#nav .nav-group').forEach(group => {
-      const buttons = $$('button[data-view]').filter(button => group.contains(button));
-      group.classList.toggle('hidden', buttons.length > 0 && buttons.every(button => button.classList.contains('hidden')));
+      const items = $$('[data-view]').filter(item => group.contains(item));
+      group.classList.toggle('hidden', items.length > 0 && items.every(item => item.classList.contains('hidden')));
     });
     $('#bulkReturnCustomers')?.classList.toggle('hidden', !can('manage_customer_recycle'));
     $('#intakeSettingsBtn')?.classList.toggle('hidden',
@@ -3458,20 +3507,25 @@
     $('#attentionList').innerHTML = attention.length ? attention.map(item => {
       const account = state.data.accounts.find(row => row.id === item.customerId);
       const displayCustomer = account || item;
-      return `<button type="button" class="attention-item" ${item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"` : `data-open-customer="${esc(item.customerId)}"`}>
+      const href = item.intakeItemId
+        ? intakeDrawerHref(item.intakeItemId, 'dashboard')
+        : customerDrawerHref(item.customerId, 'dashboard');
+      const target = item.intakeItemId ? `data-intake-profile="${esc(item.intakeItemId)}"`
+        : `data-open-customer="${esc(item.customerId)}"`;
+      return `<a class="attention-item" href="${esc(href)}" ${target}>
         <div class="attention-item-main">
           <div class="attention-item-row"><strong>${esc(accountDisplayName(displayCustomer))}</strong><b class="pill ${item.urgency === 'immediate' || item.severity === 'critical' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber'}">${esc(item.urgencyLabel || (item.severity === 'critical' ? '立即处理' : '需要关注'))}</b></div>
           <span class="attention-why">${esc(item.title)}${item.reasonCount > 1 ? ` · 另有 ${item.reasonCount - 1} 个原因` : ''}</span>
           <span class="attention-id">${esc(accountIdentity(displayCustomer) || '')}</span>
         </div>
-      </button>`;
+      </a>`;
     }).join('') : '<div class="empty">当前没有需要处理的异常</div>';
     renderCountrySnapshot(accounts);
     const activities = filteredActivities(accounts).slice(0, 8);
     $('#activityFeed').innerHTML = activities.length ? activities.map(activity => {
       const account = state.data.accounts.find(item => item.id === activity.customer_id);
       const meta = activityMeta[activity.activity_type] || [activity.activity_type, '记'];
-      return `<div class="feed-item" data-open-customer="${activity.customer_id}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(accountDisplayName(account))}</strong><span>${esc(meta[0])} · ${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')}</span></div><time class="feed-ago">${esc(relative(activity.occurred_at))}</time></div>`;
+      return `<a class="feed-item" href="${esc(customerDrawerHref(activity.customer_id, 'dashboard'))}" data-open-customer="${esc(activity.customer_id)}"><span class="feed-icon">${meta[1]}</span><div><strong>${esc(accountDisplayName(account))}</strong><span>${esc(meta[0])} · ${esc(activity.user_name || '')} · ${esc(activity.summary || activity.outcome || '')}</span></div><time class="feed-ago">${esc(relative(activity.occurred_at))}</time></a>`;
     }).join('') : '<div class="empty">当前周期没有有效动作</div>';
   }
   function percent(numerator, denominator) {
@@ -4383,6 +4437,8 @@
   function leadWorkflowNavigationUrl(view) {
     const url = new URL(location.href);
     const key = String(url.searchParams.get('leadView') || '');
+    url.searchParams.delete('customer');
+    url.searchParams.delete('intake');
     if (!leadWorkflowMatchesView(view, key)) url.searchParams.delete('leadView');
     url.hash = view;
     return `${url.pathname}${url.search}${url.hash}`;
@@ -4469,7 +4525,7 @@
     const intakeColumns = [
       { key: 'company', header: '线索资料 / 客户标签', fieldClass: 'col-company', visible: true, label: '线索资料 / 客户标签', className: 'col-company', sortKey: 'company_name' },
       { key: 'fit', header: 'Fit / readiness / 优先级', fieldClass: 'col-fit', visible: showAI, label: 'Fit / readiness / 优先级', className: 'col-fit', sortKey: 'fit_score' },
-      { key: 'candidates', header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI, label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name' },
+      { key: 'candidates', header: '候选销售排名', fieldClass: 'col-candidates', visible: showAssignmentAI, defaultVisible: false, label: '候选销售排名', className: 'col-candidates', sortKey: 'suggested_owner_name' },
       { key: 'contact', header: '联系质量 / 联系人', fieldClass: 'col-contact', visible: true, label: '联系质量 / 联系人', className: 'col-contact', sortKey: 'contact_level' },
       { key: 'owner', header: salesView ? '负责人' : '负责人 / 阻断原因', fieldClass: 'col-owner', visible: true, label: salesView ? '负责人' : '负责人 / 阻断原因', className: 'col-owner', sortKey: 'assigned_owner_name' },
       { key: 'status', header: '状态 / 时限', fieldClass: 'col-status', visible: true, label: '状态 / 时限', className: 'col-status', sortKey: 'status' },
@@ -4499,18 +4555,18 @@
         if (salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) {
           primaryActions = [
             `<button class="button primary tiny" data-intake-action="claim" data-item-id="${item.id}" data-idempotency-key="${esc(proposalRequestId())}">领取</button>`,
-            `<button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button>`,
           ];
-          moreActions = [`<button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button>`];
+          moreActions = [
+            `<button class="text-button" data-intake-action="return" data-item-id="${item.id}">退回</button>`,
+            `<button class="text-button" data-intake-action="reject" data-item-id="${item.id}">不对口</button>`,
+          ];
         } else if (salesView && item.status === 'assigned') {
-          primaryActions = [
-            `<span class="pill amber">管理员确认中</span>`,
-            `<button class="button secondary tiny" data-intake-action="return" data-item-id="${item.id}">退回</button>`,
-          ];
+          primaryActions = [`<span class="pill amber">管理员确认中</span>`];
+          moreActions = [`<button class="text-button" data-intake-action="return" data-item-id="${item.id}">退回</button>`];
         } else if (!salesView && intakeItemAssignable(item)) {
           actions = '—';
         } else if (item.linkedMasterExternalId) {
-          primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.linkedMasterExternalId}">查看已关联客户</button>`];
+          primaryActions = [`<a class="button secondary tiny internal-detail-action" href="${esc(customerProfileHref(item.linkedMasterExternalId))}" data-open-master="${esc(item.linkedMasterExternalId)}">查看已关联客户</a>`];
         } else if (!salesView && intakeNeedsIdentityReview(item)) {
           primaryActions = [intakeReviewActionMarkup(item)];
         } else if (!salesView && item.status === 'assigned' && !item.claimBlocked && !item.identityWarning) {
@@ -4520,10 +4576,10 @@
           primaryActions = ['<span class="pill amber">管理员确认中</span>'];
         } else if (!salesView && item.status === 'claimed') {
           if (item.crm_customer_id) {
-            primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.crm_customer_id}">打开客户</button>`];
+            primaryActions = [`<a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(item.crm_customer_id, 'pool'))}" data-open-customer="${esc(item.crm_customer_id)}">打开客户</a>`];
           }
         } else if (item.duplicate_state === 'exact' && item.crm_customer_id) {
-          primaryActions = [`<button class="button secondary tiny" data-open-customer="${item.crm_customer_id}">查看已关联客户</button>`];
+          primaryActions = [`<a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(item.crm_customer_id, 'pool'))}" data-open-customer="${esc(item.crm_customer_id)}">查看已关联客户</a>`];
         } else if (item.status === 'returned' && item.crm_customer_id) {
           primaryActions = [`<button class="button secondary tiny" type="button" data-returned-history="${esc(item.crm_customer_id)}">开发历史</button>`];
         }
@@ -4548,6 +4604,7 @@
           : esc(item.return_reason || '');
         const sourceMeta = `<span>更新 ${esc(shortDate(item.updated_at, true))}</span>`;
         const extra = [
+          listEntityWebsiteMarkup(item.website),
           item.identityWarning?.active
             ? `<span class="pill amber" title="${esc(item.identityWarning.message || '疑似同名线索，进入 CRM 前需管理员核验')}">${esc(item.identityWarning.label || '名称待核验')}</span>`
             : '',
@@ -4556,8 +4613,12 @@
         const businessColumns = [
           listEntityMarkup(
             accountDisplayName(item),
-            [accountIdentity(item), hostLabel(item.website), item.industry || item.customer_type],
+            [accountIdentity(item), item.industry || item.customer_type],
             extra,
+            {
+              href: intakeDrawerHref(item.id, 'pool'),
+              attrs: `data-intake-profile="${esc(item.id)}"`,
+            },
           ),
           `<div class="intake-contact"><span class="pill ${item.contact_level === 'L3' ? '' : item.contact_level === 'L2' ? 'amber' : 'gray'}">${esc(item.contact_level || 'L0')}</span>${item.contact_name ? `<span class="id">${esc(item.contact_name)}</span>` : ''}</div>`,
           `<div class="decision-stack">${esc(item.assigned_owner_name || '待手动分配')}${salesView || !assignmentBlock ? '' : `<div class="id">${esc(assignmentBlock)}</div>`}</div>`,
@@ -5067,7 +5128,7 @@
     const showTechnicalSources = !isSalesRepresentative();
     container.innerHTML = masterProfileSectionHtml({
       title: '企业背景与开发依据',
-      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      actions: `<a class="text-button internal-detail-link" href="${esc(customerProfileHref(account.external_customer_id || ''))}" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</a>`,
       rows: [
         ['企业简介', esc(account.master_description || '暂无企业简介')],
         ['产品与潜在需求', esc(account.product_focus || '未标注')],
@@ -5179,7 +5240,7 @@
     const account = ctx.account;
     container.innerHTML = masterProfileSectionHtml({
       title: '企业背景与开发依据',
-      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      actions: `<a class="text-button internal-detail-link" href="${esc(customerProfileHref(account.external_customer_id || ''))}" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</a>`,
       gridClass: 'drawer-master-grid',
       rows: [
         ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
@@ -5454,6 +5515,7 @@
   }
 
   function openCustomerProfile(externalCustomerId) {
+    const { updateUrl = true } = arguments[1] || {};
     if (!externalCustomerId) return toast('缺少客户编码，无法打开完整资料');
     const account = state.data.accounts.find(item => item.external_customer_id === externalCustomerId);
     if (!account) return toast('未找到对应客户资料');
@@ -5468,7 +5530,7 @@
     state.customerEnrichment = null;
     state.customerEnrichmentLastSuccess = null;
     state.customerEnrichmentError = '';
-    closeDrawer();
+    closeDrawer({ preserveUrl: !updateUrl });
     switchView('customerProfile');
     renderCustomerProfileHeader();
     mountCustomerProfileWidgets(externalCustomerId);
@@ -5476,17 +5538,16 @@
       const frame = $('#customerProfileFrame');
       if (frame) frame.src = customerProfileFrameUrl(externalCustomerId);
     }
-    const url = new URL(location.href);
-    url.searchParams.set('customer', externalCustomerId);
-    url.searchParams.delete('intake');
-    url.hash = 'customerProfile';
-    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    if (updateUrl && typeof history !== 'undefined') {
+      history.replaceState(null, '', customerProfileHref(externalCustomerId));
+    }
     // AI 客户站已按当前产品边界弃用；完整资料页只保留事实、跟进、Recon、标签。
     if (!technicalAIPresentationAllowed()) $('#customerAiStation')?.classList.add('hidden');
     $('#customerAiStation')?.classList.add('hidden');
   }
 
-  async function openIntakeMasterProfile(itemId, fallbackExternalId = '') {
+  async function openIntakeMasterProfile(itemId, fallbackExternalId = '', options = {}) {
+    const { updateUrl = true } = options;
     let item = state.data.intake?.items?.find(row => String(row.id) === String(itemId))
       || (fallbackExternalId ? {
         id: itemId,
@@ -5522,7 +5583,7 @@
     const externalCustomerId = String(item.external_customer_id || fallbackExternalId || '').trim();
     if (!externalCustomerId) return toast('该线索未关联客户主档，暂时无法查看完整资料');
     const account = state.data.accounts.find(row => row.external_customer_id === externalCustomerId);
-    if (account) return openCustomerProfile(externalCustomerId);
+    if (account) return openCustomerProfile(externalCustomerId, { updateUrl });
     const adminMasterAccess = state.data.user?.role === 'admin' && !state.data.impersonation;
     let master = null;
     if (adminMasterAccess) {
@@ -5561,7 +5622,7 @@
     state.customerEnrichment = null;
     state.customerEnrichmentLastSuccess = null;
     state.customerEnrichmentError = '';
-    closeDrawer();
+    closeDrawer({ preserveUrl: !updateUrl });
     switchView('customerProfile');
     renderCustomerProfileHeader();
     mountCustomerProfileWidgets(externalCustomerId, state.customerProfileIntakeItemId);
@@ -5569,11 +5630,9 @@
       const frame = $('#customerProfileFrame');
       if (frame) frame.src = customerProfileFrameUrl(externalCustomerId, state.customerProfileIntakeItemId);
     }
-    const url = new URL(location.href);
-    url.searchParams.set('customer', externalCustomerId);
-    url.searchParams.set('intake', state.customerProfileIntakeItemId);
-    url.hash = 'customerProfile';
-    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    if (updateUrl && typeof history !== 'undefined') {
+      history.replaceState(null, '', customerProfileHref(externalCustomerId, state.customerProfileIntakeItemId));
+    }
     if (!technicalAIPresentationAllowed()) $('#customerAiStation')?.classList.add('hidden');
     $('#customerAiStation')?.classList.add('hidden');
   }
@@ -6142,7 +6201,7 @@
       const row = [
         `<div class="company-cell"><strong>${esc(item.taskId)}</strong><span>${esc(item.source)}</span></div>`,
         esc(aiTaskTypeLabels[item.taskType] || item.taskType),
-        item.customerId ? `<button class="text-button" data-open-master="${esc(item.customerId)}">${esc(item.customerName || item.customerId)}</button>` : '工作区',
+        item.customerId ? `<a class="text-button internal-detail-link" href="${esc(customerProfileHref(item.customerId))}" data-open-master="${esc(item.customerId)}">${esc(item.customerName || item.customerId)}</a>` : '工作区',
         esc(item.actorId || '系统'),
         `<span class="pill ${stateMeta[1]}">${esc(stateMeta[0])}</span>`,
         `<div class="company-cell"><strong>${esc(item.model || item.engine || '—')}</strong><span>${item.cost ? `$${Number(item.cost).toFixed(4)}` : '无计费'}</span></div>`,
@@ -6621,7 +6680,7 @@
       const canTrash = !state.data.impersonation && can('manage_manual_customer_deletion')
         && !account.intake_item_id && account.source_file === 'CRM手工新增';
       const lifecycleActions = [
-        state.customerStarView !== 'all' ? `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>` : '',
+        state.customerStarView !== 'all' ? `<a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(account.id, 'customers'))}" data-open-customer="${esc(account.id)}">客户详情</a>` : '',
         state.customerStarView !== 'all' && can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
         canReturn ? `<button class="text-button danger-text" data-return-customer="${esc(account.id)}">退回线索池</button>` : '',
         canReject ? `<button class="text-button danger-text" data-reject-customer="${esc(account.id)}">标记不对口</button>` : '',
@@ -6630,9 +6689,11 @@
       const primaryStatus = customerPrimaryStatus(alert);
       const row = {
         select: canSelectCustomers && canSelectCustomer(account) ? `<input type="checkbox" data-select-customer="${esc(account.id)}" ${state.customerSelectionMode === 'filtered' || state.selectedCustomerIds.has(account.id) ? 'checked' : ''} aria-label="选择 ${esc(accountDisplayName(account))}">` : '',
-        company: listEntityMarkup(
-          accountDisplayName(account),
-          [accountIdentity(account), hostLabel(account.website || account.domain)],
+        company: customerEntityMarkup(
+          account,
+          [accountIdentity(account)],
+          listEntityWebsiteMarkup(account.website || account.domain),
+          'customers',
         ),
         country_industry: `${esc(account.country || '—')}<div class="id">${esc(account.industry || '—')}</div>`,
         stage: statusMarkup(account.stage, { [account.stage]: stageLabel(account.stage) }),
@@ -6794,7 +6855,7 @@
     const rows = state.recycleBin.rows || [];
     const sales = state.data.assignmentCandidates || [];
     const tableRows = rows.map(row => {
-        const customerCell = `<button type="button" class="text-button tp-company-anchor" data-open-mismatch-record="${esc(row.recordKey)}">${esc(accountDisplayName(row))}</button>`;
+        const customerCell = `<a class="text-button tp-company-anchor internal-detail-link" href="${esc(mismatchRecordHref(row.recordKey))}" data-open-mismatch-record="${esc(row.recordKey)}">${esc(accountDisplayName(row))}</a>`;
         let actionCell = '<span class="subtle">仅查看记录</span>';
         if (row.actions?.includes('reassign')) {
           actionCell = `<div class="assignment-actions"><select data-recycle-owner="${esc(row.customerId)}">${sales.map(user => `<option value="${esc(user.id)}">${esc(user.name)}</option>`).join('')}</select><button class="button primary tiny" data-reassign-customer="${esc(row.customerId)}">重新分配</button></div>`;
@@ -7067,9 +7128,11 @@
       && $('#customerDrawer').classList.contains('open'));
   }
 
-  async function openMismatchRecord(recordKey) {
+  async function openMismatchRecord(recordKey, options = {}) {
+    const { updateUrl = true } = options;
     recordKey = String(recordKey || '').trim();
     if (!recordKey) return;
+    if (updateUrl && typeof history !== 'undefined') history.pushState(null, '', mismatchRecordHref(recordKey));
     const request = claimCustomerDrawer(`mismatch:${recordKey}`);
     state.mismatchRecordRequestEpoch += 1;
     state.mismatchRecordExpanded = false;
@@ -7189,14 +7252,14 @@
       const stay = pipelineStayMarkup(account);
       const primaryActions = [
         can('record_activity') ? `<button class="button primary tiny" type="button" data-pipeline-progress="${esc(account.id)}">记录进展</button>` : '',
-        `<button class="button secondary tiny" type="button" data-open-customer="${esc(account.id)}">客户详情</button>`,
+        `<a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(account.id, 'pipeline'))}" data-open-customer="${esc(account.id)}">客户详情</a>`,
       ];
       const moreActions = [
         can('record_activity') && !account.manager_required ? `<button class="text-button" type="button" data-pipeline-assistance="${esc(account.id)}">请求主管协助</button>` : '',
         can('resolve_manager_tasks') && account.manager_required ? '<button class="text-button" type="button" data-pipeline-manager-tasks>处理主管协助</button>' : '',
       ];
       return {
-        company: listEntityMarkup(accountDisplayName(account), [accountIdentity(account), hostLabel(account.website || account.domain)]),
+        company: customerEntityMarkup(account, [accountIdentity(account)], listEntityWebsiteMarkup(account.website || account.domain), 'pipeline'),
         stage: `${esc(account.stageLabel || stageLabel(account.stage))}${stay}`,
         next_action: `${esc(next)}<div class="id">${account.next_action_at ? `计划 ${shortDate(account.next_action_at, true)}` : '未设置时间'}</div>`,
         owner: `${esc(account.owner_name || '未分配')}${starButtonMarkup(account, true)}`,
@@ -7902,7 +7965,7 @@
             ? drilldown.rows.map(row => `<article class="manager-risk-card">
               <div><strong>${esc(row.nickname || row.companyName || row.customerId)}</strong><span>${esc(row.customerId)} · ${esc(stageLabel(row.stage))}</span></div>
               <div><span>负责人 ${esc(row.ownerName || row.ownerId || '未记录')}</span><span>最近动作 ${esc(row.lastActivityAt ? shortDate(row.lastActivityAt, true) : '暂无')}</span><span>下一步 ${esc(row.nextAction || '暂未设置')}${row.nextActionAt ? ` · ${esc(shortDate(row.nextActionAt, true))}` : ''}</span></div>
-              <button class="text-button" type="button" data-open-customer="${esc(row.accountId)}">查看客户 →</button>
+              <a class="text-button internal-detail-link" href="${esc(customerDrawerHref(row.accountId, 'managerMetrics'))}" data-open-customer="${esc(row.accountId)}">查看客户 →</a>
             </article>`).join('')
             : '<div class="empty">当前口径下没有客户</div>'}${Number(drilldown.total || 0) > Number(drilldown.pageSize || 50) ? `<nav class="manager-drilldown-pagination" aria-label="统计明细分页"><button type="button" class="button secondary" data-manager-drilldown-page="${Math.max(1, Number(drilldown.page || 1) - 1)}" ${Number(drilldown.page || 1) <= 1 ? 'disabled' : ''}>上一页</button><span>第 ${Number(drilldown.page || 1)} / ${Math.max(1, Math.ceil(Number(drilldown.total || 0) / Number(drilldown.pageSize || 50)))} 页</span><button type="button" class="button secondary" data-manager-drilldown-page="${Number(drilldown.page || 1) + 1}" ${drilldown.hasMore ? '' : 'disabled'}>下一页</button></nav>` : ''}`;
       return;
@@ -8127,9 +8190,9 @@
       const action = item.code === 'ACTIVITY_CORRECTION_REVIEW'
         ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="activityCorrections">处理更正申请</button>`
         : item.code === 'ACTIVITY_CORRECTION_COMPLETED' && account
-          ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看目标客户</button>`
+          ? `<a class="text-button internal-detail-link" href="${esc(customerDrawerHref(account.id, 'notifications'))}" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看目标客户</a>`
           : account
-            ? `<button class="text-button" type="button" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</button>`
+            ? `<a class="text-button internal-detail-link" href="${esc(customerDrawerHref(account.id, 'notifications'))}" data-notification-customer="${esc(item.id)}" data-customer-id="${esc(account.id)}">查看客户</a>`
         : item.code === 'MANAGER_ANOMALY_READY'
           ? `<button class="text-button" type="button" data-notification-view="${esc(item.id)}" data-target-view="alerts">查看异常</button>`
           : item.code === 'SALES_COACHING_READY'
@@ -8251,7 +8314,7 @@
             ? `<div class="manager-ai-copy"><span class="pill">AI 中文</span><p>${esc(value.explanation)}</p></div>`
             : `<span class="subtle">${esc(item.ai?.stale ? '业务状态已变化，请重新扫描' : jobStatus)}</span>`,
           `<div class="manager-anomaly-copy"><strong>${value ? 'AI 建议' : '规则建议'}</strong><span>${esc(value?.interventionSuggestion || item.action)}</span></div>`,
-          `<button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看并决定介入</button>`,
+          `<a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(item.customerId, 'dashboard'))}" data-open-customer="${esc(item.customerId)}">查看并决定介入</a>`,
         ];
       }),
     );
@@ -8448,7 +8511,7 @@
   function renderInsightsAuthorizedList(rows, meta) {
     const columns = insightsColumnDefinitions();
     const tableRows = rows.map(item => ({
-      company: listEntityMarkup(accountDisplayName(item), [accountIdentity(item)]),
+      company: customerEntityMarkup(item, [accountIdentity(item)], listEntityWebsiteMarkup(item.website), 'insights'),
       stage: esc(stageLabel(item.stage)),
       country: esc(item.country || '未标注'),
       owner: esc(item.ownerName || '未分配'),
@@ -8460,7 +8523,7 @@
       evaluated_at: esc((item.evaluationUpdatedAt || item.evaluatedAt)
         ? shortDate(item.evaluationUpdatedAt || item.evaluatedAt, true)
         : '—'),
-      actions: `<div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${esc(item.customerId)}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>`,
+      actions: `<div class="insight-hub-actions"><a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(item.customerId, 'insights'))}" data-open-customer="${esc(item.customerId)}">查看详情</a><button class="button primary tiny" data-evaluate-company-id="${esc(item.customerId)}">${item.evaluationStatus === 'evaluated' ? '追加评价' : '写企业评价'}</button></div>`,
       _sort: {
         company_name: accountDisplayName(item), stage: item.stage || '', country: item.country || '',
         owner_name: item.ownerName || '', evaluation_status: item.evaluationStatus === 'evaluated' ? 1 : 0,
@@ -8545,7 +8608,7 @@
         <div><span class="status-pill">${esc(stageLabel(account.stage))}</span><h3>${esc(accountDisplayName(account))}</h3><p>${esc(accountIdentity(account))}${accountIdentity(account) ? ' · ' : ''}${esc(account.country)} · ${esc(account.owner_name)}</p></div>
         <div class="insight-preview ${companyEval ? '' : 'empty-preview'}">${companyEval ? `<strong>客户经营复盘：</strong>${esc(companyEval.evaluationText)}` : '尚未填写企业经营评价'}</div>
         <div>${customerAIEnabled() ? `<div class="ai-tag-row">${labels.length ? labels.map(label => `<span class="ai-tag">AI · ${esc(label.name)}</span>`).join('') : '<span class="subtle">暂无AI标签</span>'}</div>` : ''}<p style="margin-top:6px">${contactCount} 位对接人 · ${contactEvalCount} 条联系人评价</p></div>
-        <div class="insight-hub-actions"><button class="button secondary tiny" data-open-customer="${account.id}">查看详情</button><button class="button primary tiny" data-evaluate-company-id="${account.id}">${companyEval ? '追加评价' : '写企业评价'}</button></div>
+        <div class="insight-hub-actions"><a class="button secondary tiny internal-detail-action" href="${esc(customerDrawerHref(account.id, 'insights'))}" data-open-customer="${esc(account.id)}">查看详情</a><button class="button primary tiny" data-evaluate-company-id="${account.id}">${companyEval ? '追加评价' : '写企业评价'}</button></div>
       </article>`;
     }).join('') : '<div class="empty">没有符合条件的客户</div>';
   }
@@ -8921,7 +8984,7 @@
         const facts = [row.progressed && '有推进', row.deferred && '有延期',
           row.planned && '已形成计划', row.actedAfterPlan && '计划后已行动'].filter(Boolean);
         return {
-          company: `<button class="text-button" type="button" data-open-customer="${esc(row.accountId)}">${esc(row.companyName || row.customerId)}</button>`,
+          company: `<a class="text-button internal-detail-link" href="${esc(customerDrawerHref(row.accountId, 'team'))}" data-open-customer="${esc(row.accountId)}">${esc(row.companyName || row.customerId)}</a>`,
           customer_id: esc(row.customerId),
           owner: esc(userById(row.ownerId)?.name || row.ownerId || '未分配'),
           country: esc(row.country || '—'), stage: esc(row.stage || '—'),
@@ -9955,7 +10018,7 @@
     renderAll();
     if ($('#customerDrawer')?.classList.contains('open')) {
       if (state.selectedCustomerId) renderDrawer();
-      else closeDrawer();
+      else if (!state.drawerOwner.startsWith('intake:')) closeDrawer();
     }
     if (state.view === 'aiTasks' && !technicalAIPresentationAllowed()) switchView(firstAllowedBusinessView(), false);
   }
@@ -10246,7 +10309,7 @@
     }
     const columns = protectedCustomerColumns();
     root.innerHTML = listWidget?.renderTable ? listWidget.renderTable({ columns, preferences: model.listLayout || {}, rows: model.items.map(item => ({
-      external_customer_id: esc(item.externalCustomerId || '—'), alpha_nickname: `<div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div>`, crm_nickname: esc(item.crmNickname || '—'), company_name: esc(item.companyName || '—'), country: esc(item.country || '—'), city: esc(item.city || '—'), website: esc(item.website || '—'), industry: esc(item.industry || '—'), customer_type: esc(item.customerType || '—'), product_focus: esc(item.productFocus || '—'), status: protectedStatusMarkup(item.status), batch_id: esc(item.batchId || '—'), created_at: esc(shortDate(item.createdAt, true)), activated_at: esc(item.activatedAt ? shortDate(item.activatedAt, true) : '—'), updated_at: esc(shortDate(item.updatedAt, true)), actions: `<div class="protected-row-actions"><button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}</div>`,
+      external_customer_id: esc(item.externalCustomerId || '—'), alpha_nickname: `<div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div>`, crm_nickname: esc(item.crmNickname || '—'), company_name: esc(item.companyName || '—'), country: esc(item.country || '—'), city: esc(item.city || '—'), website: websiteMarkup(item.website), industry: esc(item.industry || '—'), customer_type: esc(item.customerType || '—'), product_focus: esc(item.productFocus || '—'), status: protectedStatusMarkup(item.status), batch_id: esc(item.batchId || '—'), created_at: esc(shortDate(item.createdAt, true)), activated_at: esc(item.activatedAt ? shortDate(item.activatedAt, true) : '—'), updated_at: esc(shortDate(item.updatedAt, true)), actions: `<div class="protected-row-actions"><button class="text-button" type="button" data-protected-profile="${esc(item.externalCustomerId)}">查看资料</button>${item.status === 'protected' ? `<button class="text-button" type="button" data-protected-activate="${esc(item.externalCustomerId)}" ${protectedWritesAvailable() ? '' : 'disabled'}>激活分配</button>` : ''}</div>`,
       _sort: {
         external_customer_id: item.externalCustomerId || '', alpha_nickname: item.alphaNickname || '',
         company_name: item.companyName || '', country: item.country || '', status: item.status || '',
@@ -10256,6 +10319,7 @@
       <td data-label="客户"><div class="protected-customer-name"><strong>${esc(item.alphaNickname || '—')}</strong><small>CRM 昵称：${esc(item.crmNickname || '—')}</small></div></td>
       <td data-label="正式公司名称">${esc(item.companyName || '—')}</td>
       <td data-label="国家/地区">${esc([item.country, item.city].filter(Boolean).join(' · ') || '—')}</td>
+      <td data-label="官网">${websiteMarkup(item.website)}</td>
       <td data-label="状态">${protectedStatusMarkup(item.status)}</td>
       <td data-label="稳定客户编号"><strong>${esc(item.externalCustomerId || '—')}</strong><br><span class="subtle">批次 ${esc(item.batchId || '—')}</span></td>
       <td data-label="创建/激活时间">${esc(shortDate(item.createdAt, true))}${item.activatedAt ? `<br><span class="subtle">激活 ${esc(shortDate(item.activatedAt, true))}</span>` : ''}</td>
@@ -10356,6 +10420,10 @@
     return String(comparison.selected?.externalCustomerId || '');
   }
 
+  function comparisonValueMarkup(value, kind = 'text') {
+    return kind === 'website' ? websiteMarkup(value) : esc(value);
+  }
+
   function protectedConflictPendingOptions(item, model) {
     const linkTarget = protectedConflictTargetExternalCustomerId(item, 'link_existing');
     const distinctTarget = protectedConflictTargetExternalCustomerId(item, 'confirm_new');
@@ -10376,14 +10444,14 @@
     const region = record => [record?.country, record?.city].filter(Boolean).join(' · ') || '—';
     const fields = [
       ['国家/地区', region(subject), region(selected)],
-      ['官方网站', subject.website || '—', selected.website || '—'],
+      ['官方网站', subject.website || '—', selected.website || '—', 'website'],
       ['联系邮箱', subject.email || '—', selected.email || '—'],
       ['所属行业', subject.industry || '—', selected.industry || '—'],
     ];
-    const rowMarkup = fields.map(([label, submitted, existing]) => {
+    const rowMarkup = fields.map(([label, submitted, existing, kind = 'text']) => {
       const differs = String(submitted).trim().toLocaleLowerCase('und') !== String(existing).trim().toLocaleLowerCase('und');
       const className = differs ? ' class="different"' : '';
-      return `<div class="identity-comparison-row"><div>${esc(label)}</div><div${className}>${esc(submitted)}</div><div${className}>${esc(existing)}</div></div>`;
+      return `<div class="identity-comparison-row"><div>${esc(label)}</div><div${className}>${comparisonValueMarkup(submitted, kind)}</div><div${className}>${comparisonValueMarkup(existing, kind)}</div></div>`;
     }).join('');
     const picker = candidates.length > 1 ? `<label class="pending-candidate-picker">选择比较记录<select data-conflict-target="${esc(item.conflictId)}">${candidates.map(candidate => `<option value="${esc(candidate.externalCustomerId)}" ${candidate.externalCustomerId === selected.externalCustomerId ? 'selected' : ''}>${esc(candidate.companyName || candidate.nickname || candidate.rawName || candidate.externalCustomerId)} · ${esc(candidate.externalCustomerId)}</option>`).join('')}</select></label>`
       : `<input type="hidden" data-conflict-target="${esc(item.conflictId)}" value="${esc(selected.externalCustomerId)}">`;
@@ -10694,7 +10762,7 @@
           <button class="text-button" type="button" data-toggle-duplicate-search="${esc(review.id)}" ${interactionPending || protectedExact ? 'disabled' : ''}>更换疑似客户</button>
           <div class="duplicate-candidate-search ${searchOpen ? '' : 'hidden'}">
             <input type="search" role="combobox" data-duplicate-candidate-search="${esc(review.id)}" value="${esc(searchQuery)}" autocomplete="off" placeholder="搜索客户昵称、公司名称、官网或客户编号" aria-label="搜索其他已有客户" aria-autocomplete="list" aria-controls="${esc(searchListId)}" aria-expanded="${searchOpen && searchResults.length ? 'true' : 'false'}" ${activeSearchIndex >= 0 ? `aria-activedescendant="${esc(searchListId)}-option-${activeSearchIndex}"` : ''} ${interactionPending ? 'disabled' : ''}>
-            <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span><span>${esc(uiFormat.website(item.website)?.label || '暂无官网')}</span></button>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
+            <div id="${esc(searchListId)}" class="duplicate-candidate-results" role="listbox">${searchResults.map((item, index) => `<div class="duplicate-candidate-result"><button id="${esc(searchListId)}-option-${index}" type="button" role="option" aria-selected="${index === activeSearchIndex ? 'true' : 'false'}" data-duplicate-candidate-result="${esc(review.id)}" data-customer-id="${esc(item.customerId)}" ${interactionPending ? 'disabled' : ''}><strong>${esc(item.nickname || item.companyName)}</strong><span>${esc(item.companyName)} · ${esc(item.customerId)} · ${esc(item.ownerName || '未分配')} · ${esc(stageLabel(item.customerStage))}</span></button>${uiFormat.website(item.website) ? websiteMarkup(item.website) : ''}</div>`).join('') || '<span class="subtle">输入至少两个字符开始搜索</span>'}</div>
           </div>
         </section>
       </div>
@@ -10766,12 +10834,49 @@
     return view === 'teamStatus' ? 'team' : view;
   }
 
+  function viewHashParams(hash = location.hash) {
+    const value = String(hash || '').replace(/^#/, '');
+    return new URLSearchParams(value.includes('?') ? value.slice(value.indexOf('?') + 1) : '');
+  }
+
   function beginPendingDeepLinkNavigation(hash = location.hash) {
     const nextHash = String(hash || '');
     if (state.pendingCenter.deepLinkNavigationHash === nextHash) return;
     state.pendingCenter.deepLinkNavigationHash = nextHash;
     state.pendingCenter.deepLinkNavigationEpoch += 1;
     state.pendingCenter.deepLinkUnavailable = false;
+  }
+
+  function restoreInternalNavigationFromLocation() {
+    const requestedView = viewFromLocationHash();
+    if (!viewMeta[requestedView] || !state.data) return false;
+    const params = new URLSearchParams(location.search);
+    const requestedCustomerId = params.get('customer') || '';
+    const requestedIntakeItemId = params.get('intake') || '';
+    const canonicalView = ['intake', 'pending', 'claimed'].includes(requestedView)
+      ? 'pool' : requestedView;
+    restoreLeadWorkflowFromLocation(requestedView);
+    switchView(requestedView, false);
+    if (state.view !== canonicalView) return false;
+    if (requestedView === 'customerProfile') {
+      if (requestedIntakeItemId) {
+        void openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId, { updateUrl: false });
+      } else if (requestedCustomerId) {
+        openCustomerProfile(requestedCustomerId, { updateUrl: false });
+      }
+    } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed'].includes(requestedView)) {
+      openIntakeProfile(requestedIntakeItemId, { updateUrl: false });
+    } else if (requestedCustomerId) {
+      openCustomer(requestedCustomerId, { updateUrl: false });
+    } else if (!requestedCustomerId && !requestedIntakeItemId
+      && $('#customerDrawer')?.classList.contains('open')) {
+      closeDrawer({ preserveUrl: true });
+    }
+    const recordKey = viewHashParams().get('record');
+    if (requestedView === 'recycleBin' && recordKey) {
+      void openMismatchRecord(recordKey, { updateUrl: false });
+    }
+    return true;
   }
 
   function pendingTabsAvailable() {
@@ -12107,13 +12212,15 @@
     }
   }
 
-  function openCustomer(customerId) {
+  function openCustomer(customerId, options = {}) {
+    const { updateUrl = true } = options;
     const account = state.data.accounts.find(item => item.id === customerId);
     if (!account) {
       resetDrawerActions();
       return toast('当前客户不在可见范围内');
     }
     claimCustomerDrawer(`crm:${customerId}`);
+    if (updateUrl && typeof history !== 'undefined') history.pushState(null, '', customerDrawerHref(customerId));
     state.selectedCustomerId = customerId;
     state.drawerAiContext = null;
     renderDrawer();
@@ -12177,12 +12284,14 @@
   }
 
   function openIntakeProfile(itemId) {
+    const { updateUrl = true } = arguments[1] || {};
     const item = state.data.intake?.items?.find(row => row.id === itemId);
     if (!item) {
       resetDrawerActions();
       return toast('当前线索不在可见范围内');
     }
     claimCustomerDrawer(`intake:${itemId}`);
+    if (updateUrl && typeof history !== 'undefined') history.pushState(null, '', intakeDrawerHref(itemId));
     const signals = intakeSignals(item);
     const showAssignmentDecisions = canViewAssignmentDecisions();
     const showAI = technicalAIPresentationAllowed();
@@ -12250,7 +12359,7 @@
       </div>
       ${masterProfileSectionHtml({
         title: '企业背景与开发依据',
-        actions: `<div class="assignment-actions"><button class="button secondary tiny" type="button" data-open-intake-master="${esc(item.id)}">查看完整资料</button>${showTechnicalSources && item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div>`,
+        actions: `<div class="assignment-actions"><a class="button secondary tiny internal-detail-action" href="${esc(customerProfileHref(item.external_customer_id || '', item.id))}" data-open-intake-master="${esc(item.id)}" data-customer-id="${esc(item.external_customer_id || '')}">查看完整资料</a>${showTechnicalSources && item.report_url ? `<a class="text-button" href="${esc(item.report_url)}" target="_blank" rel="noopener">查看背调报告</a>` : ''}</div>`,
         rows: [
           ['企业背景', esc(item.master_description || '暂无企业简介'), 'wide'],
           ['主营产品', esc(item.master_products || item.product_focus || '暂无产品信息')],
@@ -12280,7 +12389,8 @@
     }
   }
 
-  function closeDrawer() {
+  function closeDrawer(options = {}) {
+    const { preserveUrl = false } = options;
     stopDrawerNextActionTimer();
     state.drawerRequestEpoch += 1;
     state.drawerOwner = '';
@@ -12292,6 +12402,21 @@
     $('#customerDrawer').setAttribute('aria-hidden', 'true');
     state.recycleCustomerDetail = null;
     resetDrawerActions();
+    if (!preserveUrl && typeof location !== 'undefined' && typeof history !== 'undefined') {
+      const url = new URL(location.href);
+      let changed = false;
+      ['customer', 'intake'].forEach(key => {
+        if (url.searchParams.has(key)) {
+          url.searchParams.delete(key);
+          changed = true;
+        }
+      });
+      if (viewFromLocationHash() === 'recycleBin' && viewHashParams().has('record')) {
+        url.hash = 'recycleBin';
+        changed = true;
+      }
+      if (changed) history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
     const returnEl = state.drawerFocusReturn;
     state.drawerFocusReturn = null;
     if (returnEl && typeof returnEl.focus === 'function' && typeof document !== 'undefined' && document.contains(returnEl)) {
@@ -12357,6 +12482,7 @@
       ['报价历史', quotes, item => `${item.quote_no || item.quoteNo || item.id || '报价'} · ${money(item.amount)} · ${item.status || '—'} · ${shortDate(item.sent_at || item.sentAt, true)}`],
       ['订单历史', orders, item => `${item.order_no || item.orderNo || item.id || '订单'} · ${money(item.amount)} · ${item.status || '—'} · ${shortDate(item.ordered_at || item.orderedAt, true)}`],
     ];
+    const recycleWebsite = master.website || account.website || '';
 
     $('#drawerStage').textContent = '回收站客户';
     $('#drawerCompany').textContent = name;
@@ -12399,7 +12525,8 @@
           ['企业简介', esc(master.description || account.master_description || '暂无企业简介')],
           ['行业与客户类型', esc([master.industry || account.industry, master.customerType || account.customer_type].filter(Boolean).join(' · ') || '未标注')],
           ['产品与潜在需求', esc(master.products || account.product_focus || '未标注')],
-          ['官网与地区', esc([master.website || account.website, master.country || account.country, master.city || account.city].filter(Boolean).join(' · ') || '未标注')],
+          ['官网', websiteMarkup(recycleWebsite)],
+          ['地区', esc([master.country || account.country, master.city || account.city].filter(Boolean).join(' · ') || '未标注')],
         ],
       })}
       <div class="commerce-strip recycle-commerce-strip">
@@ -13592,7 +13719,7 @@
     }));
     const masterMarkup = renderRegisteredDrawerWidget('drawer-master', () => masterProfileSectionHtml({
       title: '企业背景与开发依据',
-      actions: `<button class="text-button" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</button>`,
+      actions: `<a class="text-button internal-detail-link" href="${esc(customerProfileHref(account.external_customer_id || ''))}" data-open-master="${esc(account.external_customer_id || '')}">查看完整客户资料 →</a>`,
       gridClass: 'drawer-master-grid',
       rows: [
         ['企业简介', esc(account.master_description || '暂无企业简介'), 'drawer-master-card-wide'],
@@ -16205,7 +16332,50 @@
     }
   });
 
+  function isPlainPrimaryClick(event) {
+    return event.button === 0
+      && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+  }
+
+  function handleInternalNavigationClick(event) {
+    const link = event.target.closest('a[href]');
+    if (!link || !link.matches([
+      'a[data-view]',
+      'a[data-go]',
+      'a[data-open-customer]',
+      'a[data-customer]',
+      'a[data-intake-profile]',
+      'a[data-open-intake-master]',
+      'a[data-open-master]',
+      'a[data-open-mismatch-record]',
+      'a[data-notification-customer]',
+    ].join(','))) return false;
+    if (!isPlainPrimaryClick(event)) return true;
+    event.preventDefault();
+    if (link.matches('a[data-view]')) {
+      switchView(link.dataset.view);
+    } else if (link.matches('a[data-go]')) {
+      switchView(link.dataset.go);
+    } else if (link.matches('a[data-notification-customer]')) {
+      void markNotificationRead(link.dataset.notificationCustomer, {
+        customerId: link.dataset.customerId,
+      });
+    } else if (link.matches('a[data-open-customer],a[data-customer]')) {
+      openCustomer(link.dataset.openCustomer || link.dataset.customer);
+    } else if (link.matches('a[data-intake-profile]')) {
+      openIntakeProfile(link.dataset.intakeProfile);
+    } else if (link.matches('a[data-open-intake-master]')) {
+      void openIntakeMasterProfile(link.dataset.openIntakeMaster, link.dataset.customerId || '');
+    } else if (link.matches('a[data-open-master]')) {
+      openCustomerProfile(link.dataset.openMaster);
+    } else if (link.matches('a[data-open-mismatch-record]')) {
+      void openMismatchRecord(link.dataset.openMismatchRecord);
+    }
+    return true;
+  }
+
   document.addEventListener('click', async event => {
+    if (handleInternalNavigationClick(event)) return;
     const paginationButton = event.target.closest('[data-pagination-action]');
     if (paginationButton && !paginationButton.disabled) {
       const root = paginationButton.closest('[data-pagination]');
@@ -17737,6 +17907,9 @@
       return toast(unauthorizedViewMessage(canonicalView));
     }
       const viewChanged = state.view !== canonicalView;
+      if (viewChanged && $('#customerDrawer')?.classList.contains('open')) {
+        closeDrawer({ preserveUrl: true });
+      }
       state.view = canonicalView;
       if (viewChanged && canonicalView === 'customers') {
         restoreCustomerFilters();
@@ -17778,7 +17951,12 @@
       }
     state.intakeStatus = legacyIntakeStatus || (canonicalView === 'pool' ? '' : state.intakeStatus);
     $$('.view').forEach(item => item.classList.toggle('active', item.id === `${canonicalView}View`));
-    $$('#nav [data-view]').forEach(item => item.classList.toggle('active', item.dataset.view === canonicalView));
+    $$('#nav [data-view]').forEach(item => {
+      const active = item.dataset.view === canonicalView;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
     $('#viewEyebrow').textContent = viewMeta[canonicalView][0];
     $('#viewTitle').textContent = viewMeta[canonicalView][1];
     if ($('#viewSub')) $('#viewSub').textContent = viewSubtitle(canonicalView);
@@ -17860,11 +18038,14 @@
         if ($('#protectedConflictStatus')) $('#protectedConflictStatus').value = state.protectedCustomers.conflictStatus;
         void loadProtectedWorkspace();
     }
-    closeDrawer();
+    closeDrawer({ preserveUrl: true });
     closeCustomerFilterPanel();
     document.body.classList.remove('sidebar-open');
     window.scrollTo?.(0, 0);
-    if (location.hash.replace(/^#/, '').split('?')[0] !== canonicalView) {
+    const hasDetailQuery = new URLSearchParams(location.search).has('customer')
+      || new URLSearchParams(location.search).has('intake')
+      || (canonicalView === 'recycleBin' && viewHashParams().has('record'));
+    if (location.hash.replace(/^#/, '').split('?')[0] !== canonicalView || (pushHistory && hasDetailQuery)) {
       const navigationUrl = leadWorkflowNavigationUrl(canonicalView);
       if (pushHistory && !intakeAlias) history.pushState(null, '', navigationUrl);
       else history.replaceState(null, '', navigationUrl);
@@ -18516,19 +18697,11 @@
   });
   window.addEventListener('hashchange', () => {
     beginPendingDeepLinkNavigation(location.hash);
-    const view = viewFromLocationHash();
-    if (viewMeta[view] && state.data) {
-      restoreLeadWorkflowFromLocation(view);
-      switchView(view, false);
-    }
+    restoreInternalNavigationFromLocation();
   });
   window.addEventListener('popstate', () => {
     beginPendingDeepLinkNavigation(location.hash);
-    const view = viewFromLocationHash();
-    if (viewMeta[view] && state.data) {
-      restoreLeadWorkflowFromLocation(view);
-      switchView(view, false);
-    }
+    restoreInternalNavigationFromLocation();
   });
 
   document.addEventListener('visibilitychange', () => {

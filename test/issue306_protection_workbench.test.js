@@ -123,5 +123,5 @@ test('linked leads expose a view entry to the master customer in the pool', () =
   const intake = section(app, 'function renderIntake', 'function customerProfileFrameUrl');
   assert.match(intake, /item\.duplicate_state === 'exact' && item\.crm_customer_id/);
   assert.match(intake, /查看已关联客户/);
-  assert.match(intake, /data-open-customer="\$\{item\.crm_customer_id\}"/);
+  assert.match(intake, /data-open-customer="\$\{esc\(item\.crm_customer_id\)\}"/);
 });

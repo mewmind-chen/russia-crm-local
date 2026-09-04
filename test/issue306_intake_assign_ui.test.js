@@ -278,6 +278,6 @@ test('identity-conflict-linked items expose a view entry to the linked master', 
   const renderer = functionBlock(app, 'renderIntake');
   const actions = section(renderer, "let actions = '';", 'const signals = intakeSignals(item);');
   assert.match(actions, /item\.linkedMasterExternalId/);
-  assert.match(actions, /data-open-customer="\$\{item\.linkedMasterExternalId\}"/);
+  assert.match(actions, /data-open-master="\$\{esc\(item\.linkedMasterExternalId\)\}"/);
   assert.match(actions, /查看已关联客户/);
 });

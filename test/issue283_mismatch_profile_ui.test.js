@@ -185,7 +185,7 @@ test('mismatch profile assets use the current production cache token', () => {
   assert.match(shell, /sales-assets\/app\.js\?v=20260824-studio-deck-v1/);
 });
 
-test('every authorized mismatch record has one explicit profile button while actions stay server-driven', () => {
+test('every authorized mismatch record has one explicit profile link while actions stay server-driven', () => {
   const render = topLevelFunction('renderRecycleBin');
   const handler = clickHandler();
 
@@ -197,7 +197,7 @@ test('every authorized mismatch record has one explicit profile button while act
   assert.match(render, /table\([\s\S]*'class="mismatch-record-table"'/);
   assert.match(
     render,
-    /<button type="button" class="text-button tp-company-anchor" data-open-mismatch-record="\$\{esc\(row\.recordKey\)\}">/,
+    /<a class="text-button tp-company-anchor internal-detail-link" href="\$\{esc\(mismatchRecordHref\(row\.recordKey\)\)\}" data-open-mismatch-record="\$\{esc\(row\.recordKey\)\}">/,
   );
   assert.doesNotMatch(render, /canOpenProfile/);
   assert.doesNotMatch(render, /sourceType\s*===\s*'account'[\s\S]{0,120}manage_customer_recycle/);

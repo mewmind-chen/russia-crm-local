@@ -6,7 +6,7 @@
   <title>TradePulse · 电子元器件外贸CRM</title>
   <meta name="description" content="面向电子元器件外贸团队的客户推进、销售能力和经营决策系统">
   <link rel="stylesheet" href="/shared-assets/ui-system.css?v=20260824-studio-deck-v1">
-  <link rel="stylesheet" href="/sales-assets/app.css?v=20260824-studio-deck-v1&rev=20260902-list-layout-v4">
+  <link rel="stylesheet" href="/sales-assets/app.css?v=20260824-studio-deck-v1&rev=20260904-pool-compact-v1">
   <link rel="stylesheet" href="/sales-assets/filter-component.css?v=20260824-studio-deck-v1">
 </head>
 <body data-app="sales" data-theme="studio">
@@ -46,29 +46,29 @@
       </a>
       <nav id="nav" class="nav">
         <div class="nav-group"><div class="nav-group-label">今日工作</div>
-          <button data-view="dashboard" data-permission="view_dashboard" class="active"><i data-tp-icon="dashboard" aria-hidden="true"></i><span>经营驾驶舱</span></button>
-          <button data-view="alerts" data-permission="view_alerts"><i data-tp-icon="alert" aria-hidden="true"></i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></button>
-          <button data-view="notifications" data-permission="view_notifications"><i data-tp-icon="bell" aria-hidden="true"></i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></button>
-          <button data-view="aiTasks" data-permission="view_customers" data-ai-business><i data-tp-icon="sparkles" aria-hidden="true"></i><span>AI任务中心</span></button>
+          <a href="/#dashboard" data-view="dashboard" data-permission="view_dashboard" class="active" aria-current="page"><i data-tp-icon="dashboard" aria-hidden="true"></i><span>经营驾驶舱</span></a>
+          <a href="/#alerts" data-view="alerts" data-permission="view_alerts"><i data-tp-icon="alert" aria-hidden="true"></i><span>今日待办</span><b id="navAlertCount" class="danger-count">0</b></a>
+          <a href="/#notifications" data-view="notifications" data-permission="view_notifications"><i data-tp-icon="bell" aria-hidden="true"></i><span>通知中心</span><b id="navNotificationCount" class="danger-count">0</b></a>
+          <a href="/#aiTasks" data-view="aiTasks" data-permission="view_customers" data-ai-business><i data-tp-icon="sparkles" aria-hidden="true"></i><span>AI任务中心</span></a>
         </div>
         <div class="nav-group"><div class="nav-group-label">客户流转</div>
-          <button data-view="pool" data-permission="view_intake"><i data-tp-icon="inbox" aria-hidden="true"></i><span id="navIntakeLabel">线索池</span><b id="navIntakeCount">0</b></button>
-          <button data-view="contacts" data-permission="view_contacts"><i data-tp-icon="users" aria-hidden="true"></i><span>客户联系人线索</span></button>
-          <button data-view="recon" data-permission="view_recon"><i data-tp-icon="search" aria-hidden="true"></i><span>Recon 情报</span></button>
-          <button data-view="customers" data-permission="view_customers"><i data-tp-icon="building" aria-hidden="true"></i><span>CRM客户全景</span><b id="navCustomerCount">0</b></button>
-          <button data-view="recycleBin" data-permission="view_own_mismatch_history"><i data-tp-icon="archive" aria-hidden="true"></i><span>不对口记录</span><b id="navRecycleCount">0</b></button>
-          <button data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进动作台</span></button>
+          <a href="/#pool" data-view="pool" data-permission="view_intake"><i data-tp-icon="inbox" aria-hidden="true"></i><span id="navIntakeLabel">线索池</span><b id="navIntakeCount">0</b></a>
+          <a href="/#contacts" data-view="contacts" data-permission="view_contacts"><i data-tp-icon="users" aria-hidden="true"></i><span>客户联系人线索</span></a>
+          <a href="/#recon" data-view="recon" data-permission="view_recon"><i data-tp-icon="search" aria-hidden="true"></i><span>Recon 情报</span></a>
+          <a href="/#customers" data-view="customers" data-permission="view_customers"><i data-tp-icon="building" aria-hidden="true"></i><span>CRM客户全景</span><b id="navCustomerCount">0</b></a>
+          <a href="/#recycleBin" data-view="recycleBin" data-permission="view_own_mismatch_history"><i data-tp-icon="archive" aria-hidden="true"></i><span>不对口记录</span><b id="navRecycleCount">0</b></a>
+          <a href="/#pipeline" data-view="pipeline" data-permission="view_pipeline"><i data-tp-icon="pipeline" aria-hidden="true"></i><span>推进动作台</span></a>
         </div>
         <div class="nav-group"><div class="nav-group-label">管理中心</div>
-          <button data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管协助事项</span></button>
-          <button data-view="activityCorrections" data-permission="manage_activity_corrections"><i data-tp-icon="note" aria-hidden="true"></i><span>跟进更正</span></button>
-          <button data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>计划跟进与协助统计</span></button>
-          <button data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>团队状态</span></button>
-          <button data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>客户经营复盘</span><b id="navInsightCount">0</b></button>
-          <button data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></button>
-          <button data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></button>
-          <button data-view="protectedCustomers"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户保护与查重</span><b id="navProtectedConflictCount" class="danger-count hidden">0</b></button>
-          <button data-view="maintenance" data-permission="manage_data_maintenance"><i data-tp-icon="settings" aria-hidden="true"></i><span>数据维护</span></button>
+          <a href="/#managerTasks" data-view="managerTasks" data-permission="resolve_manager_tasks"><i data-tp-icon="alert" aria-hidden="true"></i><span>主管协助事项</span></a>
+          <a href="/#activityCorrections" data-view="activityCorrections" data-permission="manage_activity_corrections"><i data-tp-icon="note" aria-hidden="true"></i><span>跟进更正</span></a>
+          <a href="/#managerMetrics" data-view="managerMetrics" data-permission="resolve_manager_tasks"><i data-tp-icon="chart" aria-hidden="true"></i><span>计划跟进与协助统计</span></a>
+          <a href="/#team" data-view="team" data-permission="view_team"><i data-tp-icon="chart" aria-hidden="true"></i><span>团队状态</span></a>
+          <a href="/#insights" data-view="insights" data-permission="view_insights"><i data-tp-icon="note" aria-hidden="true"></i><span>客户经营复盘</span><b id="navInsightCount">0</b></a>
+          <a href="/#markets" data-view="markets" data-permission="view_markets"><i data-tp-icon="globe" aria-hidden="true"></i><span>市场策略</span></a>
+          <a href="/#users" data-view="users" data-permission="view_users"><i data-tp-icon="users" aria-hidden="true"></i><span>用户与权限</span></a>
+          <a href="/#protectedCustomers" data-view="protectedCustomers"><i data-tp-icon="archive" aria-hidden="true"></i><span>客户保护与查重</span><b id="navProtectedConflictCount" class="danger-count hidden">0</b></a>
+          <a href="/#maintenance" data-view="maintenance" data-permission="manage_data_maintenance"><i data-tp-icon="settings" aria-hidden="true"></i><span>数据维护</span></a>
         </div>
       </nav>
       <div class="sidebar-foot">
@@ -103,9 +103,9 @@
               <option value="deck">夜间</option>
             </select>
           </label>
-          <button id="notificationButton" data-view="notifications" data-permission="view_notifications" class="notification-button icon-button" type="button" title="打开通知中心" aria-label="打开通知中心">
+          <a id="notificationButton" href="/#notifications" data-view="notifications" data-permission="view_notifications" class="notification-button icon-button" title="打开通知中心" aria-label="打开通知中心">
             <span data-tp-icon="bell" aria-hidden="true"></span><b id="topNotificationCount">0</b>
-          </button>
+          </a>
           <button id="newCustomerBtn" data-permission="create_customer" class="button secondary" type="button">＋ 新增CRM客户</button>
           <button id="quickUpdateBtn" data-permission="record_activity" class="button primary" type="button">＋ 记录新进展</button>
         </div>
@@ -124,14 +124,14 @@
           <article class="panel span-4 attention-panel">
             <div class="panel-head">
               <div><h2>需要我处理</h2><span id="attentionSummary" class="attention-summary">当前无待处理提醒</span></div>
-              <button class="text-button" data-go="alerts">查看全部</button>
+              <a class="text-button internal-detail-link" href="/#alerts" data-go="alerts">查看全部</a>
             </div>
             <div id="attentionList" class="attention-list"></div>
           </article>
           <article class="panel span-7">
             <div class="panel-head">
               <div><p class="eyebrow">MARKET SIGNAL</p><h2>国家转化与价值</h2></div>
-              <button class="text-button" data-go="markets">深度分析</button>
+              <a class="text-button internal-detail-link" href="/#markets" data-go="markets">深度分析</a>
             </div>
             <div class="toolbar dashboard-country-list-toolbar">
               <label class="sr-only" for="dashboardCountrySort">国家转化与价值排序</label>
@@ -1024,7 +1024,7 @@
   <script src="/sales-assets/widget-registry.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/next-action-time.js?v=20260824-studio-deck-v1"></script>
   <script src="/sales-assets/list-widget.js?v=20260824-studio-deck-v1&rev=20260902-list-settings-v2"></script>
-  <script src="/sales-assets/app.js?v=20260824-studio-deck-v1&rev=20260902-list-layout-v4"></script>
+  <script src="/sales-assets/app.js?v=20260824-studio-deck-v1&rev=20260904-pool-compact-v1"></script>
   <script>
     (function () {
       var KEY = 'tp-theme';
