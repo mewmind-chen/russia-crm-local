@@ -26,6 +26,9 @@ test('customer and lead names render as real detail links', () => {
   assert.match(appJs, /function customerEntityMarkup\(account,[\s\S]*?href: customerDrawerHref\(account\.id/);
   assert.match(appJs, /class="an tp-company-anchor internal-detail-link" href=/);
   assert.match(appJs, /<a class="text-button internal-detail-link" href="\$\{esc\(customerDrawerHref\(account\.id, 'notifications'\)\)\}" data-notification-customer=/);
+  assert.match(appJs, /function todayTaskCustomerMarkup\(item, account, view = 'alerts'\)/);
+  assert.match(appJs, /data-intake-profile="\$\{esc\(intakeId\)\}"/);
+  assert.match(appJs, /data-open-customer="\$\{esc\(customerId\)\}"/);
 });
 
 test('website values are direct external links across list and review surfaces', () => {
@@ -55,6 +58,10 @@ test('deep links restore the selected view and detail target', () => {
   assert.match(appJs, /url\.searchParams\.set\('customer', customer\)/);
   assert.match(appJs, /url\.searchParams\.set\('intake', intake\)/);
   assert.match(appJs, /function restoreInternalNavigationFromLocation\(/);
+  assert.equal(
+    (appJs.match(/requestedIntakeItemId && \['pool', 'intake', 'pending', 'claimed', 'alerts'\]\.includes\(requestedView\)/g) || []).length,
+    2,
+  );
   assert.match(appJs, /openCustomer\(requestedCustomerId, \{ updateUrl: false \}\)/);
   assert.match(appJs, /openIntakeProfile\(requestedIntakeItemId, \{ updateUrl: false \}\)/);
   assert.match(appJs, /if \(!requestedCustomerId && !requestedIntakeItemId[\s\S]*?closeDrawer\(\{ preserveUrl: true \}\)/);

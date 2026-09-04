@@ -3191,7 +3191,7 @@
         if (requestedIntakeItemId) openIntakeMasterProfile(requestedIntakeItemId, requestedCustomerId, { updateUrl: false });
         else if (requestedCustomerId) openCustomerProfile(requestedCustomerId);
         else switchView('customers');
-      } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed'].includes(requestedView) && requestedAllowed) {
+      } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed', 'alerts'].includes(requestedView) && requestedAllowed) {
         openIntakeProfile(requestedIntakeItemId, { updateUrl: false });
       } else if (requestedCustomerId && requestedAllowed) {
         openCustomer(requestedCustomerId, { updateUrl: false });
@@ -7379,6 +7379,19 @@
       : [identity, account?.country || '', stageLabel(item.stage)].filter(Boolean).join(' · ');
   }
 
+  function todayTaskCustomerMarkup(item, account, view = 'alerts') {
+    const name = accountDisplayName(account || item);
+    const intakeId = String(item?.intakeItemId || '').trim();
+    const customerId = String(item?.customerId || '').trim();
+    if (intakeId) {
+      return `<a class="today-task-customer-link tp-company-anchor internal-detail-link" href="${esc(intakeDrawerHref(intakeId, view))}" data-intake-profile="${esc(intakeId)}">${esc(name)}</a>`;
+    }
+    if (customerId) {
+      return `<a class="today-task-customer-link tp-company-anchor internal-detail-link" href="${esc(customerDrawerHref(customerId, view))}" data-open-customer="${esc(customerId)}">${esc(name)}</a>`;
+    }
+    return `<strong>${esc(name)}</strong>`;
+  }
+
   function renderTodayTaskMobileCard(item, account) {
     const pill = item.urgency === 'immediate' ? 'red' : item.urgency === 'today' ? 'blue' : 'amber';
     const otherReasons = item.otherReasons || [];
@@ -7395,7 +7408,7 @@
         <span class="today-task-mobile-count">${Number(item.reasonCount || 1)} 个原因</span>
       </div>
       <div class="today-task-mobile-customer">
-        <strong>${esc(accountDisplayName(account || item))}</strong>
+        ${todayTaskCustomerMarkup(item, account)}
         <span>${esc(context)}</span>
       </div>
       <dl class="today-task-mobile-facts">
@@ -7494,7 +7507,7 @@
       const other = (item.otherReasons || []).map(reason => `<span class="pill alert-reason-pill">${esc(reason)}</span>`).join('');
       return {
         urgency: `<span class="pill ${pill}">${esc(item.urgencyLabel || '需要关注')}</span>`,
-        company: `<div class="company-cell"><strong>${esc(accountDisplayName(account || item))}</strong><span>${esc(todayTaskContext(item, account))}</span></div>`,
+        company: `<div class="company-cell">${todayTaskCustomerMarkup(item, account)}<span>${esc(todayTaskContext(item, account))}</span></div>`,
         reasons: `<div class="alert-reasons"><strong>${esc(item.title)}</strong>${other ? `<div>${other}</div>` : ''}<small class="subtle">${item.reasonCount || 1} 个原因</small></div>`,
         due_at: esc(todayTaskDueText(item)),
         owner: esc(item.ownerName || account?.owner_name || userById(item.ownerId)?.name || ''),
@@ -10864,7 +10877,7 @@
       } else if (requestedCustomerId) {
         openCustomerProfile(requestedCustomerId, { updateUrl: false });
       }
-    } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed'].includes(requestedView)) {
+    } else if (requestedIntakeItemId && ['pool', 'intake', 'pending', 'claimed', 'alerts'].includes(requestedView)) {
       openIntakeProfile(requestedIntakeItemId, { updateUrl: false });
     } else if (requestedCustomerId) {
       openCustomer(requestedCustomerId, { updateUrl: false });
